@@ -3,21 +3,13 @@
 <html>
 
 <head>
-	<title>How Tax Brackets Work</title>
+    <title>How Tax Brackets Work</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
 	<script src="https://www.chartjs.org/dist/2.9.4/Chart.min.js"></script>
     <script src="https://www.chartjs.org/samples/latest/utils.js"></script>
     <script src="https://unpkg.com/vue"></script>
-	<style>
-	canvas {
-		-moz-user-select: none;
-		-webkit-user-select: none;
-		-ms-user-select: none;
-	}
 
-    table, th, td {
-        border: 1px solid black;
-    }
-	</style>
 </head>
 
 <body>
@@ -26,27 +18,48 @@
 </div>
 <br>
 <br>
-<button id="rebuildGraph">Rebuild Graph</button>
-<button id="addNewTaxBracket">Add New Tax Bracket</button>
-<button id="removeTaxBracket">Remove Selected Tax Bracket</button>
+<button id="rebuildGraph" class="pure-button">Rebuild Graph</button>
+<button id="addNewTaxBracket" class="pure-button">Add New Tax Bracket</button>
+<button id="removeTaxBracket" class="pure-button">Remove Selected Tax Bracket</button>
 <br />
 <div id="app">
     <h3>Configuration</h3>
     <div id="configuration">
-        Show incomes between <input type="number" id="min" v-model="min" step="100" /> and <input type="number" id="max" v-model="max" step="100" /> going up by <input type="number" id="step" v-model="step" />
-        <br />
-        <ul>
-            <li v-for="(bracket, index) in taxBrackets">
-                <input type="radio" v-model="selectedRow" :value="`${index}`" :id="`bracket-row-${index}`" />Incomes up to <input type="number" :id="`bracket-max-${index}`" v-model="bracket.bracketMax" step="100" /> are taxed at a rate of <input type="number" min="0" max="1" step=".01" :id="`bracket-taxRate-{index}`" v-model="bracket.taxRate" />
-            </li>
-        </ul>
+        <h4>Graph configs</h4>
+        <table id="graphConfiguration" class="pure-table pure-table-bordered">
+            <tr>
+                <td>Start Graph at </td>
+                <td><input type="number" id="min" v-model="min" step="100" /></td>
+            </tr>
+            <tr>
+                <td>End Graph at </td>
+                <td><input type="number" id="max" v-model="max" step="100" /></td>
+            </tr>
+            <tr>
+                <td>Goind up by </td>
+                <td><input type="number" id="step" v-model="step" /></td>
+            </tr>     
+        </table>
+        <h4>Tax configs</h4>
+        <table id="taxConfiguration" class="pure-table pure-table-bordered">
+            <tr>
+                <th>Selection</th>
+                <th>Income Bracket</th>
+                <th>TaxRate</th>
+            </tr>
+            <tr v-for="(bracket, index) in taxBrackets">
+                <td><input type="radio" v-model="selectedRow" :value="`${index}`" :id="`bracket-row-${index}`" class="pure-radio" /></td>
+                <td><input type="number" :id="`bracket-max-${index}`" v-model="bracket.bracketMax" step="100" class="pure-input-rounded" /></td>
+                <td><input type="number" min="0" max="1" step=".01" :id="`bracket-taxRate-{index}`" v-model="bracket.taxRate" class="pure-input-rounded" /></td>
+            </tr>
+        </table>
     </div>
     <h3>Specific Income Breakdown</h3>
     <div id="breakdown" >
         Enter a specific income to show it's breakdown <input type="number" step="100" id="specificIncome" v-model="specificIncomeBreakdown.startingAmount" />
         <br />
-        <button id="calculateBreakdown" onclick="calculateBreakdown()">Calculate Breakdown</button>
-        <table>
+        <button id="calculateBreakdown" class="pure-button" onclick="calculateBreakdown()">Calculate Breakdown</button>
+        <table class="pure-table pure-table-bordered">
             <tr>
                 <th>Income Bracket</th>
                 <th>Tax Rate</th>
@@ -58,11 +71,22 @@
                 <td>{{ breakdown.taxAmount }}</td>
             </tr>                
         </table>
-        <ul>
-            <li>The total amount of tax owed would be {{ specificIncomeBreakdown.totalAmount }}</li>
-            <li>The marginal tax rate would be {{ specificIncomeBreakdown.marginalTaxRate }}</li>
-            <li>The net income after tax would be {{ specificIncomeBreakdown.netIncome }}</li>
-        </ul>
+        <table class="pure-table pure-table-bordered">
+            <tr>
+                <td>The total amount of tax owed would be</td>
+                <td>{{ specificIncomeBreakdown.totalAmount }}</td>
+            </tr>
+
+            <tr>
+                <td>The marginal tax rate would be</td>
+                <td>{{ specificIncomeBreakdown.marginalTaxRate }}</td>
+            </tr>
+
+            <tr>
+                <td>The net income after tax would be</td>
+                <td>{{ specificIncomeBreakdown.netIncome }}</td>
+            </tr>
+        </table>
     </div>        
 </div>
 <script>
