@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
 	<script src="https://www.chartjs.org/dist/2.9.4/Chart.min.js"></script>
     <script src="https://www.chartjs.org/samples/latest/utils.js"></script>
-    <script src="https://unpkg.com/vue"></script>
+    <script src="https://unpkg.com/vue@2.6.12/dist/vue.min.js"></script>
     <style>
         canvas{
             -moz-user-select: none;
@@ -19,14 +19,10 @@
 </head>
 
 <body>
-<div style="width:640;height:480;">
+<div style="width:90%;height:50%;">
     <canvas id="canvas"></canvas>
 </div>
-<br>
-<br>
-<button id="rebuildGraph" class="pure-button">Rebuild Graph</button>
-<button id="addNewTaxBracket" class="pure-button">Add New Tax Bracket</button>
-<button id="removeTaxBracket" class="pure-button">Remove Selected Tax Bracket</button>
+<button id="rebuildGraph" onclick="rebuildGraph()" class="pure-button">Rebuild Graph</button>
 <br />
 <div id="app">
     <h3>Configuration</h3>
@@ -42,14 +38,16 @@
                 <td><input type="number" id="max" v-model="max" step="100" /></td>
             </tr>
             <tr>
-                <td>Goind up by </td>
+                <td>Going up by </td>
                 <td><input type="number" id="step" v-model="step" /></td>
             </tr>     
         </table>
         <h4>Tax configs</h4>
+        <button id="addNewTaxBracket" onclick="addNewTaxBracket()" class="pure-button">Add New Tax Bracket</button>
+        <button id="removeTaxBracket" onclick="removeTaxBracket()" class="pure-button">Remove Selected Tax Bracket</button>
         <table id="taxConfiguration" class="pure-table pure-table-bordered">
             <tr>
-                <th>Selection</th>
+                <th></th>
                 <th>Income Bracket</th>
                 <th>TaxRate</th>
             </tr>
@@ -60,10 +58,25 @@
             </tr>
         </table>
     </div>
+    <div id="furtherResources">
+        <p>
+            For historical tax rates, please visit <a href="https://files.taxfoundation.org/legacy/docs/fed_individual_rate_history_nominal.pdf">taxfoundation.org's listings here</a>
+        </p>
+        <p>
+            For more recent tax rates, please visit <a href="http://www.moneychimp.com/features/tax_brackets.htm">http://www.moneychimp.com/features/tax_brackets.htm</a>
+        </p>    
+    </div>
     <h3>Specific Income Breakdown</h3>
     <div id="breakdown" >
-        Enter a specific income to show it's breakdown <input type="number" step="100" id="specificIncome" v-model="specificIncomeBreakdown.startingAmount" />
-        <br />
+        <table id="breakDownInput" class="pure-table pure-table-bordered">
+            <tr>
+                <td>Enter a specific income to show it's breakdown</td>
+            </tr>
+            <tr>
+                <td><input type="number" step="1000" id="specificIncome" v-model="specificIncomeBreakdown.startingAmount" /></td>
+            </tr>
+        </table>
+
         <button id="calculateBreakdown" class="pure-button" onclick="calculateBreakdown()">Calculate Breakdown</button>
         <table class="pure-table pure-table-bordered">
             <tr>
@@ -98,33 +111,42 @@
 <script>
     var app;
     var defaultMin = 10000;
-    var defaultMax = 500000;
-    var defaultStep = 10000;
+    var defaultMax = 800000;
+    var defaultStep = 15000;
     var defaultTaxBrackets = [{
         taxRate: .10,
-        bracketMax: 15000
+        bracketMax: 9875
     },
     {
-        taxRate: .15,
-        bracketMax: 50000
+        taxRate: .12,
+        bracketMax: 40125
     },
     {
-        taxRate: .25,
-        bracketMax: 200000
+        taxRate: .22,
+        bracketMax: 85525
     },
     {
-        taxRate: .30,
-        bracketMax: 300000
+        taxRate: .24,
+        bracketMax: 163300
     },
     {
-        taxRate: .40,
+        taxRate: .32,
+        bracketMax: 207350
+    },
+    {
+        taxRate: .35,
+        bracketMax: 518400
+    },
+    {
+        taxRate: .37,
         bracketMax: Number.MAX_SAFE_INTEGER
     }];
     var specificIncomeBreakdown = {
         components: [],
         totalAmount: 0,
         marginalTaxRate: 0,
-        netIncome: 0
+        netIncome: 0,
+        startingAmount: 15000
     };
     var defaultSelectedRow = 0;
     var colorNames = Object.keys(window.chartColors);
@@ -189,14 +211,15 @@
             }
         });            
         buildChart();
+        calculateBreakdown();
         window.myLine = new Chart(ctx, config);            
     };
 
     function calculateBreakdown(){
         var income = parseInt(app.specificIncomeBreakdown.startingAmount);
-        app.specificIncomeBreakdown.totalAmount = getTaxAmount(income);
+        app.specificIncomeBreakdown.totalAmount = getTaxAmount(income).toFixed(2);
         app.specificIncomeBreakdown.marginalTaxRate = (app.specificIncomeBreakdown.totalAmount / income).toFixed(2);
-        app.specificIncomeBreakdown.netIncome = income - app.specificIncomeBreakdown.totalAmount;
+        app.specificIncomeBreakdown.netIncome = (income - app.specificIncomeBreakdown.totalAmount).toFixed(2);
         buildComponents(income);
     }
 
@@ -249,12 +272,12 @@
         return taxAmount;
     }
 
-    document.getElementById('rebuildGraph').addEventListener('click', function() {
+    function rebuildGraph() {
         buildChart();
         window.myLine.update();
-    });
+    };
 
-    document.getElementById('addNewTaxBracket').addEventListener('click', function(){
+    function addNewTaxBracket(){
         var secondHighestIncome = app.taxBrackets[app.taxBrackets.length - 2].bracketMax;
         var highestTaxRate = app.taxBrackets[app.taxBrackets.length - 1].taxRate;
         app.taxBrackets[app.taxBrackets.length - 1].bracketMax = parseInt(secondHighestIncome) + 1;
@@ -262,15 +285,15 @@
             taxRate: (highestTaxRate + .01).toFixed(2),
             bracketMax: Number.MAX_SAFE_INTEGER
         });
-    });
+    };
 
-    document.getElementById('removeTaxBracket').addEventListener('click', function(){
+    function removeTaxBracket(){
         var selRow = app.selectedRow;
         if(app.taxBrackets.length == parseInt(selRow) + 1 && app.taxBrackets.length > 1){
             app.taxBrackets[selRow - 1].bracketMax = Number.MAX_SAFE_INTEGER;
         }
         app.taxBrackets.splice(selRow, 1);
-    });
+    };
 </script>
 </body>
 
