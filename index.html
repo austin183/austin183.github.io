@@ -13,167 +13,234 @@
 		-webkit-user-select: none;
 		-ms-user-select: none;
 	}
+
+    table, th, td {
+        border: 1px solid black;
+    }
 	</style>
 </head>
 
 <body>
-	<div style="width:80%;">
-		<canvas id="canvas"></canvas>
-	</div>
-	<br>
-	<br>
-    <button id="rebuildGraph">Rebuild Graph</button>
-    <button id="addNewTaxBracket">Add New Tax Bracket</button>
-    <button id="removeTaxBracket">Remove Selected Tax Bracket</button>
-    <br />
-    <div id="app">
-        For incomes between <input id="min" v-model="min" /> and <input id="max" v-model="max" /> going up by <input id="step" v-model="step" />
+<div style="width:75%;">
+    <canvas id="canvas"></canvas>
+</div>
+<br>
+<br>
+<button id="rebuildGraph">Rebuild Graph</button>
+<button id="addNewTaxBracket">Add New Tax Bracket</button>
+<button id="removeTaxBracket">Remove Selected Tax Bracket</button>
+<br />
+<div id="app">
+    <h3>Configuration</h3>
+    <div id="configuration">
+        Show incomes between <input type="number" id="min" v-model="min" step="100" /> and <input type="number" id="max" v-model="max" step="100" /> going up by <input type="number" id="step" v-model="step" />
         <br />
         <ul>
             <li v-for="(bracket, index) in taxBrackets">
-                <input type="radio" v-model="selectedRow" :value="`${index}`" :id="`bracket-row-${index}`" />Incomes up to <input :id="`bracket-max-${index}`" v-model="bracket.bracketMax" /> are taxed at a rate of <input :id="`bracket-taxRate-{index}`" v-model="bracket.taxRate" />
+                <input type="radio" v-model="selectedRow" :value="`${index}`" :id="`bracket-row-${index}`" />Incomes up to <input type="number" :id="`bracket-max-${index}`" v-model="bracket.bracketMax" step="100" /> are taxed at a rate of <input type="number" min="0" max="1" step=".01" :id="`bracket-taxRate-{index}`" v-model="bracket.taxRate" />
             </li>
         </ul>
     </div>
-	<script>
-        var app;
-        var defaultMin = 10000;
-        var defaultMax = 500000;
-        var defaultStep = 10000;
-        var defaultTaxBrackets = [{
-                taxRate: .10,
-                bracketMax: 15000
+    <h3>Specific Income Breakdown</h3>
+    <div id="breakdown" >
+        Enter a specific income to show it's breakdown <input type="number" step="100" id="specificIncome" v-model="specificIncomeBreakdown.startingAmount" />
+        <br />
+        <button id="calculateBreakdown" onclick="calculateBreakdown()">Calculate Breakdown</button>
+        <table>
+            <tr>
+                <th>Income Bracket</th>
+                <th>Tax Rate</th>
+                <th>Tax Amount</th>
+            </tr>
+            <tr v-for="breakdown in specificIncomeBreakdown.components">
+                <td>{{ breakdown.max }}</td>
+                <td>{{ breakdown.taxRate }}</td>
+                <td>{{ breakdown.taxAmount }}</td>
+            </tr>                
+        </table>
+        <ul>
+            <li>The total amount of tax owed would be {{ specificIncomeBreakdown.totalAmount }}</li>
+            <li>The marginal tax rate would be {{ specificIncomeBreakdown.marginalTaxRate }}</li>
+            <li>The net income after tax would be {{ specificIncomeBreakdown.netIncome }}</li>
+        </ul>
+    </div>        
+</div>
+<script>
+    var app;
+    var defaultMin = 10000;
+    var defaultMax = 500000;
+    var defaultStep = 10000;
+    var defaultTaxBrackets = [{
+        taxRate: .10,
+        bracketMax: 15000
+    },
+    {
+        taxRate: .15,
+        bracketMax: 50000
+    },
+    {
+        taxRate: .25,
+        bracketMax: 200000
+    },
+    {
+        taxRate: .30,
+        bracketMax: 300000
+    },
+    {
+        taxRate: .40,
+        bracketMax: Number.MAX_SAFE_INTEGER
+    }];
+    var specificIncomeBreakdown = {
+        components: [],
+        totalAmount: 0,
+        marginalTaxRate: 0,
+        netIncome: 0
+    };
+    var defaultSelectedRow = 0;
+    var colorNames = Object.keys(window.chartColors);
+    var config = {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Tax Amount per Income',
+                backgroundColor: window.chartColors.red,
+                borderColor: window.chartColors.red,
+                data: [
+                ],
+                fill: false,
+            }]
+        },
+        options: {
+            responsive: true,
+            title: {
+                display: true,
+                text: 'Income'
             },
-            {
-                taxRate: .15,
-                bracketMax: 50000
+            tooltips: {
+                mode: 'index',
+                intersect: false,
             },
-            {
-                taxRate: .25,
-                bracketMax: 200000
+            hover: {
+                mode: 'nearest',
+                intersect: true
             },
-            {
-                taxRate: .30,
-                bracketMax: 300000
-            },
-            {
-                taxRate: .40,
-                bracketMax: Number.MAX_SAFE_INTEGER
-            }];
-        var defaultSelectedRow = 0;
-        var colorNames = Object.keys(window.chartColors);
-		var config = {
-			type: 'line',
-			data: {
-				labels: [],
-				datasets: [{
-					label: 'Tax Amount per Income',
-					backgroundColor: window.chartColors.red,
-					borderColor: window.chartColors.red,
-					data: [
-					],
-					fill: false,
-				}]
-			},
-			options: {
-				responsive: true,
-				title: {
-					display: true,
-					text: 'Income'
-				},
-				tooltips: {
-					mode: 'index',
-					intersect: false,
-				},
-				hover: {
-					mode: 'nearest',
-					intersect: true
-				},
-				scales: {
-					xAxes: [{
-						display: true,
-						scaleLabel: {
-							display: true,
-							labelString: 'Income'
-						}
-					}],
-					yAxes: [{
-						display: true,
-						scaleLabel: {
-							display: true,
-							labelString: 'Tax Amount'
-						}
-					}]
-				}
-			}
-		};
-
-		window.onload = function() {
-			var ctx = document.getElementById('canvas').getContext('2d');
-            app = new Vue({
-                el: '#app',
-                data : {
-                    min: defaultMin,
-                    max: defaultMax,
-                    taxBrackets: defaultTaxBrackets,
-                    step: defaultStep,
-                    selectedRow: defaultSelectedRow
-                }
-            });            
-            buildChart();
-			window.myLine = new Chart(ctx, config);            
-		};
-
-        function buildChart(){
-            config.data.datasets[0].data = [];
-            config.data.labels = [];
-            var i = app.min;
-            while(i <= app.max){
-                config.data.labels.push(i);
-                var taxAmount = getTaxAmount(i);
-                config.data.datasets[0].data.push(taxAmount);
-                i = parseInt(i) + parseInt(app.step);
+            scales: {
+                xAxes: [{
+                    display: true,
+                    scaleLabel: {
+                        display: true,
+                        labelString: 'Income'
+                    }
+                }],
+                yAxes: [{
+                    display: true,
+                    scaleLabel: {
+                        display: true,
+                        labelString: 'Tax Amount'
+                    }
+                }]
             }
         }
+    };
 
-        function getTaxAmount(income){
-            var taxAmount = 0;
-            var previousMax = 0;
-            app.taxBrackets.forEach(function(item, index){
-                if(income > item.bracketMax){
-                    taxAmount += (item.bracketMax - previousMax) * item.taxRate;
-                }
-                else if(income > previousMax){
-                    taxAmount += (income - previousMax) * item.taxRate;
-                }
-                previousMax = item.bracketMax;
-            });
-            return taxAmount;
-        }
-
-		document.getElementById('rebuildGraph').addEventListener('click', function() {
-			buildChart();
-            window.myLine.update();
-		});
-
-        document.getElementById('addNewTaxBracket').addEventListener('click', function(){
-            var secondHighestIncome = app.taxBrackets[app.taxBrackets.length - 2].bracketMax;
-            var highestTaxRate = app.taxBrackets[app.taxBrackets.length - 1].taxRate;
-            app.taxBrackets[app.taxBrackets.length - 1].bracketMax = parseInt(secondHighestIncome) + 1;
-            app.taxBrackets.push({
-                taxRate: (highestTaxRate + .01).toFixed(2),
-                bracketMax: Number.MAX_SAFE_INTEGER
-            });
-        });
-
-        document.getElementById('removeTaxBracket').addEventListener('click', function(){
-            var selRow = app.selectedRow;
-            if(app.taxBrackets.length == parseInt(selRow) + 1 && app.taxBrackets.length > 1){
-                app.taxBrackets[selRow - 1].bracketMax = Number.MAX_SAFE_INTEGER;
+    window.onload = function() {
+        var ctx = document.getElementById('canvas').getContext('2d');
+        app = new Vue({
+            el: '#app',
+            data : {
+                min: defaultMin,
+                max: defaultMax,
+                taxBrackets: defaultTaxBrackets,
+                step: defaultStep,
+                selectedRow: defaultSelectedRow,
+                specificIncomeBreakdown: specificIncomeBreakdown
             }
-            app.taxBrackets.splice(selRow, 1);
+        });            
+        buildChart();
+        window.myLine = new Chart(ctx, config);            
+    };
+
+    function calculateBreakdown(){
+        var income = parseInt(app.specificIncomeBreakdown.startingAmount);
+        app.specificIncomeBreakdown.totalAmount = getTaxAmount(income);
+        app.specificIncomeBreakdown.marginalTaxRate = (app.specificIncomeBreakdown.totalAmount / income).toFixed(2);
+        app.specificIncomeBreakdown.netIncome = income - app.specificIncomeBreakdown.totalAmount;
+        buildComponents(income);
+    }
+
+    function buildComponents(income){
+        app.specificIncomeBreakdown.components = [];
+        var previousMax = 0;
+        app.taxBrackets.forEach(function(item, index){
+            var component = {
+                max: 0,
+                taxRate: item.taxRate,
+                taxAmount: 0
+            };
+            if(income > item.bracketMax){
+                component.taxAmount = ((item.bracketMax - previousMax) * item.taxRate).toFixed(2);
+                component.max = item.bracketMax - previousMax;
+            }
+            else if(income > previousMax){
+                component.taxAmount = (income - previousMax) * item.taxRate;
+                component.max = income - previousMax;
+            }
+            app.specificIncomeBreakdown.components.push(component);
+            previousMax = item.bracketMax;
         });
-	</script>
+    }
+
+    function buildChart(){
+        config.data.datasets[0].data = [];
+        config.data.labels = [];
+        var i = app.min;
+        while(i <= app.max){
+            config.data.labels.push(i);
+            var taxAmount = getTaxAmount(i);
+            config.data.datasets[0].data.push(taxAmount);
+            i = parseInt(i) + parseInt(app.step);
+        }
+    }
+
+    function getTaxAmount(income){
+        var taxAmount = 0;
+        var previousMax = 0;
+        app.taxBrackets.forEach(function(item, index){
+            if(income > item.bracketMax){
+                taxAmount += (item.bracketMax - previousMax) * item.taxRate;
+            }
+            else if(income > previousMax){
+                taxAmount += (income - previousMax) * item.taxRate;
+            }
+            previousMax = item.bracketMax;
+        });
+        return taxAmount;
+    }
+
+    document.getElementById('rebuildGraph').addEventListener('click', function() {
+        buildChart();
+        window.myLine.update();
+    });
+
+    document.getElementById('addNewTaxBracket').addEventListener('click', function(){
+        var secondHighestIncome = app.taxBrackets[app.taxBrackets.length - 2].bracketMax;
+        var highestTaxRate = app.taxBrackets[app.taxBrackets.length - 1].taxRate;
+        app.taxBrackets[app.taxBrackets.length - 1].bracketMax = parseInt(secondHighestIncome) + 1;
+        app.taxBrackets.push({
+            taxRate: (highestTaxRate + .01).toFixed(2),
+            bracketMax: Number.MAX_SAFE_INTEGER
+        });
+    });
+
+    document.getElementById('removeTaxBracket').addEventListener('click', function(){
+        var selRow = app.selectedRow;
+        if(app.taxBrackets.length == parseInt(selRow) + 1 && app.taxBrackets.length > 1){
+            app.taxBrackets[selRow - 1].bracketMax = Number.MAX_SAFE_INTEGER;
+        }
+        app.taxBrackets.splice(selRow, 1);
+    });
+</script>
 </body>
 
 </html>
