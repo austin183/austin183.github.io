@@ -19,30 +19,22 @@
 </head>
 
 <body>
-<div style="position:relative;width:95vw;height:50vh">
-    <canvas id="canvas"></canvas>
-</div>
-<button id="rebuildGraph" onclick="rebuildGraph()" class="pure-button">Rebuild Graph</button>
-<br />
 <div id="app">
-    <h3>Configuration</h3>
+    <h2>How Tax Brackets Work</h2>
+    <p>
+        Tax Brackets are a way to scale up the tax rate as an individual's income climbs.  Since taxing everyone at a high rate would disproportionally affect individuals with lower incomes, this method is used to relieve the tax burden on the most vulnerable individuals.
+    </p>
+    <p>
+        When taxes are calculated, everyone's first bracket is taxed equally.  Once an individual surpasses the first bracket, any amount of income above the first bracket and below the next bracket is taxed at the next bracket's rate.
+    </p>
+    <p>
+        Please see the interactive examples below:
+    </p>
     <div id="configuration">
-        <h4>Graph configs</h4>
-        <table id="graphConfiguration" class="pure-table pure-table-bordered">
-            <tr>
-                <td>Start Graph at </td>
-                <td><input type="number" id="min" v-model="min" step="100" /></td>
-            </tr>
-            <tr>
-                <td>End Graph at </td>
-                <td><input type="number" id="max" v-model="max" step="100" /></td>
-            </tr>
-            <tr>
-                <td>Going up by </td>
-                <td><input type="number" id="step" v-model="step" /></td>
-            </tr>     
-        </table>
         <h4>Tax configs</h4>
+        <p>
+            Here you can add definitions for tax brackets to show how they would affect incomes and marginal tax rates.  The example provided is for a single person filing in the US in 2020.
+        </p>
         <button id="addNewTaxBracket" onclick="addNewTaxBracket()" class="pure-button">Add New Tax Bracket</button>
         <button id="removeTaxBracket" onclick="removeTaxBracket()" class="pure-button">Remove Selected Tax Bracket</button>
         <table id="taxConfiguration" class="pure-table pure-table-bordered">
@@ -58,15 +50,10 @@
             </tr>
         </table>
     </div>
-    <div id="furtherResources">
-        <p>
-            For historical tax rates, please visit <a href="https://files.taxfoundation.org/legacy/docs/fed_individual_rate_history_nominal.pdf">taxfoundation.org's listings here</a>
-        </p>
-        <p>
-            For more recent tax rates, please visit <a href="http://www.moneychimp.com/features/tax_brackets.htm">http://www.moneychimp.com/features/tax_brackets.htm</a>
-        </p>    
-    </div>
     <h3>Specific Income Breakdown</h3>
+    <p>
+        Here you can see how the taxes would be calculated for a specific income based on the configurations above.  The amount of tax is shown per bracket, and the marginal tax rate for the income is shown below.
+    </p>
     <div id="breakdown" >
         <table id="breakDownInput" class="pure-table pure-table-bordered">
             <tr>
@@ -106,8 +93,41 @@
                 <td>{{ specificIncomeBreakdown.netIncome }}</td>
             </tr>
         </table>
-    </div>        
+    </div>
+    <h4>Graph configs</h4>
+    <p>
+        To see how a range of incomes would be affected by the configured tax brackets, you can specify a start, end, and step value to graph.
+        The step value is how to specify which specific points to graph.  The bigger the step, the less points will be calculated.
+    </p>
+    <table id="graphConfiguration" class="pure-table pure-table-bordered">
+        <tr>
+            <td>Start</td>
+            <td><input type="number" id="min" v-model="min" step="100" /></td>
+        </tr>
+        <tr>
+            <td>End</td>
+            <td><input type="number" id="max" v-model="max" step="100" /></td>
+        </tr>
+        <tr>
+            <td>Step</td>
+            <td><input type="number" id="step" v-model="step" /></td>
+        </tr>     
+    </table>    
 </div>
+<button id="rebuildGraph" onclick="rebuildGraph()" class="pure-button">Rebuild Graph</button>
+<div style="position:relative;width:95vw;height:50vh">
+    <canvas id="canvas"></canvas>
+</div>
+<div id="furtherResources">
+    <h4>Further Resources</h4>
+    <p>
+        For historical tax rates, please visit <a href="https://files.taxfoundation.org/legacy/docs/fed_individual_rate_history_nominal.pdf">taxfoundation.org's listings here</a>
+    </p>
+    <p>
+        For more recent tax rates, please visit <a href="http://www.moneychimp.com/features/tax_brackets.htm">http://www.moneychimp.com/features/tax_brackets.htm</a>
+    </p>    
+</div>
+
 <script>
     var app;
     var defaultMin = 10000;
@@ -161,6 +181,28 @@
                 data: [
                 ],
                 fill: false,
+                yAxisID: 'amount-axis'
+            },
+            {
+                label: 'Net Income per Income',
+                backgroundColor: window.chartColors.blue,
+                borderColor: window.chartColors.blue,
+                data:[
+
+                ],
+                fill:false,
+                yAxisID: 'amount-axis'
+            },
+            {
+                label: 'Marginal Tax Rate per Income',
+                backgroundColor: window.chartColors.green,
+                borderColor: window.chartColors.green,
+                data:[
+
+                ],
+                fill:false,
+                yAxisID: 'marginal-rate-axis',
+                borderDash:[5,5]
             }]
         },
         options: {
@@ -190,11 +232,30 @@
                     display: true,
                     scaleLabel: {
                         display: true,
-                        labelString: 'Tax Amount'
+                        labelString: 'Amount'
+                    },
+                    id: 'amount-axis',
+                    position:'left'
+                },
+                {
+                    display: true,
+                    scaleLabel: {
+                        display: true,
+                        labelString: 'Marginal Tax Rate'
+                    },
+                    id: 'marginal-rate-axis',
+                    position:'right',
+                    gridLines:{
+                        drawOnChartArea: false
                     }
                 }]
             }
         }
+    };
+    var graphLineIndex = {
+        taxAmount: 0,
+        netIncome: 1,
+        marginalTaxRate: 2
     };
 
     window.onload = function() {
@@ -217,9 +278,10 @@
 
     function calculateBreakdown(){
         var income = parseInt(app.specificIncomeBreakdown.startingAmount);
-        app.specificIncomeBreakdown.totalAmount = getTaxAmount(income).toFixed(2);
-        app.specificIncomeBreakdown.marginalTaxRate = (app.specificIncomeBreakdown.totalAmount / income).toFixed(2);
-        app.specificIncomeBreakdown.netIncome = (income - app.specificIncomeBreakdown.totalAmount).toFixed(2);
+        var taxInformation = getTaxInformation(income);
+        app.specificIncomeBreakdown.totalAmount = taxInformation.taxAmount.toFixed(2);
+        app.specificIncomeBreakdown.marginalTaxRate = taxInformation.marginalTaxRate.toFixed(2);
+        app.specificIncomeBreakdown.netIncome = taxInformation.netIncome.toFixed(2);
         buildComponents(income);
     }
 
@@ -251,14 +313,18 @@
         var i = app.min;
         while(i <= app.max){
             config.data.labels.push(i);
-            var taxAmount = getTaxAmount(i);
-            config.data.datasets[0].data.push(taxAmount);
+            var taxInformation = getTaxInformation(i);
+            config.data.datasets[graphLineIndex.taxAmount].data.push(taxInformation.taxAmount);
+            config.data.datasets[graphLineIndex.marginalTaxRate].data.push(taxInformation.marginalTaxRate);
+            config.data.datasets[graphLineIndex.netIncome].data.push(taxInformation.netIncome);
             i = parseInt(i) + parseInt(app.step);
         }
     }
 
-    function getTaxAmount(income){
+    function getTaxInformation(income){
         var taxAmount = 0;
+        var marginalTaxRate = 0;
+        var netIncome = 0;
         var previousMax = 0;
         app.taxBrackets.forEach(function(item, index){
             if(income > item.bracketMax){
@@ -269,7 +335,13 @@
             }
             previousMax = item.bracketMax;
         });
-        return taxAmount;
+        marginalTaxRate = taxAmount / income;
+        netIncome = income - taxAmount;
+        return {
+            taxAmount: taxAmount,
+            marginalTaxRate: marginalTaxRate,
+            netIncome: netIncome
+        };
     }
 
     function rebuildGraph() {
