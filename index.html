@@ -308,7 +308,9 @@
     }
 
     function buildChart(){
-        config.data.datasets[0].data = [];
+        for(var i = 0; i < config.data.datasets.length; i++){
+            config.data.datasets[i].data = [];
+        }
         config.data.labels = [];
         var i = app.min;
         while(i <= app.max){
