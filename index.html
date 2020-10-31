@@ -46,7 +46,7 @@
             <tr v-for="(bracket, index) in taxBrackets">
                 <td><input type="radio" v-model="selectedRow" :value="`${index}`" :id="`bracket-row-${index}`" class="pure-radio" /></td>
                 <td><input type="number" :id="`bracket-max-${index}`" v-model="bracket.bracketMax" step="100" class="pure-input-rounded" /></td>
-                <td><input type="number" min="0" max="1" step=".01" :id="`bracket-taxRate-{index}`" v-model="bracket.taxRate" class="pure-input-rounded" /></td>
+                <td><input type="number" min="0" max="100" step="1" :id="`bracket-taxRate-{index}`" v-model="bracket.taxRate" class="pure-input-rounded" /> %</td>
             </tr>
         </table>
     </div>
@@ -72,25 +72,29 @@
                 <th>Tax Amount</th>
             </tr>
             <tr v-for="breakdown in specificIncomeBreakdown.components">
-                <td>{{ breakdown.max }}</td>
-                <td>{{ breakdown.taxRate }}</td>
-                <td>{{ breakdown.taxAmount }}</td>
+                <td>${{ formatNumberForDisplay(breakdown.max) }}</td>
+                <td>{{ formatNumberForDisplay(breakdown.taxRate) }}%</td>
+                <td>${{ formatNumberForDisplay(breakdown.taxAmount) }}</td>
             </tr>                
         </table>
         <table class="pure-table pure-table-bordered">
             <tr>
+                <td>Income specified was</td>
+                <td>${{ formatNumberForDisplay(specificIncomeBreakdown.startingAmount) }}</td>
+            </tr>
+            <tr>
                 <td>The total amount of tax owed would be</td>
-                <td>{{ specificIncomeBreakdown.totalAmount }}</td>
+                <td>${{ formatNumberForDisplay(specificIncomeBreakdown.totalAmount) }}</td>
             </tr>
 
             <tr>
                 <td>The marginal tax rate would be</td>
-                <td>{{ specificIncomeBreakdown.marginalTaxRate }}</td>
+                <td>{{ formatNumberForDisplay(specificIncomeBreakdown.marginalTaxRate) }}%</td>
             </tr>
 
             <tr>
                 <td>The net income after tax would be</td>
-                <td>{{ specificIncomeBreakdown.netIncome }}</td>
+                <td>${{ formatNumberForDisplay(specificIncomeBreakdown.netIncome) }}</td>
             </tr>
         </table>
     </div>
@@ -129,36 +133,51 @@
 </div>
 
 <script>
+    function formatNumberForDisplay(value){
+        if(parseInt(value) >= 1000){
+            return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        } else if (value < 1 && value > 0){
+            return (value * 100).toFixed(2);
+        }        
+        else {
+            return value;
+        }
+    }
+
+    function getPercentage(value){
+        return (value * .01).toFixed(2);
+    }
+
     var app;
     var defaultMin = 10000;
     var defaultMax = 800000;
     var defaultStep = 15000;
     var defaultTaxBrackets = [{
-        taxRate: .10,
+        taxRate: 10,
         bracketMax: 9875
     },
     {
-        taxRate: .12,
+        taxRate: 12,
         bracketMax: 40125
     },
     {
-        taxRate: .22,
+        taxRate: 22,
         bracketMax: 85525
     },
     {
-        taxRate: .24,
+        taxRate: 24,
         bracketMax: 163300
     },
     {
-        taxRate: .32,
+        taxRate: 32,
         bracketMax: 207350
     },
     {
-        taxRate: .35,
+        taxRate: 35,
         bracketMax: 518400
     },
     {
-        taxRate: .37,
+        taxRate: 37,
         bracketMax: Number.MAX_SAFE_INTEGER
     }];
     var specificIncomeBreakdown = {
@@ -215,6 +234,15 @@
             tooltips: {
                 mode: 'index',
                 intersect: false,
+                callbacks: {
+                    label: function(tooltipItem, data){
+                        var value = formatNumberForDisplay(tooltipItem.value);
+                        if(tooltipItem.value > 0 && tooltipItem.value < 1){
+                            return value + "%";
+                        }
+                        else return value;
+                    }
+                }
             },
             hover: {
                 mode: 'nearest',
@@ -226,6 +254,11 @@
                     scaleLabel: {
                         display: true,
                         labelString: 'Income'
+                    },
+                    ticks:{
+                        callback: function(value, index, values){
+                            return formatNumberForDisplay(value);
+                        }
                     }
                 }],
                 yAxes: [{
@@ -235,7 +268,12 @@
                         labelString: 'Amount'
                     },
                     id: 'amount-axis',
-                    position:'left'
+                    position:'left',
+                    ticks:{
+                        callback: function(value, index, values){
+                            return formatNumberForDisplay(value);
+                        }
+                    }
                 },
                 {
                     display: true,
@@ -247,6 +285,11 @@
                     position:'right',
                     gridLines:{
                         drawOnChartArea: false
+                    },
+                    ticks:{
+                        callback: function(value, index, values){
+                            return formatNumberForDisplay(value) + "%";
+                        }
                     }
                 }]
             }
@@ -279,9 +322,9 @@
     function calculateBreakdown(){
         var income = parseInt(app.specificIncomeBreakdown.startingAmount);
         var taxInformation = getTaxInformation(income);
-        app.specificIncomeBreakdown.totalAmount = taxInformation.taxAmount.toFixed(2);
-        app.specificIncomeBreakdown.marginalTaxRate = taxInformation.marginalTaxRate.toFixed(2);
-        app.specificIncomeBreakdown.netIncome = taxInformation.netIncome.toFixed(2);
+        app.specificIncomeBreakdown.totalAmount = taxInformation.taxAmount;
+        app.specificIncomeBreakdown.marginalTaxRate = taxInformation.marginalTaxRate;
+        app.specificIncomeBreakdown.netIncome = taxInformation.netIncome;
         buildComponents(income);
     }
 
@@ -295,11 +338,11 @@
                 taxAmount: 0
             };
             if(income > item.bracketMax){
-                component.taxAmount = ((item.bracketMax - previousMax) * item.taxRate).toFixed(2);
+                component.taxAmount = ((item.bracketMax - previousMax) * getPercentage(item.taxRate));
                 component.max = item.bracketMax - previousMax;
             }
             else if(income > previousMax){
-                component.taxAmount = (income - previousMax) * item.taxRate;
+                component.taxAmount = ((income - previousMax) * getPercentage(item.taxRate));
                 component.max = income - previousMax;
             }
             app.specificIncomeBreakdown.components.push(component);
@@ -314,7 +357,7 @@
         config.data.labels = [];
         var i = app.min;
         while(i <= app.max){
-            config.data.labels.push(i);
+            config.data.labels.push(formatNumberForDisplay(i));
             var taxInformation = getTaxInformation(i);
             config.data.datasets[graphLineIndex.taxAmount].data.push(taxInformation.taxAmount);
             config.data.datasets[graphLineIndex.marginalTaxRate].data.push(taxInformation.marginalTaxRate);
@@ -330,19 +373,19 @@
         var previousMax = 0;
         app.taxBrackets.forEach(function(item, index){
             if(income > item.bracketMax){
-                taxAmount += (item.bracketMax - previousMax) * item.taxRate;
+                taxAmount += (item.bracketMax - previousMax) * getPercentage(item.taxRate);
             }
             else if(income > previousMax){
-                taxAmount += (income - previousMax) * item.taxRate;
+                taxAmount += (income - previousMax) * getPercentage(item.taxRate);
             }
             previousMax = item.bracketMax;
         });
         marginalTaxRate = taxAmount / income;
         netIncome = income - taxAmount;
         return {
-            taxAmount: taxAmount,
-            marginalTaxRate: marginalTaxRate,
-            netIncome: netIncome
+            taxAmount: taxAmount.toFixed(2),
+            marginalTaxRate: marginalTaxRate.toFixed(4),
+            netIncome: netIncome.toFixed(2)
         };
     }
 
