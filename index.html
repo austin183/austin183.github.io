@@ -399,7 +399,7 @@
         var highestTaxRate = app.taxBrackets[app.taxBrackets.length - 1].taxRate;
         app.taxBrackets[app.taxBrackets.length - 1].bracketMax = parseInt(secondHighestIncome) + 1;
         app.taxBrackets.push({
-            taxRate: (highestTaxRate + .01).toFixed(2),
+            taxRate: highestTaxRate + 1,
             bracketMax: Number.MAX_SAFE_INTEGER
         });
     };
