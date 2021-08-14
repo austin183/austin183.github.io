@@ -7,7 +7,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
 	<script src="https://www.chartjs.org/dist/2.9.4/Chart.min.js"></script>
-    <script src="https://www.chartjs.org/samples/latest/utils.js"></script>
     <script src="https://unpkg.com/vue@2.6.12/dist/vue.min.js"></script>
     <style>
         canvas{
@@ -147,6 +146,15 @@
 </div>
 
 <script>
+    const CHART_COLORS = {
+        red: 'rgb(255, 99, 132)',
+        orange: 'rgb(255, 159, 64)',
+        yellow: 'rgb(255, 205, 86)',
+        green: 'rgb(75, 192, 192)',
+        blue: 'rgb(54, 162, 235)',
+        purple: 'rgb(153, 102, 255)',
+        grey: 'rgb(201, 203, 207)'
+    };
     function formatNumberForDisplay(value){
         if(parseInt(value) >= 1000){
             return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -204,15 +212,14 @@
         calculatedIncome: 0
     };
     var defaultSelectedRow = 0;
-    var colorNames = Object.keys(window.chartColors);
     var config = {
         type: 'line',
         data: {
             labels: [],
             datasets: [{
                 label: 'Tax Amount per Income',
-                backgroundColor: window.chartColors.red,
-                borderColor: window.chartColors.red,
+                backgroundColor: CHART_COLORS.red,
+                borderColor: CHART_COLORS.red,
                 data: [
                 ],
                 fill: false,
@@ -220,8 +227,8 @@
             },
             {
                 label: 'Net Income per Income',
-                backgroundColor: window.chartColors.blue,
-                borderColor: window.chartColors.blue,
+                backgroundColor: CHART_COLORS.blue,
+                borderColor: CHART_COLORS.blue,
                 data:[
 
                 ],
@@ -230,8 +237,8 @@
             },
             {
                 label: 'Marginal Tax Rate per Income',
-                backgroundColor: window.chartColors.green,
-                borderColor: window.chartColors.green,
+                backgroundColor: CHART_COLORS.green,
+                borderColor: CHART_COLORS.green,
                 data:[
 
                 ],
