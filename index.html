@@ -457,7 +457,7 @@
         app.taxBrackets = app.selectedTaxYear.brackets;
         app.taxDeductionAmount = app.selectedTaxYear.standardDeduction;
 
-        buildChart();
+        rebuildGraph();
         calculateBreakdown();
         var ctx = document.getElementById('canvas').getContext('2d');
         window.myLine = new Chart(ctx, config);  
