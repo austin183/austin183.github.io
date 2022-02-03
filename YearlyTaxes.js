@@ -1,5 +1,38 @@
 function getTaxYears() {
     return {
+        "Single2018": {
+            "standardDeduction": 12000,
+            "brackets": [
+                {
+                    "taxRate": 10,
+                    "bracketMax": 9525
+                },
+                {
+                    "taxRate": 12,
+                    "bracketMax": 38700
+                },
+                {
+                    "taxRate": 22,
+                    "bracketMax": 82500
+                },
+                {
+                    "taxRate": 24,
+                    "bracketMax": 157500
+                },
+                {
+                    "taxRate": 32,
+                    "bracketMax": 200000
+                },
+                {
+                    "taxRate": 35,
+                    "bracketMax": 500000
+                },
+                {
+                    "taxRate": 37,
+                    "bracketMax": Number.MAX_SAFE_INTEGER
+                }
+            ]
+        },
         "Single2019": {
             "standardDeduction": 12200,
             "brackets": [
