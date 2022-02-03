@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
 	<script src="https://www.chartjs.org/dist/2.9.4/Chart.min.js"></script>
     <script src="https://unpkg.com/vue@2.6.12/dist/vue.min.js"></script>
+    <script src="YearlyTaxes.js"></script>
     <style>
         canvas{
             -moz-user-select: none;
@@ -37,6 +38,13 @@
         <p>
             Here you can add definitions for tax brackets to show how they would affect incomes and marginal tax rates.  The example provided is for a single person filing in the US in 2020.
         </p>
+        <div class="pure-u-1">
+            <select id="selectTaxYear" v-model="selectedTaxYear" v-on:change="switchTaxBracket()" class="pure-input-1-2" >
+                <option value="" disabled selected>Select a tax year to pull the tax brackets for a single file that year.</option>
+                <option v-for="(item, key, index) in getTaxYears()" :value="item">{{key}}</option>
+            </select>
+        </div>
+        
         <button id="addNewTaxBracket" onclick="addNewTaxBracket()" class="pure-button">Add New Tax Bracket</button>
         <button id="removeTaxBracket" onclick="removeTaxBracket()" class="pure-button">Remove Selected Tax Bracket</button>
         <table id="taxConfiguration" class="pure-table pure-table-bordered">
@@ -335,7 +343,8 @@
                 step: defaultStep,
                 selectedRow: defaultSelectedRow,
                 specificIncomeBreakdown: specificIncomeBreakdown,
-                taxDeductionAmount: defaultTaxDeductionAmount
+                taxDeductionAmount: defaultTaxDeductionAmount,
+                selectedTaxYear:{}
             }
         });            
         buildChart();
@@ -439,6 +448,15 @@
         }
         app.taxBrackets.splice(selRow, 1);
     };
+
+    function switchTaxBracket(){
+        app.taxBrackets = app.selectedTaxYear.brackets;
+        app.taxDeductionAmount = app.selectedTaxYear.standardDeduction;
+
+        buildChart();
+        calculateBreakdown();
+        window.myLine = new Chart(ctx, config);  
+    }
 </script>
 </body>
 
