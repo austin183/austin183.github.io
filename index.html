@@ -36,15 +36,19 @@
     <div id="configuration">
         <h4>Tax configs</h4>
         <p>
-            Here you can add definitions for tax brackets to show how they would affect incomes and marginal tax rates.  The example provided is for a single person filing in the US in 2020.
+            Here you can add definitions for tax brackets to show how they would affect incomes and marginal tax rates.
+
+            Some historical tax brackets are provided in the drop down.  Select one to show what taxes would have looked like that year.
         </p>
-        <div class="pure-u-1">
-            <select id="selectTaxYear" v-model="selectedTaxYear" v-on:change="switchTaxBracket()" class="pure-input-1-2" >
+        <div >
+            <select id="selectTaxYear" v-model="selectedTaxYear" v-on:change="switchTaxBracket()" class="pure-input-rounded" >
                 <option value="" disabled selected>Select a tax year to pull the tax brackets for a single file that year.</option>
                 <option v-for="(item, key, index) in getTaxYears()" :value="item">{{key}}</option>
             </select>
         </div>
-        
+        <p>
+            You can modify tax bracket definitions here to set up your own scenarios.
+        </p>
         <button id="addNewTaxBracket" onclick="addNewTaxBracket()" class="pure-button">Add New Tax Bracket</button>
         <button id="removeTaxBracket" onclick="removeTaxBracket()" class="pure-button">Remove Selected Tax Bracket</button>
         <table id="taxConfiguration" class="pure-table pure-table-bordered">
@@ -60,7 +64,7 @@
             </tr>
         </table>
         <p>
-            Set a Deduction amount below.  The example provided is for a single person fileing in the US in 2020.
+            Set a Deduction amount below.
         </p>
         <table id="taxDeduction" class="pure-table pure-table-bordered">
             <tr>

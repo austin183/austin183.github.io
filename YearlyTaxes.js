@@ -1,6 +1,39 @@
 function getTaxYears() {
     return {
-        "Single2021": {
+        "Single2019": {
+            "standardDeduction": 12200,
+            "brackets": [
+                {
+                    "taxRate": 10,
+                    "bracketMax": 9700
+                },
+                {
+                    "taxRate": 12,
+                    "bracketMax": 39475
+                },
+                {
+                    "taxRate": 22,
+                    "bracketMax": 84200
+                },
+                {
+                    "taxRate": 24,
+                    "bracketMax": 160725
+                },
+                {
+                    "taxRate": 32,
+                    "bracketMax": 204100
+                },
+                {
+                    "taxRate": 35,
+                    "bracketMax": 510300
+                },
+                {
+                    "taxRate": 37,
+                    "bracketMax": Number.MAX_SAFE_INTEGER
+                }
+            ]
+        },
+        "Single2020": {
             "standardDeduction": 12400,
             "brackets": [
                 {
@@ -33,8 +66,41 @@ function getTaxYears() {
                 }
             ]
         },
+        "Single2021": {
+            "standardDeduction": 12550,
+            "brackets": [
+                {
+                    "taxRate": 10,
+                    "bracketMax": 9950
+                },
+                {
+                    "taxRate": 12,
+                    "bracketMax": 40525
+                },
+                {
+                    "taxRate": 22,
+                    "bracketMax": 86375
+                },
+                {
+                    "taxRate": 24,
+                    "bracketMax": 164925
+                },
+                {
+                    "taxRate": 32,
+                    "bracketMax": 209425
+                },
+                {
+                    "taxRate": 35,
+                    "bracketMax": 523600
+                },
+                {
+                    "taxRate": 37,
+                    "bracketMax": Number.MAX_SAFE_INTEGER
+                }
+            ]
+        },
         "Single2022": {
-            "standardDeduction": 12400,
+            "standardDeduction": 12950,
             "brackets": [
                 {
                     "taxRate": 10,
