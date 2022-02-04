@@ -142,10 +142,29 @@
             <td><input type="number" id="step" v-model="step" /></td>
         </tr>     
     </table>    
+    <button id="rebuildGraph" onclick="rebuildGraph()" class="pure-button">Rebuild Graph</button>
+    <div style="position:relative;width:95vw;height:50vh">
+        <canvas id="canvas"></canvas>
+    </div>
 </div>
-<button id="rebuildGraph" onclick="rebuildGraph()" class="pure-button">Rebuild Graph</button>
-<div style="position:relative;width:95vw;height:50vh">
-    <canvas id="canvas"></canvas>
+
+<div id="TaxAmountYearly">
+    <h4>
+        Taxes over Time
+    </h4>
+    <p>
+        With some years worth of tax bracket definitions, we can look at how an amount would be taxed over the years.  Here you can see experiment to see how different incomes are affected by yearly changes.
+    </p>
+    <table id="yearlyGraphConfiguration" class="pure-table pure-table-bordered">
+        <tr>
+            <td>Amount</td>
+            <td><input type="number" id="amountForYearlyGraph" v-model="amountForYearlyGraph" step="100" /></td>
+        </tr>
+    </table>
+    <button id="rebuildYearlyGraph" onclick="rebuildYearlyGraph()" class="pure-button">Rebuild Graph</button>
+    <div style="position:relative;width:95vw;height:50vh">
+        <canvas id="canvasYearly"></canvas>
+    </div>
 </div>
 <div id="furtherResources">
     <h4>Further Resources</h4>
@@ -183,6 +202,7 @@
     }
 
     var app;
+    var defaultAmountForYearlyGraph = 50000;
     var defaultMin = 10000;
     var defaultMax = 800000;
     var defaultStep = 15000;
@@ -337,7 +357,6 @@
     };
 
     window.onload = function() {
-        var ctx = document.getElementById('canvas').getContext('2d');
         app = new Vue({
             el: '#app',
             data : {
@@ -348,12 +367,18 @@
                 selectedRow: defaultSelectedRow,
                 specificIncomeBreakdown: specificIncomeBreakdown,
                 taxDeductionAmount: defaultTaxDeductionAmount,
-                selectedTaxYear:{}
+                selectedTaxYear:{},
+                amountForYearlyGraph:defaultAmountForYearlyGraph,
+                vueCanvas:null
+            },
+            mounted(){
+                var ctx = document.getElementById('canvas').getContext('2d');
+                this.vueCanvas = ctx;
+                window.myLine = new Chart(this.vueCanvas, config);            
             }
         });            
-        buildChart();
+        rebuildGraph();
         calculateBreakdown();
-        window.myLine = new Chart(ctx, config);            
     };
 
     function calculateBreakdown(){
@@ -459,8 +484,6 @@
 
         rebuildGraph();
         calculateBreakdown();
-        var ctx = document.getElementById('canvas').getContext('2d');
-        window.myLine = new Chart(ctx, config);  
     }
 </script>
 </body>
