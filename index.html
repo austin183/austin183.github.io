@@ -488,9 +488,9 @@
                 this.vueCanvasYearly = yearlyctx;
                 window.myLineYearly = new Chart(this.vueCanvasYearly, yearlyConfig);
             }
-        });            
-        rebuildGraph();
+        });
         calculateBreakdown();
+        rebuildGraph();
         rebuildYearlyGraph();
     };
 
@@ -592,7 +592,6 @@
             yearlyConfig.data.datasets[graphLineIndex.marginalTaxRate].data.push(taxInfo.marginalTaxRate);
             yearlyConfig.data.datasets[graphLineIndex.netIncome].data.push(taxInfo.netIncome);
         });
-        console.log(yearlyConfig.data.datasets);
     }
 
     function rebuildGraph() {

@@ -1,5 +1,121 @@
 function getTaxYears() {
     return {
+        "Single2006": {
+            "standardDeduction": 5150,
+            "brackets": [
+                {
+                    "taxRate": 10,
+                    "bracketMax": 7550
+                },
+                {
+                    "taxRate": 15,
+                    "bracketMax": 30650
+                },
+                {
+                    "taxRate": 25,
+                    "bracketMax": 74200
+                },
+                {
+                    "taxRate": 28,
+                    "bracketMax": 154800
+                },
+                {
+                    "taxRate": 33,
+                    "bracketMax": 336550
+                },
+                {
+                    "taxRate": 35,
+                    "bracketMax": Number.MAX_SAFE_INTEGER
+                }
+            ]
+        },
+        "Single2007": {
+            "standardDeduction": 5350,
+            "brackets": [
+                {
+                    "taxRate": 10,
+                    "bracketMax": 7825
+                },
+                {
+                    "taxRate": 15,
+                    "bracketMax": 31850
+                },
+                {
+                    "taxRate": 25,
+                    "bracketMax": 77100
+                },
+                {
+                    "taxRate": 28,
+                    "bracketMax": 160850
+                },
+                {
+                    "taxRate": 33,
+                    "bracketMax": 349700
+                },
+                {
+                    "taxRate": 35,
+                    "bracketMax": Number.MAX_SAFE_INTEGER
+                }
+            ]
+        },
+        "Single2008": {
+            "standardDeduction": 5450,
+            "brackets": [
+                {
+                    "taxRate": 10,
+                    "bracketMax": 8025
+                },
+                {
+                    "taxRate": 15,
+                    "bracketMax": 32550
+                },
+                {
+                    "taxRate": 25,
+                    "bracketMax": 78850
+                },
+                {
+                    "taxRate": 28,
+                    "bracketMax": 164550
+                },
+                {
+                    "taxRate": 33,
+                    "bracketMax": 357700
+                },
+                {
+                    "taxRate": 35,
+                    "bracketMax": Number.MAX_SAFE_INTEGER
+                }
+            ]
+        },
+        "Single2009": {
+            "standardDeduction": 5700,
+            "brackets": [
+                {
+                    "taxRate": 10,
+                    "bracketMax": 8350
+                },
+                {
+                    "taxRate": 15,
+                    "bracketMax": 33950
+                },
+                {
+                    "taxRate": 25,
+                    "bracketMax": 82250
+                },
+                {
+                    "taxRate": 28,
+                    "bracketMax": 171550
+                },
+                {
+                    "taxRate": 33,
+                    "bracketMax": 372950
+                },
+                {
+                    "taxRate": 35,
+                    "bracketMax": Number.MAX_SAFE_INTEGER
+                }
+            ]
+        },
         "Single2010": {
             "standardDeduction": 5700,
             "brackets": [
