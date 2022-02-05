@@ -13,6 +13,24 @@ function getPlotlyHelper() {
                     t: 65
                 }
             };
+        },
+        getInitialPlotlyRow: function(){
+            return {
+                "x": [],
+                "y": [],
+                "z": [],
+                "opacity": 0.9,
+                "mode": "markers",
+                "type": "scatter3d",
+                "name": "topology",
+                marker: {
+                    size: 4,
+                    color: [],
+                    colorscale:"Jet",
+                    cmin: -20,
+                    cmax: 50
+                }
+            };
         }
     };
 }

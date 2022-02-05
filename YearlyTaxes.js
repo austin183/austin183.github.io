@@ -2,6 +2,18 @@ function getDefaultTaxYear(){
     return this.getTaxYears().Single2022;
 }
 
+function getSingleTaxPayerDefinitionKeys() {
+    var taxYearDefinitions = getTaxYears();
+    var taxYearProperties = [];
+    for (taxYearProperty in taxYearDefinitions) {
+        if (taxYearProperty.includes("Single")) {
+            taxYearProperties.push(taxYearProperty);
+        }
+    }
+    taxYearProperties.sort();
+    return taxYearProperties;
+}
+
 function getTaxYears() {
     return {
         "Single2006": {

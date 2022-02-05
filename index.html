@@ -226,6 +226,7 @@
             purple: 'rgb(153, 102, 255)',
             grey: 'rgb(201, 203, 207)'
         };
+        var singleTaxPayerDefinitionKeys = getSingleTaxPayerDefinitionKeys();
         var chartHelper = getChartHelper();
         var plotlyHelper = getPlotlyHelper();
         var taxCalculator = getTaxCalculator();
@@ -407,7 +408,7 @@
             }
             yearlyConfig.data.labels = [];
             var i = app.amountForYearlyGraph;
-            var taxYearProperties = getSingleTaxPayerDefinitionKeys();
+            var taxYearProperties = singleTaxPayerDefinitionKeys;
             var taxYearDefinitions = getTaxYears();
             taxYearProperties.forEach(function (taxYear) {
                 var taxYearDef = taxYearDefinitions[taxYear];
@@ -421,18 +422,6 @@
             });
         }
 
-        function getSingleTaxPayerDefinitionKeys() {
-            var taxYearDefinitions = getTaxYears();
-            var taxYearProperties = [];
-            for (taxYearProperty in taxYearDefinitions) {
-                if (taxYearProperty.includes("Single")) {
-                    taxYearProperties.push(taxYearProperty);
-                }
-            }
-            taxYearProperties.sort();
-            return taxYearProperties;
-        }
-
         function rebuildGraph() {
             buildChart();
             buildPlotlyTopology();
@@ -441,26 +430,11 @@
 
         function buildPlotlyTopology() {
             z_data = [];
-            var taxYearProperties = getSingleTaxPayerDefinitionKeys();
+            var taxYearProperties = singleTaxPayerDefinitionKeys;
             var taxYearDefinitions = getTaxYears();
 
-            var plotlyRow = {
-                "x": [],
-                "y": [],
-                "z": [],
-                "opacity": 0.8,
-                "mode": "markers",
-                "type": "scatter3d",
-                "name": "topology",
-                marker: {
-                    size: 3.5,
-                    color: "blue",
-                    colorscale: "Viridis",
-                    cmin: -20,
-                    cmax: 50
-                }
-            };
-
+            var plotlyRow = plotlyHelper.getInitialPlotlyRow();
+            var counter = 0;
             taxYearProperties.forEach(function (taxYear) {
                 var taxYearDef = taxYearDefinitions[taxYear];
                 var taxYearLabel = parseInt(taxYear.replace("Single", ""));
@@ -471,8 +445,10 @@
                     plotlyRow.x.push(i);
                     plotlyRow.y.push(taxYearLabel);
                     plotlyRow.z.push(taxInformation.marginalTaxRate * 100);
+                    plotlyRow.marker.color.push(counter*3);
                     i = parseInt(i) + parseInt(app.step);
                 }
+                counter++;
             });
             z_data.push(plotlyRow);
             Plotly.newPlot(app.topologyGraph, z_data, plotlyLayout);
