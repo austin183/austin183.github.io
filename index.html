@@ -260,6 +260,76 @@
         calculatedIncome: 0
     };
     var defaultSelectedRow = 0;
+    var chartConfigOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        title: {
+            display: true,
+            text: 'Income'
+        },
+        tooltips: {
+            mode: 'index',
+            intersect: false,
+            callbacks: {
+                label: function(tooltipItem, data){
+                    var value = formatNumberForDisplay(tooltipItem.value);
+                    if(tooltipItem.value > 0 && tooltipItem.value < 1){
+                        return value + "%";
+                    }
+                    else return value;
+                }
+            }
+        },
+        hover: {
+            mode: 'nearest',
+            intersect: true
+        },
+        scales: {
+            xAxes: [{
+                display: true,
+                scaleLabel: {
+                    display: true,
+                    labelString: 'Income'
+                },
+                ticks:{
+                    callback: function(value, index, values){
+                        return formatNumberForDisplay(value);
+                    }
+                }
+            }],
+            yAxes: [{
+                display: true,
+                scaleLabel: {
+                    display: true,
+                    labelString: 'Amount'
+                },
+                id: 'amount-axis',
+                position:'left',
+                ticks:{
+                    callback: function(value, index, values){
+                        return formatNumberForDisplay(value);
+                    }
+                }
+            },
+            {
+                display: true,
+                scaleLabel: {
+                    display: true,
+                    labelString: 'Marginal Tax Rate'
+                },
+                id: 'marginal-rate-axis',
+                position:'right',
+                gridLines:{
+                    drawOnChartArea: false
+                },
+                ticks:{
+                    callback: function(value, index, values){
+                        return formatNumberForDisplay(value) + "%";
+                    }
+                }
+            }]
+        }
+    };
     var yearlyConfig = {
         type: 'line',
         data: {
@@ -295,76 +365,7 @@
                 borderDash:[5,5]
             }]
         },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            title: {
-                display: true,
-                text: 'Income'
-            },
-            tooltips: {
-                mode: 'index',
-                intersect: false,
-                callbacks: {
-                    label: function(tooltipItem, data){
-                        var value = formatNumberForDisplay(tooltipItem.value);
-                        if(tooltipItem.value > 0 && tooltipItem.value < 1){
-                            return value + "%";
-                        }
-                        else return value;
-                    }
-                }
-            },
-            hover: {
-                mode: 'nearest',
-                intersect: true
-            },
-            scales: {
-                xAxes: [{
-                    display: true,
-                    scaleLabel: {
-                        display: true,
-                        labelString: 'Year'
-                    },
-                    ticks:{
-                        callback: function(value, index, values){
-                            return formatNumberForDisplay(value);
-                        }
-                    }
-                }],
-                yAxes: [{
-                    display: true,
-                    scaleLabel: {
-                        display: true,
-                        labelString: 'Amount'
-                    },
-                    id: 'amount-axis',
-                    position:'left',
-                    ticks:{
-                        callback: function(value, index, values){
-                            return formatNumberForDisplay(value);
-                        }
-                    }
-                },
-                {
-                    display: true,
-                    scaleLabel: {
-                        display: true,
-                        labelString: 'Marginal Tax Rate'
-                    },
-                    id: 'marginal-rate-axis',
-                    position:'right',
-                    gridLines:{
-                        drawOnChartArea: false
-                    },
-                    ticks:{
-                        callback: function(value, index, values){
-                            return formatNumberForDisplay(value) + "%";
-                        }
-                    }
-                }]
-            }
-        }
+        options: chartConfigOptions
     };
 
     var config = {
@@ -402,76 +403,7 @@
                 borderDash:[5,5]
             }]
         },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            title: {
-                display: true,
-                text: 'Income'
-            },
-            tooltips: {
-                mode: 'index',
-                intersect: false,
-                callbacks: {
-                    label: function(tooltipItem, data){
-                        var value = formatNumberForDisplay(tooltipItem.value);
-                        if(tooltipItem.value > 0 && tooltipItem.value < 1){
-                            return value + "%";
-                        }
-                        else return value;
-                    }
-                }
-            },
-            hover: {
-                mode: 'nearest',
-                intersect: true
-            },
-            scales: {
-                xAxes: [{
-                    display: true,
-                    scaleLabel: {
-                        display: true,
-                        labelString: 'Income'
-                    },
-                    ticks:{
-                        callback: function(value, index, values){
-                            return formatNumberForDisplay(value);
-                        }
-                    }
-                }],
-                yAxes: [{
-                    display: true,
-                    scaleLabel: {
-                        display: true,
-                        labelString: 'Amount'
-                    },
-                    id: 'amount-axis',
-                    position:'left',
-                    ticks:{
-                        callback: function(value, index, values){
-                            return formatNumberForDisplay(value);
-                        }
-                    }
-                },
-                {
-                    display: true,
-                    scaleLabel: {
-                        display: true,
-                        labelString: 'Marginal Tax Rate'
-                    },
-                    id: 'marginal-rate-axis',
-                    position:'right',
-                    gridLines:{
-                        drawOnChartArea: false
-                    },
-                    ticks:{
-                        callback: function(value, index, values){
-                            return formatNumberForDisplay(value) + "%";
-                        }
-                    }
-                }]
-            }
-        }
+        options: chartConfigOptions
     };
     var graphLineIndex = {
         taxAmount: 0,
@@ -647,9 +579,7 @@
         z_data = [];
         var taxYearProperties = getSingleTaxPayerDefinitionKeys();
         var taxYearDefinitions = getTaxYears();
-        /*
-            [{"x":[],"y":[],"z":[],"opacity":0.5,"mode":"markers","type":"mesh3d","name":"cube"}]
-        */
+        
         var plotlyRow = {
             "x": [],
             "y": [],
@@ -666,6 +596,7 @@
                 cmax: 50
             }
         };
+
         taxYearProperties.forEach(function(taxYear){
             var taxYearDef = taxYearDefinitions[taxYear];
             var taxYearLabel = parseInt(taxYear.replace("Single", ""));
