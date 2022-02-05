@@ -1,3 +1,7 @@
+function getDefaultTaxYear(){
+    return this.getTaxYears().Single2022;
+}
+
 function getTaxYears() {
     return {
         "Single2006": {

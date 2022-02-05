@@ -282,35 +282,7 @@
         var defaultMin = 10000;
         var defaultMax = 800000;
         var defaultStep = 15000;
-        var defaultTaxDeductionAmount = 12400;
-        var defaultTaxBrackets = [{
-            taxRate: 10,
-            bracketMax: 9875
-        },
-        {
-            taxRate: 12,
-            bracketMax: 40125
-        },
-        {
-            taxRate: 22,
-            bracketMax: 85525
-        },
-        {
-            taxRate: 24,
-            bracketMax: 163300
-        },
-        {
-            taxRate: 32,
-            bracketMax: 207350
-        },
-        {
-            taxRate: 35,
-            bracketMax: 518400
-        },
-        {
-            taxRate: 37,
-            bracketMax: Number.MAX_SAFE_INTEGER
-        }];
+        var defaultTaxYear = getDefaultTaxYear();
         var specificIncomeBreakdown = {
             components: [],
             totalAmount: 0,
@@ -414,11 +386,11 @@
                     data: {
                         min: defaultMin,
                         max: defaultMax,
-                        taxBrackets: defaultTaxBrackets,
+                        taxBrackets: defaultTaxYear.brackets,
                         step: defaultStep,
                         selectedRow: defaultSelectedRow,
                         specificIncomeBreakdown: specificIncomeBreakdown,
-                        taxDeductionAmount: defaultTaxDeductionAmount,
+                        taxDeductionAmount: defaultTaxYear.standardDeduction,
                         selectedTaxYear: {},
                         amountForYearlyGraph: defaultAmountForYearlyGraph,
                         vueCanvas: null,
@@ -439,8 +411,8 @@
                         Plotly.newPlot(this.topologyGraph, z_data, plotlyLayout);
                     }
                 });
-                calculateBreakdown();
-                rebuildGraph();
+                app.selectedTaxYear = defaultTaxYear;
+                switchTaxBracket();
                 rebuildYearlyGraph();
             };
 
