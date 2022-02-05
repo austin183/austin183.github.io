@@ -217,6 +217,23 @@
         return (value * .01).toFixed(2);
     }
 
+    function buildInitialDataset(label, color, yAxisId, includeBorderDash){
+        var dataset = {
+            label: label,
+                backgroundColor: color,
+                borderColor: color,
+                data: [
+                ],
+                fill: false,
+                yAxisID: yAxisId
+        };
+        if(includeBorderDash){
+            dataset.borderDash = [5,5];
+        }
+
+        return dataset;
+    }
+
     var app;
     var defaultAmountForYearlyGraph = 50000;
     var defaultMin = 10000;
@@ -260,6 +277,7 @@
         calculatedIncome: 0
     };
     var defaultSelectedRow = 0;
+
     var chartConfigOptions = {
         responsive: true,
         maintainAspectRatio: false,
@@ -324,86 +342,49 @@
                 },
                 ticks:{
                     callback: function(value, index, values){
-                        return formatNumberForDisplay(value) + "%";
+                        return formatNumberForDisplay(value * 100) + "%";
                     }
                 }
             }]
         }
     };
+
     var yearlyConfig = {
         type: 'line',
         data: {
             labels: [],
-            datasets: [{
-                label: 'Tax Amount per Year for a Specific Income',
-                backgroundColor: CHART_COLORS.red,
-                borderColor: CHART_COLORS.red,
-                data: [
-                ],
-                fill: false,
-                yAxisID: 'amount-axis'
-            },
-            {
-                label: 'Net Income per Year',
-                backgroundColor: CHART_COLORS.blue,
-                borderColor: CHART_COLORS.blue,
-                data:[
-
-                ],
-                fill:false,
-                yAxisID: 'amount-axis'
-            },
-            {
-                label: 'Marginal Tax Rate per Year',
-                backgroundColor: CHART_COLORS.green,
-                borderColor: CHART_COLORS.green,
-                data:[
-
-                ],
-                fill:false,
-                yAxisID: 'marginal-rate-axis',
-                borderDash:[5,5]
-            }]
+            datasets: [
+                buildInitialDataset('Tax Amount per Year for a Specific Income', CHART_COLORS.red, 'amount-axis', false),
+                buildInitialDataset('Net Income per Year', CHART_COLORS.blue, 'amount-axis', false),
+                buildInitialDataset('Marginal Tax Rate per Year', CHART_COLORS.green, 'marginal-rate-axis', true)
+            ]
         },
-        options: chartConfigOptions
+        options: JSON.parse(JSON.stringify(chartConfigOptions))
     };
+    yearlyConfig.options.scales.xAxes = [{
+        display: true,
+        scaleLabel: {
+            display: true,
+            labelString: 'Year'
+        },
+        ticks:{
+            callback: function(value, index, values){
+                return value;
+            }
+        }
+    }];
 
     var config = {
         type: 'line',
         data: {
             labels: [],
-            datasets: [{
-                label: 'Tax Amount per Income',
-                backgroundColor: CHART_COLORS.red,
-                borderColor: CHART_COLORS.red,
-                data: [
-                ],
-                fill: false,
-                yAxisID: 'amount-axis'
-            },
-            {
-                label: 'Net Income per Income',
-                backgroundColor: CHART_COLORS.blue,
-                borderColor: CHART_COLORS.blue,
-                data:[
-
-                ],
-                fill:false,
-                yAxisID: 'amount-axis'
-            },
-            {
-                label: 'Marginal Tax Rate per Income',
-                backgroundColor: CHART_COLORS.green,
-                borderColor: CHART_COLORS.green,
-                data:[
-
-                ],
-                fill:false,
-                yAxisID: 'marginal-rate-axis',
-                borderDash:[5,5]
-            }]
+            datasets: [
+                buildInitialDataset('Tax Amount per Year for a Specific Income', CHART_COLORS.red, 'amount-axis', false),
+                buildInitialDataset('Net Income per Year', CHART_COLORS.blue, 'amount-axis', false),
+                buildInitialDataset('Marginal Tax Rate per Year', CHART_COLORS.green, 'marginal-rate-axis', true)
+            ]
         },
-        options: chartConfigOptions
+        options: JSON.parse(JSON.stringify(chartConfigOptions))
     };
     var graphLineIndex = {
         taxAmount: 0,
