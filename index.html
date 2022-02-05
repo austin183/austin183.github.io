@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html>
 
@@ -6,12 +5,12 @@
     <title>How Tax Brackets Work</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
-	<script src="https://www.chartjs.org/dist/2.9.4/Chart.min.js"></script>
+    <script src="https://www.chartjs.org/dist/2.9.4/Chart.min.js"></script>
     <script src="https://unpkg.com/vue@2.6.12/dist/vue.min.js"></script>
     <script src='https://cdn.plot.ly/plotly-2.8.3.min.js'></script>
     <script src="YearlyTaxes.js"></script>
     <style>
-        canvas{
+        canvas {
             -moz-user-select: none;
             -webkit-user-select: none;
             -ms-user-select: none;
@@ -20,612 +19,613 @@
 </head>
 
 <body>
-<div id="app">
-    <h2>How Tax Brackets Work</h2>
-    <p>
-        Tax Brackets are a way to scale up the tax rate as an individual's income climbs.  Since taxing everyone at a high rate would disproportionally affect individuals with lower incomes, this method is used to relieve the tax burden on the most vulnerable individuals.
-    </p>
-    <p>
-        When taxes are calculated, everyone's first bracket is taxed equally.  Once an individual surpasses the first bracket, any amount of income above the first bracket and below the next bracket is taxed at the next bracket's rate.
-    </p>
-    <p>
-        A deduction is something that reduces an individual's taxable income.  Someone could make $40,000, and if they deducted $10,000, they would only get taxed on $30,000.
-    </p>
-    <p>
-        Please see the interactive examples below:
-    </p>
-    <div id="configuration">
-        <h4>Tax configs</h4>
+    <div id="app">
+        <h2>How Tax Brackets Work</h2>
         <p>
-            Here you can add definitions for tax brackets to show how they would affect incomes and marginal tax rates.
-
-            Some historical tax brackets are provided in the drop down.  Select one to show what taxes would have looked like that year.
+            Tax Brackets are a way to scale up the tax rate as an individual's income climbs. Since taxing everyone at a
+            high rate would disproportionally affect individuals with lower incomes, this method is used to relieve the
+            tax burden on the most vulnerable individuals.
         </p>
-        <div >
-            <select id="selectTaxYear" v-model="selectedTaxYear" v-on:change="switchTaxBracket()" class="pure-input-rounded" >
-                <option value="" disabled selected>Select a tax year to pull the tax brackets for a single file that year.</option>
-                <option v-for="(item, key, index) in getTaxYears()" :value="item">{{key}}</option>
-            </select>
+        <p>
+            When taxes are calculated, everyone's first bracket is taxed equally. Once an individual surpasses the first
+            bracket, any amount of income above the first bracket and below the next bracket is taxed at the next
+            bracket's rate.
+        </p>
+        <p>
+            A deduction is something that reduces an individual's taxable income. Someone could make $40,000, and if
+            they deducted $10,000, they would only get taxed on $30,000.
+        </p>
+        <p>
+            Please see the interactive examples below:
+        </p>
+        <div id="configuration">
+            <h4>Tax configs</h4>
+            <p>
+                Here you can add definitions for tax brackets to show how they would affect incomes and marginal tax
+                rates.
+
+                Some historical tax brackets are provided in the drop down. Select one to show what taxes would have
+                looked like that year.
+            </p>
+            <div>
+                <select id="selectTaxYear" v-model="selectedTaxYear" v-on:change="switchTaxBracket()"
+                    class="pure-input-rounded">
+                    <option value="" disabled selected>Select a tax year to pull the tax brackets for a single file that
+                        year.</option>
+                    <option v-for="(item, key, index) in getTaxYears()" :value="item">{{key}}</option>
+                </select>
+            </div>
+            <p>
+                You can modify tax bracket definitions here to set up your own scenarios.
+            </p>
+            <button id="addNewTaxBracket" onclick="addNewTaxBracket()" class="pure-button">Add New Tax Bracket</button>
+            <button id="removeTaxBracket" onclick="removeTaxBracket()" class="pure-button">Remove Selected Tax
+                Bracket</button>
+            <table id="taxConfiguration" class="pure-table pure-table-bordered">
+                <tr>
+                    <th></th>
+                    <th>Income Bracket</th>
+                    <th>TaxRate</th>
+                </tr>
+                <tr v-for="(bracket, index) in taxBrackets">
+                    <td><input type="radio" v-model="selectedRow" :value="`${index}`" :id="`bracket-row-${index}`"
+                            class="pure-radio" /></td>
+                    <td><input type="number" :id="`bracket-max-${index}`" v-model="bracket.bracketMax" step="100"
+                            class="pure-input-rounded" /></td>
+                    <td><input type="number" min="0" max="100" step="1" :id="`bracket-taxRate-{index}`"
+                            v-model="bracket.taxRate" class="pure-input-rounded" /> %</td>
+                </tr>
+            </table>
+            <p>
+                Set a Deduction amount below.
+            </p>
+            <table id="taxDeduction" class="pure-table pure-table-bordered">
+                <tr>
+                    <th>Deduction Amount</th>
+                </tr>
+                <tr>
+                    <td><input type="number" id="taxDeductionAmount" v-model="taxDeductionAmount" /></td>
+                </tr>
+            </table>
         </div>
+        <h3>Specific Income Breakdown</h3>
         <p>
-            You can modify tax bracket definitions here to set up your own scenarios.
+            Here you can see how the taxes would be calculated for a specific income based on the configurations above.
+            The amount of tax is shown per bracket, and the marginal tax rate for the income is shown below.
         </p>
-        <button id="addNewTaxBracket" onclick="addNewTaxBracket()" class="pure-button">Add New Tax Bracket</button>
-        <button id="removeTaxBracket" onclick="removeTaxBracket()" class="pure-button">Remove Selected Tax Bracket</button>
-        <table id="taxConfiguration" class="pure-table pure-table-bordered">
-            <tr>
-                <th></th>
-                <th>Income Bracket</th>
-                <th>TaxRate</th>
-            </tr>
-            <tr v-for="(bracket, index) in taxBrackets">
-                <td><input type="radio" v-model="selectedRow" :value="`${index}`" :id="`bracket-row-${index}`" class="pure-radio" /></td>
-                <td><input type="number" :id="`bracket-max-${index}`" v-model="bracket.bracketMax" step="100" class="pure-input-rounded" /></td>
-                <td><input type="number" min="0" max="100" step="1" :id="`bracket-taxRate-{index}`" v-model="bracket.taxRate" class="pure-input-rounded" /> %</td>
-            </tr>
-        </table>
-        <p>
-            Set a Deduction amount below.
-        </p>
-        <table id="taxDeduction" class="pure-table pure-table-bordered">
-            <tr>
-                <th>Deduction Amount</th>
-            </tr>
-            <tr>
-                <td><input type="number" id="taxDeductionAmount" v-model="taxDeductionAmount"/></td>
-            </tr>
-        </table>
-    </div>
-    <h3>Specific Income Breakdown</h3>
-    <p>
-        Here you can see how the taxes would be calculated for a specific income based on the configurations above.  The amount of tax is shown per bracket, and the marginal tax rate for the income is shown below.
-    </p>
-    <div id="breakdown" >
-        <table id="breakDownInput" class="pure-table pure-table-bordered">
-            <tr>
-                <td>Enter a specific income to show it's breakdown</td>
-            </tr>
-            <tr>
-                <td><input type="number" step="1000" id="specificIncome" v-model="specificIncomeBreakdown.startingAmount" /></td>
-            </tr>
-        </table>
+        <div id="breakdown">
+            <table id="breakDownInput" class="pure-table pure-table-bordered">
+                <tr>
+                    <td>Enter a specific income to show it's breakdown</td>
+                </tr>
+                <tr>
+                    <td><input type="number" step="1000" id="specificIncome"
+                            v-model="specificIncomeBreakdown.startingAmount" /></td>
+                </tr>
+            </table>
 
-        <button id="calculateBreakdown" class="pure-button" onclick="calculateBreakdown()">Calculate Breakdown</button>
-        <table class="pure-table pure-table-bordered">
-            <tr>
-                <th>Income Bracket</th>
-                <th>Tax Rate</th>
-                <th>Tax Amount</th>
-            </tr>
-            <tr v-for="breakdown in specificIncomeBreakdown.components">
-                <td>${{ formatNumberForDisplay(breakdown.max) }}</td>
-                <td>{{ formatNumberForDisplay(breakdown.taxRate) }}%</td>
-                <td>${{ formatNumberForDisplay(breakdown.taxAmount) }}</td>
-            </tr>                
-        </table>
-        <table class="pure-table pure-table-bordered">
-            <tr>
-                <td>Income specified was</td>
-                <td>${{ formatNumberForDisplay(specificIncomeBreakdown.calculatedIncome) }}</td>
-            </tr>
-            <tr>
-                <td>The total amount of tax owed would be</td>
-                <td>${{ formatNumberForDisplay(specificIncomeBreakdown.totalAmount) }}</td>
-            </tr>
+            <button id="calculateBreakdown" class="pure-button" onclick="calculateBreakdown()">Calculate
+                Breakdown</button>
+            <table class="pure-table pure-table-bordered">
+                <tr>
+                    <th>Income Bracket</th>
+                    <th>Tax Rate</th>
+                    <th>Tax Amount</th>
+                </tr>
+                <tr v-for="breakdown in specificIncomeBreakdown.components">
+                    <td>${{ formatNumberForDisplay(breakdown.max) }}</td>
+                    <td>{{ formatNumberForDisplay(breakdown.taxRate) }}%</td>
+                    <td>${{ formatNumberForDisplay(breakdown.taxAmount) }}</td>
+                </tr>
+            </table>
+            <table class="pure-table pure-table-bordered">
+                <tr>
+                    <td>Income specified was</td>
+                    <td>${{ formatNumberForDisplay(specificIncomeBreakdown.calculatedIncome) }}</td>
+                </tr>
+                <tr>
+                    <td>The total amount of tax owed would be</td>
+                    <td>${{ formatNumberForDisplay(specificIncomeBreakdown.totalAmount) }}</td>
+                </tr>
 
-            <tr>
-                <td>The marginal tax rate would be</td>
-                <td>{{ formatNumberForDisplay(specificIncomeBreakdown.marginalTaxRate) }}%</td>
-            </tr>
+                <tr>
+                    <td>The marginal tax rate would be</td>
+                    <td>{{ formatNumberForDisplay(specificIncomeBreakdown.marginalTaxRate) }}%</td>
+                </tr>
 
-            <tr>
-                <td>The net income after tax would be</td>
-                <td>${{ formatNumberForDisplay(specificIncomeBreakdown.netIncome) }}</td>
-            </tr>
-        </table>
-    </div>
-    <div id="IncomeRangeGraph">
-        <h4>Taxes over a range of Incomes for a single year</h4>
-        <p>
-            To see how a range of incomes would be affected by the configured tax brackets, you can specify a start, end, and step value to graph.
-            The step value is how to specify which specific points to graph.  The bigger the step, the less points will be calculated.
-        </p>
-        <table id="graphConfiguration" class="pure-table pure-table-bordered">
-            <tr>
-                <td>Start</td>
-                <td><input type="number" id="min" v-model="min" step="100" /></td>
-            </tr>
-            <tr>
-                <td>End</td>
-                <td><input type="number" id="max" v-model="max" step="100" /></td>
-            </tr>
-            <tr>
-                <td>Step</td>
-                <td><input type="number" id="step" v-model="step" /></td>
-            </tr>     
-        </table>    
-        <button id="rebuildGraph" onclick="rebuildGraph()" class="pure-button">Rebuild Graph</button>
-        <div style="position:relative;width:95vw;height:50vh">
-            <canvas id="canvas"></canvas>
+                <tr>
+                    <td>The net income after tax would be</td>
+                    <td>${{ formatNumberForDisplay(specificIncomeBreakdown.netIncome) }}</td>
+                </tr>
+            </table>
+        </div>
+        <div id="IncomeRangeGraph">
+            <h4>Taxes over a range of Incomes for a single year</h4>
+            <p>
+                To see how a range of incomes would be affected by the configured tax brackets, you can specify a start,
+                end, and step value to graph.
+                The step value is how to specify which specific points to graph. The bigger the step, the less points
+                will be calculated.
+            </p>
+            <table id="graphConfiguration" class="pure-table pure-table-bordered">
+                <tr>
+                    <td>Start</td>
+                    <td><input type="number" id="min" v-model="min" step="100" /></td>
+                </tr>
+                <tr>
+                    <td>End</td>
+                    <td><input type="number" id="max" v-model="max" step="100" /></td>
+                </tr>
+                <tr>
+                    <td>Step</td>
+                    <td><input type="number" id="step" v-model="step" /></td>
+                </tr>
+            </table>
+            <button id="rebuildGraph" onclick="rebuildGraph()" class="pure-button">Rebuild Graph</button>
+            <div style="position:relative;width:95vw;height:50vh">
+                <canvas id="canvas"></canvas>
+            </div>
+        </div>
+        <div id="MarginalTaxTopology">
+            <h4>
+                Marginal Tax Topology over the years
+            </h4>
+            <p>
+                This is a 3d graph that aims to show how marginal tax rate changes year over year across a range of
+                incomes.
+            </p>
+            <p>
+                This widget uses the same form values as above in Taxes over a range of Incomes for a single year
+            </p>
+            <div id="topologyGraph"></div>
+        </div>
+        <div id="TaxAmountYearly">
+            <h4>
+                Taxes over Time
+            </h4>
+            <p>
+                With some years worth of tax bracket definitions, we can look at how an amount would be taxed over the
+                years. Here you can experiment to see how different incomes are affected by yearly changes.
+            </p>
+            <table id="yearlyGraphConfiguration" class="pure-table pure-table-bordered">
+                <tr>
+                    <td>Amount</td>
+                    <td><input type="number" id="amountForYearlyGraph" v-model="amountForYearlyGraph" step="100" /></td>
+                </tr>
+            </table>
+            <button id="rebuildYearlyGraph" onclick="rebuildYearlyGraph()" class="pure-button">Rebuild Graph</button>
+            <div style="position:relative;width:95vw;height:50vh">
+                <canvas id="canvasYearly"></canvas>
+            </div>
         </div>
     </div>
-    <div id="MarginalTaxTopology">
-        <h4>
-            Marginal Tax Topology over the years
-        </h4>
+
+
+    <div id="furtherResources">
+        <h4>Further Resources</h4>
         <p>
-            This is a 3d graph that aims to show how marginal tax rate changes year over year across a range of incomes.
+            For historical tax rates, please visit <a
+                href="https://files.taxfoundation.org/legacy/docs/fed_individual_rate_history_nominal.pdf">TaxFoundation.org</a>
         </p>
         <p>
-            This widget uses the same form values as above in Taxes over a range of Incomes for a single year
+            For more recent tax rates, please visit <a
+                href="http://www.moneychimp.com/features/tax_brackets.htm">MoneyChimp.com</a>
         </p>
-        <div id="topologyGraph"></div>
     </div>
-    <div id="TaxAmountYearly">
-        <h4>
-            Taxes over Time
-        </h4>
-        <p>
-            With some years worth of tax bracket definitions, we can look at how an amount would be taxed over the years.  Here you can experiment to see how different incomes are affected by yearly changes.
-        </p>
-        <table id="yearlyGraphConfiguration" class="pure-table pure-table-bordered">
-            <tr>
-                <td>Amount</td>
-                <td><input type="number" id="amountForYearlyGraph" v-model="amountForYearlyGraph" step="100" /></td>
-            </tr>
-        </table>
-        <button id="rebuildYearlyGraph" onclick="rebuildYearlyGraph()" class="pure-button">Rebuild Graph</button>
-        <div style="position:relative;width:95vw;height:50vh">
-            <canvas id="canvasYearly"></canvas>
-        </div>
-    </div>
-</div>
 
-
-<div id="furtherResources">
-    <h4>Further Resources</h4>
-    <p>
-        For historical tax rates, please visit <a href="https://files.taxfoundation.org/legacy/docs/fed_individual_rate_history_nominal.pdf">TaxFoundation.org</a>
-    </p>
-    <p>
-        For more recent tax rates, please visit <a href="http://www.moneychimp.com/features/tax_brackets.htm">MoneyChimp.com</a>
-    </p>    
-</div>
-
-<script>
-    const CHART_COLORS = {
-        red: 'rgb(255, 99, 132)',
-        orange: 'rgb(255, 159, 64)',
-        yellow: 'rgb(255, 205, 86)',
-        green: 'rgb(75, 192, 192)',
-        blue: 'rgb(54, 162, 235)',
-        purple: 'rgb(153, 102, 255)',
-        grey: 'rgb(201, 203, 207)'
-    };
-    function formatNumberForDisplay(value){
-        if(parseInt(value) >= 1000){
-            return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-        } else if (value < 1 && value > 0){
-            return (value * 100).toFixed(2);
-        }        
-        else {
-            return value;
+    <script>
+        const CHART_COLORS = {
+            red: 'rgb(255, 99, 132)',
+            orange: 'rgb(255, 159, 64)',
+            yellow: 'rgb(255, 205, 86)',
+            green: 'rgb(75, 192, 192)',
+            blue: 'rgb(54, 162, 235)',
+            purple: 'rgb(153, 102, 255)',
+            grey: 'rgb(201, 203, 207)'
+        };
+        function formatNumberForDisplay(value) {
+            if (parseInt(value) >= 1000) {
+                return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+            } else if (value < 1 && value > 0) {
+                return (value * 100).toFixed(2);
+            }
+            else {
+                return value;
+            }
         }
-    }
 
-    function getPercentage(value){
-        return (value * .01).toFixed(2);
-    }
+        function getPercentage(value) {
+            return (value * .01).toFixed(2);
+        }
 
-    function buildInitialDataset(label, color, yAxisId, includeBorderDash){
-        var dataset = {
-            label: label,
+        function buildInitialDataset(label, color, yAxisId, includeBorderDash) {
+            var dataset = {
+                label: label,
                 backgroundColor: color,
                 borderColor: color,
                 data: [
                 ],
                 fill: false,
                 yAxisID: yAxisId
-        };
-        if(includeBorderDash){
-            dataset.borderDash = [5,5];
+            };
+            if (includeBorderDash) {
+                dataset.borderDash = [5, 5];
+            }
+
+            return dataset;
         }
 
-        return dataset;
-    }
-
-    var app;
-    var defaultAmountForYearlyGraph = 50000;
-    var defaultMin = 10000;
-    var defaultMax = 800000;
-    var defaultStep = 15000;
-    var defaultTaxDeductionAmount = 12400;
-    var defaultTaxBrackets = [{
-        taxRate: 10,
-        bracketMax: 9875
-    },
-    {
-        taxRate: 12,
-        bracketMax: 40125
-    },
-    {
-        taxRate: 22,
-        bracketMax: 85525
-    },
-    {
-        taxRate: 24,
-        bracketMax: 163300
-    },
-    {
-        taxRate: 32,
-        bracketMax: 207350
-    },
-    {
-        taxRate: 35,
-        bracketMax: 518400
-    },
-    {
-        taxRate: 37,
-        bracketMax: Number.MAX_SAFE_INTEGER
-    }];
-    var specificIncomeBreakdown = {
-        components: [],
-        totalAmount: 0,
-        marginalTaxRate: 0,
-        netIncome: 0,
-        startingAmount: 15000,
-        calculatedIncome: 0
-    };
-    var defaultSelectedRow = 0;
-
-    var chartConfigOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        title: {
-            display: true,
-            text: 'Income'
-        },
-        tooltips: {
-            mode: 'index',
-            intersect: false,
-            callbacks: {
-                label: function(tooltipItem, data){
-                    var value = formatNumberForDisplay(tooltipItem.value);
-                    if(tooltipItem.value > 0 && tooltipItem.value < 1){
-                        return value + "%";
-                    }
-                    else return value;
-                }
-            }
-        },
-        hover: {
-            mode: 'nearest',
-            intersect: true
-        },
-        scales: {
-            xAxes: [{
+        function buildChartAxisDefinition(labelString, id, position, drawOnChartArea, tickCallBackFn) {
+            return {
                 display: true,
                 scaleLabel: {
                     display: true,
-                    labelString: 'Income'
+                    labelString: labelString
                 },
-                ticks:{
-                    callback: function(value, index, values){
-                        return formatNumberForDisplay(value);
-                    }
+                id: id,
+                position: position,
+                gridLines: {
+                    drawOnChartArea: drawOnChartArea
+                },
+                ticks: {
+                    callback: tickCallBackFn
                 }
-            }],
-            yAxes: [{
-                display: true,
-                scaleLabel: {
-                    display: true,
-                    labelString: 'Amount'
-                },
-                id: 'amount-axis',
-                position:'left',
-                ticks:{
-                    callback: function(value, index, values){
-                        return formatNumberForDisplay(value);
-                    }
-                }
-            },
-            {
-                display: true,
-                scaleLabel: {
-                    display: true,
-                    labelString: 'Marginal Tax Rate'
-                },
-                id: 'marginal-rate-axis',
-                position:'right',
-                gridLines:{
-                    drawOnChartArea: false
-                },
-                ticks:{
-                    callback: function(value, index, values){
-                        return formatNumberForDisplay(value * 100) + "%";
-                    }
-                }
-            }]
+            }
         }
-    };
 
-    var yearlyConfig = {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [
-                buildInitialDataset('Tax Amount per Year for a Specific Income', CHART_COLORS.red, 'amount-axis', false),
-                buildInitialDataset('Net Income per Year', CHART_COLORS.blue, 'amount-axis', false),
-                buildInitialDataset('Marginal Tax Rate per Year', CHART_COLORS.green, 'marginal-rate-axis', true)
-            ]
+        function formatDecimalAsPercent(value, index, values) {
+            return formatNumberForDisplay(value.toFixed(2) * 100).toFixed(0) + "%";
+        }
+
+        var app;
+        var defaultAmountForYearlyGraph = 50000;
+        var defaultMin = 10000;
+        var defaultMax = 800000;
+        var defaultStep = 15000;
+        var defaultTaxDeductionAmount = 12400;
+        var defaultTaxBrackets = [{
+            taxRate: 10,
+            bracketMax: 9875
         },
-        options: JSON.parse(JSON.stringify(chartConfigOptions))
-    };
-    yearlyConfig.options.scales.xAxes = [{
-        display: true,
-        scaleLabel: {
-            display: true,
-            labelString: 'Year'
+        {
+            taxRate: 12,
+            bracketMax: 40125
         },
-        ticks:{
-            callback: function(value, index, values){
-                return value;
-            }
-        }
-    }];
-
-    var config = {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [
-                buildInitialDataset('Tax Amount per Year for a Specific Income', CHART_COLORS.red, 'amount-axis', false),
-                buildInitialDataset('Net Income per Year', CHART_COLORS.blue, 'amount-axis', false),
-                buildInitialDataset('Marginal Tax Rate per Year', CHART_COLORS.green, 'marginal-rate-axis', true)
-            ]
+        {
+            taxRate: 22,
+            bracketMax: 85525
         },
-        options: JSON.parse(JSON.stringify(chartConfigOptions))
-    };
-    var graphLineIndex = {
-        taxAmount: 0,
-        netIncome: 1,
-        marginalTaxRate: 2
-    };
-
-    var plotlyLayout = {
-        title: 'Marginal Tax Topology Over Income and Year',
-        autosize: false,
-        width: 600,
-        height: 600,
-        margin: {
-            l: 0,
-            r: 0,
-            b: 0,
-            t: 65
-        }
-    };
-
-    var z_data = [
-    ];
-
-    window.onload = function() {
-        app = new Vue({
-            el: '#app',
-            data : {
-                min: defaultMin,
-                max: defaultMax,
-                taxBrackets: defaultTaxBrackets,
-                step: defaultStep,
-                selectedRow: defaultSelectedRow,
-                specificIncomeBreakdown: specificIncomeBreakdown,
-                taxDeductionAmount: defaultTaxDeductionAmount,
-                selectedTaxYear:{},
-                amountForYearlyGraph:defaultAmountForYearlyGraph,
-                vueCanvas:null,
-                vueCanvasYearly:null,
-                topologyGraph:null
-            },
-            mounted(){
-                var ctx = document.getElementById('canvas').getContext('2d');
-                this.vueCanvas = ctx;
-                window.myLine = new Chart(this.vueCanvas, config);
-                
-                var yearlyctx = document.getElementById('canvasYearly').getContext('2d');
-                this.vueCanvasYearly = yearlyctx;
-                window.myLineYearly = new Chart(this.vueCanvasYearly, yearlyConfig);
-                
-                var graphDiv = document.getElementById('topologyGraph');
-                this.topologyGraph = graphDiv;
-                Plotly.newPlot(this.topologyGraph, z_data, plotlyLayout);
-            }
-        });
-        calculateBreakdown();
-        rebuildGraph();
-        rebuildYearlyGraph();
-    };
-
-    function calculateBreakdown(){
-        var income = parseInt(app.specificIncomeBreakdown.startingAmount);
-        app.specificIncomeBreakdown.calculatedIncome = app.specificIncomeBreakdown.startingAmount;
-        var taxInformation = getTaxInformation(income, true, app.taxBrackets, app.taxDeductionAmount);
-        app.specificIncomeBreakdown.totalAmount = taxInformation.taxAmount;
-        app.specificIncomeBreakdown.marginalTaxRate = taxInformation.marginalTaxRate;
-        app.specificIncomeBreakdown.netIncome = taxInformation.netIncome;
-    }
-
-    function getTaxableIncome(income, deduction){
-        var income = income - deduction;
-        if(income < 0) income = 0;
-        return income;
-    }
-
-    function getTaxInformation(income, buildBreakdown, taxBrackets, deduction){
-        var taxableIncome = getTaxableIncome(income, deduction);
-        var taxAmount = 0;
-        var marginalTaxRate = 0;
-        var netIncome = 0;
-        var previousMax = 0;
-        if(buildBreakdown) app.specificIncomeBreakdown.components = [];
-        taxBrackets.forEach(function(item, index){
-            if(buildBreakdown) buildBreakdownComponent(taxableIncome, item, previousMax);
-            if(taxableIncome > item.bracketMax){
-                taxAmount += (item.bracketMax - previousMax) * getPercentage(item.taxRate);
-            }
-            else if(taxableIncome > previousMax){
-                taxAmount += (taxableIncome - previousMax) * getPercentage(item.taxRate);
-            }
-            previousMax = item.bracketMax;
-        });
-        marginalTaxRate = taxAmount / income;
-        netIncome = income - taxAmount;
-        return {
-            taxAmount: taxAmount.toFixed(2),
-            marginalTaxRate: marginalTaxRate.toFixed(4),
-            netIncome: netIncome.toFixed(2)
-        };
-    }
-
-    function buildBreakdownComponent(income, item, minimumAmount){
-        var component = {
-            max: 0,
-            taxRate: item.taxRate,
-            taxAmount: 0
-        };
-        if(income > item.bracketMax){
-            component.taxAmount = ((item.bracketMax - minimumAmount) * getPercentage(item.taxRate));
-            component.max = item.bracketMax - minimumAmount;
-        }
-        else if(income > minimumAmount){
-            component.taxAmount = ((income - minimumAmount) * getPercentage(item.taxRate));
-            component.max = income - minimumAmount;
-        }
-        app.specificIncomeBreakdown.components.push(component);
-    }
-
-    function buildChart(){
-        for(var i = 0; i < config.data.datasets.length; i++){
-            config.data.datasets[i].data = [];
-        }
-        config.data.labels = [];
-        var i = app.min;
-        while(i <= app.max){
-            config.data.labels.push(formatNumberForDisplay(i));
-            var taxInformation = getTaxInformation(i, false, app.taxBrackets, app.taxDeductionAmount);
-            config.data.datasets[graphLineIndex.taxAmount].data.push(taxInformation.taxAmount);
-            config.data.datasets[graphLineIndex.marginalTaxRate].data.push(taxInformation.marginalTaxRate);
-            config.data.datasets[graphLineIndex.netIncome].data.push(taxInformation.netIncome);
-            i = parseInt(i) + parseInt(app.step);
-        }
-    }
-
-    function buildYearlyChart(){
-        for(var i = 0; i < yearlyConfig.data.datasets.length; i++){
-            yearlyConfig.data.datasets[i].data = [];
-        }
-        yearlyConfig.data.labels = [];
-        var i = app.amountForYearlyGraph;
-        var taxYearProperties = getSingleTaxPayerDefinitionKeys();
-        var taxYearDefinitions = getTaxYears();
-        taxYearProperties.forEach(function(taxYear){
-            var taxYearDef = taxYearDefinitions[taxYear];
-            var taxYearLabel = taxYear.replace("Single", "");
-            var taxInfo = getTaxInformation(i, false, taxYearDef.brackets, taxYearDef.standardDeduction);
-
-            yearlyConfig.data.labels.push(taxYearLabel);
-            yearlyConfig.data.datasets[graphLineIndex.taxAmount].data.push(taxInfo.taxAmount);
-            yearlyConfig.data.datasets[graphLineIndex.marginalTaxRate].data.push(taxInfo.marginalTaxRate);
-            yearlyConfig.data.datasets[graphLineIndex.netIncome].data.push(taxInfo.netIncome);
-        });
-    }
-
-    function getSingleTaxPayerDefinitionKeys(){
-        var taxYearDefinitions = getTaxYears();
-        var taxYearProperties = [];
-        for(taxYearProperty in taxYearDefinitions){
-            if(taxYearProperty.includes("Single")){
-                taxYearProperties.push(taxYearProperty);
-            }
-        }
-        taxYearProperties.sort();
-        return taxYearProperties;
-    }
-
-    function rebuildGraph() {
-        buildChart();
-        buildPlotlyTopology();
-        window.myLine.update();
-    };
-
-    function buildPlotlyTopology(){
-        z_data = [];
-        var taxYearProperties = getSingleTaxPayerDefinitionKeys();
-        var taxYearDefinitions = getTaxYears();
-        
-        var plotlyRow = {
-            "x": [],
-            "y": [],
-            "z": [],
-            "opacity":0.8,
-            "mode":"markers",
-            "type":"scatter3d",
-            "name":"topology",
-            marker: {
-                size: 3.5,
-                color: "blue",
-                colorscale: "Viridis",
-                cmin: -20,
-                cmax: 50
-            }
-        };
-
-        taxYearProperties.forEach(function(taxYear){
-            var taxYearDef = taxYearDefinitions[taxYear];
-            var taxYearLabel = parseInt(taxYear.replace("Single", ""));
-            var i = app.min;
-            
-            while(i <= app.max){
-                var taxInformation = getTaxInformation(i, false, taxYearDef.brackets, taxYearDef.standardDeduction);
-                plotlyRow.x.push(i);
-                plotlyRow.y.push(taxYearLabel);
-                plotlyRow.z.push(taxInformation.marginalTaxRate * 100);
-                i = parseInt(i) + parseInt(app.step);
-            }
-        });
-        z_data.push(plotlyRow);
-        Plotly.newPlot(app.topologyGraph, z_data, plotlyLayout);
-    }
-
-    function rebuildYearlyGraph(){
-        buildYearlyChart();
-        window.myLineYearly.update();
-    }
-
-    function addNewTaxBracket(){
-        var secondHighestIncome = app.taxBrackets[app.taxBrackets.length - 2].bracketMax;
-        var highestTaxRate = app.taxBrackets[app.taxBrackets.length - 1].taxRate;
-        app.taxBrackets[app.taxBrackets.length - 1].bracketMax = parseInt(secondHighestIncome) + 1;
-        app.taxBrackets.push({
-            taxRate: highestTaxRate + 1,
+        {
+            taxRate: 24,
+            bracketMax: 163300
+        },
+        {
+            taxRate: 32,
+            bracketMax: 207350
+        },
+        {
+            taxRate: 35,
+            bracketMax: 518400
+        },
+        {
+            taxRate: 37,
             bracketMax: Number.MAX_SAFE_INTEGER
-        });
-    };
+        }];
+        var specificIncomeBreakdown = {
+            components: [],
+            totalAmount: 0,
+            marginalTaxRate: 0,
+            netIncome: 0,
+            startingAmount: 15000,
+            calculatedIncome: 0
+        };
+        var defaultSelectedRow = 0;
 
-    function removeTaxBracket(){
-        var selRow = app.selectedRow;
-        if(app.taxBrackets.length == parseInt(selRow) + 1 && app.taxBrackets.length > 1){
-            app.taxBrackets[selRow - 1].bracketMax = Number.MAX_SAFE_INTEGER;
-        }
-        app.taxBrackets.splice(selRow, 1);
-    };
+        function buildInitialChartConfigOptions() {
+            return {
+                responsive: true,
+                maintainAspectRatio: false,
+                title: {
+                    display: true,
+                    text: 'Income'
+                },
+                tooltips: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function (tooltipItem, data) {
+                            var value = formatNumberForDisplay(tooltipItem.value);
+                            if (tooltipItem.value > 0 && tooltipItem.value < 1) {
+                                return value + "%";
+                            }
+                            else return value;
+                        }
+                    }
+                },
+                hover: {
+                    mode: 'nearest',
+                    intersect: true
+                },
+                scales: {
+                    xAxes: [
+                        buildChartAxisDefinition('Income', 'income-axis', 'bottom', true, formatNumberForDisplay)
+                    ],
+                    yAxes: [
+                        buildChartAxisDefinition('Amount', 'amount-axis', 'left', true, formatNumberForDisplay),
+                        buildChartAxisDefinition('Marginal Tax Rate', 'marginal-rate-axis', 'right', false, formatDecimalAsPercent)
+                    ]
+                }
+            };
+        };
 
-    function switchTaxBracket(){
-        app.taxBrackets = app.selectedTaxYear.brackets;
-        app.taxDeductionAmount = app.selectedTaxYear.standardDeduction;
+            var yearlyConfig = {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        buildInitialDataset('Tax Amount per Year for a Specific Income', CHART_COLORS.red, 'amount-axis', false),
+                        buildInitialDataset('Net Income per Year', CHART_COLORS.blue, 'amount-axis', false),
+                        buildInitialDataset('Marginal Tax Rate per Year', CHART_COLORS.green, 'marginal-rate-axis', true)
+                    ]
+                },
+                options: buildInitialChartConfigOptions()
+            };
+            yearlyConfig.options.scales.xAxes = [
+                buildChartAxisDefinition('Year', 'year-axis', 'bottom', true, function (value) { return value; })
+            ];
 
-        rebuildGraph();
-        calculateBreakdown();
-    }
-</script>
+            var config = {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        buildInitialDataset('Tax Amount per Year for a Specific Income', CHART_COLORS.red, 'amount-axis', false),
+                        buildInitialDataset('Net Income per Year', CHART_COLORS.blue, 'amount-axis', false),
+                        buildInitialDataset('Marginal Tax Rate per Year', CHART_COLORS.green, 'marginal-rate-axis', true)
+                    ]
+                },
+                options: buildInitialChartConfigOptions()
+            };
+            var graphLineIndex = {
+                taxAmount: 0,
+                netIncome: 1,
+                marginalTaxRate: 2
+            };
+
+            var plotlyLayout = {
+                title: 'Marginal Tax Topology Over Income and Year',
+                autosize: false,
+                width: 600,
+                height: 600,
+                margin: {
+                    l: 0,
+                    r: 0,
+                    b: 0,
+                    t: 65
+                }
+            };
+
+            var z_data = [
+            ];
+
+            window.onload = function () {
+                app = new Vue({
+                    el: '#app',
+                    data: {
+                        min: defaultMin,
+                        max: defaultMax,
+                        taxBrackets: defaultTaxBrackets,
+                        step: defaultStep,
+                        selectedRow: defaultSelectedRow,
+                        specificIncomeBreakdown: specificIncomeBreakdown,
+                        taxDeductionAmount: defaultTaxDeductionAmount,
+                        selectedTaxYear: {},
+                        amountForYearlyGraph: defaultAmountForYearlyGraph,
+                        vueCanvas: null,
+                        vueCanvasYearly: null,
+                        topologyGraph: null
+                    },
+                    mounted() {
+                        var ctx = document.getElementById('canvas').getContext('2d');
+                        this.vueCanvas = ctx;
+                        window.myLine = new Chart(this.vueCanvas, config);
+
+                        var yearlyctx = document.getElementById('canvasYearly').getContext('2d');
+                        this.vueCanvasYearly = yearlyctx;
+                        window.myLineYearly = new Chart(this.vueCanvasYearly, yearlyConfig);
+
+                        var graphDiv = document.getElementById('topologyGraph');
+                        this.topologyGraph = graphDiv;
+                        Plotly.newPlot(this.topologyGraph, z_data, plotlyLayout);
+                    }
+                });
+                calculateBreakdown();
+                rebuildGraph();
+                rebuildYearlyGraph();
+            };
+
+            function calculateBreakdown() {
+                var income = parseInt(app.specificIncomeBreakdown.startingAmount);
+                app.specificIncomeBreakdown.calculatedIncome = app.specificIncomeBreakdown.startingAmount;
+                var taxInformation = getTaxInformation(income, true, app.taxBrackets, app.taxDeductionAmount);
+                app.specificIncomeBreakdown.totalAmount = taxInformation.taxAmount;
+                app.specificIncomeBreakdown.marginalTaxRate = taxInformation.marginalTaxRate;
+                app.specificIncomeBreakdown.netIncome = taxInformation.netIncome;
+            }
+
+            function getTaxableIncome(income, deduction) {
+                var income = income - deduction;
+                if (income < 0) income = 0;
+                return income;
+            }
+
+            function getTaxInformation(income, buildBreakdown, taxBrackets, deduction) {
+                var taxableIncome = getTaxableIncome(income, deduction);
+                var taxAmount = 0;
+                var marginalTaxRate = 0;
+                var netIncome = 0;
+                var previousMax = 0;
+                if (buildBreakdown) app.specificIncomeBreakdown.components = [];
+                taxBrackets.forEach(function (item, index) {
+                    if (buildBreakdown) buildBreakdownComponent(taxableIncome, item, previousMax);
+                    if (taxableIncome > item.bracketMax) {
+                        taxAmount += (item.bracketMax - previousMax) * getPercentage(item.taxRate);
+                    }
+                    else if (taxableIncome > previousMax) {
+                        taxAmount += (taxableIncome - previousMax) * getPercentage(item.taxRate);
+                    }
+                    previousMax = item.bracketMax;
+                });
+                marginalTaxRate = taxAmount / income;
+                netIncome = income - taxAmount;
+                return {
+                    taxAmount: taxAmount.toFixed(2),
+                    marginalTaxRate: marginalTaxRate.toFixed(4),
+                    netIncome: netIncome.toFixed(2)
+                };
+            }
+
+            function buildBreakdownComponent(income, item, minimumAmount) {
+                var component = {
+                    max: 0,
+                    taxRate: item.taxRate,
+                    taxAmount: 0
+                };
+                if (income > item.bracketMax) {
+                    component.taxAmount = ((item.bracketMax - minimumAmount) * getPercentage(item.taxRate));
+                    component.max = item.bracketMax - minimumAmount;
+                }
+                else if (income > minimumAmount) {
+                    component.taxAmount = ((income - minimumAmount) * getPercentage(item.taxRate));
+                    component.max = income - minimumAmount;
+                }
+                app.specificIncomeBreakdown.components.push(component);
+            }
+
+            function buildChart() {
+                for (var i = 0; i < config.data.datasets.length; i++) {
+                    config.data.datasets[i].data = [];
+                }
+                config.data.labels = [];
+                var i = app.min;
+                while (i <= app.max) {
+                    config.data.labels.push(formatNumberForDisplay(i));
+                    var taxInformation = getTaxInformation(i, false, app.taxBrackets, app.taxDeductionAmount);
+                    config.data.datasets[graphLineIndex.taxAmount].data.push(taxInformation.taxAmount);
+                    config.data.datasets[graphLineIndex.marginalTaxRate].data.push(taxInformation.marginalTaxRate);
+                    config.data.datasets[graphLineIndex.netIncome].data.push(taxInformation.netIncome);
+                    i = parseInt(i) + parseInt(app.step);
+                }
+            }
+
+            function buildYearlyChart() {
+                for (var i = 0; i < yearlyConfig.data.datasets.length; i++) {
+                    yearlyConfig.data.datasets[i].data = [];
+                }
+                yearlyConfig.data.labels = [];
+                var i = app.amountForYearlyGraph;
+                var taxYearProperties = getSingleTaxPayerDefinitionKeys();
+                var taxYearDefinitions = getTaxYears();
+                taxYearProperties.forEach(function (taxYear) {
+                    var taxYearDef = taxYearDefinitions[taxYear];
+                    var taxYearLabel = taxYear.replace("Single", "");
+                    var taxInfo = getTaxInformation(i, false, taxYearDef.brackets, taxYearDef.standardDeduction);
+
+                    yearlyConfig.data.labels.push(taxYearLabel);
+                    yearlyConfig.data.datasets[graphLineIndex.taxAmount].data.push(taxInfo.taxAmount);
+                    yearlyConfig.data.datasets[graphLineIndex.marginalTaxRate].data.push(taxInfo.marginalTaxRate);
+                    yearlyConfig.data.datasets[graphLineIndex.netIncome].data.push(taxInfo.netIncome);
+                });
+            }
+
+            function getSingleTaxPayerDefinitionKeys() {
+                var taxYearDefinitions = getTaxYears();
+                var taxYearProperties = [];
+                for (taxYearProperty in taxYearDefinitions) {
+                    if (taxYearProperty.includes("Single")) {
+                        taxYearProperties.push(taxYearProperty);
+                    }
+                }
+                taxYearProperties.sort();
+                return taxYearProperties;
+            }
+
+            function rebuildGraph() {
+                buildChart();
+                buildPlotlyTopology();
+                window.myLine.update();
+            };
+
+            function buildPlotlyTopology() {
+                z_data = [];
+                var taxYearProperties = getSingleTaxPayerDefinitionKeys();
+                var taxYearDefinitions = getTaxYears();
+
+                var plotlyRow = {
+                    "x": [],
+                    "y": [],
+                    "z": [],
+                    "opacity": 0.8,
+                    "mode": "markers",
+                    "type": "scatter3d",
+                    "name": "topology",
+                    marker: {
+                        size: 3.5,
+                        color: "blue",
+                        colorscale: "Viridis",
+                        cmin: -20,
+                        cmax: 50
+                    }
+                };
+
+                taxYearProperties.forEach(function (taxYear) {
+                    var taxYearDef = taxYearDefinitions[taxYear];
+                    var taxYearLabel = parseInt(taxYear.replace("Single", ""));
+                    var i = app.min;
+
+                    while (i <= app.max) {
+                        var taxInformation = getTaxInformation(i, false, taxYearDef.brackets, taxYearDef.standardDeduction);
+                        plotlyRow.x.push(i);
+                        plotlyRow.y.push(taxYearLabel);
+                        plotlyRow.z.push(taxInformation.marginalTaxRate * 100);
+                        i = parseInt(i) + parseInt(app.step);
+                    }
+                });
+                z_data.push(plotlyRow);
+                Plotly.newPlot(app.topologyGraph, z_data, plotlyLayout);
+            }
+
+            function rebuildYearlyGraph() {
+                buildYearlyChart();
+                window.myLineYearly.update();
+            }
+
+            function addNewTaxBracket() {
+                var secondHighestIncome = app.taxBrackets[app.taxBrackets.length - 2].bracketMax;
+                var highestTaxRate = app.taxBrackets[app.taxBrackets.length - 1].taxRate;
+                app.taxBrackets[app.taxBrackets.length - 1].bracketMax = parseInt(secondHighestIncome) + 1;
+                app.taxBrackets.push({
+                    taxRate: highestTaxRate + 1,
+                    bracketMax: Number.MAX_SAFE_INTEGER
+                });
+            };
+
+            function removeTaxBracket() {
+                var selRow = app.selectedRow;
+                if (app.taxBrackets.length == parseInt(selRow) + 1 && app.taxBrackets.length > 1) {
+                    app.taxBrackets[selRow - 1].bracketMax = Number.MAX_SAFE_INTEGER;
+                }
+                app.taxBrackets.splice(selRow, 1);
+            };
+
+            function switchTaxBracket() {
+                app.taxBrackets = app.selectedTaxYear.brackets;
+                app.taxDeductionAmount = app.selectedTaxYear.standardDeduction;
+
+                rebuildGraph();
+                calculateBreakdown();
+            }
+    </script>
 </body>
 
 </html>
