@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <title>How Tax Brackets Work</title>
+    <title>How Tax Brackets Work in the United States</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
     <script src="https://www.chartjs.org/dist/2.9.4/Chart.min.js"></script>
@@ -23,15 +23,15 @@
 
 <body>
     <div id="synopsis">
-        <h2>How Tax Brackets Work</h2>
+        <h2>How Tax Brackets Work in the United States</h2>
         <p>
-            When taxes are calculated, everyone's first bracket is taxed equally. Once an individual surpasses the first
+            When taxes are calculated, everyone's first bracket is taxed equally. Once an individual's yearly income surpasses the first
             bracket, any amount of income above the first bracket and below the next bracket is taxed at the next
             bracket's rate.
         </p>
         <p>
             A deduction is something that reduces an individual's taxable income. Someone could make $40,000, and if
-            they deducted $10,000, they would only get taxed on $30,000.
+            they deducted $10,000, they would only get taxed on $30,000.  Every year a Standard Deduction is established that applies for everyone by default.  However, if someone could show they spent more on deductible expenses than the standard, they could use their own deductions instead.
         </p>
         <p>
             Please see the interactive examples below:
@@ -53,6 +53,8 @@
                 </select>
             </div>
         </div>
+        <br />
+        <button id="toggleBreakDown" class="pure-button" onclick="toggleVisibility('breakdown', 'Breakdown', this)">Hide Breakdown</button>
         <div id="breakdown">
             <h3>Specific Income Breakdown for a Single Year</h3>
             <p>
@@ -69,7 +71,7 @@
                             v-model="specificIncomeBreakdown.startingAmount" /></td>
                 </tr>
             </table>
-
+            <br />
             <button id="calculateBreakdown" class="pure-button" onclick="calculateBreakdown()">Calculate
                 Breakdown</button>
             <table class="pure-table pure-table-bordered">
@@ -86,13 +88,14 @@
                     <td>${{ formatNumberForDisplay(breakdown.taxAmount) }}</td>
                 </tr>
             </table>
+            <br />
             <table class="pure-table pure-table-bordered">
                 <tr>
                     <td>Income specified was</td>
                     <td>${{ formatNumberForDisplay(specificIncomeBreakdown.calculatedIncome) }}</td>
                 </tr>
                 <tr>
-                    <td>StandarDeduction was</td>
+                    <td>Standard Deduction was</td>
                     <td>${{ formatNumberForDisplay(taxDeductionAmount) }}</td>
                 </tr>
                 <tr>
@@ -111,7 +114,8 @@
                 </tr>
             </table>
         </div>
-        
+        <br />
+        <button id="toggleIncomeRangeGraphs" class="pure-button" onclick="toggleVisibility('IncomeRangeGraphs', 'Income Range Graphs', this)">Hide Income Range Graphs</button>
         <div id="IncomeRangeGraphs">
             <h4>Taxes over a range of Incomes for a single year</h4>
             <p>
@@ -136,23 +140,36 @@
                     <td><input type="number" id="step" v-model="step" /></td>
                 </tr>
             </table>
-            <button id="rebuildGraph" onclick="rebuildGraph()" class="pure-button">Rebuild Graph</button>
-            <div style="position:relative;width:95vw;height:50vh">
-                <canvas id="canvas"></canvas>
+            <br />
+            <button id="rebuildGraph" onclick="rebuildGraph()" class="pure-button">Rebuild Graphs</button>
+            <br />
+            <button id="toggleSingleIncomeByYearChart" class="pure-button" onclick="toggleVisibility('SingleIncomeByYearChart', 'Specific Income by Year', this)">Hide Specific Income by Year</button>
+            <div id="SingleIncomeByYearChart">
+                <h4>
+                    Specific Income by Year
+                </h4>
+                <div style="position:relative;width:95vw;height:50vh">
+                    <canvas id="canvas"></canvas>
+                </div>
             </div>
-        
-            <h4>
-                Marginal Tax Topology over the years
-            </h4>
-            <p>
-                This is a 3d graph that aims to show how marginal tax rate changes year over year across a range of
-                incomes.
-            </p>
-            <p>
-                This widget uses the same form values as above in Taxes over a range of Incomes for a single year
-            </p>
-            <div id="topologyGraph"></div>
+            <br />
+            <button id="toggleMarginalTopology" class="pure-button" onclick="toggleVisibility('MarginalTopology', 'Marginal Rate Topology (3D)', this)">Hide Marginal Rate Topology (3D)</button>
+            <div id="MarginalTopology">
+                <h4>
+                    Marginal Tax Topology over the years
+                </h4>
+                <p>
+                    This is a 3d graph that aims to show how marginal tax rate changes year over year across a range of
+                    incomes.
+                </p>
+                <p>
+                    This widget uses the same form values as above in Taxes over a range of Incomes for a single year
+                </p>
+                <div id="topologyGraph"></div>
+            </div>
         </div>
+        <br />
+        <button id="toggleTaxAmountYearly" class="pure-button" onclick="toggleVisibility('TaxAmountYearly', 'Taxes over Time', this)">Hide Taxes over Time</button>
         <div id="TaxAmountYearly">
             <h4>
                 Taxes over Time
@@ -173,8 +190,7 @@
             </div>
         </div>
     </div>
-
-
+    <br />
     <div id="furtherResources">
         <h4>Further Resources</h4>
         <p>
@@ -420,6 +436,17 @@
 
             rebuildGraph();
             calculateBreakdown();
+        };
+
+        function toggleVisibility(elementId, label, actionElement){
+            var element = document.getElementById(elementId);
+            if (element.style.display === "none") {
+                element.style.display = "block";
+                actionElement.innerHTML = "Hide " + label;
+            } else {
+                element.style.display = "none";
+                actionElement.innerHTML = "Show " + label;
+            }
         };
     </script>
 </body>
