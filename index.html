@@ -12,12 +12,9 @@
     <script src="PlotlyHelper.js"></script>
     <script src="ChartHelper.js"></script>
     <script src="TaxCalculator.js"></script>
+    <script src="Styles.css"></script>
     <style>
-        canvas {
-            -moz-user-select: none;
-            -webkit-user-select: none;
-            -ms-user-select: none;
-        }
+        
     </style>
 </head>
 
@@ -143,16 +140,6 @@
             <br />
             <button id="rebuildGraph" onclick="rebuildGraph()" class="pure-button">Rebuild Graphs</button>
             <br />
-            <button id="toggleSingleIncomeByYearChart" class="pure-button" onclick="toggleVisibility('SingleIncomeByYearChart', 'Specific Income by Year', this)">Hide Specific Income by Year</button>
-            <div id="SingleIncomeByYearChart">
-                <h4>
-                    Specific Income by Year
-                </h4>
-                <div style="position:relative;width:95vw;height:50vh">
-                    <canvas id="canvas"></canvas>
-                </div>
-            </div>
-            <br />
             <button id="toggleMarginalTopology" class="pure-button" onclick="toggleVisibility('MarginalTopology', 'Marginal Rate Topology (3D)', this)">Hide Marginal Rate Topology (3D)</button>
             <div id="MarginalTopology">
                 <h4>
@@ -166,6 +153,19 @@
                     This widget uses the same form values as above in Taxes over a range of Incomes for a single year
                 </p>
                 <div id="topologyGraph"></div>
+            </div>
+            <br />
+            <button id="toggleSingleIncomeByYearChart" class="pure-button" onclick="toggleVisibility('SingleIncomeByYearChart', 'Specific Income by Year', this)">Hide Specific Income by Year</button>
+            <div id="SingleIncomeByYearChart">
+                <h4>
+                    Range of Incomes for a Specific Year
+                </h4>
+                <p>
+                    This is what a range of incomes would look like for the year chosen in the drop down at the top of the page.
+                </p>
+                <div style="position:relative;width:95vw;height:50vh">
+                    <canvas id="canvas"></canvas>
+                </div>
             </div>
         </div>
         <br />
