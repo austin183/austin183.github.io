@@ -3,7 +3,24 @@ function getPlotlyHelper() {
         getPlotlyLayout: function (title) {
             return {
                 title: title,
-                autosize: false,
+                scene: {
+                    xaxis: {
+                        title: {
+                            text: 'Income'
+                        }
+                    },
+                    yaxis: {
+                        title: {
+                            text: 'Year'
+                        }
+                    },
+                    zaxis: {
+                        title: {
+                            text: 'MarginalRate'
+                        }
+                    }
+                },
+                autosize: true,
                 width: 600,
                 height: 600,
                 margin: {
