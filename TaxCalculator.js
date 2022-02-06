@@ -33,7 +33,7 @@ function getTaxCalculator(){
         getTaxInformation: function (income, buildBreakdown, taxBrackets, deduction, incomeBreakDown){
             var taxableIncome = getTaxableIncome(income, deduction);
             var taxAmount = 0;
-            var marginalTaxRate = 0;
+            var effectiveTaxRate = 0;
             var netIncome = 0;
             var previousMax = 0;
             if (buildBreakdown) incomeBreakDown.components = [];
@@ -47,11 +47,11 @@ function getTaxCalculator(){
                 }
                 previousMax = item.bracketMax;
             });
-            marginalTaxRate = taxAmount / income;
+            effectiveTaxRate = taxAmount / income;
             netIncome = income - taxAmount;
             return {
                 taxAmount: taxAmount.toFixed(2),
-                marginalTaxRate: marginalTaxRate.toFixed(4),
+                effectiveTaxRate: effectiveTaxRate.toFixed(4),
                 netIncome: netIncome.toFixed(2)
             };
         }

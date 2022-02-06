@@ -19,7 +19,7 @@
 </head>
 
 <body>
-    <div id="synopsis">
+    <div id="synopsis" >
         <h2>How Tax Brackets Work in the United States</h2>
         <p>
             When taxes are calculated, everyone's first bracket is taxed equally. Once an individual's yearly income surpasses the first
@@ -52,11 +52,11 @@
         </div>
         <br />
         <button id="toggleBreakDown" class="pure-button" onclick="toggleVisibility('breakdown', 'Breakdown', this)">Hide Breakdown</button>
-        <div id="breakdown">
+        <div id="breakdown" class="bordered">
             <h3>Specific Income Breakdown for a Single Year</h3>
             <p>
                 Here is how the taxes would be calculated for a specific income based on the selected Tax Year.
-                The amount of tax is shown per bracket, and the marginal tax rate for the income is shown below.
+                The amount of tax is shown per bracket, and the effective tax rate for the income is shown below.
             </p>
         
             <table id="breakDownInput" class="pure-table pure-table-bordered">
@@ -101,8 +101,8 @@
                 </tr>
 
                 <tr>
-                    <td>The marginal tax rate would be</td>
-                    <td>{{ formatDecimalAsPercent(specificIncomeBreakdown.marginalTaxRate) }}</td>
+                    <td>The effective tax rate would be</td>
+                    <td>{{ formatDecimalAsPercent(specificIncomeBreakdown.effectiveTaxRate) }}</td>
                 </tr>
 
                 <tr>
@@ -113,7 +113,7 @@
         </div>
         <br />
         <button id="toggleIncomeRangeGraphs" class="pure-button" onclick="toggleVisibility('IncomeRangeGraphs', 'Income Range Graphs', this)">Hide Income Range Graphs</button>
-        <div id="IncomeRangeGraphs">
+        <div id="IncomeRangeGraphs" class="bordered">
             <h4>Taxes over a range of Incomes for a single year</h4>
             <p>
                 To see how a range of incomes would be affected by the configured tax brackets, you can specify a start,
@@ -140,13 +140,13 @@
             <br />
             <button id="rebuildGraph" onclick="rebuildGraph()" class="pure-button">Rebuild Graphs</button>
             <br />
-            <button id="toggleMarginalTopology" class="pure-button" onclick="toggleVisibility('MarginalTopology', 'Marginal Rate Topology (3D)', this)">Hide Marginal Rate Topology (3D)</button>
-            <div id="MarginalTopology">
+            <button id="toggleEffectiveTopology" class="pure-button" onclick="toggleVisibility('EffectiveTopology', 'Effective Rate Topology (3D)', this)">Hide Effective Rate Topology (3D)</button>
+            <div id="EffectiveTopology" class="bordered">
                 <h4>
-                    Marginal Tax Topology over the years
+                    Effective Tax Topology over the years
                 </h4>
                 <p>
-                    This is a 3d graph that aims to show how marginal tax rate changes year over year across a range of
+                    This is a 3d graph that aims to show how effective tax rate changes year over year across a range of
                     incomes.
                 </p>
                 <p>
@@ -156,7 +156,7 @@
             </div>
             <br />
             <button id="toggleSingleIncomeByYearChart" class="pure-button" onclick="toggleVisibility('SingleIncomeByYearChart', 'Specific Income by Year', this)">Hide Specific Income by Year</button>
-            <div id="SingleIncomeByYearChart">
+            <div id="SingleIncomeByYearChart" class="bordered">
                 <h4>
                     Range of Incomes for a Specific Year
                 </h4>
@@ -170,7 +170,7 @@
         </div>
         <br />
         <button id="toggleTaxAmountYearly" class="pure-button" onclick="toggleVisibility('TaxAmountYearly', 'Taxes over Time', this)">Hide Taxes over Time</button>
-        <div id="TaxAmountYearly">
+        <div id="TaxAmountYearly" class="bordered">
             <h4>
                 Taxes over Time
             </h4>
@@ -253,7 +253,7 @@
         var specificIncomeBreakdown = {
             components: [],
             totalAmount: 0,
-            marginalTaxRate: 0,
+            effectiveTaxRate: 0,
             netIncome: 0,
             startingAmount: 1500000,
             calculatedIncome: 0
@@ -263,7 +263,7 @@
         function buildCommonYAxisDefinitions(){
             return [
                 chartHelper.buildChartAxisDefinition('Net Income', 'amount-axis', 'left', true, formatNumberForDisplay),
-                chartHelper.buildChartAxisDefinition('Marginal Tax Rate', 'marginal-rate-axis', 'right', false, formatDecimalAsPercent)
+                chartHelper.buildChartAxisDefinition('Effective Tax Rate', 'effective-rate-axis', 'right', false, formatDecimalAsPercent)
             ];
         }
 
@@ -274,7 +274,7 @@
                 datasets: [
                     chartHelper.buildInitialDataset('Tax Amount per Year for a Specific Income', CHART_COLORS.red, 'amount-axis', false),
                     chartHelper.buildInitialDataset('Net Income per Year', CHART_COLORS.blue, 'amount-axis', false),
-                    chartHelper.buildInitialDataset('Marginal Tax Rate per Year', CHART_COLORS.green, 'marginal-rate-axis', true)
+                    chartHelper.buildInitialDataset('Effective Tax Rate per Year', CHART_COLORS.green, 'effective-rate-axis', true)
                 ]
             },
             options: chartHelper.buildInitialChartConfigOptions(buildTooltipLabel)
@@ -291,7 +291,7 @@
                 datasets: [
                     chartHelper.buildInitialDataset('Tax Amount for a Specific Income', CHART_COLORS.red, 'amount-axis', false),
                     chartHelper.buildInitialDataset('Net Income', CHART_COLORS.blue, 'amount-axis', false),
-                    chartHelper.buildInitialDataset('Marginal Tax Rate', CHART_COLORS.green, 'marginal-rate-axis', true)
+                    chartHelper.buildInitialDataset('Effective Tax Rate', CHART_COLORS.green, 'effective-rate-axis', true)
                 ]
             },
             options: chartHelper.buildInitialChartConfigOptions(buildTooltipLabel)
@@ -304,10 +304,10 @@
         var graphLineIndex = {
             taxAmount: 0,
             netIncome: 1,
-            marginalTaxRate: 2
+            effectiveTaxRate: 2
         };
 
-        var plotlyLayout = plotlyHelper.getPlotlyLayout('Marginal Tax Topology Over Income and Year');
+        var plotlyLayout = plotlyHelper.getPlotlyLayout('Effective Tax Topology Over Income and Year');
 
         var z_data = [
         ];
@@ -353,7 +353,7 @@
             app.specificIncomeBreakdown.calculatedIncome = app.specificIncomeBreakdown.startingAmount;
             var taxInformation = taxCalculator.getTaxInformation(income, true, app.taxBrackets, app.taxDeductionAmount, app.specificIncomeBreakdown);
             app.specificIncomeBreakdown.totalAmount = taxInformation.taxAmount;
-            app.specificIncomeBreakdown.marginalTaxRate = taxInformation.marginalTaxRate;
+            app.specificIncomeBreakdown.effectiveTaxRate = taxInformation.effectiveTaxRate;
             app.specificIncomeBreakdown.netIncome = taxInformation.netIncome;
         }
 
@@ -367,7 +367,7 @@
                 config.data.labels.push(formatNumberForDisplay(i));
                 var taxInformation = taxCalculator.getTaxInformation(i, false, app.taxBrackets, app.taxDeductionAmount);
                 config.data.datasets[graphLineIndex.taxAmount].data.push(taxInformation.taxAmount);
-                config.data.datasets[graphLineIndex.marginalTaxRate].data.push(taxInformation.marginalTaxRate);
+                config.data.datasets[graphLineIndex.effectiveTaxRate].data.push(taxInformation.effectiveTaxRate);
                 config.data.datasets[graphLineIndex.netIncome].data.push(taxInformation.netIncome);
                 i = parseInt(i) + parseInt(app.step);
             }
@@ -388,7 +388,7 @@
 
                 yearlyConfig.data.labels.push(taxYearLabel);
                 yearlyConfig.data.datasets[graphLineIndex.taxAmount].data.push(taxInfo.taxAmount);
-                yearlyConfig.data.datasets[graphLineIndex.marginalTaxRate].data.push(taxInfo.marginalTaxRate);
+                yearlyConfig.data.datasets[graphLineIndex.effectiveTaxRate].data.push(taxInfo.effectiveTaxRate);
                 yearlyConfig.data.datasets[graphLineIndex.netIncome].data.push(taxInfo.netIncome);
             });
         }
@@ -415,7 +415,7 @@
                     var taxInformation = taxCalculator.getTaxInformation(i, false, taxYearDef.brackets, taxYearDef.standardDeduction);
                     plotlyRow.x.push(i);
                     plotlyRow.y.push(taxYearLabel);
-                    plotlyRow.z.push(taxInformation.marginalTaxRate * 100);
+                    plotlyRow.z.push(taxInformation.effectiveTaxRate * 100);
                     plotlyRow.marker.color.push(counter*3);
                     i = parseInt(i) + parseInt(app.step);
                 }

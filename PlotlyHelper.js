@@ -16,7 +16,7 @@ function getPlotlyHelper() {
                     },
                     zaxis: {
                         title: {
-                            text: 'MarginalRate'
+                            text: 'EffectiveRate'
                         }
                     }
                 },
@@ -49,7 +49,7 @@ function getPlotlyHelper() {
                 },
                 hovertemplate:
                 "Income: %{x}<br />" +
-                "MarginalRate: %{z}%<br />" +
+                "EffectiveRate: %{z}%<br />" +
                 "Year: %{y}"
             };
         }

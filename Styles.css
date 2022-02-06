@@ -3,3 +3,9 @@ canvas {
     -webkit-user-select: none;
     -ms-user-select: none;
 }
+
+div.bordered {
+    border: 1pt;
+    border-color: darkcyan;
+    border-style: solid;
+}
