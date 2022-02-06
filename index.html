@@ -22,7 +22,7 @@
 </head>
 
 <body>
-    <div id="app">
+    <div id="synopsis">
         <h2>How Tax Brackets Work</h2>
         <p>
             Tax Brackets are a way to scale up the tax rate as an individual's income climbs. Since taxing everyone at a
@@ -41,6 +41,8 @@
         <p>
             Please see the interactive examples below:
         </p>
+    </div>
+    <div id="app">
         <div id="configuration">
             <h4>Tax configs</h4>
             <p>
@@ -61,42 +63,105 @@
             <p>
                 You can modify tax bracket definitions here to set up your own scenarios.
             </p>
-            <button id="addNewTaxBracket" onclick="addNewTaxBracket()" class="pure-button">Add New Tax Bracket</button>
-            <button id="removeTaxBracket" onclick="removeTaxBracket()" class="pure-button">Remove Selected Tax
-                Bracket</button>
-            <table id="taxConfiguration" class="pure-table pure-table-bordered">
-                <tr>
-                    <th></th>
-                    <th>Income Bracket</th>
-                    <th>TaxRate</th>
-                </tr>
-                <tr v-for="(bracket, index) in taxBrackets">
-                    <td><input type="radio" v-model="selectedRow" :value="`${index}`" :id="`bracket-row-${index}`"
-                            class="pure-radio" /></td>
-                    <td><input type="number" :id="`bracket-max-${index}`" v-model="bracket.bracketMax" step="100"
-                            class="pure-input-rounded" /></td>
-                    <td><input type="number" min="0" max="100" step="1" :id="`bracket-taxRate-{index}`"
-                            v-model="bracket.taxRate" class="pure-input-rounded" /> %</td>
-                </tr>
-            </table>
-            <p>
-                Set a Deduction amount below.
-            </p>
-            <table id="taxDeduction" class="pure-table pure-table-bordered">
-                <tr>
-                    <th>Deduction Amount</th>
-                </tr>
-                <tr>
-                    <td><input type="number" id="taxDeductionAmount" v-model="taxDeductionAmount" /></td>
-                </tr>
-            </table>
+            <div id="customizeBrackets">
+                <button id="addNewTaxBracket" onclick="addNewTaxBracket()" class="pure-button">Add New Tax Bracket</button>
+                <button id="removeTaxBracket" onclick="removeTaxBracket()" class="pure-button">Remove Selected Tax
+                    Bracket</button>
+                <table id="taxConfiguration" class="pure-table pure-table-bordered">
+                    <tr>
+                        <th></th>
+                        <th>Income Bracket</th>
+                        <th>TaxRate</th>
+                    </tr>
+                    <tr v-for="(bracket, index) in taxBrackets">
+                        <td><input type="radio" v-model="selectedRow" :value="`${index}`" :id="`bracket-row-${index}`"
+                                class="pure-radio" /></td>
+                        <td><input type="number" :id="`bracket-max-${index}`" v-model="bracket.bracketMax" step="100"
+                                class="pure-input-rounded" /></td>
+                        <td><input type="number" min="0" max="100" step="1" :id="`bracket-taxRate-{index}`"
+                                v-model="bracket.taxRate" class="pure-input-rounded" /> %</td>
+                    </tr>
+                </table>
+                <p>
+                    Set a Deduction amount below.
+                </p>
+                <table id="taxDeduction" class="pure-table pure-table-bordered">
+                    <tr>
+                        <th>Deduction Amount</th>
+                    </tr>
+                    <tr>
+                        <td><input type="number" id="taxDeductionAmount" v-model="taxDeductionAmount" /></td>
+                    </tr>
+                </table>
+            </div>
         </div>
-        <h3>Specific Income Breakdown</h3>
-        <p>
-            Here you can see how the taxes would be calculated for a specific income based on the configurations above.
-            The amount of tax is shown per bracket, and the marginal tax rate for the income is shown below.
-        </p>
+        
+        <div id="IncomeRangeGraphs">
+            <h3>Taxes over a range of Incomes for a single year</h3>
+            <h4>Taxes over a range of Incomes for a single year</h4>
+            <p>
+                To see how a range of incomes would be affected by the configured tax brackets, you can specify a start,
+                end, and step value to graph.
+                The step value is how to specify which specific points to graph. The bigger the step, the less points
+                will be calculated.
+            </p>
+            <table id="graphConfiguration" class="pure-table pure-table-bordered">
+                <tr>
+                    <td>Start</td>
+                    <td><input type="number" id="min" v-model="min" step="100" /></td>
+                </tr>
+                <tr>
+                    <td>End</td>
+                    <td><input type="number" id="max" v-model="max" step="100" /></td>
+                </tr>
+                <tr>
+                    <td>Step</td>
+                    <td><input type="number" id="step" v-model="step" /></td>
+                </tr>
+            </table>
+            <button id="rebuildGraph" onclick="rebuildGraph()" class="pure-button">Rebuild Graph</button>
+            <div style="position:relative;width:95vw;height:50vh">
+                <canvas id="canvas"></canvas>
+            </div>
+        
+            <h4>
+                Marginal Tax Topology over the years
+            </h4>
+            <p>
+                This is a 3d graph that aims to show how marginal tax rate changes year over year across a range of
+                incomes.
+            </p>
+            <p>
+                This widget uses the same form values as above in Taxes over a range of Incomes for a single year
+            </p>
+            <div id="topologyGraph"></div>
+        </div>
+        <div id="TaxAmountYearly">
+            <h4>
+                Taxes over Time
+            </h4>
+            <p>
+                With some years worth of tax bracket definitions, we can look at how an amount would be taxed over the
+                years. Here you can experiment to see how different incomes are affected by yearly changes.
+            </p>
+            <table id="yearlyGraphConfiguration" class="pure-table pure-table-bordered">
+                <tr>
+                    <td>Amount</td>
+                    <td><input type="number" id="amountForYearlyGraph" v-model="amountForYearlyGraph" step="100" /></td>
+                </tr>
+            </table>
+            <button id="rebuildYearlyGraph" onclick="rebuildYearlyGraph()" class="pure-button">Rebuild Graph</button>
+            <div style="position:relative;width:95vw;height:50vh">
+                <canvas id="canvasYearly"></canvas>
+            </div>
+        </div>
         <div id="breakdown">
+            <h3>Specific Income Breakdown</h3>
+            <p>
+                Here you can see how the taxes would be calculated for a specific income based on the configurations above.
+                The amount of tax is shown per bracket, and the marginal tax rate for the income is shown below.
+            </p>
+        
             <table id="breakDownInput" class="pure-table pure-table-bordered">
                 <tr>
                     <td>Enter a specific income to show it's breakdown</td>
@@ -141,65 +206,6 @@
                     <td>${{ formatNumberForDisplay(specificIncomeBreakdown.netIncome) }}</td>
                 </tr>
             </table>
-        </div>
-        <div id="IncomeRangeGraph">
-            <h4>Taxes over a range of Incomes for a single year</h4>
-            <p>
-                To see how a range of incomes would be affected by the configured tax brackets, you can specify a start,
-                end, and step value to graph.
-                The step value is how to specify which specific points to graph. The bigger the step, the less points
-                will be calculated.
-            </p>
-            <table id="graphConfiguration" class="pure-table pure-table-bordered">
-                <tr>
-                    <td>Start</td>
-                    <td><input type="number" id="min" v-model="min" step="100" /></td>
-                </tr>
-                <tr>
-                    <td>End</td>
-                    <td><input type="number" id="max" v-model="max" step="100" /></td>
-                </tr>
-                <tr>
-                    <td>Step</td>
-                    <td><input type="number" id="step" v-model="step" /></td>
-                </tr>
-            </table>
-            <button id="rebuildGraph" onclick="rebuildGraph()" class="pure-button">Rebuild Graph</button>
-            <div style="position:relative;width:95vw;height:50vh">
-                <canvas id="canvas"></canvas>
-            </div>
-        </div>
-        <div id="MarginalTaxTopology">
-            <h4>
-                Marginal Tax Topology over the years
-            </h4>
-            <p>
-                This is a 3d graph that aims to show how marginal tax rate changes year over year across a range of
-                incomes.
-            </p>
-            <p>
-                This widget uses the same form values as above in Taxes over a range of Incomes for a single year
-            </p>
-            <div id="topologyGraph"></div>
-        </div>
-        <div id="TaxAmountYearly">
-            <h4>
-                Taxes over Time
-            </h4>
-            <p>
-                With some years worth of tax bracket definitions, we can look at how an amount would be taxed over the
-                years. Here you can experiment to see how different incomes are affected by yearly changes.
-            </p>
-            <table id="yearlyGraphConfiguration" class="pure-table pure-table-bordered">
-                <tr>
-                    <td>Amount</td>
-                    <td><input type="number" id="amountForYearlyGraph" v-model="amountForYearlyGraph" step="100" /></td>
-                </tr>
-            </table>
-            <button id="rebuildYearlyGraph" onclick="rebuildYearlyGraph()" class="pure-button">Rebuild Graph</button>
-            <div style="position:relative;width:95vw;height:50vh">
-                <canvas id="canvasYearly"></canvas>
-            </div>
         </div>
     </div>
 
