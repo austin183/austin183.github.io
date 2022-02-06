@@ -54,15 +54,15 @@
             </div>
         </div>
         <div id="breakdown">
-            <h3>Specific Income Breakdown</h3>
+            <h3>Specific Income Breakdown for a Single Year</h3>
             <p>
-                Here you can see how the taxes would be calculated for a specific income based on the configurations above.
+                Here is how the taxes would be calculated for a specific income based on the selected Tax Year.
                 The amount of tax is shown per bracket, and the marginal tax rate for the income is shown below.
             </p>
         
             <table id="breakDownInput" class="pure-table pure-table-bordered">
                 <tr>
-                    <td>Enter a specific income to show it's breakdown</td>
+                    <td>Enter a specific income to show its breakdown</td>
                 </tr>
                 <tr>
                     <td><input type="number" step="1000" id="specificIncome"
@@ -93,7 +93,7 @@
                 </tr>
                 <tr>
                     <td>StandarDeduction was</td>
-                    <td>${{ taxDeductionAmount }}</td>
+                    <td>${{ formatNumberForDisplay(taxDeductionAmount) }}</td>
                 </tr>
                 <tr>
                     <td>The total amount of tax owed would be</td>
@@ -117,8 +117,10 @@
             <p>
                 To see how a range of incomes would be affected by the configured tax brackets, you can specify a start,
                 end, and step value to graph.
-                The step value is how to specify which specific points to graph. The bigger the step, the less points
-                will be calculated.
+                The step value is how to specify which specific points to graph.
+            </p>
+            <p>
+                Performance Note: If your page stutters, it could help to increase the Step value so fewer points need to be rendered on some of the graphs below.
             </p>
             <table id="graphConfiguration" class="pure-table pure-table-bordered">
                 <tr>
@@ -201,7 +203,7 @@
         var taxCalculator = getTaxCalculator();
         
         function formatNumberForDisplay(value) {
-            if (parseInt(value) >= 1000) {
+            if (Number(value) >= 1000) {
                 return Number(value).toFixed(2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
             } else if (value < 1 && value > 0) {
                 return (value * 100).toFixed(2);
