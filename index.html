@@ -25,11 +25,6 @@
     <div id="synopsis">
         <h2>How Tax Brackets Work</h2>
         <p>
-            Tax Brackets are a way to scale up the tax rate as an individual's income climbs. Since taxing everyone at a
-            high rate would disproportionally affect individuals with lower incomes, this method is used to relieve the
-            tax burden on the most vulnerable individuals.
-        </p>
-        <p>
             When taxes are calculated, everyone's first bracket is taxed equally. Once an individual surpasses the first
             bracket, any amount of income above the first bracket and below the next bracket is taxed at the next
             bracket's rate.
@@ -198,7 +193,7 @@
 
                 <tr>
                     <td>The marginal tax rate would be</td>
-                    <td>{{ formatNumberForDisplay(specificIncomeBreakdown.marginalTaxRate) }}%</td>
+                    <td>{{ formatDecimalAsPercent(specificIncomeBreakdown.marginalTaxRate) }}</td>
                 </tr>
 
                 <tr>
@@ -239,7 +234,7 @@
         
         function formatNumberForDisplay(value) {
             if (parseInt(value) >= 1000) {
-                return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                return Number(value).toFixed(2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
             } else if (value < 1 && value > 0) {
                 return (value * 100).toFixed(2);
             }
@@ -249,7 +244,10 @@
         }
 
         function formatDecimalAsPercent(value, index, values) {
-            return formatNumberForDisplay(value.toFixed(3) * 100).toFixed(2) + "%";
+            if(value > 0){
+                return formatNumberForDisplay(Number(value).toFixed(3) * 100).toFixed(2) + "%";
+            }
+            return "0%";
         }
 
         function buildTooltipLabel(tooltipItem, data) {
@@ -278,7 +276,7 @@
 
         function buildCommonYAxisDefinitions(){
             return [
-                chartHelper.buildChartAxisDefinition('Amount', 'amount-axis', 'left', true, formatNumberForDisplay),
+                chartHelper.buildChartAxisDefinition('Net Income', 'amount-axis', 'left', true, formatNumberForDisplay),
                 chartHelper.buildChartAxisDefinition('Marginal Tax Rate', 'marginal-rate-axis', 'right', false, formatDecimalAsPercent)
             ];
         }
@@ -305,15 +303,15 @@
             data: {
                 labels: [],
                 datasets: [
-                    chartHelper.buildInitialDataset('Tax Amount per Year for a Specific Income', CHART_COLORS.red, 'amount-axis', false),
-                    chartHelper.buildInitialDataset('Net Income per Year', CHART_COLORS.blue, 'amount-axis', false),
-                    chartHelper.buildInitialDataset('Marginal Tax Rate per Year', CHART_COLORS.green, 'marginal-rate-axis', true)
+                    chartHelper.buildInitialDataset('Tax Amount for a Specific Income', CHART_COLORS.red, 'amount-axis', false),
+                    chartHelper.buildInitialDataset('Net Income', CHART_COLORS.blue, 'amount-axis', false),
+                    chartHelper.buildInitialDataset('Marginal Tax Rate', CHART_COLORS.green, 'marginal-rate-axis', true)
                 ]
             },
             options: chartHelper.buildInitialChartConfigOptions(buildTooltipLabel)
         };
         config.options.scales.xAxes = [
-            chartHelper.buildChartAxisDefinition('Year', 'year-axis', 'bottom', true, function (value) { return value; })
+            chartHelper.buildChartAxisDefinition('Total Income', 'year-axis', 'bottom', true, function (value) { return value; })
         ];
         config.options.scales.yAxes = buildCommonYAxisDefinitions();
         
