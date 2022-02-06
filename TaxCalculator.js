@@ -4,6 +4,7 @@ function getTaxCalculator(){
     };
     var getBreakDownComponent = function(income, item, minimumAmount){
         var component = {
+            bracket: item.bracketMax,
             max: 0,
             taxRate: item.taxRate,
             taxAmount: 0
