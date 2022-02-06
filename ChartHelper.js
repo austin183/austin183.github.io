@@ -32,6 +32,31 @@ function getChartHelper(){
                     callback: tickCallBackFn
                 }
             }
+        },
+        buildInitialChartConfigOptions: function(buildTooltipLabel){
+            return {
+                responsive: true,
+                maintainAspectRatio: false,
+                title: {
+                    display: true,
+                    text: 'Income'
+                },
+                tooltips: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: buildTooltipLabel
+                    }
+                },
+                hover: {
+                    mode: 'nearest',
+                    intersect: true
+                },
+                scales: {
+                    xAxes: [],
+                    yAxes: []
+                }
+            };
         }
     };
 }
