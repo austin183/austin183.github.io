@@ -39,14 +39,18 @@ function getPlotlyHelper() {
                 "opacity": 0.9,
                 "mode": "markers",
                 "type": "scatter3d",
-                "name": "topology",
+                "name": "",
                 marker: {
                     size: 4,
                     color: [],
                     colorscale:"Jet",
                     cmin: -20,
                     cmax: 50
-                }
+                },
+                hovertemplate:
+                "Income: %{x}<br />" +
+                "MarginalRate: %{z}%<br />" +
+                "Year: %{y}"
             };
         }
     };
