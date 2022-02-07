@@ -19,7 +19,7 @@
 </head>
 
 <body>
-    <div id="synopsis" >
+    <div id="synopsis" class="centered">
         <h2>How Tax Brackets Work in the United States</h2>
         <p>
             When taxes are calculated, everyone's first bracket is taxed equally. Once an individual's yearly income surpasses the first
@@ -35,7 +35,7 @@
         </p>
     </div>
     <div id="app">
-        <div id="configuration">
+        <div id="configuration" class="centered">
             <h4>Tax configs</h4>
             <p>
                 Some historical tax brackets are provided in the drop down. Select one to show what taxes would have
@@ -51,8 +51,8 @@
             </div>
         </div>
         <br />
-        <button id="toggleBreakDown" class="pure-button" onclick="toggleVisibility('breakdown', 'Breakdown', this)">Hide Breakdown</button>
-        <div id="breakdown" class="bordered">
+        <button id="toggleBreakDown" class="pure-button button-toggle" onclick="toggleVisibility('breakdown', 'Breakdown', this)">Hide Breakdown</button>
+        <div id="breakdown" class="bordered centered">
             <h3>Specific Income Breakdown for a Single Year</h3>
             <p>
                 Here is how the taxes would be calculated for a specific income based on the selected Tax Year.
@@ -112,8 +112,8 @@
             </table>
         </div>
         <br />
-        <button id="toggleIncomeRangeGraphs" class="pure-button" onclick="toggleVisibility('IncomeRangeGraphs', 'Income Range Graphs', this)">Hide Income Range Graphs</button>
-        <div id="IncomeRangeGraphs" class="bordered">
+        <button id="toggleIncomeRangeGraphs" class="pure-button button-toggle" onclick="toggleVisibility('IncomeRangeGraphs', 'Income Range Graphs', this)">Hide Income Range Graphs</button>
+        <div id="IncomeRangeGraphs" class="bordered centered">
             <h4>Taxes over a range of Incomes for a single year</h4>
             <p>
                 To see how a range of incomes would be affected by the configured tax brackets, you can specify a start,
@@ -140,8 +140,8 @@
             <br />
             <button id="rebuildGraph" onclick="rebuildGraph()" class="pure-button">Rebuild Graphs</button>
             <br />
-            <button id="toggleEffectiveTopology" class="pure-button" onclick="toggleVisibility('EffectiveTopology', 'Effective Rate Topology (3D)', this)">Hide Effective Rate Topology (3D)</button>
-            <div id="EffectiveTopology" class="bordered">
+            <button id="toggleEffectiveTopology" class="pure-button button-toggle" onclick="toggleVisibility('EffectiveTopology', 'Effective Rate Topology (3D)', this)">Hide Effective Rate Topology (3D)</button>
+            <div id="EffectiveTopology" class="bordered centered">
                 <h4>
                     Effective Tax Topology over the years
                 </h4>
@@ -155,8 +155,8 @@
                 <div id="topologyGraph"></div>
             </div>
             <br />
-            <button id="toggleSingleIncomeByYearChart" class="pure-button" onclick="toggleVisibility('SingleIncomeByYearChart', 'Specific Income by Year', this)">Hide Specific Income by Year</button>
-            <div id="SingleIncomeByYearChart" class="bordered">
+            <button id="toggleSingleIncomeByYearChart" class="pure-button button-toggle" onclick="toggleVisibility('SingleIncomeByYearChart', 'Specific Income by Year', this)">Hide Specific Income by Year</button>
+            <div id="SingleIncomeByYearChart" class="bordered centered">
                 <h4>
                     Range of Incomes for a Specific Year
                 </h4>
@@ -169,8 +169,8 @@
             </div>
         </div>
         <br />
-        <button id="toggleTaxAmountYearly" class="pure-button" onclick="toggleVisibility('TaxAmountYearly', 'Taxes over Time', this)">Hide Taxes over Time</button>
-        <div id="TaxAmountYearly" class="bordered">
+        <button id="toggleTaxAmountYearly" class="pure-button button-toggle" onclick="toggleVisibility('TaxAmountYearly', 'Taxes over Time', this)">Hide Taxes over Time</button>
+        <div id="TaxAmountYearly" class="bordered centered">
             <h4>
                 Taxes over Time
             </h4>
@@ -181,7 +181,7 @@
             <table id="yearlyGraphConfiguration" class="pure-table pure-table-bordered">
                 <tr>
                     <td>Amount</td>
-                    <td><input type="number" id="amountForYearlyGraph" v-model="amountForYearlyGraph" step="100" /></td>
+                    <td><input type="number" step="1000" id="amountForYearlyGraph" v-model="amountForYearlyGraph" step="100" /></td>
                 </tr>
             </table>
             <button id="rebuildYearlyGraph" onclick="rebuildYearlyGraph()" class="pure-button">Rebuild Graph</button>
@@ -191,7 +191,7 @@
         </div>
     </div>
     <br />
-    <div id="furtherResources">
+    <div id="furtherResources" class="centered">
         <h4>Further Resources</h4>
         <p>
             For historical tax rates, please visit <a
@@ -340,7 +340,7 @@
 
                     var graphDiv = document.getElementById('topologyGraph');
                     this.topologyGraph = graphDiv;
-                    Plotly.newPlot(this.topologyGraph, z_data, plotlyLayout);
+                    Plotly.newPlot(this.topologyGraph, z_data, plotlyLayout, {responsive:true});
                 }
             });
             app.selectedTaxYear = defaultTaxYear;

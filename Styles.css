@@ -4,8 +4,28 @@ canvas {
     -ms-user-select: none;
 }
 
+body{
+    margin-left: 10px;
+    margin-right: 10px;
+}
+
 div.bordered {
     border: 1pt;
     border-color: darkcyan;
     border-style: solid;
+}
+
+div.centered{
+    text-align: center;
+}
+
+table{
+    align-content: center;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+button.button-toggle {
+    background-color: darkcyan;
+    color:floralwhite;
 }

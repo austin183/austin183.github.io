@@ -21,13 +21,11 @@ function getPlotlyHelper() {
                     }
                 },
                 autosize: true,
-                width: 600,
-                height: 600,
                 margin: {
                     l: 0,
                     r: 0,
-                    b: 0,
-                    t: 65
+                    b: 10,
+                    t: 50
                 }
             };
         },
