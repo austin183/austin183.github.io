@@ -184,7 +184,7 @@
             </p>
             <div id="TaxAmountYearlyConvig">
                 Amount: <input type="number" step="1000" id="amountForYearlyGraph" v-model="amountForYearlyGraph" v-on:change="rebuildYearlyGraph()" step="100" />
-                <input type="range" class="range" min="5000" max="1000000" id="rangeForYearlyGraph" v-model="amountForYearlyGraph" v-on:input="rebuildYearlyGraph()" />
+                <input type="range" class="range" min="5000" max="500000" id="rangeForYearlyGraph" v-model="amountForYearlyGraph" v-on:input="rebuildYearlyGraph()" />
             <button id="rebuildYearlyGraph" onclick="rebuildYearlyGraph()" class="pure-button">Rebuild Graph</button>
             </div>
             <div style="position:relative;width:95vw;height:50vh">
