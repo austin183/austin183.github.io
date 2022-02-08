@@ -5,8 +5,8 @@ canvas {
 }
 
 body{
-    margin-left: 10px;
-    margin-right: 10px;
+    margin-left: 20px;
+    margin-right: 15px;
 }
 
 div.bordered {
@@ -28,4 +28,8 @@ table{
 button.button-toggle {
     background-color: darkcyan;
     color:floralwhite;
+}
+
+input.range {
+    width:50%;
 }

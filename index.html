@@ -35,22 +35,7 @@
         </p>
     </div>
     <div id="app">
-        <div id="configuration" class="centered">
-            <h4>Tax configs</h4>
-            <p>
-                Some historical tax brackets are provided in the drop down. Select one to show what taxes would have
-                looked like that year for single year visualizations.
-            </p>
-            <div>
-                <select id="selectTaxYear" v-model="selectedTaxYear" v-on:change="switchTaxBracket()"
-                    class="pure-input-rounded">
-                    <option value="" disabled selected>Select a tax year to pull the tax brackets for a single file that
-                        year.</option>
-                    <option v-for="(item, key, index) in getTaxYears()" :value="item">{{key}}</option>
-                </select>
-            </div>
-        </div>
-        <br />
+        
         <button id="toggleBreakDown" class="pure-button button-toggle" onclick="toggleVisibility('breakdown', 'Breakdown', this)">Hide Breakdown</button>
         <div id="breakdown" class="bordered centered">
             <h3>Specific Income Breakdown for a Single Year</h3>
@@ -58,16 +43,27 @@
                 Here is how the taxes would be calculated for a specific income based on the selected Tax Year.
                 The amount of tax is shown per bracket, and the effective tax rate for the income is shown below.
             </p>
-        
-            <table id="breakDownInput" class="pure-table pure-table-bordered">
-                <tr>
-                    <td>Enter a specific income to show its breakdown</td>
-                </tr>
-                <tr>
-                    <td><input type="number" step="1000" id="specificIncome"
-                            v-model="specificIncomeBreakdown.startingAmount" /></td>
-                </tr>
-            </table>
+            <div id="configuration" class="centered">
+                <p>
+                    Some historical tax brackets are provided in the drop down. Select one to show what taxes would have
+                    looked like that year for single year visualizations.
+                </p>
+                <div>
+                    <select id="selectTaxYear" v-model="selectedTaxYear" v-on:change="switchTaxBracket()"
+                        class="pure-input-rounded">
+                        <option value="" disabled selected>Select a tax year to pull the tax brackets for a single file that
+                            year.</option>
+                        <option v-for="(item, key, index) in getTaxYears()" :value="item">{{key}}</option>
+                    </select>
+                </div>
+            </div>
+            <br />
+            <div id="breakdownInput" >
+                Enter a specific income to show its breakdown <input type="number" step="1000" id="specificIncome"
+                v-model="specificIncomeBreakdown.startingAmount" v-on:change="calculateBreakdown()" />
+                <input type="range" class="range" min="5000" max="800000" id="rangeForBreakdownInput" v-model="specificIncomeBreakdown.startingAmount" v-on:input="calculateBreakdown()" />
+            </div>
+
             <br />
             <button id="calculateBreakdown" class="pure-button" onclick="calculateBreakdown()">Calculate
                 Breakdown</button>
@@ -160,6 +156,14 @@
                 <h4>
                     Range of Incomes for a Specific Year
                 </h4>
+                <div>
+                    <select id="selectTaxYear" v-model="selectedTaxYear" v-on:change="switchTaxBracket()"
+                        class="pure-input-rounded">
+                        <option value="" disabled selected>Select a tax year to pull the tax brackets for a single file that
+                            year.</option>
+                        <option v-for="(item, key, index) in getTaxYears()" :value="item">{{key}}</option>
+                    </select>
+                </div>
                 <p>
                     This is what a range of incomes would look like for the year chosen in the drop down at the top of the page.
                 </p>
@@ -178,13 +182,11 @@
                 With some years worth of tax bracket definitions, we can look at how an amount would be taxed over the
                 years. Here you can experiment to see how different incomes are affected by yearly changes.
             </p>
-            <table id="yearlyGraphConfiguration" class="pure-table pure-table-bordered">
-                <tr>
-                    <td>Amount</td>
-                    <td><input type="number" step="1000" id="amountForYearlyGraph" v-model="amountForYearlyGraph" step="100" /></td>
-                </tr>
-            </table>
+            <div id="TaxAmountYearlyConvig">
+                Amount: <input type="number" step="1000" id="amountForYearlyGraph" v-model="amountForYearlyGraph" v-on:change="rebuildYearlyGraph()" step="100" />
+                <input type="range" class="range" min="5000" max="1000000" id="rangeForYearlyGraph" v-model="amountForYearlyGraph" v-on:input="rebuildYearlyGraph()" />
             <button id="rebuildYearlyGraph" onclick="rebuildYearlyGraph()" class="pure-button">Rebuild Graph</button>
+            </div>
             <div style="position:relative;width:95vw;height:50vh">
                 <canvas id="canvasYearly"></canvas>
             </div>
