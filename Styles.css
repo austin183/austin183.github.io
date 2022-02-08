@@ -39,3 +39,12 @@ button.button-toggle {
 input.range {
     width:50%;
 }
+
+ul.no-bullets {
+    list-style-type: none;
+    text-align: left;
+}
+
+input {
+    width: fit-content;
+}
