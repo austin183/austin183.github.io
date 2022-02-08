@@ -39,11 +39,11 @@ function getPlotlyHelper() {
                 "type": "scatter3d",
                 "name": "",
                 marker: {
-                    size: 4,
+                    size: 3.2,
                     color: [],
                     colorscale:"Jet",
-                    cmin: -20,
-                    cmax: 50
+                    cmin: -15,
+                    cmax: 55
                 },
                 hovertemplate:
                 "Income: %{x}<br />" +
