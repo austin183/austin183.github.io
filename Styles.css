@@ -4,6 +4,12 @@ canvas {
     -ms-user-select: none;
 }
 
+div.canvas {
+    position:relative;
+    width:95vw;
+    height:50vh;
+}
+
 body{
     margin-left: 20px;
     margin-right: 15px;

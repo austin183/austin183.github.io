@@ -13,9 +13,6 @@
     <script src="ChartHelper.js"></script>
     <script src="TaxCalculator.js"></script>
     <link href="Styles.css" rel="stylesheet">
-    <style>
-        
-    </style>
 </head>
 
 <body>
@@ -167,7 +164,7 @@
                 <p>
                     This is what a range of incomes would look like for the year chosen in the drop down at the top of the page.
                 </p>
-                <div style="position:relative;width:95vw;height:50vh">
+                <div class="canvas">
                     <canvas id="canvas"></canvas>
                 </div>
             </div>
@@ -182,12 +179,12 @@
                 With some years worth of tax bracket definitions, we can look at how an amount would be taxed over the
                 years. Here you can experiment to see how different incomes are affected by yearly changes.
             </p>
-            <div id="TaxAmountYearlyConvig">
+            <div id="TaxAmountYearlyConfig">
                 Amount: <input type="number" step="1000" id="amountForYearlyGraph" v-model="amountForYearlyGraph" v-on:change="rebuildYearlyGraph()" step="100" />
                 <input type="range" class="range" min="5000" max="500000" id="rangeForYearlyGraph" v-model="amountForYearlyGraph" v-on:input="rebuildYearlyGraph()" />
             <button id="rebuildYearlyGraph" onclick="rebuildYearlyGraph()" class="pure-button">Rebuild Graph</button>
             </div>
-            <div style="position:relative;width:95vw;height:50vh">
+            <div class="canvas">
                 <canvas id="canvasYearly"></canvas>
             </div>
         </div>
