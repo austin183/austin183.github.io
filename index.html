@@ -111,28 +111,8 @@
             <p>
                 To see how a range of incomes would be affected by the configured tax brackets, you can specify a start,
                 end, and step value to graph.
-                The step value is how to specify which specific points to graph.
+                The number of steps value determines how many points between the start and end get rendered to the graphs.
             </p>
-            <p>
-                Performance Note: If your page stutters, it could help to increase the Step value so fewer points need to be rendered on some of the graphs below.
-            </p>
-            <table id="graphConfiguration" class="pure-table pure-table-bordered">
-                <tr>
-                    <td>Start</td>
-                    <td><input type="number" id="min" v-model="min" step="100" /></td>
-                </tr>
-                <tr>
-                    <td>End</td>
-                    <td><input type="number" id="max" v-model="max" step="100" /></td>
-                </tr>
-                <tr>
-                    <td>Step</td>
-                    <td><input type="number" id="step" v-model="step" /></td>
-                </tr>
-            </table>
-            <br />
-            <button id="rebuildGraph" onclick="rebuildGraph()" class="pure-button">Rebuild Graphs</button>
-            <br />
             <button id="toggleEffectiveTopology" class="pure-button button-toggle" onclick="toggleVisibility('EffectiveTopology', 'Effective Rate Topology (3D)', this)">Hide Effective Rate Topology (3D)</button>
             <div id="EffectiveTopology" class="bordered centered">
                 <h4>
@@ -143,8 +123,16 @@
                     incomes.
                 </p>
                 <p>
-                    This widget uses the same form values as above in Taxes over a range of Incomes for a single year
+                    Performance Note: If your page stutters, it could help to decrease the number of steps so fewer points need to be rendered on some of the graphs below.
                 </p>
+                <div id="graphConfiguration">
+                    <span>Start <input type="number" id="min" v-model="min" step="1000" /></span>
+                    <span>End <input type="number" id="max" v-model="max" step="1000" /></span>
+                    <span>Step Count <input type="number" id="step" min="5" max="30" v-model="step" /></span>
+                    <input type="range" class="range" min="5" max="30" id="rangeForStepCount" v-model="step" v-on:input="rebuildGraph()" />
+                    <button id="rebuildGraph" onclick="rebuildGraph()" class="pure-button">Rebuild Graphs</button>
+                </div>
+                
                 <div id="topologyGraph"></div>
             </div>
             <br />
@@ -153,6 +141,12 @@
                 <h4>
                     Range of Incomes for a Specific Year
                 </h4>
+                <p>
+                    This is what a range of incomes would look like for the year chosen in the drop down at the top of the page.
+                </p>
+                <p>
+                    Performance Note: If your page stutters, it could help to decrease the number of steps so fewer points need to be rendered on some of the graphs below.
+                </p>
                 <div>
                     <select id="selectTaxYear" v-model="selectedTaxYear" v-on:change="switchTaxBracket()"
                         class="pure-input-rounded">
@@ -161,9 +155,15 @@
                         <option v-for="(item, key, index) in getTaxYears()" :value="item">{{key}}</option>
                     </select>
                 </div>
-                <p>
-                    This is what a range of incomes would look like for the year chosen in the drop down at the top of the page.
-                </p>
+                <br />
+                <div id="graphConfiguration">
+                    <span>Start <input type="number" id="min" v-model="min" step="1000" /></span>
+                    <span>End <input type="number" id="max" v-model="max" step="1000" /></span>
+                    <span>Step Count <input type="number" id="step" min="5" max="30" v-model="step" /></span>
+                    <input type="range" class="range" min="5" max="30" id="rangeForStepCount" v-model="step" v-on:input="rebuildGraph()" />
+                    <button id="rebuildGraph" onclick="rebuildGraph()" class="pure-button">Rebuild Graphs</button>
+                </div>
+                
                 <div class="canvas">
                     <canvas id="canvas"></canvas>
                 </div>
@@ -247,7 +247,7 @@
         var defaultAmountForYearlyGraph = 50000;
         var defaultMin = 10000;
         var defaultMax = 800000;
-        var defaultStep = 15000;
+        var defaultStep = 24;
         var defaultTaxYear = getDefaultTaxYear();
         var specificIncomeBreakdown = {
             components: [],
@@ -356,19 +356,24 @@
             app.specificIncomeBreakdown.netIncome = taxInformation.netIncome;
         }
 
+        function getStepSize(min, max, stepCount){
+            return Math.round((max - min) / stepCount) + 1;
+        }
+
         function buildChart() {
             for (var i = 0; i < config.data.datasets.length; i++) {
                 config.data.datasets[i].data = [];
             }
             config.data.labels = [];
             var i = app.min;
+            var stepSize = getStepSize(app.min, app.max, app.step);
             while (i <= app.max) {
                 config.data.labels.push(formatNumberForDisplay(i));
                 var taxInformation = taxCalculator.getTaxInformation(i, false, app.taxBrackets, app.taxDeductionAmount);
                 config.data.datasets[graphLineIndex.taxAmount].data.push(taxInformation.taxAmount);
                 config.data.datasets[graphLineIndex.effectiveTaxRate].data.push(taxInformation.effectiveTaxRate);
                 config.data.datasets[graphLineIndex.netIncome].data.push(taxInformation.netIncome);
-                i = parseInt(i) + parseInt(app.step);
+                i = parseInt(i) + parseInt(stepSize);
             }
         }
 
@@ -409,14 +414,14 @@
                 var taxYearDef = taxYearDefinitions[taxYear];
                 var taxYearLabel = parseInt(taxYear.replace("Single", ""));
                 var i = app.min;
-
+                var stepSize = getStepSize(app.min, app.max, app.step);
                 while (i <= app.max) {
                     var taxInformation = taxCalculator.getTaxInformation(i, false, taxYearDef.brackets, taxYearDef.standardDeduction);
                     plotlyRow.x.push(i);
                     plotlyRow.y.push(taxYearLabel);
                     plotlyRow.z.push(taxInformation.effectiveTaxRate * 100);
                     plotlyRow.marker.color.push(counter*3);
-                    i = parseInt(i) + parseInt(app.step);
+                    i = parseInt(i) + parseInt(stepSize);
                 }
                 counter++;
             });
