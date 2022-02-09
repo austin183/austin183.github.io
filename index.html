@@ -215,7 +215,7 @@
 
     <script>
         const CHART_COLORS = {
-            red: 'rgb(255, 99, 132)',
+            red: 'rgb(255,0,0)',
             salmon: 'rgb(250,128,114)',
             orange: 'rgb(255, 159, 64)',
             yellow: 'rgb(255, 205, 86)',
@@ -224,7 +224,8 @@
             blue: 'rgb(54, 162, 235)',
             cyan: 'rgb(0,255,255)',
             purple: 'rgb(153, 102, 255)',
-            grey: 'rgb(201, 203, 207)'
+            grey: 'rgb(201, 203, 207)',
+            magenta: 'rgb(255,0,255)'
         };
         var singleTaxPayerDefinitionKeys = getSingleTaxPayerDefinitionKeys();
         var chartHelper = getChartHelper();
@@ -303,7 +304,7 @@
                     chartHelper.buildInitialDataset('Tax Amount for a Specific Income', CHART_COLORS.red, 'amount-axis', false),
                     chartHelper.buildInitialDataset('Net Income', CHART_COLORS.blue, 'amount-axis', false),
                     chartHelper.buildInitialDataset('Effective Tax Rate', CHART_COLORS.green, 'effective-rate-axis', true),
-                    chartHelper.buildInitialDataset('Tax Amount for Comparison', CHART_COLORS.salmon, 'amount-axis', false),
+                    chartHelper.buildInitialDataset('Tax Amount for Comparison', CHART_COLORS.magenta, 'amount-axis', false),
                     chartHelper.buildInitialDataset('Net Income for Comparison', CHART_COLORS.cyan, 'amount-axis', false),
                     chartHelper.buildInitialDataset('Effective Tax Rate for comparison', CHART_COLORS.lightgreen, 'effective-rate-axis', true),
                 ]
