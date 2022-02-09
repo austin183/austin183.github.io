@@ -16,8 +16,9 @@
 </head>
 
 <body>
-    <div id="synopsis" class="centered">
-        <h2>How Tax Brackets Work in the United States</h2>
+    <button id="toggleBreakDown" class="pure-button button-toggle" onclick="toggleVisibility('synopsis', 'Synopsis', this)">Hide Synopsis</button>
+    <div id="synopsis" class="bordered centered">
+        <h2>How Tax Brackets Work in the United States - Synopsis</h2>
         <p>
             When taxes are calculated, everyone's first bracket is taxed equally. Once an individual's yearly income surpasses the first
             bracket, any amount of income above the first bracket and below the next bracket is taxed at the next
@@ -28,9 +29,13 @@
             they deducted $10,000, they would only get taxed on $30,000.  Every year a Standard Deduction is established that applies for everyone by default.  However, if someone could show they spent more on deductible expenses than the standard, they could use their own deductions instead.
         </p>
         <p>
-            Please see the interactive examples below:
+            Every year, US tax brackets are redefined by law.  By looking at income and tax brackets per year, we can see how changes in tax policy affect incomes differently.
+        </p>
+        <p>
+            Please see the interactive examples below.  You can show and hide sections of the page when you are done with them.
         </p>
     </div>
+    <br />
     <div id="app">
         
         <button id="toggleBreakDown" class="pure-button button-toggle" onclick="toggleVisibility('breakdown', 'Breakdown', this)">Hide Breakdown</button>
@@ -41,12 +46,8 @@
                 The amount of tax is shown per bracket, and the effective tax rate for the income is shown below.
             </p>
             <div id="configuration" class="centered">
-                <p>
-                    Some historical tax brackets are provided in the drop down. Select one to show what taxes would have
-                    looked like that year for single year visualizations.
-                </p>
                 <div>
-                    <select id="selectTaxYear" v-model="selectedTaxYear" v-on:change="switchTaxBracket()"
+                    <select id="selectTaxYear" v-model="selectedTaxYearBreakdown" v-on:change="calculateBreakdown()"
                         class="pure-input-rounded">
                         <option value="" disabled selected>Select a tax year to pull the tax brackets for a single file that
                             year.</option>
@@ -105,69 +106,59 @@
             </table>
         </div>
         <br />
-        <button id="toggleIncomeRangeGraphs" class="pure-button button-toggle" onclick="toggleVisibility('IncomeRangeGraphs', 'Income Range Graphs', this)">Hide Income Range Graphs</button>
-        <div id="IncomeRangeGraphs" class="bordered centered">
-            <h4>Taxes over a range of Incomes for a single year</h4>
+        <button id="toggleEffectiveTopology" class="pure-button button-toggle" onclick="toggleVisibility('EffectiveTopology', 'Effective Rate Topology (3D)', this)">Hide Effective Rate Topology (3D)</button>
+        <div id="EffectiveTopology" class="bordered centered">
+            <h4>
+                Effective Tax Topology over the years
+            </h4>
             <p>
-                To see how a range of incomes would be affected by the configured tax brackets, you can specify a start,
-                end, and step value to graph.
-                The number of steps value determines how many points between the start and end get rendered to the graphs.
+                This is a 3d graph that aims to show how effective tax rate changes year over year across a range of
+                incomes.
             </p>
-            <button id="toggleEffectiveTopology" class="pure-button button-toggle" onclick="toggleVisibility('EffectiveTopology', 'Effective Rate Topology (3D)', this)">Hide Effective Rate Topology (3D)</button>
-            <div id="EffectiveTopology" class="bordered centered">
-                <h4>
-                    Effective Tax Topology over the years
-                </h4>
-                <p>
-                    This is a 3d graph that aims to show how effective tax rate changes year over year across a range of
-                    incomes.
-                </p>
-                <p>
-                    Performance Note: If your page stutters, it could help to decrease the number of steps so fewer points need to be rendered on some of the graphs below.
-                </p>
-                <ul id="graphConfiguration" class="no-bullets">
-                    <li>Start <input type="number" id="min" v-model="min" step="1000" /></li>
-                    <li>End <input type="number" id="max" v-model="max" step="1000" /></li>
-                    <li>Step Count <input type="number" id="step" min="5" max="30" v-model="step" /></li>
-                </ul>
-                <input type="range" class="range" min="5" max="30" id="rangeForStepCount" v-model="step" v-on:input="rebuildGraph()" />
-                <button id="rebuildGraph" onclick="rebuildGraph()" class="pure-button">Rebuild Graphs</button>
-                
-                <div id="topologyGraph"></div>
+            <p>
+                Performance Note: If your page stutters, it could help to decrease the number of steps so fewer points need to be rendered on some of the graphs below.
+            </p>
+            <ul id="graphConfiguration" class="no-bullets">
+                <li>Start <input type="number" id="min" v-model="min" step="1000" /></li>
+                <li>End <input type="number" id="max" v-model="max" step="1000" /></li>
+                <li>Step Count <input type="number" id="step" min="5" max="30" v-model="step" /></li>
+                <li><button id="rebuildGraph" onclick="buildPlotlyTopology()" class="pure-button">Rebuild Graphs</button></li>
+            </ul>
+            <label for="rangeForStepCount">Step Count</label><input type="range" class="range" min="5" max="30" id="rangeForStepCount" v-model="step" v-on:input="buildPlotlyTopology()" />
+            
+            <div id="topologyGraph"></div>
+        </div>
+        <br />
+        <button id="toggleSingleIncomeByYearChart" class="pure-button button-toggle" onclick="toggleVisibility('SingleIncomeByYearChart', 'Specific Income by Year', this)">Hide Specific Income by Year</button>
+        <div id="SingleIncomeByYearChart" class="bordered centered">
+            <h4>
+                Range of Incomes for a Specific Year
+            </h4>
+            <p>
+                This is what a range of incomes would look like for the year chosen in the drop down at the top of the page.
+            </p>
+            <p>
+                Performance Note: If your page stutters, it could help to decrease the number of steps so fewer points need to be rendered on some of the graphs below.
+            </p>
+            <div>
+                <select id="selectTaxYear" v-model="selectedTaxYearIncomeRangeGraph" v-on:change="rebuildGraph()"
+                    class="pure-input-rounded">
+                    <option value="" disabled selected>Select a tax year to pull the tax brackets for a single file that
+                        year.</option>
+                    <option v-for="(item, key, index) in getTaxYears()" :value="item">{{key}}</option>
+                </select>
             </div>
             <br />
-            <button id="toggleSingleIncomeByYearChart" class="pure-button button-toggle" onclick="toggleVisibility('SingleIncomeByYearChart', 'Specific Income by Year', this)">Hide Specific Income by Year</button>
-            <div id="SingleIncomeByYearChart" class="bordered centered">
-                <h4>
-                    Range of Incomes for a Specific Year
-                </h4>
-                <p>
-                    This is what a range of incomes would look like for the year chosen in the drop down at the top of the page.
-                </p>
-                <p>
-                    Performance Note: If your page stutters, it could help to decrease the number of steps so fewer points need to be rendered on some of the graphs below.
-                </p>
-                <div>
-                    <select id="selectTaxYear" v-model="selectedTaxYear" v-on:change="switchTaxBracket()"
-                        class="pure-input-rounded">
-                        <option value="" disabled selected>Select a tax year to pull the tax brackets for a single file that
-                            year.</option>
-                        <option v-for="(item, key, index) in getTaxYears()" :value="item">{{key}}</option>
-                    </select>
-                </div>
-                <br />
-                <ul id="graphConfigurationSingleYear" class="no-bullets">
-                    <li>Start <input type="number" id="minSingleYear" v-model="min" step="1000" /></li>
-                    <li>End <input type="number" id="maxSingleYear" v-model="max" step="1000" /></li>
-                    <li>Step Count <input type="number" id="stepSingleYear" min="5" max="30" v-model="step" /></li>
-                </ul>
-                <input type="range" class="range" min="5" max="30" id="rangeForStepCountSingleYear" v-model="step" v-on:input="rebuildGraph()" />
+            <ul id="graphConfigurationSingleYear" class="no-bullets">
+                <li>Start <input type="number" id="minSingleYear" v-model="minSingleYear" step="1000" /></li>
+                <li>End <input type="number" id="maxSingleYear" v-model="maxSingleYear" step="1000" /></li>
+                <li>Step Count <input type="number" id="stepSingleYear" min="5" max="30" v-model="stepSingleYear" /></li>
                 <button id="rebuildGraphSingleYear" onclick="rebuildGraph()" class="pure-button">Rebuild Graphs</button>
-                
-                
-                <div class="canvas">
-                    <canvas id="canvas"></canvas>
-                </div>
+            </ul>
+            <label for="rangeForStepCountSingleYear">Step Count</label><input type="range" class="range" min="5" max="30" id="rangeForStepCountSingleYear" v-model="stepSingleYear" v-on:input="rebuildGraph()" />
+            
+            <div class="canvas">
+                <canvas id="canvas"></canvas>
             </div>
         </div>
         <br />
@@ -316,14 +307,18 @@
             app = new Vue({
                 el: '#app',
                 data: {
+                    taxBrackets: defaultTaxYear.brackets,
                     min: defaultMin,
                     max: defaultMax,
-                    taxBrackets: defaultTaxYear.brackets,
                     step: defaultStep,
+                    minSingleYear: defaultMin,
+                    maxSingleYear: defaultMax,
+                    stepSingleYear: defaultStep,
                     selectedRow: defaultSelectedRow,
                     specificIncomeBreakdown: specificIncomeBreakdown,
                     taxDeductionAmount: defaultTaxYear.standardDeduction,
-                    selectedTaxYear: {},
+                    selectedTaxYearBreakdown: {},
+                    selectedTaxYearIncomeRangeGraph: {},
                     amountForYearlyGraph: defaultAmountForYearlyGraph,
                     vueCanvas: null,
                     vueCanvasYearly: null,
@@ -343,15 +338,20 @@
                     Plotly.newPlot(this.topologyGraph, z_data, plotlyLayout, {responsive:true});
                 }
             });
-            app.selectedTaxYear = defaultTaxYear;
-            switchTaxBracket();
+            app.selectedTaxYearBreakdown = defaultTaxYear;
+            app.selectedTaxYearIncomeRangeGraph = defaultTaxYear;
+            calculateBreakdown();
+            rebuildGraph();
+            buildPlotlyTopology();
             rebuildYearlyGraph();
         };
 
         function calculateBreakdown() {
+            var taxBrackets = app.selectedTaxYearBreakdown.brackets;
+            var deductionAmount = app.selectedTaxYearBreakdown.standardDeduction;
             var income = parseInt(app.specificIncomeBreakdown.startingAmount);
             app.specificIncomeBreakdown.calculatedIncome = app.specificIncomeBreakdown.startingAmount;
-            var taxInformation = taxCalculator.getTaxInformation(income, true, app.taxBrackets, app.taxDeductionAmount, app.specificIncomeBreakdown);
+            var taxInformation = taxCalculator.getTaxInformation(income, true, taxBrackets, deductionAmount, app.specificIncomeBreakdown);
             app.specificIncomeBreakdown.totalAmount = taxInformation.taxAmount;
             app.specificIncomeBreakdown.effectiveTaxRate = taxInformation.effectiveTaxRate;
             app.specificIncomeBreakdown.netIncome = taxInformation.netIncome;
@@ -366,11 +366,11 @@
                 config.data.datasets[i].data = [];
             }
             config.data.labels = [];
-            var i = app.min;
-            var stepSize = getStepSize(app.min, app.max, app.step);
-            while (i <= app.max) {
+            var i = app.minSingleYear;
+            var stepSize = getStepSize(app.minSingleYear, app.maxSingleYear, app.stepSingleYear);
+            while (i <= app.maxSingleYear) {
                 config.data.labels.push(formatNumberForDisplay(i));
-                var taxInformation = taxCalculator.getTaxInformation(i, false, app.taxBrackets, app.taxDeductionAmount);
+                var taxInformation = taxCalculator.getTaxInformation(i, false, app.selectedTaxYearIncomeRangeGraph.brackets, app.selectedTaxYearIncomeRangeGraph.standardDeduction);
                 config.data.datasets[graphLineIndex.taxAmount].data.push(taxInformation.taxAmount);
                 config.data.datasets[graphLineIndex.effectiveTaxRate].data.push(taxInformation.effectiveTaxRate);
                 config.data.datasets[graphLineIndex.netIncome].data.push(taxInformation.netIncome);
@@ -400,7 +400,6 @@
 
         function rebuildGraph() {
             buildChart();
-            buildPlotlyTopology();
             window.myLine.update();
         };
 
@@ -433,14 +432,6 @@
         function rebuildYearlyGraph() {
             buildYearlyChart();
             window.myLineYearly.update();
-        };
-
-        function switchTaxBracket() {
-            app.taxBrackets = app.selectedTaxYear.brackets;
-            app.taxDeductionAmount = app.selectedTaxYear.standardDeduction;
-
-            rebuildGraph();
-            calculateBreakdown();
         };
 
         function toggleVisibility(elementId, label, actionElement){
