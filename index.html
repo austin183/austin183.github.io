@@ -85,10 +85,14 @@
                 <tr>
                     <td>Income specified was</td>
                     <td>${{ formatNumberForDisplay(specificIncomeBreakdown.calculatedIncome) }}</td>
-                </tr>
+                </tr>                
                 <tr>
                     <td>Standard Deduction was</td>
                     <td>${{ formatNumberForDisplay(taxDeductionAmount) }}</td>
+                </tr>
+                <tr>
+                    <td>Taxable Income was</td>
+                    <td>${{ formatNumberForDisplay(specificIncomeBreakdown.taxableIncome) }}</td>
                 </tr>
                 <tr>
                     <td>The total amount of tax owed would be</td>
@@ -228,10 +232,8 @@
         var taxCalculator = getTaxCalculator();
         
         function formatNumberForDisplay(value) {
-            if (Number(value) >= 1000) {
+            if (Number(value) > 0) {
                 return Number(value).toFixed(2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-            } else if (value < 1 && value > 0) {
-                return (value * 100).toFixed(2);
             }
             else {
                 return value;
@@ -240,7 +242,7 @@
 
         function formatDecimalAsPercent(value, index, values) {
             if(value > 0){
-                return formatNumberForDisplay(Number(value).toFixed(3) * 100).toFixed(2) + "%";
+                return (Number(value).toFixed(3) * 100).toFixed(2) + "%";
             }
             return "0%";
         }
@@ -376,11 +378,13 @@
             var taxBrackets = app.selectedTaxYearBreakdown.brackets;
             var deductionAmount = app.selectedTaxYearBreakdown.standardDeduction;
             var income = parseInt(app.specificIncomeBreakdown.startingAmount);
+            app.taxDeductionAmount = deductionAmount;
             app.specificIncomeBreakdown.calculatedIncome = app.specificIncomeBreakdown.startingAmount;
             var taxInformation = taxCalculator.getTaxInformation(income, true, taxBrackets, deductionAmount, app.specificIncomeBreakdown);
             app.specificIncomeBreakdown.totalAmount = taxInformation.taxAmount;
             app.specificIncomeBreakdown.effectiveTaxRate = taxInformation.effectiveTaxRate;
             app.specificIncomeBreakdown.netIncome = taxInformation.netIncome;
+            app.specificIncomeBreakdown.taxableIncome = taxInformation.taxableIncome;
         }
 
         function getStepSize(min, max, stepCount){

@@ -50,6 +50,7 @@ function getTaxCalculator(){
             effectiveTaxRate = taxAmount / income;
             netIncome = income - taxAmount;
             return {
+                taxableIncome: taxableIncome,
                 taxAmount: taxAmount.toFixed(2),
                 effectiveTaxRate: effectiveTaxRate.toFixed(4),
                 netIncome: netIncome.toFixed(2)
