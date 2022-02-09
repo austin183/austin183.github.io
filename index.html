@@ -34,8 +34,9 @@
         <p>
             Please see the interactive examples below.  You can show and hide sections of the page when you are done with them.
         </p>
+        <br />
     </div>
-    <br />
+    
     <div id="app">
         
         <button id="toggleBreakDown" class="pure-button button-toggle" onclick="toggleVisibility('breakdown', 'Breakdown', this)">Hide Breakdown</button>
@@ -104,8 +105,9 @@
                     <td>${{ formatNumberForDisplay(specificIncomeBreakdown.netIncome) }}</td>
                 </tr>
             </table>
+            <br />
         </div>
-        <br />
+        
         <button id="toggleEffectiveTopology" class="pure-button button-toggle" onclick="toggleVisibility('EffectiveTopology', 'Effective Rate Topology (3D)', this)">Hide Effective Rate Topology (3D)</button>
         <div id="EffectiveTopology" class="bordered centered">
             <h4>
@@ -127,8 +129,9 @@
             <label for="rangeForStepCount">Step Count</label><input type="range" class="range" min="5" max="30" id="rangeForStepCount" v-model="step" v-on:input="buildPlotlyTopology()" />
             
             <div id="topologyGraph"></div>
+            <br />
         </div>
-        <br />
+        
         <button id="toggleSingleIncomeByYearChart" class="pure-button button-toggle" onclick="toggleVisibility('SingleIncomeByYearChart', 'Incomes for Year', this)">Hide Incomes for Year</button>
         <div id="SingleIncomeByYearChart" class="bordered centered">
             <h4>
@@ -170,8 +173,9 @@
             <div class="canvas">
                 <canvas id="canvas"></canvas>
             </div>
+            <br />
         </div>
-        <br />
+        
         <button id="toggleTaxAmountYearly" class="pure-button button-toggle" onclick="toggleVisibility('TaxAmountYearly', 'Taxes over Time', this)">Hide Taxes over Time</button>
         <div id="TaxAmountYearly" class="bordered centered">
             <h4>
@@ -190,8 +194,9 @@
                 <canvas id="canvasYearly"></canvas>
             </div>
         </div>
+        <br />
     </div>
-    <br />
+    
     <div id="furtherResources" class="centered">
         <h4>Further Resources</h4>
         <p>
