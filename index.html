@@ -149,6 +149,16 @@
                 </select>
             </div>
             <br />
+            Compare To: 
+            <div>
+                <select id="selectTaxYear" v-model="selectedTaxYearIncomeRangeGraphComparison" v-on:change="rebuildGraph()"
+                    class="pure-input-rounded">
+                    <option value="" disabled selected>Select a tax year to pull the tax brackets for a single file that
+                        year.</option>
+                    <option v-for="(item, key, index) in getTaxYears()" :value="item">{{key}}</option>
+                </select>
+            </div>
+            <br />
             <ul id="graphConfigurationSingleYear" class="no-bullets">
                 <li>Start <input type="number" id="minSingleYear" v-model="minSingleYear" step="1000" /></li>
                 <li>End <input type="number" id="maxSingleYear" v-model="maxSingleYear" step="1000" /></li>
@@ -197,10 +207,13 @@
     <script>
         const CHART_COLORS = {
             red: 'rgb(255, 99, 132)',
+            salmon: 'rgb(250,128,114)',
             orange: 'rgb(255, 159, 64)',
             yellow: 'rgb(255, 205, 86)',
             green: 'rgb(75, 192, 192)',
+            lightgreen: 'rgb(144,238,144)',
             blue: 'rgb(54, 162, 235)',
+            cyan: 'rgb(0,255,255)',
             purple: 'rgb(153, 102, 255)',
             grey: 'rgb(201, 203, 207)'
         };
@@ -282,7 +295,10 @@
                 datasets: [
                     chartHelper.buildInitialDataset('Tax Amount for a Specific Income', CHART_COLORS.red, 'amount-axis', false),
                     chartHelper.buildInitialDataset('Net Income', CHART_COLORS.blue, 'amount-axis', false),
-                    chartHelper.buildInitialDataset('Effective Tax Rate', CHART_COLORS.green, 'effective-rate-axis', true)
+                    chartHelper.buildInitialDataset('Effective Tax Rate', CHART_COLORS.green, 'effective-rate-axis', true),
+                    chartHelper.buildInitialDataset('Tax Amount for Comparison', CHART_COLORS.salmon, 'amount-axis', false),
+                    chartHelper.buildInitialDataset('Net Income for Comparison', CHART_COLORS.cyan, 'amount-axis', false),
+                    chartHelper.buildInitialDataset('Effective Tax Rate for comparison', CHART_COLORS.lightgreen, 'effective-rate-axis', true),
                 ]
             },
             options: chartHelper.buildInitialChartConfigOptions(buildTooltipLabel)
@@ -295,7 +311,10 @@
         var graphLineIndex = {
             taxAmount: 0,
             netIncome: 1,
-            effectiveTaxRate: 2
+            effectiveTaxRate: 2,
+            taxAmountComparison: 3,
+            netIncomeComparison: 4,
+            effectiveTaxRateComparison: 5
         };
 
         var plotlyLayout = plotlyHelper.getPlotlyLayout('Effective Tax Topology Over Income and Year');
@@ -319,6 +338,7 @@
                     taxDeductionAmount: defaultTaxYear.standardDeduction,
                     selectedTaxYearBreakdown: {},
                     selectedTaxYearIncomeRangeGraph: {},
+                    selectedTaxYearIncomeRangeGraphComparison: {},
                     amountForYearlyGraph: defaultAmountForYearlyGraph,
                     vueCanvas: null,
                     vueCanvasYearly: null,
@@ -340,6 +360,7 @@
             });
             app.selectedTaxYearBreakdown = defaultTaxYear;
             app.selectedTaxYearIncomeRangeGraph = defaultTaxYear;
+            app.selectedTaxYearIncomeRangeGraphComparison = defaultTaxYear;
             calculateBreakdown();
             rebuildGraph();
             buildPlotlyTopology();
@@ -374,6 +395,12 @@
                 config.data.datasets[graphLineIndex.taxAmount].data.push(taxInformation.taxAmount);
                 config.data.datasets[graphLineIndex.effectiveTaxRate].data.push(taxInformation.effectiveTaxRate);
                 config.data.datasets[graphLineIndex.netIncome].data.push(taxInformation.netIncome);
+                if(app.selectedTaxYearIncomeRangeGraphComparison.standardDeduction !== app.selectedTaxYearIncomeRangeGraph.standardDeduction){
+                    var taxInformation = taxCalculator.getTaxInformation(i, false, app.selectedTaxYearIncomeRangeGraphComparison.brackets, app.selectedTaxYearIncomeRangeGraphComparison.standardDeduction);
+                    config.data.datasets[graphLineIndex.taxAmountComparison].data.push(taxInformation.taxAmount);
+                    config.data.datasets[graphLineIndex.effectiveTaxRateComparison].data.push(taxInformation.effectiveTaxRate);
+                    config.data.datasets[graphLineIndex.netIncomeComparison].data.push(taxInformation.netIncome);
+                }
                 i = parseInt(i) + parseInt(stepSize);
             }
         }
