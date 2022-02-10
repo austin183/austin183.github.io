@@ -225,7 +225,14 @@
             cyan: 'rgb(0,255,255)',
             purple: 'rgb(153, 102, 255)',
             grey: 'rgb(201, 203, 207)',
-            magenta: 'rgb(255,0,255)'
+            magenta: 'rgb(255,0,255)',
+            colorsafeBurntOrange: 'rgb(230, 159, 0)',
+            colorsafeLighBlue: 'rgb(86,180,233)',
+            colorsafeForestGreen: 'rgb(0,158,115)',
+            colorsafeBrightYellow: 'rgb(240,228,66)',
+            colorsafeDarkBlue: 'rgb(0,114,178)',
+            colorsafeOrangeRed: 'rgb(213,94,0)',
+            colorsafeSalmonPurple: 'rgb(204,121,167)'
         };
         var singleTaxPayerDefinitionKeys = getSingleTaxPayerDefinitionKeys();
         var chartHelper = getChartHelper();
@@ -301,12 +308,12 @@
             data: {
                 labels: [],
                 datasets: [
-                    chartHelper.buildInitialDataset('Tax Amount for a Specific Income', CHART_COLORS.red, 'amount-axis', false),
-                    chartHelper.buildInitialDataset('Net Income', CHART_COLORS.blue, 'amount-axis', false),
-                    chartHelper.buildInitialDataset('Effective Tax Rate', CHART_COLORS.green, 'effective-rate-axis', true),
-                    chartHelper.buildInitialDataset('Tax Amount for Comparison', CHART_COLORS.magenta, 'amount-axis', false),
-                    chartHelper.buildInitialDataset('Net Income for Comparison', CHART_COLORS.cyan, 'amount-axis', false),
-                    chartHelper.buildInitialDataset('Effective Tax Rate for comparison', CHART_COLORS.lightgreen, 'effective-rate-axis', true),
+                    chartHelper.buildInitialDataset('Tax Amount for a Specific Income', CHART_COLORS.colorsafeOrangeRed, 'amount-axis', false),
+                    chartHelper.buildInitialDataset('Net Income', CHART_COLORS.colorsafeDarkBlue, 'amount-axis', false),
+                    chartHelper.buildInitialDataset('Effective Tax Rate', CHART_COLORS.colorsafeSalmonPurple, 'effective-rate-axis', true),
+                    chartHelper.buildInitialDataset('Tax Amount for Comparison', CHART_COLORS.colorsafeLighBlue, 'amount-axis', false),
+                    chartHelper.buildInitialDataset('Net Income for Comparison', CHART_COLORS.colorsafeBurntOrange, 'amount-axis', false),
+                    chartHelper.buildInitialDataset('Effective Tax Rate for comparison', CHART_COLORS.colorsafeForestGreen, 'effective-rate-axis', true),
                 ]
             },
             options: chartHelper.buildInitialChartConfigOptions(buildTooltipLabel)
