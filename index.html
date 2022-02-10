@@ -243,7 +243,7 @@
 
         function formatDecimalAsPercent(value, index, values) {
             if(value > 0){
-                return (Number(value).toFixed(3) * 100).toFixed(2) + "%";
+                return (Number(value).toFixed(4) * 100).toFixed(2) + "%";
             }
             return "0%";
         }
@@ -251,7 +251,7 @@
         function buildTooltipLabel(tooltipItem, data) {
             var value = formatNumberForDisplay(tooltipItem.value);
             if (tooltipItem.value > 0 && tooltipItem.value < 1) {
-                return value + "%";
+                return formatDecimalAsPercent(tooltipItem.value);
             }
             else return value;
         }
