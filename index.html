@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
     <script defer src="https://www.chartjs.org/dist/2.9.4/Chart.min.js"></script>
     <script src="https://unpkg.com/vue@2.6.12/dist/vue.min.js"></script>
-    <script defer src='https://cdn.plot.ly/plotly-2.8.3.min.js'></script>
+    <script defer src="https://cdn.plot.ly/plotly-gl3d-2.9.0.min.js"></script>
     <script src="YearlyTaxes.js"></script>
     <script src="PlotlyHelper.js"></script>
     <script src="ChartHelper.js"></script>
@@ -49,8 +49,8 @@
             </p>
             <div id="configuration" class="centered">
                 <div>
-                    <label for="selectTaxYear">Tax Year</label>
-                    <select id="selectTaxYear" v-model="selectedTaxYearBreakdown" v-on:change="calculateBreakdown()"
+                    <label for="selectedTaxYearBreakdown">Tax Year</label>
+                    <select id="selectedTaxYearBreakdown" v-model="selectedTaxYearBreakdown" v-on:change="calculateBreakdown()"
                         class="pure-input-rounded">
                         <option value="" disabled selected>Select a tax year to pull the tax brackets for a single file that
                             year.</option>
@@ -150,7 +150,8 @@
                 Performance Note: If your page stutters, it could help to decrease the number of steps so fewer points need to be rendered on some of the graphs below.
             </p>
             <div>
-                <select id="selectTaxYear" v-model="selectedTaxYearIncomeRangeGraph" v-on:change="rebuildGraph()"
+                <label for="selectedTaxYearIncomeRangeGraph">Tax Year</label>
+                <select id="selectedTaxYearIncomeRangeGraph" v-model="selectedTaxYearIncomeRangeGraph" v-on:change="rebuildGraph()"
                     class="pure-input-rounded">
                     <option value="" disabled selected>Select a tax year to pull the tax brackets for a single file that
                         year.</option>
@@ -160,7 +161,8 @@
             <br />
             Compare To: 
             <div>
-                <select id="selectTaxYear" v-model="selectedTaxYearIncomeRangeGraphComparison" v-on:change="rebuildGraph()"
+                <label for="selectedTaxYearIncomeRangeGraphComparison">Tax Year</label>
+                <select id="selectedTaxYearIncomeRangeGraphComparison" v-model="selectedTaxYearIncomeRangeGraphComparison" v-on:change="rebuildGraph()"
                     class="pure-input-rounded">
                     <option value="" disabled selected>Select a tax year to pull the tax brackets for a single file that
                         year.</option>
