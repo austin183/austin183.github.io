@@ -5,9 +5,9 @@
     <title>How Tax Brackets Work in the United States</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
-    <script src="https://www.chartjs.org/dist/2.9.4/Chart.min.js"></script>
+    <script defer src="https://www.chartjs.org/dist/2.9.4/Chart.min.js"></script>
     <script src="https://unpkg.com/vue@2.6.12/dist/vue.min.js"></script>
-    <script src='https://cdn.plot.ly/plotly-2.8.3.min.js'></script>
+    <script defer src='https://cdn.plot.ly/plotly-2.8.3.min.js'></script>
     <script src="YearlyTaxes.js"></script>
     <script src="PlotlyHelper.js"></script>
     <script src="ChartHelper.js"></script>
@@ -49,6 +49,7 @@
             </p>
             <div id="configuration" class="centered">
                 <div>
+                    <label for="selectTaxYear">Tax Year</label>
                     <select id="selectTaxYear" v-model="selectedTaxYearBreakdown" v-on:change="calculateBreakdown()"
                         class="pure-input-rounded">
                         <option value="" disabled selected>Select a tax year to pull the tax brackets for a single file that
@@ -59,14 +60,14 @@
             </div>
             <br />
             <div id="breakdownInput" >
-                Enter a specific income to show its breakdown <input type="number" step="1000" id="specificIncome"
+                <label for="specificIncome">Enter a specific income to show its breakdown</label> <input type="number" step="1000" id="specificIncome"
                 v-model="specificIncomeBreakdown.startingAmount" v-on:change="calculateBreakdown()" />
-                <input type="range" class="range" min="5000" max="800000" id="rangeForBreakdownInput" v-model="specificIncomeBreakdown.startingAmount" v-on:input="calculateBreakdown()" />
+                <button id="calculateBreakdown" class="pure-button" onclick="calculateBreakdown()">Calculate
+                    Breakdown</button>
             </div>
-
             <br />
-            <button id="calculateBreakdown" class="pure-button" onclick="calculateBreakdown()">Calculate
-                Breakdown</button>
+            <label for="rangeForBreakdownInput">Slide to change Income</label><input type="range" class="range" min="5000" max="800000" id="rangeForBreakdownInput" v-model="specificIncomeBreakdown.startingAmount" v-on:input="calculateBreakdown()" />
+            
             <table class="pure-table pure-table-bordered">
                 <tr>
                     <th>Income Bracket</th>
@@ -126,12 +127,12 @@
                 Performance Note: If your page stutters, it could help to decrease the number of steps so fewer points need to be rendered on some of the graphs below.
             </p>
             <ul id="graphConfiguration" class="no-bullets">
-                <li>Start <input type="number" id="min" v-model="min" step="1000" /></li>
-                <li>End <input type="number" id="max" v-model="max" step="1000" /></li>
-                <li>Step Count <input type="number" id="step" min="5" max="30" v-model="step" /></li>
+                <li><label for="min">Start </label><input type="number" id="min" v-model="min" step="1000" /></li>
+                <li><label for="max">End </label><input type="number" id="max" v-model="max" step="1000" /></li>
+                <li><label for="step">Step Count </label><input type="number" id="step" min="5" max="30" v-model="step" /></li>
                 <li><button id="rebuildGraph" onclick="buildPlotlyTopology()" class="pure-button">Rebuild Graphs</button></li>
             </ul>
-            <label for="rangeForStepCount">Step Count</label><input type="range" class="range" min="5" max="30" id="rangeForStepCount" v-model="step" v-on:input="buildPlotlyTopology()" />
+            <label for="rangeForStepCount">Slide to change Step Count</label><input type="range" class="range" min="5" max="30" id="rangeForStepCount" v-model="step" v-on:input="buildPlotlyTopology()" />
             
             <div id="topologyGraph"></div>
             <br />
@@ -168,12 +169,13 @@
             </div>
             <br />
             <ul id="graphConfigurationSingleYear" class="no-bullets">
-                <li>Start <input type="number" id="minSingleYear" v-model="minSingleYear" step="1000" /></li>
-                <li>End <input type="number" id="maxSingleYear" v-model="maxSingleYear" step="1000" /></li>
-                <li>Step Count <input type="number" id="stepSingleYear" min="5" max="30" v-model="stepSingleYear" /></li>
-                <button id="rebuildGraphSingleYear" onclick="rebuildGraph()" class="pure-button">Rebuild Graphs</button>
+                <li><label for="minSingleYear">Start </label><input type="number" id="minSingleYear" v-model="minSingleYear" step="1000" /></li>
+                <li><label for="maxSingleYear">End </label><input type="number" id="maxSingleYear" v-model="maxSingleYear" step="1000" /></li>
+                <li><label for="stepSingleYear">Step Count </label><input type="number" id="stepSingleYear" min="5" max="30" v-model="stepSingleYear" /></li> 
+                <li><button id="rebuildGraphSingleYear" onclick="rebuildGraph()" class="pure-button">Rebuild Graphs</button></li>
             </ul>
-            <label for="rangeForStepCountSingleYear">Step Count</label><input type="range" class="range" min="5" max="30" id="rangeForStepCountSingleYear" v-model="stepSingleYear" v-on:input="rebuildGraph()" />
+            
+            <label for="rangeForStepCountSingleYear">Slide to change Step Count</label><input type="range" class="range" min="5" max="30" id="rangeForStepCountSingleYear" v-model="stepSingleYear" v-on:input="rebuildGraph()" />
             
             <div class="canvas">
                 <canvas id="canvas"></canvas>
@@ -191,9 +193,8 @@
                 years. Here you can experiment to see how different incomes are affected by yearly changes.
             </p>
             <div id="TaxAmountYearlyConfig">
-                Amount: <input type="number" step="1000" id="amountForYearlyGraph" v-model="amountForYearlyGraph" v-on:change="rebuildYearlyGraph()" step="100" />
-                <input type="range" class="range" min="5000" max="500000" id="rangeForYearlyGraph" v-model="amountForYearlyGraph" v-on:input="rebuildYearlyGraph()" />
-            <button id="rebuildYearlyGraph" onclick="rebuildYearlyGraph()" class="pure-button">Rebuild Graph</button>
+                <label for="amountForYearlyGraph">Amount </label><input type="number" step="1000" id="amountForYearlyGraph" v-model="amountForYearlyGraph" v-on:change="rebuildYearlyGraph()" step="100" />
+                <label for="rangeForYearlyGraph">Slide to change Amount</label><input type="range" class="range" min="5000" max="500000" id="rangeForYearlyGraph" v-model="amountForYearlyGraph" v-on:input="rebuildYearlyGraph()" />
             </div>
             <div class="canvas">
                 <canvas id="canvasYearly"></canvas>
@@ -272,9 +273,9 @@
             data: {
                 labels: [],
                 datasets: [
-                    chartHelper.buildInitialDataset('Tax Amount per Year for a Specific Income', CHART_COLORS.red, 'amount-axis', false),
-                    chartHelper.buildInitialDataset('Net Income per Year', CHART_COLORS.blue, 'amount-axis', false),
-                    chartHelper.buildInitialDataset('Effective Tax Rate per Year', CHART_COLORS.green, 'effective-rate-axis', true)
+                    chartHelper.buildInitialChartDataset('Tax Amount per Year for a Specific Income', CHART_COLORS.red, 'amount-axis', false),
+                    chartHelper.buildInitialChartDataset('Net Income per Year', CHART_COLORS.blue, 'amount-axis', false),
+                    chartHelper.buildInitialChartDataset('Effective Tax Rate per Year', CHART_COLORS.green, 'effective-rate-axis', true)
                 ]
             },
             options: chartHelper.buildInitialChartConfigOptions(buildTooltipLabel)
@@ -289,12 +290,12 @@
             data: {
                 labels: [],
                 datasets: [
-                    chartHelper.buildInitialDataset('Tax Amount for a Specific Income', CHART_COLORS.colorsafeOrangeRed, 'amount-axis', false),
-                    chartHelper.buildInitialDataset('Net Income', CHART_COLORS.colorsafeDarkBlue, 'amount-axis', false),
-                    chartHelper.buildInitialDataset('Effective Tax Rate', CHART_COLORS.colorsafeSalmonPurple, 'effective-rate-axis', true),
-                    chartHelper.buildInitialDataset('Tax Amount for Comparison', CHART_COLORS.colorsafeLighBlue, 'amount-axis', false),
-                    chartHelper.buildInitialDataset('Net Income for Comparison', CHART_COLORS.colorsafeBurntOrange, 'amount-axis', false),
-                    chartHelper.buildInitialDataset('Effective Tax Rate for comparison', CHART_COLORS.colorsafeForestGreen, 'effective-rate-axis', true),
+                    chartHelper.buildInitialChartDataset('Tax Amount for a Specific Income', CHART_COLORS.colorsafeOrangeRed, 'amount-axis', false),
+                    chartHelper.buildInitialChartDataset('Net Income', CHART_COLORS.colorsafeDarkBlue, 'amount-axis', false),
+                    chartHelper.buildInitialChartDataset('Effective Tax Rate', CHART_COLORS.colorsafeSalmonPurple, 'effective-rate-axis', true),
+                    chartHelper.buildInitialChartDataset('Tax Amount for Comparison', CHART_COLORS.colorsafeLighBlue, 'amount-axis', false),
+                    chartHelper.buildInitialChartDataset('Net Income for Comparison', CHART_COLORS.colorsafeBurntOrange, 'amount-axis', false),
+                    chartHelper.buildInitialChartDataset('Effective Tax Rate for comparison', CHART_COLORS.colorsafeForestGreen, 'effective-rate-axis', true),
                 ]
             },
             options: chartHelper.buildInitialChartConfigOptions(buildTooltipLabel)

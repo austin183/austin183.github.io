@@ -1,6 +1,6 @@
 function getChartHelper(){
     return {
-        buildInitialDataset : function(label, color, yAxisId, includeBorderDash){
+        buildInitialChartDataset : function(label, color, yAxisId, includeBorderDash){
             var dataset = {
                 label: label,
                 backgroundColor: color,
