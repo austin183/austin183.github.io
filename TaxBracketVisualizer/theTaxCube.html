@@ -16,6 +16,15 @@
 
 <body>
     <div id="app">
+        <p class="bordered" id="loadingBanner">
+            Performance Note: Please allow around 10 seconds for the chart to load.
+        </p>
+        <div id="topologyGraph"></div>
+        <ul id="graphConfiguration" class="no-bullets">
+            <li><label for="min">Start </label><input type="number" id="min" v-model="min" step="1000" onchange="buildPlotlyTopology()" /></li>
+            <li><label for="max">End </label><input type="number" id="max" v-model="max" step="1000" onchange="buildPlotlyTopology()" /></li>
+            <li><label for="step">Step Count </label><input type="number" id="step" min="5" max="30" v-model="step" onchange="buildPlotlyTopology()" /></li>
+        </ul>
         <div id="EffectiveTopology" class="bordered centered">
             <h4>
                 Effective Tax Topology over time
@@ -24,16 +33,7 @@
                 This is a 3d graph that aims to show how effective tax rate changes year over year across a range of
                 incomes.
             </p>
-            <p class="bordered">
-                Performance Note: Please allow around 10 seconds for the 3d graphing library to load up. If your page stutters, it could help to decrease the number of steps so fewer points need to be rendered on some of the graphs below.
-            </p>
-            <ul id="graphConfiguration" class="no-bullets">
-                <li><label for="min">Start </label><input type="number" id="min" v-model="min" step="1000" onchange="buildPlotlyTopology()" /></li>
-                <li><label for="max">End </label><input type="number" id="max" v-model="max" step="1000" onchange="buildPlotlyTopology()" /></li>
-                <li><label for="step">Step Count </label><input type="number" id="step" min="5" max="30" v-model="step" onchange="buildPlotlyTopology()" /></li>
-            </ul>
-        </div>
-        <div id="topologyGraph"></div>
+        </div>        
     </div>
 
     <script>
@@ -68,6 +68,11 @@
                 }
             });  
             buildPlotlyTopology();
+            //hide the loading banner
+            var loadingBanner = document.getElementById('loadingBanner');
+            if (loadingBanner) {
+                loadingBanner.style.display = 'none';
+            }
         };
 
         function getStepSize(min, max, stepCount){
