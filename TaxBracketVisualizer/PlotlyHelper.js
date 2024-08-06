@@ -24,8 +24,8 @@ function getPlotlyHelper() {
                 margin: {
                     l: 0,
                     r: 0,
-                    b: 10,
-                    t: 50
+                    b: 0,
+                    t: 0
                 }
             };
         },

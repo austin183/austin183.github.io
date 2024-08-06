@@ -11,8 +11,8 @@ div.canvas {
 }
 
 body{
-    margin-left: 20px;
-    margin-right: 15px;
+    margin-left: 10px;
+    margin-right: 10px;
 }
 
 div.bordered {
@@ -46,5 +46,10 @@ ul.no-bullets {
 }
 
 input {
+    width: fit-content;
+}
+
+div.app {
+    height: fit-content;
     width: fit-content;
 }

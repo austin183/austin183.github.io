@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css" integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous">
     <script src="https://unpkg.com/vue@2.6.12/dist/vue.min.js"></script>
-    <script defer src="https://cdn.plot.ly/plotly-gl3d-2.9.0.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.34.0.min.js" charset="utf-8"></script>
     <script src="YearlyTaxes.js"></script>
     <script src="PlotlyHelper.js"></script>
     <script src="TaxCalculator.js"></script>
@@ -28,16 +28,12 @@
                 Performance Note: Please allow around 10 seconds for the 3d graphing library to load up. If your page stutters, it could help to decrease the number of steps so fewer points need to be rendered on some of the graphs below.
             </p>
             <ul id="graphConfiguration" class="no-bullets">
-                <li><label for="min">Start </label><input type="number" id="min" v-model="min" step="1000" /></li>
-                <li><label for="max">End </label><input type="number" id="max" v-model="max" step="1000" /></li>
-                <li><label for="step">Step Count </label><input type="number" id="step" min="5" max="30" v-model="step" /></li>
-                <li><button id="rebuildGraph" onclick="buildPlotlyTopology()" class="pure-button">Rebuild Graphs</button></li>
+                <li><label for="min">Start </label><input type="number" id="min" v-model="min" step="1000" onchange="buildPlotlyTopology()" /></li>
+                <li><label for="max">End </label><input type="number" id="max" v-model="max" step="1000" onchange="buildPlotlyTopology()" /></li>
+                <li><label for="step">Step Count </label><input type="number" id="step" min="5" max="30" v-model="step" onchange="buildPlotlyTopology()" /></li>
             </ul>
-            <label for="rangeForStepCount">Slide to change Step Count</label><input type="range" class="range" min="5" max="30" id="rangeForStepCount" v-model="step" v-on:input="buildPlotlyTopology()" />
-            
-            <div id="topologyGraph"></div>
-            <br />
         </div>
+        <div id="topologyGraph"></div>
     </div>
 
     <script>
@@ -101,7 +97,7 @@
                 counter++;
             });
             z_data.push(plotlyRow);
-            Plotly.newPlot(app.topologyGraph, z_data, plotlyLayout);
+            Plotly.newPlot(app.topologyGraph, z_data, plotlyLayout, {responsive:true});
         }
     </script>
 </body>
