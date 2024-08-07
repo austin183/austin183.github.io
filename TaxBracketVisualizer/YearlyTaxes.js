@@ -936,6 +936,40 @@ function getTaxYears() {
                     "bracketMax": Number.MAX_SAFE_INTEGER
                 }
             ]
-        }
+        },
+        "Single2023": {
+            "standardDeduction": 13850,
+            "brackets": [
+                {
+                    "taxRate": 10,
+                    "bracketMax": 11000
+                },
+                {
+                    "taxRate": 12,
+                    "bracketMax": 44725
+                },
+                {
+                    "taxRate": 22,
+                    "bracketMax": 95375
+                },
+                {
+                    "taxRate": 24,
+                    "bracketMax": 182100
+                },
+                {
+                    "taxRate": 32,
+                    "bracketMax": 231250
+                },
+                {
+                    "taxRate": 35,
+                    "bracketMax": 578125
+                },
+                {
+                    "taxRate": 37,
+                    "bracketMax": Number.MAX_SAFE_INTEGER
+                }
+            ]
+            }
+
     };
 }

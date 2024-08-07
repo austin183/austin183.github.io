@@ -65,6 +65,7 @@
                     var graphDiv = document.getElementById('topologyGraph');
                     this.topologyGraph = graphDiv;
                     Plotly.newPlot(this.topologyGraph, z_data, plotlyLayout, {responsive:true});
+                    graphResize();
                 }
             });  
             buildPlotlyTopology();
@@ -74,6 +75,18 @@
                 loadingBanner.style.display = 'none';
             }
         };
+
+        window.onresize = function() {
+            graphResize();
+        };
+
+        function graphResize(){
+            var window_height = window.innerHeight;
+
+            var svg_container = this.topologyGraph.getElementsByClassName('plot-container')[0].getElementsByClassName('svg-container')[0];
+            svg_container.style.height = (window_height * .8) + "px";
+        }
+
 
         function getStepSize(min, max, stepCount){
             return Math.round((max - min) / stepCount) + 1;
