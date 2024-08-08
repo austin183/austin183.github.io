@@ -1,0 +1,130 @@
+<!doctype html>
+<html>
+
+<head>
+    <title>Midi Song Builder</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css" integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous">
+    <script src="https://unpkg.com/vue@2.6.12/dist/vue.min.js"></script>
+    <link href="../Styles.css" rel="stylesheet">
+    <script src="https://unpkg.com/tone"></script>
+    <script>
+        const queryString = window.location.search;
+        const debugPage = queryString == "?debug";
+        const keyNoteMap = {
+            "a": "G4",
+            "s": "A4",
+            "d": "B4",
+            "f": "C5",
+            "g": "D5",
+            "h": "E5",
+            "j": "F5",
+            "k": "G5",
+            "l": "A5",
+            ";": "B5"
+        };
+        const synthArray = [];
+        const pressedKeys = {};
+        var synthMap = {};
+
+        //Since people have 10 fingers, they could play 10 notes at once
+        //Get synths set up for each possible finger
+        for (let i = 0; i < 10; i++) {
+          synthArray.push(
+                new Tone.FMSynth( {
+                    "harmonicity":5,
+                    "modulationIndex": 10,
+                    "oscillator" : {
+                        "type": "sine"
+                    },
+                    "modulation" : {
+                        "type" : "square"
+                    }
+                }).toDestination()
+            );
+        }
+
+        // Assign 'a' key press to trigger playing of the note
+        document.addEventListener("keydown", function(event) {
+            if (event.key in keyNoteMap) {
+                writeLog("Pressed key for " + keyNoteMap[event.key]);
+                
+                pressedKeys[event.key] = true;
+                playNotes();
+            }
+        });
+
+        document.addEventListener("keyup", function() {
+            if(event.key in keyNoteMap && event.key in synthMap){
+                writeLog("Release key for " + keyNoteMap[event.key]);
+                pressedKeys[event.key] = false;
+                playNotes();
+            }
+        });
+
+        function playNotes(){
+            writeLog(pressedKeys);
+            for(var key in pressedKeys){
+                if(pressedKeys[key]){
+                    var synthIndex = synthMap[key];
+                    if(synthIndex === undefined){
+                        writeLog(synthIndex);
+                        writeLog("Getting free synth for " + key);
+                        var synthIndex = getFreeSynth();
+                    }                    
+                    synthArray[synthIndex].triggerAttack(keyNoteMap[key]);
+                    synthMap[key] = synthIndex;
+                } else {
+                    if(key in synthMap){
+                        var synthIndex = synthMap[key];
+                        synthArray[synthIndex].triggerAttackRelease();
+                        delete synthMap[key];
+                    }                    
+                }
+            }
+        }
+
+        function writeLog(logEntry){
+            if(debugPage == true){
+                console.log(logEntry);
+            }
+        }
+
+        function getFreeSynth(){
+            var synthIndex = 0;
+            var keyInUse = true;
+            writeLog(synthMap);
+            while(synthIndex < 10 && keyInUse){
+                keyInUse = false;                
+                for (let key in synthMap) {
+                    if(synthMap[key] == synthIndex){
+                        keyInUse = true;
+                        break;
+                    }
+                }
+                if(!keyInUse){
+                    return synthIndex;
+                }
+                synthIndex++;
+            }
+        }
+
+        window.onload = function(){
+        //hide the loading banner
+            var loadingBanner = document.getElementById('loadingBanner');
+            if (loadingBanner) {
+                loadingBanner.style.display = 'none';
+            }
+        };
+        
+    </script>
+
+</head>
+<body>
+    <h1>Type To Play Notes</h1>
+    <p class="bordered" id="loadingBanner">
+        Performance Note: Please allow around 10 seconds for the chart to load.
+    </p>
+    <p>Use the 'a s d f g h j k l ;' keys on your keyboard to play notes on your browser.  Please enjoy this tiny piano.  If sound continues after you have released all the keys, please refresh the web page to stop it.  I apologize for the rough state this page is in right now, but I wanted to test it out from github.io.</p>
+</body>
+</html>
