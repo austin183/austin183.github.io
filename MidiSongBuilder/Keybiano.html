@@ -91,21 +91,12 @@
         }
 
         function getFreeSynth(){
-            var synthIndex = 0;
-            var keyInUse = true;
-            writeLog(synthMap);
-            while(synthIndex < 10 && keyInUse){
-                keyInUse = false;                
-                for (let key in synthMap) {
-                    if(synthMap[key] == synthIndex){
-                        keyInUse = true;
-                        break;
-                    }
+            var values = Object.values(synthMap);
+            for (let i = 0; i < 10; i++) {
+                if (!(values.includes(i))){
+                    writeLog("Returning synth [" + i + "]");
+                    return i;
                 }
-                if(!keyInUse){
-                    return synthIndex;
-                }
-                synthIndex++;
             }
         }
 
