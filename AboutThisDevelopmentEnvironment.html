@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Austin183's Development Environment</title>
+    <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
+</head>
+<body>
+    <h1>Hardware</h1>
+    <p>
+        <ul>
+            <li>Model - ASUSTeK COMPUTER INC. TUF Gaming FX505DU_TUF505DU</li>
+            <li>CPU - AMD® Ryzen 7 3750h with radeon vega mobile gfx × 8 </li>
+            <li>Memory - 16 GB</li>
+            <li>GPU Memory - 6GB</li>
+            <li>NVIDIA Corporation TU116M [GeForce GTX 1660 Ti Mobile] / AMD® Radeon vega 10 graphics</li>
+            <li>SDD - 256GB</li>
+            <li>HDD - 1TB</li>
+        </ul>
+    </p>
+    <h1>Software</h1>
+    <p>
+        <ul>
+            <li>POP! OS 22.04 (with NVIDIA) - <a href="https://pop.system76.com/">https://pop.system76.com/</a></li>
+            <li>Visual Studio Code (latest from <a href="https://code.visualstudio.com/download">https://code.visualstudio.com/download</a>)</li>
+            <li>Visual Studio Code Extension - Continue (<a href="https://docs.continue.dev/quickstart">https://docs.continue.dev/quickstart</a>)</li>
+            <li>Git CLI - <a href="https://git-scm.com/book/en/v2/Getting-Started-Installing-Git">https://git-scm.com/book/en/v2/Getting-Started-Installing-Git</a></li>
+            <li>Ollama - https://ollama.com/download</li>
+        </ul>
+    </p>
+    
+    <h1>How it all ties together</h1>
+    <p>
+        I use Git CLI to interact with my github repos, and I use Visual Studio Code as my editor.  In Visual Studio Code, I can open the whole repo folder and have access to all the files. With the Visual Studio Code Extension, Continue, I can interact with LLMs through a Chat interface or request code blocks directly in files using an inline prompt wizard.  Continue also offers auto-completion functionality, but I found it to have too much latency with my workflow, so I turned it off.  Switching between an instruct LLM to a code completion LLM requires almost 10 seconds to load the new model into memory, so I chose to just stick with instruct models.
+    </p>
+
+    <h1>Why is it like this?</h1>
+    <p>
+        This was a Windows 10 gaming laptop, but with Windows 10 end of lifing and Window 11 having several anti-consumer issues, it was time to wipe it and install Linux.  I picked POP! OS because I recently purchased a System 76 mini pc, and I really liked its clean presentation and familiar features.  I have not used it for gaming again yet, but since I started using Copilot at work, I decided to figure out how to set up a local LLM and see how smaller LLMs stacked up against the giant cloud LLMs.  I haven't compared the two directly since my personal programming projects do not intersect with my professional development projects at all.
+    </p>
+
+    <h1>How is it working out?</h1>
+    <p>
+        Since I only have 6GB of GPU memory to work with, I have stuck to smaller LLMs for local development.  They have very small context windows, so I found I had to put more effort into arranging code I wanted to include as the context for my prompts.  One of the biggest time saves I was able to achieve was with Llama 3.1 (8b q4_0).  I needed to builld out tax bracket definitions for several years using the json structure at <a href="https://github.com/austin183/austin183.github.io/blob/main/TaxBracketVisualizer/YearlyTaxes.js#L19">https://github.com/austin183/austin183.github.io/blob/main/TaxBracketVisualizer/YearlyTaxes.js#L19</a> .  Not all years were covered in the same format or on the same website.  I had several that were in a single CSV file though.  I was able to clean up the CSV file and feed promtps into Continue, year by year, with a trimmed down version of the YearlyTaxes.js file and ask it to write the new json objects for years from 2006 back to 1990.  It still took a number of hours, and I had to determine which LLM was right for the job.  Only Llama 3.1 did it reliably.  I was able to set the LLM on the task and walk away to do other things, only coming back by to review, copy paste results, and set up the next prompt.  When I was doing them by hand 2 years ago, it took alot more attention and time to get a year written up.
+    </p>
+    <br />
+    <p>
+        Other ways local LLMs have augmented my development workflow is giving me things to Google when I ask for a general idea.  Like for the keyboard piano project, Llama offered up an example with Tone.js.  I hadn't heard of it before, and the example code threw errors, but after reading through the Tone.js documentation and looking at the Tone.js examples (<a href="https://tonejs.github.io/examples/">https://tonejs.github.io/examples/</a>), I was able to put together enough knowledge to get the page built.  It also helped me optimize some code blocks, like <a href="https://github.com/austin183/austin183.github.io/commit/3708841382eff8950d5ea73b6e8137ad383e30d3">https://github.com/austin183/austin183.github.io/commit/3708841382eff8950d5ea73b6e8137ad383e30d3</a>.  I had to convince it that I did not want an 'if(i in synthMap)' statment when I wanted to find i as a value in one of the synthMap properties, but it got there, and I found out about the Object.values method.
+    </p>
+    <br />
+    <p>
+        It feels more natural to develop with an LLM than without to me now, because there is alot less bouncing around the internet looking for the right solutions to thousands of tiny problems.  They make it so I do less unfocused research, perform less mechanical coding work, and I also take more time to understand and express the problem and test the code that ends up in the project.  
+    </p>
+</body>
+</html>
