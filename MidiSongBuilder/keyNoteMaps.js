@@ -1,6 +1,6 @@
 function getKeyNoteMaps(){
     return {
-        "TypersSplit" : {
+        "TypersSplitZToP" : {
             "description": "This layout starts at 'z' and goes higher through 'h', then jumps to 'a' thru 'g', then jump to 'q' thru 't', then 'n' thru '.', then 'h' thru ';', then 'y' thru 'p'.  It reminds me the home key style of typing.",
             "keyNoteMap":{
                 "z": "D2",
@@ -101,6 +101,50 @@ function getKeyNoteMaps(){
                 "o": "B5",
                 ";": "C6",
                 "p": "D6"
+            }
+        },
+        "HorizontalZTo0":{
+            "description":"This layout include half steps as part of the progression, and it extends from the 'z' key, all the way to the '0' key.",
+            "keyNoteMap":{
+                "z": "D3",
+                "x": "D#3",
+                "c": "E3",
+                "v": "F3",
+                "b": "F#3",
+                "n": "G3",
+                "m": "G#3",
+                ",": "A3",
+                ".": "A#3",
+                "a": "B3",
+                "s": "C4",
+                "d": "C#4",
+                "f": "D4",
+                "g": "D#4",
+                "h": "E4",
+                "j": "F4",
+                "k": "F#4",
+                "l": "G4",
+                ";": "A4",
+                "q": "A#4",
+                "w": "B4",
+                "e": "C5",
+                "r": "C#5",
+                "t": "D5",
+                "y": "D#5",
+                "u": "E5",
+                "i": "F5",
+                "o": "F#5",
+                "p": "G5",
+                "1": "G#5",
+                "2": "A5",
+                "3": "A#5",
+                "4": "B5",
+                "5": "C6",
+                "6": "C#6",
+                "7": "D6",
+                "8": "D#6",
+                "9": "E6",
+                "0": "E#6"         
             }
         }
     };
