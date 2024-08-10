@@ -70,7 +70,7 @@ function getKeyNoteMaps(){
             }            
         },
         "VerticalZToP":{
-            "description":"This layout starts at 'z' and goes higher upward thrue 'q', then jumps to 'x' thru 'w', then 'c' thru 'e', and so on that way.  I am not sure what type of instrument it reminds me of, but maybe it makes sense to someone!",
+            "description":"This layout starts at 'z' and goes higher upward thru 'q', then jumps to 'x' thru 'w', then 'c' thru 'e', and so on that way.  I am not sure what type of instrument it reminds me of, but maybe it makes sense to someone!",
             "keyNoteMap": {
                 "z": "D2",
                 "a": "E2",

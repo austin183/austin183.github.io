@@ -22,12 +22,13 @@
         If at any point a note keeps playing after you stop pressing all the keys, I apologize for the bug.  Please refresh or close this browser window.
     </p>
     <div id="app">
-        <div id="configuration" class="centered">
+        <div id="configuration">
             <div>
                 <label for="keyNoteMapSelect">Select a Keyboard Layout</label>
                 <select id="keyNoteMapSelect" v-model="selectedKeyNoteMap" class="pure-input-rounded">
                     <option v-for="(item, key, index) in availableKeyNoteMaps" :value="item">{{key}}</option>
                 </select>
+                <p>Description: {{selectedKeyNoteMap.description}}</p>
             </div>
         </div>
     </div>
