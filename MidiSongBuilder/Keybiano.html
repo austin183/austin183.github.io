@@ -8,34 +8,65 @@
     <script src="https://unpkg.com/vue@2.6.12/dist/vue.min.js"></script>
     <link href="../Styles.css" rel="stylesheet">
     <script src="https://unpkg.com/tone"></script>
+    <script src="keyNoteMaps.js"></script>
+</head>
+<body>
+    <h1>Type To Play Notes</h1>
+    <p class="bordered" id="loadingBanner">
+        Performance Note: Please allow a few moments for the page to load.
+    </p>
+    <p>
+        The keys on your keyboard act as a piano, and the space bar acts as percussive instrument.  Please select the keyboard layout to use for how notes will progress across it.
+    </p>
+    <p>
+        If at any point a note keeps playing after you stop pressing all the keys, I apologize for the bug.  Please refresh or close this browser window.
+    </p>
+    <div id="app">
+        <div id="configuration" class="centered">
+            <div>
+                <label for="keyNoteMapSelect">Select a Keyboard Layout</label>
+                <select id="keyNoteMapSelect" v-model="selectedKeyNoteMap" class="pure-input-rounded">
+                    <option v-for="(item, key, index) in availableKeyNoteMaps" :value="item">{{key}}</option>
+                </select>
+            </div>
+        </div>
+    </div>
     <script>
+        var app;
+        var synthMap = {};
+        const conga = new Tone.MembraneSynth({
+            pitchDecay: 0.008,
+            octaves: 2,
+            envelope: {
+                attack: 0.0006,
+                decay: 0.5,
+                sustain: 0,
+            },
+        }).toDestination();
         const queryString = window.location.search;
         const debugPage = queryString == "?debug";
-        const keyNoteMap = {
-            "a": "G4",
-            "s": "A4",
-            "d": "B4",
-            "f": "C5",
-            "g": "D5",
-            "h": "E5",
-            "j": "F5",
-            "k": "G5",
-            "l": "A5",
-            ";": "B5"
-        };
+        
         const synthArray = [];
         const pressedKeys = {};
-        var synthMap = {};
+
+        //Get all the keyNoteMaps
+        const keyNoteMapCollection = getKeyNoteMaps();
+
+        //Get all the available keyNoteMapKeys keys
+        const keyNoteMapKeys = Object.keys(keyNoteMapCollection);
+
+        //Get a default value for the keyNoteMap
+        const defaultKeyNoteMap = keyNoteMapCollection[keyNoteMapKeys[0]];
 
         //Since people have 10 fingers, they could play 10 notes at once
         //Get synths set up for each possible finger
         for (let i = 0; i < 10; i++) {
           synthArray.push(
                 new Tone.FMSynth( {
-                    "harmonicity":5,
-                    "modulationIndex": 10,
+                    "harmonicity":1,
+                    "modulationIndex": i,
                     "oscillator" : {
-                        "type": "sine"
+                        "type": "sawtooth"
                     },
                     "modulation" : {
                         "type" : "square"
@@ -46,17 +77,22 @@
 
         // Assign 'a' key press to trigger playing of the note
         document.addEventListener("keydown", function(event) {
-            if (event.key in keyNoteMap) {
-                writeLog("Pressed key for " + keyNoteMap[event.key]);
+            if (event.key in app.selectedKeyNoteMap.keyNoteMap) {
+                writeLog("Pressed key for " + app.selectedKeyNoteMap.keyNoteMap[event.key]);
                 
                 pressedKeys[event.key] = true;
                 playNotes();
             }
+            else if (event.key === ' ') { // added if statement for space bar
+                writeLog('Space bar pressed!');
+                conga.triggerAttackRelease("C4", "4n");
+            }
+            
         });
 
         document.addEventListener("keyup", function() {
-            if(event.key in keyNoteMap && event.key in synthMap){
-                writeLog("Release key for " + keyNoteMap[event.key]);
+            if(event.key in app.selectedKeyNoteMap.keyNoteMap && event.key in synthMap){
+                writeLog("Release key for " + app.selectedKeyNoteMap.keyNoteMap[event.key]);
                 pressedKeys[event.key] = false;
                 playNotes();
             }
@@ -72,7 +108,7 @@
                         writeLog("Getting free synth for " + key);
                         var synthIndex = getFreeSynth();
                     }                    
-                    synthArray[synthIndex].triggerAttack(keyNoteMap[key]);
+                    synthArray[synthIndex].triggerAttack(app.selectedKeyNoteMap.keyNoteMap[key]);
                     synthMap[key] = synthIndex;
                 } else {
                     if(key in synthMap){
@@ -101,7 +137,15 @@
         }
 
         window.onload = function(){
-        //hide the loading banner
+            app = new Vue({
+                el: '#app',
+                data: {
+                    selectedKeyNoteMap: defaultKeyNoteMap,
+                    availableKeyNoteMaps: keyNoteMapCollection
+
+                }
+            })
+            //hide the loading banner
             var loadingBanner = document.getElementById('loadingBanner');
             if (loadingBanner) {
                 loadingBanner.style.display = 'none';
@@ -109,13 +153,5 @@
         };
         
     </script>
-
-</head>
-<body>
-    <h1>Type To Play Notes</h1>
-    <p class="bordered" id="loadingBanner">
-        Performance Note: Please allow around 10 seconds for the chart to load.
-    </p>
-    <p>Use the 'a s d f g h j k l ;' keys on your keyboard to play notes on your browser.  Please enjoy this tiny piano.  If sound continues after you have released all the keys, please refresh the web page to stop it.  I apologize for the rough state this page is in right now, but I wanted to test it out from github.io.</p>
 </body>
 </html>
