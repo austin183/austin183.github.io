@@ -23,12 +23,39 @@
     </p>
     <div id="app">
         <div id="configuration">
-            <div>
+            <div id="keyNoteMapConfigs">
                 <label for="keyNoteMapSelect">Select a Keyboard Layout</label>
                 <select id="keyNoteMapSelect" v-model="selectedKeyNoteMap" class="pure-input-rounded">
                     <option v-for="(item, key, index) in availableKeyNoteMaps" :value="item">{{key}}</option>
                 </select>
                 <p>Description: {{selectedKeyNoteMap.description}}</p>
+            </div>
+            <div id="FMSynthConfigs">
+                <ul>
+                    <li>
+                        <label for="detune">Set Detune Number</label>
+                        <input type="number" step=".01" min="-1000" max="1000" id="detune"
+                        v-model="fmSynthOptions.detune" />
+                    </li>
+                    <li>
+                        <label for="harmonicity">Set harmonicity Number</label>
+                        <input type="number" step=".01" min="0" max="1000" id="harmonicity"
+                        v-model="fmSynthOptions.harmonicity" />
+                    </li>
+                    <li>
+                        <label for="modulationTypeSelect">Set Modulation Type</label>
+                        <select id="modulationTypeSelect" v-model="fmSynthOptions.modulation.type" class="pure-input-rounded">
+                            <option v-for="(item, index) in oscillatorTypes" :value="item">{{item}}</option>
+                        </select>
+                    </li>
+                    <li>
+                        <label for="oscillatorTypeSelect">Set Oscillator Type</label>
+                        <select id="oscillatorTypeSelect" v-model="fmSynthOptions.oscillator.type" class="pure-input-rounded">
+                            <option v-for="(item, index) in oscillatorTypes" :value="item">{{item}}</option>
+                        </select>
+                    </li>
+                </ul>
+                <button id="reloadSynthOptions" class="pure-button button-toggle" onclick="changeSynthOptions()">Update Synth Options</button>
             </div>
         </div>
     </div>
@@ -49,6 +76,7 @@
         
         const synthArray = [];
         const pressedKeys = {};
+        const oscillatorTypes = ["sine", "square", "sawtooth", "triangle"];
 
         //Get all the keyNoteMaps
         const keyNoteMapCollection = getKeyNoteMaps();
@@ -59,21 +87,40 @@
         //Get a default value for the keyNoteMap
         const defaultKeyNoteMap = keyNoteMapCollection[keyNoteMapKeys[0]];
 
-        //Since people have 10 fingers, they could play 10 notes at once
-        //Get synths set up for each possible finger
-        for (let i = 0; i < 10; i++) {
-          synthArray.push(
-                new Tone.FMSynth( {
-                    "harmonicity":1,
-                    "modulationIndex": i,
-                    "oscillator" : {
-                        "type": "sawtooth"
-                    },
-                    "modulation" : {
-                        "type" : "square"
-                    }
-                }).toDestination()
-            );
+        var defaultFMSynthParams = 
+        {
+            "harmonicity":1,
+            "modulationIndex": 1,
+            "oscillator" : {
+                "type": "sawtooth"
+            },
+            "modulation" : {
+                "type" : "square"
+            }
+        };
+
+        buildSynths(defaultFMSynthParams);
+        
+        function buildSynths(params) {
+            //Clear the synthArray
+            if(synthArray.length > 0){
+                for (let i = synthArray.length - 1; i >= 0; i--) {
+                    console.log(i);
+                    writeLog(synthArray[i]);
+                    synthArray[i].dispose();
+                    //delete i from array
+                    synthArray.splice(i,1);
+                }
+            }            
+
+            //Since people have 10 fingers, they could play 10 notes at once
+            //Get synths set up for each possible finger            
+            for (let i = 0; i < 10; i++) {
+                synthArray.push(
+                    new Tone.FMSynth( params ).toDestination()
+                );
+            }
+            writeLog("synthArrayLength" + synthArray.length);
         }
 
         // Assign 'a' key press to trigger playing of the note
@@ -142,8 +189,9 @@
                 el: '#app',
                 data: {
                     selectedKeyNoteMap: defaultKeyNoteMap,
-                    availableKeyNoteMaps: keyNoteMapCollection
-
+                    availableKeyNoteMaps: keyNoteMapCollection,
+                    fmSynthOptions: defaultFMSynthParams,
+                    oscillatorTypes: oscillatorTypes
                 }
             })
             //hide the loading banner
@@ -152,6 +200,11 @@
                 loadingBanner.style.display = 'none';
             }
         };
+
+        function changeSynthOptions(){
+            writeLog(app.fmSynthOptions);
+            buildSynths(app.fmSynthOptions);
+        }
         
     </script>
 </body>
