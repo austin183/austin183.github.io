@@ -44,8 +44,8 @@ function getPlotlyHelper() {
                     size: 3.2,
                     color: [],
                     colorscale:"Jet",
-                    cmin: -15,
-                    cmax: 55
+                    cmin: -70,
+                    cmax: 140
                 },
                 hovertemplate:
                 "Income: %{x}<br />" +
