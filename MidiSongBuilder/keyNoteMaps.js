@@ -146,6 +146,50 @@ function getKeyNoteMaps(){
                 "9": "E6",
                 "0": "E#6"         
             }
+        },
+        "VerticalZTo0":{
+            "description":"This layout include half steps as part of the progression, and it extends from the 'z' key, all the way to the '0' key, going upward, like 'z', 'a', 'q', '1', 'x'....",
+            "keyNoteMap":{
+                "z": "D3",
+                "a": "D#3",
+                "q": "E3",
+                "1": "F3",
+                "x": "F#3",
+                "s": "G3",
+                "w": "G#3",
+                "2": "A3",
+                "c": "A#3",
+                "d": "B3",
+                "e": "C4",
+                "3": "C#4",
+                "v": "D4",
+                "f": "D#4",
+                "r": "E4",
+                "4": "F4",
+                "b": "F#4",
+                "g": "G4",
+                "t": "A4",
+                "5": "A#4",
+                "n": "B4",
+                "h": "C5",
+                "y": "C#5",
+                "6": "D5",
+                "m": "D#5",
+                "j": "E5",
+                "u": "F5",
+                "7": "F#5",
+                ",": "G5",
+                "k": "G#5",
+                "i": "A5",
+                "8": "A#5",
+                ".": "B5",
+                "l": "C6",
+                "o": "C#6",
+                "9": "D6",
+                ";": "D#6",
+                "p": "E6",
+                "0": "E#6"
+            }
         }
     };
 }

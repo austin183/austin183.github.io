@@ -30,6 +30,9 @@
                 </select>
                 <p>Description: {{selectedKeyNoteMap.description}}</p>
             </div>
+            <div id="CurrentNotes">
+                Current Notes Playing: | {{ notesPlaying }} |
+            </div>
             <div id="FMSynthConfigs">
                 <ul>
                     <li>
@@ -86,6 +89,9 @@
 
         //Get a default value for the keyNoteMap
         const defaultKeyNoteMap = keyNoteMapCollection[keyNoteMapKeys[0]];
+
+        //The current keys
+        var defaultNotesPlayed = "";
 
         var defaultFMSynthParams = 
         {
@@ -147,8 +153,10 @@
 
         function playNotes(){
             writeLog(pressedKeys);
+            app.notesPlaying = "";
             for(var key in pressedKeys){
                 if(pressedKeys[key]){
+                    app.notesPlaying += " " + app.selectedKeyNoteMap.keyNoteMap[key];
                     var synthIndex = synthMap[key];
                     if(synthIndex === undefined){
                         writeLog(synthIndex);
@@ -190,7 +198,8 @@
                     selectedKeyNoteMap: defaultKeyNoteMap,
                     availableKeyNoteMaps: keyNoteMapCollection,
                     fmSynthOptions: defaultFMSynthParams,
-                    oscillatorTypes: oscillatorTypes
+                    oscillatorTypes: oscillatorTypes,
+                    notesPlaying: defaultNotesPlayed
                 }
             })
             //hide the loading banner
