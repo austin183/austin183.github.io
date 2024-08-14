@@ -37,25 +37,74 @@
                 <ul>
                     <li>
                         <label for="detune">Set Detune Number</label>
-                        <input type="number" step=".01" min="-1000" max="1000" id="detune"
-                        v-model="fmSynthOptions.detune" />
+                        <input type="number" step=".01" min="-1000" max="1000" id="detune" v-model="fmSynthOptions.detune" />
                     </li>
                     <li>
                         <label for="harmonicity">Set harmonicity Number</label>
-                        <input type="number" step=".01" min="0" max="1000" id="harmonicity"
-                        v-model="fmSynthOptions.harmonicity" />
+                        <input type="number" step=".01" min="0" max="1000" id="harmonicity" v-model="fmSynthOptions.harmonicity" />
                     </li>
                     <li>
                         <label for="modulationTypeSelect">Set Modulation Type</label>
                         <select id="modulationTypeSelect" v-model="fmSynthOptions.modulation.type" class="pure-input-rounded">
                             <option v-for="(item, index) in oscillatorTypes" :value="item">{{item}}</option>
                         </select>
+                        <ul>
+                            <li>
+                                Modulation Envelope
+                            </li>
+                            <li>
+                                <label for="modulationEnvelopeAttack">Attack</label>
+                                <input type="number" step=".01" min="0" max="1000" id="modulationEnvelopeAttack" v-model="fmSynthOptions.modulationEnvelope.attack" />
+                                <label for="rangeForModulationEnvelopeAttack">Slide to change Attack</label><input type="range" class="range" min="0" max="1000" step=".5" id="rangeForModulationEnvelopeAttack" v-model="fmSynthOptions.modulationEnvelope.attack" />
+                            </li>
+                            <li>
+                                <label for="modulationEnvelopeDecay">Decay</label>
+                                <input type="number" step=".01" min="0" max="1000" id="modulationEnvelopeDecay" v-model="fmSynthOptions.modulationEnvelope.decay" />
+                                <label for="rangeForModulationEnvelopeDecay">Slide to change Decay</label><input type="range" class="range" min="0" max="1000" id="rangeForModulationEnvelopeDecay" v-model="fmSynthOptions.modulationEnvelope.decay" />
+                            </li>
+                            <li>
+                                <label for="modulationEnvelopeSustain">Sustain</label>
+                                <input type="number" step=".01" min="0" max="1" id="modulationEnvelopeSustain" v-model="fmSynthOptions.modulationEnvelope.sustain" />
+                                <label for="rangeForModulationEnvelopeSustain">Slide to change Sustain</label><input type="range" class="range" min="0" max="1" step=".01" id="rangeForModulationEnvelopeSustain" v-model="fmSynthOptions.modulationEnvelope.sustain" />
+                            </li>
+                            <li>
+                                <label for="modulationEnvelopeRelease">Release</label>
+                                <input type="number" step=".01" min="0" max="1000" id="modulationEnvelopeRelease" v-model="fmSynthOptions.modulationEnvelope.release" />
+                                <label for="rangeForModulationEnvelopeRelease">Slide to change Release</label><input type="range" class="range" min="0" max="1000" step=".01" id="rangeForModulationEnvelopeRelease" v-model="fmSynthOptions.modulationEnvelope.release" />
+                            </li>
+                        </ul>
                     </li>
                     <li>
                         <label for="oscillatorTypeSelect">Set Oscillator Type</label>
                         <select id="oscillatorTypeSelect" v-model="fmSynthOptions.oscillator.type" class="pure-input-rounded">
                             <option v-for="(item, index) in oscillatorTypes" :value="item">{{item}}</option>
                         </select>
+                        <ul>
+                            <li>
+                                Envelope
+                            </li>
+                            <li>
+                                <label for="envelopeAttack">Attack</label>
+                                <input type="number" step=".01" min="0" max="1000" id="envelopeAttack" v-model="fmSynthOptions.envelope.attack" />
+                                <label for="rangeForEnvelopeAttack">Slide to change Attack</label><input type="range" class="range" min="0" max="1000" step=".5" id="rangeForEnvelopeAttack" v-model="fmSynthOptions.envelope.attack" />
+                            </li>
+                            <li>
+                                <label for="envelopeDecay">Decay</label>
+                                <input type="number" step=".01" min="0" max="1000" id="envelopeDecay" v-model="fmSynthOptions.envelope.decay" />
+                                <label for="rangeForEnvelopeDecay">Slide to change Decay</label><input type="range" class="range" min="0" max="1000" id="rangeForEnvelopeDecay" v-model="fmSynthOptions.envelope.decay" />
+                            </li>
+                            <li>
+                                <label for="envelopeSustain">Sustain</label>
+                                <input type="number" step=".01" min="0" max="1" id="envelopeSustain" v-model="fmSynthOptions.envelope.sustain" />
+                                <label for="rangeForEnvelopeSustain">Slide to change Sustain</label><input type="range" class="range" min="0" max="1" step=".01" id="rangeForEnvelopeSustain" v-model="fmSynthOptions.envelope.sustain" />
+                            </li>
+                            <li>
+                                <label for="envelopeRelease">Release</label>
+                                <input type="number" step=".01" min="0" max="1000" id="envelopeRelease" v-model="fmSynthOptions.envelope.release" />
+                                <label for="rangeForEnvelopeRelease">Slide to change Release</label><input type="range" class="range" min="0" max="1000" step=".01" id="rangeForEnvelopeRelease" v-model="fmSynthOptions.envelope.release" />
+                                
+                            </li>
+                        </ul>
                     </li>
                 </ul>
                 <button id="reloadSynthOptions" class="pure-button button-toggle" onclick="changeSynthOptions()">Update Synth Options</button>
@@ -95,13 +144,26 @@
 
         var defaultFMSynthParams = 
         {
-            "harmonicity":1,
-            "modulationIndex": 1,
-            "oscillator" : {
-                "type": "sawtooth"
+            harmonicity : 3 ,
+            modulationIndex : 10 ,
+            detune : 0 ,
+            oscillator : {
+                type : "sine"
             },
-            "modulation" : {
-                "type" : "square"
+            envelope : {
+                attack : 0.01 ,
+                decay : 0.01 ,
+                sustain : 1 ,
+                release : 0.5
+            },
+            modulation : {
+                type : "square"
+            },
+            modulationEnvelope : {
+                attack : 0.5 ,
+                decay : 0 ,
+                sustain : 1 ,
+                release : 0.5
             }
         };
 
