@@ -38,10 +38,12 @@
                     <li>
                         <label for="detune">Set Detune Number</label>
                         <input type="number" step=".01" min="-1000" max="1000" id="detune" v-model="fmSynthOptions.detune" />
+                        <label for="rangeForDetune">Slide to change Detune</label><input type="range" class="range" min="-1000" max="1000" step=".5" id="rangeForDetune" v-model="fmSynthOptions.detune" />
                     </li>
                     <li>
                         <label for="harmonicity">Set harmonicity Number</label>
                         <input type="number" step=".01" min="0" max="1000" id="harmonicity" v-model="fmSynthOptions.harmonicity" />
+                        <label for="rangeForHarmonicity">Slide to change Harmonicity</label><input type="range" class="range" min="0" max="10000" step=".5" id="rangeForHarmonicity" v-model="fmSynthOptions.harmonicity" />
                     </li>
                     <li>
                         <label for="modulationTypeSelect">Set Modulation Type</label>
