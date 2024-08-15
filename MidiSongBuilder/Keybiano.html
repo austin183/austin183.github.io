@@ -52,12 +52,12 @@
                         </select>
                         <ul>
                             <li>
-                                Modulation Envelope
+                                Modulation Envelope (<a target="_blank" href="https://tonejs.github.io/docs/14.9.17/classes/Envelope.html#constructor">Click here for more info on Envelope settings</a>)
                             </li>
                             <li>
                                 <label for="modulationEnvelopeAttack">Attack</label>
-                                <input type="number" step=".01" min="0" max="1000" id="modulationEnvelopeAttack" v-model="fmSynthOptions.modulationEnvelope.attack" />
-                                <label for="rangeForModulationEnvelopeAttack">Slide to change Attack</label><input type="range" class="range" min="0" max="1000" step=".5" id="rangeForModulationEnvelopeAttack" v-model="fmSynthOptions.modulationEnvelope.attack" />
+                                <input type="number" step=".01" min="0" max="3" id="modulationEnvelopeAttack" v-model="fmSynthOptions.modulationEnvelope.attack" />
+                                <label for="rangeForModulationEnvelopeAttack">Slide to change Attack</label><input type="range" class="range" min="0" max="3" step=".5" id="rangeForModulationEnvelopeAttack" v-model="fmSynthOptions.modulationEnvelope.attack" />
                             </li>
                             <li>
                                 <label for="modulationEnvelopeDecay">Decay</label>
@@ -83,12 +83,12 @@
                         </select>
                         <ul>
                             <li>
-                                Envelope
+                                Envelope (<a target="_blank" href="https://tonejs.github.io/docs/14.9.17/classes/Envelope.html#constructor">Click here for more info on Envelope settings</a>)
                             </li>
                             <li>
                                 <label for="envelopeAttack">Attack</label>
-                                <input type="number" step=".01" min="0" max="1000" id="envelopeAttack" v-model="fmSynthOptions.envelope.attack" />
-                                <label for="rangeForEnvelopeAttack">Slide to change Attack</label><input type="range" class="range" min="0" max="1000" step=".5" id="rangeForEnvelopeAttack" v-model="fmSynthOptions.envelope.attack" />
+                                <input type="number" step=".01" min="0" max="3" id="envelopeAttack" v-model="fmSynthOptions.envelope.attack" />
+                                <label for="rangeForEnvelopeAttack">Slide to change Attack</label><input type="range" class="range" min="0" max="3" step=".5" id="rangeForEnvelopeAttack" v-model="fmSynthOptions.envelope.attack" />
                             </li>
                             <li>
                                 <label for="envelopeDecay">Decay</label>
