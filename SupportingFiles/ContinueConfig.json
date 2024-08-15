@@ -1,0 +1,43 @@
+{
+    "models": [
+      {
+        "title": "Ollama Gemma2 2b",
+        "provider": "ollama",
+        "model": "gemma2:2b",
+        "apiBase": "http://localhost:11434/"
+      },
+      {
+        "title": "Granite Code 3b",
+        "provider": "ollama",
+        "model": "granite-code:3b",
+        "apiBase": "http://localhost:11434/"
+      },
+      {
+        "title": "phi3:3.8b",
+        "provider": "ollama",
+        "model": "phi3:3.8b",
+        "apiBase": "http://localhost:11434/"
+      },
+      {
+        "title": "llama3.1",
+        "provider": "ollama",
+        "model": "llama3.1:8b-instruct-q4_0",
+        "apiBase": "http://localhost:11434/"
+      },
+      {
+        "title": "internlm",
+        "provider": "ollama",
+        "model": "internlm2:7b",
+        "apiBase": "http://localhost:11434/"
+      }
+    ],
+    "slashCommands": [],
+    "customCommands": [],
+    "contextProviders": [],
+    "embeddingsProvider": {
+      "title": "Ollama nomic embed",
+      "provider": "ollama",
+      "model": "nomic-embed-text:latest",
+      "apiBase": "http://localhost:11434/"
+    }
+  }

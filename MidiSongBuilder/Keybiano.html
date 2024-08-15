@@ -114,9 +114,11 @@
         </div>
     </div>
     <script>
-        var app;
-        var synthMap = {};
-        const conga = new Tone.MembraneSynth({
+        //Declare / Initialize global variables
+        var app; //The Vue.js variable
+        var synthMap = {}; //Contains which key goes with with synth when the user presses keys on the keyboard
+        
+        const conga = new Tone.MembraneSynth({ //When the user presses the space bar, it uses this synth to make a percussive
             pitchDecay: 0.008,
             octaves: 2,
             envelope: {
@@ -125,15 +127,18 @@
                 sustain: 0,
             },
         }).toDestination();
-        const queryString = window.location.search;
+        
+        //If the user enters something after the url, like http://url.com?debug
+        //The window.location.search field holds everything after the main url
+        const queryString = window.location.search; 
         const debugPage = queryString == "?debug";
         
-        const synthArray = [];
-        const pressedKeys = {};
-        const oscillatorTypes = ["sine", "square", "sawtooth", "triangle"];
+        const synthArray = [];  //Holds all the available synths
+        const pressedKeys = {}; //Holds which keys are pressed down on the keyboard
+        const oscillatorTypes = ["sine", "square", "sawtooth", "triangle"]; //These types apply to both oscillator type and modulation type
 
         //Get all the keyNoteMaps
-        const keyNoteMapCollection = getKeyNoteMaps();
+        const keyNoteMapCollection = getKeyNoteMaps();  //Supplied from ./keyNoteMap.js
 
         //Get all the available keyNoteMapKeys keys
         const keyNoteMapKeys = Object.keys(keyNoteMapCollection);
@@ -144,6 +149,8 @@
         //The current keys
         var defaultNotesPlayed = "";
 
+        //These are copied from - https://tonejs.github.io/docs/r13/FMSynth
+        //Also for reference - https://tonejs.github.io/docs/14.9.17/interfaces/FMSynthOptions.html
         var defaultFMSynthParams = 
         {
             harmonicity : 3 ,
@@ -169,6 +176,8 @@
             }
         };
 
+        //Disposes of existing synths and creates synths based on FMSynth options
+        //Fist call uses the default
         buildSynths(defaultFMSynthParams);
         
         function buildSynths(params) {
@@ -183,7 +192,7 @@
             }            
 
             //Since people have 10 fingers, they could play 10 notes at once
-            //Get synths set up for each possible finger            
+            //Get synths set up for each possible finger       
             for (let i = 0; i < 10; i++) {
                 synthArray.push(
                     new Tone.FMSynth( params ).toDestination()
@@ -192,7 +201,15 @@
             writeLog("synthArrayLength" + synthArray.length);
         }
 
-        // Assign 'a' key press to trigger playing of the note
+        /*
+            Any time a user presses a key down on the keyboard:
+                Check if the key is in the selected keyNoteMap
+                If it is, add it as pressed in the pressedKeys object
+                Then run the playNotes method to handle reading the pressedKeys and handling them
+
+                If the key is the space key, just play the conga for "4n" time units
+                More about time units: https://tonejs.github.io/docs/14.9.17/types/Unit.Time.html
+        */
         document.addEventListener("keydown", function(event) {
             if (event.key in app.selectedKeyNoteMap.keyNoteMap) {
                 writeLog("Pressed key for " + app.selectedKeyNoteMap.keyNoteMap[event.key]);
@@ -207,6 +224,10 @@
             
         });
 
+        /*
+            When the user releases a key, the pressedKey for it should stop appearing as pressed
+                Then run playNotes again to handle playing the notes in pressedKeys
+        */
         document.addEventListener("keyup", function() {
             if(event.key in app.selectedKeyNoteMap.keyNoteMap && event.key in synthMap){
                 writeLog("Release key for " + app.selectedKeyNoteMap.keyNoteMap[event.key]);
@@ -215,22 +236,44 @@
             }
         });
 
+        /*
+            Resets the Notes Playing field on the page
+            Evaluates which keys are pressed
+                If any keys are pressed
+                    Gets the notes mapped to the pressed keys
+                    Assigns free synths
+                    Starts playing the synths
+                If any synths are playing for a key that is not pressed
+                    Stops playing the synth 
+
+        */
         function playNotes(){
             writeLog(pressedKeys);
+
+            //Reset Note Playing field on the page
             app.notesPlaying = "";
+            //Evaluate each key in pressedKeys
             for(var key in pressedKeys){
                 if(pressedKeys[key]){
+                    //Add the note to the Notes Playing field
                     app.notesPlaying += " " + app.selectedKeyNoteMap.keyNoteMap[key];
+                    //If the key is already mapped to a synth, get which synth it is
                     var synthIndex = synthMap[key];
                     if(synthIndex === undefined){
+                        //If no synth already mapped, get a free one from the array
                         writeLog(synthIndex);
                         writeLog("Getting free synth for " + key);
                         var synthIndex = getFreeSynth();
-                    }                    
+                    }
+                    //Start playing the note for the key through the synth
+                    //based on the pressed key's not in the selected keyNoteMap
                     synthArray[synthIndex].triggerAttack(app.selectedKeyNoteMap.keyNoteMap[key]);
+                    //Save which synth goes with the key right now
                     synthMap[key] = synthIndex;
                 } else {
                     if(key in synthMap){
+                        //If there was a synth playing the note for a key that was release
+                        //Stop playing the note and free up the synth for a new key in the synthMap
                         var synthIndex = synthMap[key];
                         synthArray[synthIndex].triggerAttackRelease();
                         delete synthMap[key];
@@ -239,12 +282,17 @@
             }
         }
 
+        //Hiding console debug logs behind the "?debug" string in the url, like https://austin183.github.io/MidiSongBuilder/Keybiano.html?debug
         function writeLog(logEntry){
             if(debugPage == true){
                 console.log(logEntry);
             }
         }
 
+        /*
+            When it is time to play notes, any pressed keys not already mapped to a synth will need to
+            find a free synth in the array.  This finds the first unmapped synth in the array starting from the front
+        */
         function getFreeSynth(){
             var values = Object.values(synthMap);
             for (let i = 0; i < 10; i++) {
@@ -255,15 +303,16 @@
             }
         }
 
+        //Once everything is downloaded, and the page has loaded, start rendering the Vue.js app
         window.onload = function(){
             app = new Vue({
-                el: '#app',
+                el: '#app', //The div id to put the Vue.js app in.  I can end sentences with prepositions if I want.  It's what my repo is really about!
                 data: {
-                    selectedKeyNoteMap: defaultKeyNoteMap,
-                    availableKeyNoteMaps: keyNoteMapCollection,
-                    fmSynthOptions: defaultFMSynthParams,
-                    oscillatorTypes: oscillatorTypes,
-                    notesPlaying: defaultNotesPlayed
+                    selectedKeyNoteMap: defaultKeyNoteMap, //Which keyboard map the user has selected in the drop down.
+                    availableKeyNoteMaps: keyNoteMapCollection, //All the keyboard maps available in the drop down
+                    fmSynthOptions: defaultFMSynthParams, //Options set for all 10 of the FMSynths in the synthArray
+                    oscillatorTypes: oscillatorTypes, //The list of types for Modulation and Oscillator
+                    notesPlaying: defaultNotesPlayed //The field to show which notes are playing based on the keys pressed at the time
                 }
             })
             //hide the loading banner
@@ -273,6 +322,7 @@
             }
         };
 
+        //This function is called when the user presses the button to change Synth options
         function changeSynthOptions(){
             writeLog(app.fmSynthOptions);
             buildSynths(app.fmSynthOptions);
