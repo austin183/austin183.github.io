@@ -319,6 +319,117 @@ function getSongs(){
             {
                 "note": "E4"
             }
+        ],
+        "AmazingGrace":[
+            {
+                "note": "G3"
+            },
+            {
+                "note": "C4"
+            },
+            {
+                "note": "E4"
+            },
+            {
+                "note": "C4"
+            },
+            {
+                "note": "E4"
+            },
+            {
+                "note": "D4"
+            },
+            {
+                "note": "C4"
+            },
+            {
+                "note": "A3"
+            },
+            {
+                "note": "G3"
+            },
+            //Second line
+            {
+                "note": "G3"
+            },
+            {
+                "note": "C4"
+            },
+            {
+                "note": "E4"
+            },
+            {
+                "note": "C4"
+            },
+            {
+                "note": "E4"
+            },
+            {
+                "note": "D4"
+            },
+            {
+                "note": "G4"
+            },
+            //Third Row
+            {
+                "note": "E4"
+            },
+            {
+                "note": "G4"
+            },
+            {
+                "note": "E4"
+            },
+            {
+                "note": "G4"
+            },
+            {
+                "note": "E4"
+            },
+            {
+                "note": "C4"
+            },
+            //Fourth Row
+            {
+                "note": "G3"
+            },
+            {
+                "note": "A3"
+            },
+            {
+                "note": "C4"
+            },
+            {
+                "note": "C4"
+            },
+            {
+                "note": "A3"
+            },
+            {
+                "note": "G3"
+            },
+            //Fifth Row
+            {
+                "note": "G3"
+            },
+            {
+                "note": "C4"
+            },
+            {
+                "note": "E4"
+            },
+            {
+                "note": "C4"
+            },
+            {
+                "note": "E4"
+            },
+            {
+                "note": "D4"
+            },
+            {
+                "note": "C4"
+            },
         ]
     }
 }
