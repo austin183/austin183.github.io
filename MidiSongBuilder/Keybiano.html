@@ -9,6 +9,7 @@
     <link href="../Styles.css" rel="stylesheet">
     <script src="https://unpkg.com/tone"></script>
     <script src="keyNoteMaps.js"></script>
+    <script src="songs.js"></script>
 </head>
 <body>
     <h1>Type To Play Notes</h1>
@@ -25,13 +26,21 @@
         <div id="configuration">
             <div id="keyNoteMapConfigs">
                 <label for="keyNoteMapSelect">Select a Keyboard Layout</label>
-                <select id="keyNoteMapSelect" v-model="selectedKeyNoteMap" class="pure-input-rounded">
+                <select id="keyNoteMapSelect" v-model="selectedKeyNoteMap" class="pure-input-rounded" v-on:change="renderSongNotes()">
                     <option v-for="(item, key, index) in availableKeyNoteMaps" :value="item">{{key}}</option>
                 </select>
                 <p>Description: {{selectedKeyNoteMap.description}}</p>
             </div>
             <div id="CurrentNotes">
                 Current Notes Playing: | {{ notesPlaying }} |
+            </div>
+            <div id="SongNotes">
+                <label for="songNoteSelect">Select a Song</label>
+                <select id="songNoteSelect" v-model="selectedSongNotes" class="pure-input-rounded" v-on:change="renderSongNotes()">
+                    <option v-for="(item, key, index) in availableSongs" :value="item">{{item}}</option>
+                </select>
+                <p>Song Notes: {{ songNotes }}</p>
+                <p>Mapped Keys: {{ songNotesOnKeyMap }}</p>
             </div>
             <div id="FMSynthConfigs">
                 <ul>
@@ -139,15 +148,20 @@
 
         //Get all the keyNoteMaps
         const keyNoteMapCollection = getKeyNoteMaps();  //Supplied from ./keyNoteMap.js
+        const songCollection = getSongs();
 
         //Get all the available keyNoteMapKeys keys
         const keyNoteMapKeys = Object.keys(keyNoteMapCollection);
+        const songKeys = Object.keys(songCollection);
 
         //Get a default value for the keyNoteMap
         const defaultKeyNoteMap = keyNoteMapCollection[keyNoteMapKeys[0]];
-
+        const defaultSong = songKeys[0];
+        
         //The current keys
         var defaultNotesPlayed = "";
+        var defaultSongNotes = "";
+        var defaultSongNotesOnKeyMap = "";
 
         //These are copied from - https://tonejs.github.io/docs/r13/FMSynth
         //Also for reference - https://tonejs.github.io/docs/14.9.17/interfaces/FMSynthOptions.html
@@ -312,7 +326,11 @@
                     availableKeyNoteMaps: keyNoteMapCollection, //All the keyboard maps available in the drop down
                     fmSynthOptions: defaultFMSynthParams, //Options set for all 10 of the FMSynths in the synthArray
                     oscillatorTypes: oscillatorTypes, //The list of types for Modulation and Oscillator
-                    notesPlaying: defaultNotesPlayed //The field to show which notes are playing based on the keys pressed at the time
+                    notesPlaying: defaultNotesPlayed, //The field to show which notes are playing based on the keys pressed at the time
+                    availableSongs: songKeys,
+                    selectedSongNotes: defaultSong,
+                    songNotes: defaultSongNotes,
+                    songNotesOnKeyMap: defaultSongNotesOnKeyMap
                 }
             })
             //hide the loading banner
@@ -320,7 +338,34 @@
             if (loadingBanner) {
                 loadingBanner.style.display = 'none';
             }
+            renderSongNotes();
         };
+
+        function renderSongNotes(){
+            var renderedSongNotes = "";
+            var renderedSongNotesOnKeyMap = "";
+            writeLog("selectedSongNote " + app.selectedSongNotes);
+            var song = songCollection[app.selectedSongNotes];
+            writeLog(song);
+            var invertedKeyNoteMap = invertKeyNoteMap();
+            writeLog(invertedKeyNoteMap);
+
+            song.forEach(function(note){
+                renderedSongNotes += note.note + " ";
+                renderedSongNotesOnKeyMap += invertedKeyNoteMap[note.note] + " ";
+            });
+
+            app.songNotes = renderedSongNotes;
+            app.songNotesOnKeyMap = renderedSongNotesOnKeyMap;
+        }
+
+        function invertKeyNoteMap(){
+            var invertedKeyNoteMap = {};
+            for(var key in app.selectedKeyNoteMap.keyNoteMap){
+                invertedKeyNoteMap[app.selectedKeyNoteMap.keyNoteMap[key]] = key;
+            }
+            return invertedKeyNoteMap;
+        }
 
         //This function is called when the user presses the button to change Synth options
         function changeSynthOptions(){
