@@ -359,7 +359,14 @@
             app.songNotesOnKeyMap = renderedSongNotesOnKeyMap;
             //Move focus back to the document so when the user starts trying to play notes, they
             //won't accidentally be on one of the option fields
-            document.focus();
+            //Found at https://stackoverflow.com/questions/6976486/is-there-any-way-in-javascript-to-focus-the-document-content-area
+            // Give the document focus
+            window.focus();
+
+            // Remove focus from any focused element
+            if (document.activeElement) {
+                document.activeElement.blur();
+            }
         }
 
         function invertKeyNoteMap(){
