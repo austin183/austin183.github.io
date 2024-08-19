@@ -357,6 +357,9 @@
 
             app.songNotes = renderedSongNotes;
             app.songNotesOnKeyMap = renderedSongNotesOnKeyMap;
+            //Move focus back to the document so when the user starts trying to play notes, they
+            //won't accidentally be on one of the option fields
+            document.focus();
         }
 
         function invertKeyNoteMap(){
