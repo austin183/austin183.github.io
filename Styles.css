@@ -17,8 +17,11 @@ body{
 
 div.bordered {
     border: 1pt;
-    border-color: darkcyan;
+    border-color: black;
     border-style: solid;
+    margin-left: 3px;
+    margin-right: 3px;
+    margin-top: 3px;
 }
 
 div.centered{
@@ -52,4 +55,9 @@ input {
 div.app {
     height: fit-content;
     width: fit-content;
+}
+
+.side-by-side {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
 }

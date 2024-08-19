@@ -39,10 +39,13 @@
                 <select id="songNoteSelect" v-model="selectedSongNotes" class="pure-input-rounded" v-on:change="renderSongNotes()">
                     <option v-for="(item, key, index) in availableSongs" :value="item">{{item}}</option>
                 </select>
-                <p>Song Notes: {{ songNotes }}</p>
-                <p>Mapped Keys: {{ songNotesOnKeyMap }}</p>
+                <div class="side-by-side">
+                    <div class="bordered">Mapped Keys<br />{{ songNotesOnKeyMap }}</div>
+                    <div class="bordered">Song Notes<br />{{ songNotes }}</div>                
+                </div>
             </div>
             <div id="FMSynthConfigs">
+                <h3>Configure the Sound of the Instrument</h3>
                 <ul>
                     <li>
                         <label for="detune">Set Detune Number</label>
@@ -118,7 +121,7 @@
                         </ul>
                     </li>
                 </ul>
-                <button id="reloadSynthOptions" class="pure-button button-toggle" onclick="changeSynthOptions()">Update Synth Options</button>
+                <button id="reloadSynthOptions" class="pure-button button-toggle" onclick="changeSynthOptions()">Update Instrument Sound</button>
             </div>
         </div>
     </div>
@@ -167,11 +170,11 @@
         //Also for reference - https://tonejs.github.io/docs/14.9.17/interfaces/FMSynthOptions.html
         var defaultFMSynthParams = 
         {
-            harmonicity : 3 ,
+            harmonicity : 8000 ,
             modulationIndex : 10 ,
             detune : 0 ,
             oscillator : {
-                type : "sine"
+                type : "triangle"
             },
             envelope : {
                 attack : 0.01 ,
@@ -180,7 +183,7 @@
                 release : 0.5
             },
             modulation : {
-                type : "square"
+                type : "sawtooth"
             },
             modulationEnvelope : {
                 attack : 0.5 ,
