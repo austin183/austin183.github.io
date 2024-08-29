@@ -44,7 +44,8 @@
                     <div class="bordered">Song Notes<br />{{ songNotes }}</div>                
                 </div>
             </div>
-            <div id="FMSynthConfigs">
+            <button onclick="toggleFMSynthConfigs()">Toggle Instrument Config</button>
+            <div id="FMSynthConfigs" class="bordered">
                 <h3>Configure the Sound of the Instrument</h3>
                 <ul>
                     <li>
@@ -384,6 +385,21 @@
         function changeSynthOptions(){
             writeLog(app.fmSynthOptions);
             buildSynths(app.fmSynthOptions);
+        }
+
+        //This function shows or hides the FMSynthConfigs div
+        function toggleFMSynthConfigs(){
+             var configDiv = document.getElementById('FMSynthConfigs'); // Get a reference to the synth configuration DIV element by its ID (you may need to replace 'id' with actual id of your HTML structure)
+            if(configDiv){ 
+                const currentDisplayState = configDiv.style.display;     
+                
+                if(currentDisplayState === "none"){ // If it is currently hidden, then show the div (change its display style to block or inline-block as appropriate for your layout)
+                    configDiv.style.display = ""; 
+                    
+                } else { // Otherwise assume that FMSynthConfigs are already visible and hide them by setting their display property back to none
+                    configDiv.style.display = "none";  
+                }
+            }
         }
         
     </script>
