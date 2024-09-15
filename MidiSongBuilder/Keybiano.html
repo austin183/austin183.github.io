@@ -12,6 +12,7 @@
     <script src="ToneHelper.js"></script>
     <script src="SynthKeyPlayer.js"></script>
     <script src="keyNoteMaps.js"></script>
+    <script src="SongNoteRenderer.js"></script>
     <script src="songs.js"></script>
 </head>
 <body>
@@ -137,6 +138,7 @@
         //Declare / Initialize global variables
         var toneHelper = getToneHelper();
         var synthKeyPlayer = getSynthKeyPlayer();
+        var songNoteRenderer = getSongNoteRenderer();
         var app; //The Vue.js variable
         var synthMap = {}; //Contains which key goes with with synth when the user presses keys on the keyboard
         const conga = toneHelper.getCongaSynth();
@@ -256,16 +258,11 @@
             writeLog("selectedSongNote " + app.selectedSongNotes);
             var song = songCollection[app.selectedSongNotes];
             writeLog(song);
-            var invertedKeyNoteMap = invertKeyNoteMap();
-            writeLog(invertedKeyNoteMap);
+            var renderedNotes = songNoteRenderer.renderSongNotes(song, app.selectedKeyNoteMap.keyNoteMap);
+            
+            app.songNotes = renderedNotes.renderedSongNotes;
+            app.songNotesOnKeyMap = renderedNotes.renderedSongNotesOnKeyMap;
 
-            song.forEach(function(note){
-                renderedSongNotes += note.note + " ";
-                renderedSongNotesOnKeyMap += invertedKeyNoteMap[note.note] + " ";
-            });
-
-            app.songNotes = renderedSongNotes;
-            app.songNotesOnKeyMap = renderedSongNotesOnKeyMap;
             //Move focus back to the document so when the user starts trying to play notes, they
             //won't accidentally be on one of the option fields
             //Found at https://stackoverflow.com/questions/6976486/is-there-any-way-in-javascript-to-focus-the-document-content-area
@@ -276,14 +273,6 @@
             if (document.activeElement) {
                 document.activeElement.blur();
             }
-        }
-
-        function invertKeyNoteMap(){
-            var invertedKeyNoteMap = {};
-            for(var key in app.selectedKeyNoteMap.keyNoteMap){
-                invertedKeyNoteMap[app.selectedKeyNoteMap.keyNoteMap[key]] = key;
-            }
-            return invertedKeyNoteMap;
         }
 
         //This function is called when the user presses the button to change Synth options
