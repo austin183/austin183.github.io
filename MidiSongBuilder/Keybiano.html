@@ -6,8 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css" integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous">
     <script src="https://unpkg.com/vue@2.6.12/dist/vue.min.js"></script>
-    <link href="../Styles.css" rel="stylesheet">
+    <link href="../Styles.css" rel="stylesheet"></link>
     <script src="https://unpkg.com/tone"></script>
+    <script src="ToneHelper.js"></script>
     <script src="keyNoteMaps.js"></script>
     <script src="songs.js"></script>
 </head>
@@ -127,28 +128,19 @@
         </div>
     </div>
     <script>
-        //Declare / Initialize global variables
-        var app; //The Vue.js variable
-        var synthMap = {}; //Contains which key goes with with synth when the user presses keys on the keyboard
-        
-        const conga = new Tone.MembraneSynth({ //When the user presses the space bar, it uses this synth to make a percussive
-            pitchDecay: 0.008,
-            octaves: 2,
-            envelope: {
-                attack: 0.0006,
-                decay: 0.5,
-                sustain: 0,
-            },
-        }).toDestination();
-        
         //If the user enters something after the url, like http://url.com?debug
         //The window.location.search field holds everything after the main url
         const queryString = window.location.search; 
         const debugPage = queryString == "?debug";
+        //Declare / Initialize global variables
+        var toneHelper = getToneHelper();
+        var app; //The Vue.js variable
+        var synthMap = {}; //Contains which key goes with with synth when the user presses keys on the keyboard
+        const conga = toneHelper.getCongaSynth();
         
         const synthArray = [];  //Holds all the available synths
         const pressedKeys = {}; //Holds which keys are pressed down on the keyboard
-        const oscillatorTypes = ["sine", "square", "sawtooth", "triangle"]; //These types apply to both oscillator type and modulation type
+        const oscillatorTypes = toneHelper.getOscillatorTypes(); //These types apply to both oscillator type and modulation type
 
         //Get all the keyNoteMaps
         const keyNoteMapCollection = getKeyNoteMaps();  //Supplied from ./keyNoteMap.js
@@ -166,58 +158,13 @@
         var defaultNotesPlayed = "";
         var defaultSongNotes = "";
         var defaultSongNotesOnKeyMap = "";
-
-        //These are copied from - https://tonejs.github.io/docs/r13/FMSynth
-        //Also for reference - https://tonejs.github.io/docs/14.9.17/interfaces/FMSynthOptions.html
-        var defaultFMSynthParams = 
-        {
-            harmonicity : 8000 ,
-            modulationIndex : 10 ,
-            detune : 0 ,
-            oscillator : {
-                type : "triangle"
-            },
-            envelope : {
-                attack : 0.01 ,
-                decay : 0.01 ,
-                sustain : 1 ,
-                release : 0.5
-            },
-            modulation : {
-                type : "sawtooth"
-            },
-            modulationEnvelope : {
-                attack : 0.5 ,
-                decay : 0 ,
-                sustain : 1 ,
-                release : 0.5
-            }
-        };
+        
+        var defaultFMSynthParams = toneHelper.getDefaultFMSynthParams();
 
         //Disposes of existing synths and creates synths based on FMSynth options
-        //Fist call uses the default
-        buildSynths(defaultFMSynthParams);
-        
-        function buildSynths(params) {
-            //Clear the synthArray
-            if(synthArray.length > 0){
-                for (let i = synthArray.length - 1; i >= 0; i--) {
-                    writeLog(synthArray[i]);
-                    synthArray[i].dispose();
-                    //delete i from array
-                    synthArray.splice(i,1);
-                }
-            }            
+        //First call uses the default
+        toneHelper.buildSynths(defaultFMSynthParams);
 
-            //Since people have 10 fingers, they could play 10 notes at once
-            //Get synths set up for each possible finger       
-            for (let i = 0; i < 10; i++) {
-                synthArray.push(
-                    new Tone.FMSynth( params ).toDestination()
-                );
-            }
-            writeLog("synthArrayLength" + synthArray.length);
-        }
 
         /*
             Any time a user presses a key down on the keyboard:
@@ -384,7 +331,7 @@
         //This function is called when the user presses the button to change Synth options
         function changeSynthOptions(){
             writeLog(app.fmSynthOptions);
-            buildSynths(app.fmSynthOptions);
+            toneHelper.buildSynths(app.fmSynthOptions);
         }
 
         //This function shows or hides the FMSynthConfigs div
