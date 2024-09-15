@@ -8,7 +8,9 @@
     <script src="https://unpkg.com/vue@2.6.12/dist/vue.min.js"></script>
     <link href="../Styles.css" rel="stylesheet"></link>
     <script src="https://unpkg.com/tone"></script>
+    <!-- Listing ToneHelper under tone because it makes use of the tone library -->
     <script src="ToneHelper.js"></script>
+    <script src="SynthKeyPlayer.js"></script>
     <script src="keyNoteMaps.js"></script>
     <script src="songs.js"></script>
 </head>
@@ -134,6 +136,7 @@
         const debugPage = queryString == "?debug";
         //Declare / Initialize global variables
         var toneHelper = getToneHelper();
+        var synthKeyPlayer = getSynthKeyPlayer();
         var app; //The Vue.js variable
         var synthMap = {}; //Contains which key goes with with synth when the user presses keys on the keyboard
         const conga = toneHelper.getCongaSynth();
@@ -213,58 +216,13 @@
 
         */
         function playNotes(){
-            writeLog(pressedKeys);
-
-            //Reset Note Playing field on the page
-            app.notesPlaying = "";
-            //Evaluate each key in pressedKeys
-            for(var key in pressedKeys){
-                if(pressedKeys[key]){
-                    //Add the note to the Notes Playing field
-                    app.notesPlaying += " " + app.selectedKeyNoteMap.keyNoteMap[key];
-                    //If the key is already mapped to a synth, get which synth it is
-                    var synthIndex = synthMap[key];
-                    if(synthIndex === undefined){
-                        //If no synth already mapped, get a free one from the array
-                        writeLog(synthIndex);
-                        writeLog("Getting free synth for " + key);
-                        var synthIndex = getFreeSynth();
-                    }
-                    //Start playing the note for the key through the synth
-                    //based on the pressed key's not in the selected keyNoteMap
-                    synthArray[synthIndex].triggerAttack(app.selectedKeyNoteMap.keyNoteMap[key]);
-                    //Save which synth goes with the key right now
-                    synthMap[key] = synthIndex;
-                } else {
-                    if(key in synthMap){
-                        //If there was a synth playing the note for a key that was release
-                        //Stop playing the note and free up the synth for a new key in the synthMap
-                        var synthIndex = synthMap[key];
-                        synthArray[synthIndex].triggerAttackRelease();
-                        delete synthMap[key];
-                    }                    
-                }
-            }
+            synthKeyPlayer.playNotes(app, pressedKeys, synthMap, synthArray);
         }
 
         //Hiding console debug logs behind the "?debug" string in the url, like https://austin183.github.io/MidiSongBuilder/Keybiano.html?debug
         function writeLog(logEntry){
             if(debugPage == true){
                 console.log(logEntry);
-            }
-        }
-
-        /*
-            When it is time to play notes, any pressed keys not already mapped to a synth will need to
-            find a free synth in the array.  This finds the first unmapped synth in the array starting from the front
-        */
-        function getFreeSynth(){
-            var values = Object.values(synthMap);
-            for (let i = 0; i < 10; i++) {
-                if (!(values.includes(i))){
-                    writeLog("Returning synth [" + i + "]");
-                    return i;
-                }
             }
         }
 
