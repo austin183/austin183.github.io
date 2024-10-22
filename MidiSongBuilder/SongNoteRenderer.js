@@ -13,9 +13,9 @@ function getSongNoteRenderer(){
             var maxHeight = canvas.height;
             var maxWidth = canvas.width;
             //We have 10 keys to stretch across the maxWidth
-            var maxCharacterWidth = canvas.width / 10;
+            var maxCharacterWidth = maxWidth / 10;
             //We have to cover 10 seconds with the height
-            var maxSecondHeight = canvas.height / 10;
+            var maxSecondHeight = maxHeight / 10;
 
             return {
                 letter: canvasNote.letter,
@@ -26,16 +26,17 @@ function getSongNoteRenderer(){
             };
 
         },
-        drawNote: function(ctx, noteDrawInstructions) {
+        drawNote: function(canvas, ctx, noteDrawInstructions) {
             var x = noteDrawInstructions.x;
             var y = noteDrawInstructions.y;
+            var borderWidthHalf = canvas.width / 10 / 2;
         
             // Set font style and fill color for the letter
             ctx.font = "18px Georgia";
             ctx.fillStyle = "blue";
         
             // Draw the note letter at the calculated position
-            ctx.fillText(noteDrawInstructions.letter, x, y); // Assuming the height of the letter is about 20 pixels
+            ctx.fillText(noteDrawInstructions.letter, x, y - 5); // Assuming the height of the letter is about 20 pixels
         
             // Set border style and fill color
             ctx.strokeStyle = "blue";
@@ -46,10 +47,10 @@ function getSongNoteRenderer(){
         
             // Draw the border above the note
             ctx.beginPath();
-            ctx.moveTo(x - 10, y); // Starting point a bit left of the letter
-            ctx.lineTo(x + 10, y); // Ending point a bit right of the letter
-            ctx.lineTo(x + 10, y - borderHeight); // Move up to form the border
-            ctx.lineTo(x - 10, y - borderHeight); // Move back down
+            ctx.moveTo(x - borderWidthHalf, y); // Starting point a bit left of the letter
+            ctx.lineTo(x + borderWidthHalf, y); // Ending point a bit right of the letter
+            ctx.lineTo(x + borderWidthHalf, y - borderHeight); // Move up to form the border
+            ctx.lineTo(x - borderWidthHalf, y - borderHeight); // Move back down
             ctx.closePath();
             ctx.stroke();
         }        
@@ -143,7 +144,7 @@ function getSongNoteRenderer(){
             visibleField.forEach(canvasNote => {                
                 //Create new note and calculate position for it
                 var noteDrawInstructions = renderer.getNoteDrawInstructions(canvas, canvasNote, now, keyRenderInfo);
-                renderer.drawNote(ctx, noteDrawInstructions);                
+                renderer.drawNote(canvas, ctx, noteDrawInstructions);                
             });
         }
     };

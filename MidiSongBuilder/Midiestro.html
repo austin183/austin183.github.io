@@ -50,10 +50,6 @@
             </div>
             <input type="file" accept="audio/midi" />
         </div>
-        <button onclick="toggleElementById('Results')">Toggle Midi output</button>
-        <div id="Results">
-            <textarea id="ResultsText" placeholder="json output..."></textarea>
-        </div>
         <button id="tonePlayToggle" onclick="togglePlay()" disabled>Play</button>
         <div id="canvasContainer" class="bordered">
             <canvas id="notesCanvas"></canvas>
@@ -228,9 +224,6 @@
                         trimmedMidi.tracks.push(trimmedTrack);
                     }
                 });
-                document.querySelector(
-                    "#ResultsText"
-                ).value = JSON.stringify(trimmedMidi, undefined, 2);
                 document
                     .querySelector("#tonePlayToggle")
                     .removeAttribute("disabled");
