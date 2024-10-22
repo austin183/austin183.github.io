@@ -42,7 +42,7 @@ function getToneHelper(){
             }).toDestination();
         },
 
-        buildSynths: function(params){
+        buildSynths: function(params, synthArray){
             //Clear the synthArray
             if(synthArray.length > 0){
                 for (let i = synthArray.length - 1; i >= 0; i--) {

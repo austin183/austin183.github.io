@@ -5,9 +5,11 @@
     <title>Midi Song Builder</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css" integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous">
-    <script src="https://unpkg.com/vue@2.6.12/dist/vue.min.js"></script>
+    <!-- <script src="https://unpkg.com/vue@2.6.12/dist/vue.min.js"></script> -->
     <link href="../Styles.css" rel="stylesheet"></link>
-    <script src="https://unpkg.com/tone"></script>
+    <!-- <script src="https://unpkg.com/tone"></script> -->
+    <script src="Libraries/vue.min.js"></script>
+    <script type="text/javascript" src="Libraries/Tone.js"></script>
     <!-- Listing ToneHelper under tone because it makes use of the tone library -->
     <script src="ToneHelper.js"></script>
     <script src="SynthKeyPlayer.js"></script>
@@ -168,7 +170,7 @@
 
         //Disposes of existing synths and creates synths based on FMSynth options
         //First call uses the default
-        toneHelper.buildSynths(defaultFMSynthParams);
+        toneHelper.buildSynths(defaultFMSynthParams, synthArray);
 
 
         /*
@@ -278,7 +280,7 @@
         //This function is called when the user presses the button to change Synth options
         function changeSynthOptions(){
             writeLog(app.fmSynthOptions);
-            toneHelper.buildSynths(app.fmSynthOptions);
+            toneHelper.buildSynths(app.fmSynthOptions, synthArray);
         }
 
         //This function shows or hides the FMSynthConfigs div

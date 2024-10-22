@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<!--
+    This is almost vanilla from https://tonejs.github.io/Midi/ right now,
+    but I want to work some of Keybiano.html into it.  A user can drag a midi file
+    onto the page, and it will have the ability to choose one of the tracks.
+    The tracks will appear as notes and mapped keys at first, but eventually, I want to
+    animate the mapped keys based on when they will play and how long they need to be played.
+-->
+<html>
+
+<head>
+    <title>Midi-estro</title>
+    <!-- 
+    <script src="https://unpkg.com/vue@2.6.12/dist/vue.min.js"></script>
+    <script type="text/javascript" src="https://unpkg.com/tone@latest/build/Tone.js"></script>
+    <script type="text/javascript" src="https://unpkg.com/@tonejs/midi"></script>
+    -->
+    <script src="Libraries/vue.min.js"></script>
+    <script type="text/javascript" src="Libraries/Tone.js"></script>
+    <script type="text/javascript" src="Libraries/ToneMidi.js"></script>
+
+    <link href="../Styles.css" rel="stylesheet">
+    </link>
+    <script src="ToneHelper.js"></script>
+    <script src="SynthKeyPlayer.js"></script>
+    <script src="keyNoteMaps.js"></script>
+    <script src="SongNoteRenderer.js"></script>
+    <script src="keyRenderInfo.js"></script>
+</head>
+
+<body>
+    <div id="toneContent">
+        <div id="Description">
+            <p>
+                This page is a work in progress.  I am trying to build a musical typing game, where you can take a midi file and try to match the notes played on your keyboard.
+            </p>
+            <p>
+                There are definitely bugs in here that I am trying to figure out how to handle like toggling play appropriately, and there are some QoL improvements I want to make, like adjusting the buffer time after pressing the play button and the first note of the song starting.
+            </p>
+            <p>
+                Also it would be nice to work on the UI / UX.
+            </p>        
+            <p>
+                You can find some midi files to download and try out at <a href="https://bbloomf.github.io/lilypond-songs">https://bbloomf.github.io/lilypond-songs</a>" or <a href="https://onlinesequencer.net/sequences">https://onlinesequencer.net/sequences</a>
+            </p>
+        </div>
+        <div id="FileDrop">
+            <div id="Text">
+                Drop a midi file here
+            </div>
+            <input type="file" accept="audio/midi" />
+        </div>
+        <button onclick="toggleElementById('Results')">Toggle Midi output</button>
+        <div id="Results">
+            <textarea id="ResultsText" placeholder="json output..."></textarea>
+        </div>
+        <button id="tonePlayToggle" onclick="togglePlay()" disabled>Play</button>
+        <div id="canvasContainer" class="bordered">
+            <canvas id="notesCanvas"></canvas>
+        </div>
+    </div>
+    <div id="app">
+        <div id="keyNoteMapConfigs">
+            <label for="keyNoteMapSelect">Select a Keyboard Layout</label>
+            <select id="keyNoteMapSelect" v-model="selectedKeyNoteMap" class="pure-input-rounded" v-on:change="renderSongNotes()">
+                <option v-for="(item, key, index) in availableKeyNoteMaps" :value="item">{{key}}</option>
+            </select>
+            <p>Description: {{selectedKeyNoteMap.description}}</p>
+        </div>
+        <div id="trackOptions">
+            <label for="trackSelect">Select Track to play</label>
+            <select id="trackSelect" v-model="selectedTrack" class="pure-input-rounded" v-on:change="renderSongNotes()">
+                <option v-for="(item, key, index) in availableTracks" :value="item">{{item}}</option>
+            </select>
+        </div>        
+        <div id="notesPlaying">
+            <div class="bordered">{{renderedNotesPlaying}}</div>
+        </div>
+        <div class="side-by-side">
+            <div class="bordered">Mapped Keys<br />{{ songNotesOnKeyMap }}</div>
+            <div class="bordered">Song Notes<br />{{ songNotes }}</div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        //If the user enters something after the url, like http://url.com?debug
+        //The window.location.search field holds everything after the main url
+        const queryString = window.location.search;
+        const debugPage = queryString == "?debug";
+        var synthKeyPlayer = getSynthKeyPlayer();
+        var songNoteRenderer = getSongNoteRenderer();
+        var toneHelper = getToneHelper();
+        var synthMap = {};
+        const synthArray = [];  //Holds all the available synths
+        const pressedKeys = {}; //Holds which keys are pressed down on the keyboard
+        //Get all the keyNoteMaps
+        const keyNoteMapCollection = getKeyNoteMaps();  //Supplied from ./keyNoteMap.js
+        const keyRenderInfo = getKeyRenderInfo();
+        //Get all the available keyNoteMapKeys keys
+        const keyNoteMapKeys = Object.keys(keyNoteMapCollection);
+        //Get a default value for the keyNoteMap
+        const defaultKeyNoteMap = keyNoteMapCollection[keyNoteMapKeys[0]];
+        //The current keys
+        var defaultNotesPlaying = "";
+        var defaultSongNotes = "";
+        var defaultSongNotesOnKeyMap = "";
+        var defaultFMSynthParams = toneHelper.getDefaultFMSynthParams();
+        var currentStart = 0;
+
+        //Disposes of existing synths and creates synths based on FMSynth options
+        //First call uses the default
+        toneHelper.buildSynths(defaultFMSynthParams, synthArray);
+        var app; //The Vue.js variable
+
+        /*
+            Any time a user presses a key down on the keyboard:
+                Check if the key is in the selected keyNoteMap
+                If it is, add it as pressed in the pressedKeys object
+                Then run the playNotes method to handle reading the pressedKeys and handling them
+
+                If the key is the space key, just play the conga for "4n" time units
+                More about time units: https://tonejs.github.io/docs/14.9.17/types/Unit.Time.html
+        */
+        document.addEventListener("keydown", function(event) {
+            if (event.key in app.selectedKeyNoteMap.keyNoteMap) {
+                writeLog("Pressed key for " + app.selectedKeyNoteMap.keyNoteMap[event.key]);
+                
+                pressedKeys[event.key] = true;
+                playNotes();
+            }            
+        });
+
+        /*
+            When the user releases a key, the pressedKey for it should stop appearing as pressed
+                Then run playNotes again to handle playing the notes in pressedKeys
+        */
+        document.addEventListener("keyup", function() {
+            if(event.key in app.selectedKeyNoteMap.keyNoteMap && event.key in synthMap){
+                writeLog("Release key for " + app.selectedKeyNoteMap.keyNoteMap[event.key]);
+                pressedKeys[event.key] = false;
+                playNotes();
+            }
+        });
+
+        /*
+            Resets the Notes Playing field on the page
+            Evaluates which keys are pressed
+                If any keys are pressed
+                    Gets the notes mapped to the pressed keys
+                    Assigns free synths
+                    Starts playing the synths
+                If any synths are playing for a key that is not pressed
+                    Stops playing the synth 
+
+        */
+        function playNotes(){
+            synthKeyPlayer.playNotes(app, pressedKeys, synthMap, synthArray);
+        }
+
+        //Hiding console debug logs behind the "?debug" string in the url, like https://austin183.github.io/MidiSongBuilder/Keybiano.html?debug
+        function writeLog(logEntry){
+            if(debugPage == true){
+                console.log(logEntry);
+            }
+        }
+
+        if (
+            !(
+                window.File &&
+                window.FileReader &&
+                window.FileList &&
+                window.Blob
+            )
+        ) {
+            document.querySelector("#FileDrop #Text").textContent =
+                "Reading files not supported by this browser";
+        } else {
+            const fileDrop = document.querySelector("#FileDrop");
+
+            fileDrop.addEventListener("dragenter", () =>
+                fileDrop.classList.add("Hover")
+            );
+
+            fileDrop.addEventListener("dragleave", () =>
+                fileDrop.classList.remove("Hover")
+            );
+
+            fileDrop.addEventListener("drop", () =>
+                fileDrop.classList.remove("Hover")
+            );
+
+            document
+                .querySelector("#FileDrop input")
+                .addEventListener("change", (e) => {
+                    //get the files
+                    const files = e.target.files;
+                    if (files.length > 0) {
+                        const file = files[0];
+                        document.querySelector(
+                            "#FileDrop #Text"
+                        ).textContent = file.name;
+                        parseFile(file);
+                    }
+                });
+        }
+
+        let currentMidi = null;
+
+        function parseFile(file) {
+            //read the file
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const midi = new Midi(e.target.result);
+                var trimmedMidi = {"tracks": []};
+                var counter = 0;
+                midi.tracks.forEach((track) => {
+                    counter++;
+                    if(track.notes.length > 0){
+                        var trackName = track.name;
+                        if(trackName == ""){
+                            trackName = "Track";
+                        }
+                        trackName += " " + counter;
+                        var trimmedTrack = {
+                            "name" : trackName,
+                            "notes" : track.notes
+                        }
+                        trimmedMidi.tracks.push(trimmedTrack);
+                    }
+                });
+                document.querySelector(
+                    "#ResultsText"
+                ).value = JSON.stringify(trimmedMidi, undefined, 2);
+                document
+                    .querySelector("#tonePlayToggle")
+                    .removeAttribute("disabled");
+                currentMidi = trimmedMidi;
+                app.availableTracks = currentMidi.tracks;
+                app.selectedTrack = app.availableTracks[0];
+                renderSongNotes();
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        const synths = [];
+        var playing = false;
+        var playIntervalId = {};
+
+        function togglePlay() {
+            var invertedKeyNoteMap = songNoteRenderer.invertKeyNoteMap(app.selectedKeyNoteMap.keyNoteMap);
+            playing = !playing;
+            if (playing && currentMidi) {
+                
+                const now = Tone.now() - currentStart;
+
+                const synth = new Tone.PolySynth(Tone.Synth, {
+                    envelope: {
+                        attack: 0.02,
+                        decay: 0.1,
+                        sustain: 0.3,
+                        release: 1,
+                    },
+                }).toDestination();
+                synths.push(synth);
+                //schedule all of the events
+                app.selectedTrack.notes.forEach((note) => {
+                    synth.triggerAttackRelease(
+                        note.name,
+                        note.duration,
+                        note.time + now,
+                        note.velocity
+                    );
+                });
+                playIntervalId = setInterval(() => {
+                    const intervalNow = Tone.now() - currentStart;
+                    app.renderedNotesPlaying = songNoteRenderer.renderNotesPlaying(app.selectedTrack.notes, invertedKeyNoteMap, keyRenderInfo, intervalNow);
+                    app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
+                    songNoteRenderer.renderNotesPlayingForCanvas(app.notesCanvas, app.vueCanvas, app.selectedTrack.notes, invertedKeyNoteMap, keyRenderInfo, intervalNow);
+                }, 20);
+                
+            } else {
+                currentStart = Tone.now();
+                Tone.Transport.stop();
+                Tone.Transport.position = 0;
+                Tone.Transport.cancel();
+                //dispose the synth and make a new one
+                while (synths.length) {
+                    clearInterval(playIntervalId);
+                    const synth = synths.shift();
+                    synth.disconnect();
+                    app.renderNotesPlaying = "";
+                }
+            }
+        };
+        //This function shows or hides the FMSynthConfigs div
+        function toggleElementById(id) {
+            var configDiv = document.getElementById(id); // Get a reference to the synth configuration DIV element by its ID (you may need to replace 'id' with actual id of your HTML structure)
+            if (configDiv) {
+                const currentDisplayState = configDiv.style.display;
+
+                if (currentDisplayState === "none") { // If it is currently hidden, then show the div (change its display style to block or inline-block as appropriate for your layout)
+                    configDiv.style.display = "";
+
+                } else { // Otherwise assume that FMSynthConfigs are already visible and hide them by setting their display property back to none
+                    configDiv.style.display = "none";
+                }
+            }
+        }
+
+        //Once everything is downloaded, and the page has loaded, start rendering the Vue.js app
+        window.onload = function(){
+            app = new Vue({
+                el: '#app', //The div id to put the Vue.js app in.  I can end sentences with prepositions if I want.  It's what my repo is really about!
+                data: {
+                    selectedKeyNoteMap: defaultKeyNoteMap, //Which keyboard map the user has selected in the drop down.
+                    availableKeyNoteMaps: keyNoteMapCollection, //All the keyboard maps available in the drop down                    
+                    renderedNotesPlaying: defaultNotesPlaying, //The field to show which notes are playing based on the keys pressed at the time
+                    songNotes: defaultSongNotes,
+                    songNotesOnKeyMap: defaultSongNotesOnKeyMap,
+                    selectedTrack: "",
+                    availableTracks: [],
+                    vueCanvas: null,
+                    notesCanvas: null
+                },
+                mounted(){
+                    this.notesCanvas = document.getElementById("notesCanvas")
+                    var ctx = notesCanvas.getContext('2d');
+                    this.vueCanvas = ctx;
+                    this.vueCanvas.clearRect(0, 0, this.notesCanvas.width, this.notesCanvas.height);
+                    this.vueCanvas.font = "18px Georgia";
+                    this.vueCanvas.fillStyle = "black";
+                    this.vueCanvas.fillText("Watch for falling note keys!", 0, 50); // Assuming the height of the letter is about 20 pixels
+                }
+            });
+
+        };
+
+        function renderSongNotes(){
+            if(currentMidi  && app.selectedTrack !== ""){
+                var invertedKeyNoteMap = songNoteRenderer.invertKeyNoteMap(app.selectedKeyNoteMap.keyNoteMap);
+                var renderedSongNotes = "";
+                var renderedSongNotesOnKeyMap = "";
+                writeLog("selectedSongNote " + app.selectedSongNotes);
+                var song = app.selectedTrack.notes;
+                writeLog(song);
+                var renderedNotes = songNoteRenderer.renderSongNotes(song, app.selectedKeyNoteMap.keyNoteMap);
+                
+                app.songNotes = renderedNotes.renderedSongNotes;
+                app.songNotesOnKeyMap = renderedNotes.renderedSongNotesOnKeyMap;
+                app.renderedNotesPlaying = songNoteRenderer.renderNotesPlaying(song, invertedKeyNoteMap, 0);
+
+                //Move focus back to the document so when the user starts trying to play notes, they
+                //won't accidentally be on one of the option fields
+                //Found at https://stackoverflow.com/questions/6976486/is-there-any-way-in-javascript-to-focus-the-document-content-area
+                // Give the document focus
+                window.focus();
+
+                // Remove focus from any focused element
+                if (document.activeElement) {
+                    document.activeElement.blur();
+                }
+            }
+        }
+            
+    </script>
+</body>
+
+</html>
