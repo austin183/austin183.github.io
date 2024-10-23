@@ -107,27 +107,30 @@ function getSongNoteRenderer(){
                 }
                 var keyNote = invertedKeyNoteMap[note.name];
                 if(keyNote){
-                    notesToPlay += " " + keyNote;
+                    notesToPlay += " " + keyNote + " (" + note.time + ") (" + (note.time + note.duration) + ") ";
                 }
             }
             return notesToPlay;
         },
-        renderNotesPlayingForCanvas: function(canvas, ctx, song, invertedKeyNoteMap, keyRenderInfo, now){
+        renderNotesPlayingForCanvas: function(canvas, ctx, song, invertedKeyNoteMap, keyRenderInfo, now, keyCount){
             //Set the visible field to the next 10 seconds of the song
             var futureLimit = now + 10;
+            var bufferFutureLimit = now + 20;
+            var pastLimit = now - 5;
             var visibleField = [];            
             for(var i = 0; i < song.length; i++){
                 var note = song[i];
                 var noteEnd = note.time + note.duration;
                 //Fast Forward to the section of song playing
-                if(now > noteEnd){
+                if(pastLimit > noteEnd){
                     continue;                    
                 }
                 //Build dataset for visible field
-                else if(futureLimit >= noteEnd){
+                else if(bufferFutureLimit >= noteEnd){
                     if(invertedKeyNoteMap[note.name] == null){
                         continue;
                     }
+
                     var canvasNote = {
                         duration : note.duration,
                         time : note.time,
@@ -140,6 +143,22 @@ function getSongNoteRenderer(){
                     break;
                 }
             }
+
+            //Remove overlaps greater than the keyCount
+            for(var j = visibleField.length - 1; j >= 0; j--){
+                var canvasNote = visibleField[j];
+                var overlap = visibleField.filter(n => n.id !== canvasNote.id && (n.time < canvasNote.time + canvasNote.duration && n.time + n.duration > canvasNote.time));
+                if(overlap.length >= keyCount){
+                    //Remove overlapping note                
+                    visibleField.splice(visibleField.indexOf(canvasNote), 1);
+                }
+            }
+
+            //Remove notes that ended before now
+            visibleField = visibleField.filter(function(note) {
+              return note.time + note.duration >= now && note.time + note.duration <= futureLimit;
+            });                
+            
             //Render the visibleField to the canvas
             visibleField.forEach(canvasNote => {                
                 //Create new note and calculate position for it

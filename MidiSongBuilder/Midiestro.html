@@ -60,25 +60,43 @@
             </div>
             <input type="file" accept="audio/midi" />
         </div>
-        <button id="tonePlayToggle" onclick="togglePlay()" disabled>Play</button>
-        <div id="canvasContainer" class="bordered">
-            <canvas id="notesCanvas"></canvas>
-        </div>
     </div>
     <div id="app">
-        <div id="keyNoteMapConfigs">
-            <label for="keyNoteMapSelect">Select a Keyboard Layout</label>
-            <select id="keyNoteMapSelect" v-model="selectedKeyNoteMap" class="pure-input-rounded" v-on:change="renderSongNotes()">
-                <option v-for="(item, key, index) in availableKeyNoteMaps" :value="item">{{key}}</option>
-            </select>
-            <p>Description: {{selectedKeyNoteMap.description}}</p>
+        <div id="keyNoteMapConfigs" class="side-by-side">
+            <div class="bordered">
+                <label for="keyNoteMapSelect">Select a Keyboard Layout</label>
+                <select id="keyNoteMapSelect" v-model="selectedKeyNoteMap" class="pure-input-rounded" v-on:change="renderSongNotes()">
+                    <option v-for="(item, key, index) in availableKeyNoteMaps" :value="item">{{key}}</option>
+                </select>
+            </div>         
+            <div class="bordered">
+                {{selectedKeyNoteMap.description}}
+            </div>
+        </div>
+        <div id="maxKeyCount" class="side-by-side">
+            <div class="bordered">
+                <label for="maxKeyCountRadio">Max Keys at Once</label>
+                <input type="radio" id="keyCount1" name="maxKeyCountRadio" v-model="selectedKeyCount" value="1" checked>
+                <label for="keyCount1">1</label>
+                <input type="radio" id="keyCount2" name="maxKeyCountRadio" v-model="selectedKeyCount" value="2">
+                <label for="keyCount2">2</label>
+                <input type="radio" id="keyCount3" name="maxKeyCountRadio" v-model="selectedKeyCount" value="3">
+                <label for="keyCount3">3</label>
+            </div>
+            <div class="bordered">
+                This is how many keys will appear to match at one point in time. (The browser will sometimes not recognize more than 2 keys at once, so the 3rd option could appear not to work with all key combinations.)
+            </div>        
         </div>
         <div id="trackOptions">
             <label for="trackSelect">Select Track to play</label>
             <select id="trackSelect" v-model="selectedTrack" class="pure-input-rounded" v-on:change="renderSongNotes()">
                 <option v-for="(item, key, index) in availableTracks" :value="item">{{item}}</option>
             </select>
-        </div>        
+        </div>     
+        <button id="tonePlayToggle" onclick="togglePlay()" disabled>Play</button>
+        <div id="canvasContainer" class="bordered">
+            <canvas id="notesCanvas"></canvas>
+        </div>   
         <div id="notesPlaying">
             <div class="bordered">{{renderedNotesPlaying}}</div>
         </div>
@@ -279,7 +297,7 @@
                     const intervalNow = Tone.now() - currentStart;
                     app.renderedNotesPlaying = songNoteRenderer.renderNotesPlaying(app.selectedTrack.notes, invertedKeyNoteMap, keyRenderInfo, intervalNow);
                     app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
-                    songNoteRenderer.renderNotesPlayingForCanvas(app.notesCanvas, app.vueCanvas, app.selectedTrack.notes, invertedKeyNoteMap, keyRenderInfo, intervalNow);
+                    songNoteRenderer.renderNotesPlayingForCanvas(app.notesCanvas, app.vueCanvas, app.selectedTrack.notes, invertedKeyNoteMap, keyRenderInfo, intervalNow, app.selectedKeyCount);
                 }, 20);
                 
             } else {
@@ -321,6 +339,7 @@
                     renderedNotesPlaying: defaultNotesPlaying, //The field to show which notes are playing based on the keys pressed at the time
                     songNotes: defaultSongNotes,
                     songNotesOnKeyMap: defaultSongNotesOnKeyMap,
+                    selectedKeyCount: 1,
                     selectedTrack: "",
                     availableTracks: [],
                     vueCanvas: null,
