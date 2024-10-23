@@ -119,6 +119,14 @@ textarea {
     font-family: sans-serif;
 }
 
+#Disclaimer {
+    text-align: left;
+    background-color:lightgray;
+    font-size: 16px;
+    margin: 10px auto;
+    font-family: sans-serif;
+}
+
 #canvasContainer {
     width: 810px;
     height: 610px;
@@ -131,4 +139,14 @@ textarea {
 
 tone-play-toggle {
     margin-top: 10px;
+}
+
+#toggleButton {
+    position: relative;
+    bottom: 10px; /* moves the toggle button at the bottom of your div */
+    left: 5%;
+    background-color: lightblue;
+    border-radius: 3px;
+    padding: 5px;
+    cursor:pointer;
 }

@@ -9,7 +9,7 @@
 <html>
 
 <head>
-    <title>Midi-estro</title>
+    <title>Midiestro</title>
     <!-- 
     <script src="https://unpkg.com/vue@2.6.12/dist/vue.min.js"></script>
     <script type="text/javascript" src="https://unpkg.com/tone@latest/build/Tone.js"></script>
@@ -30,7 +30,8 @@
 
 <body>
     <div id="toneContent">
-        <div id="Description">
+        <div id="Disclaimer" class="bordered">
+            <h2>Disclaimer</h2>
             <p>
                 This page is a work in progress.  I am trying to build a musical typing game, where you can take a midi file and try to match the notes played on your keyboard.
             </p>
@@ -41,9 +42,18 @@
                 Also it would be nice to work on the UI / UX.
             </p>        
             <p>
-                You can find some midi files to download and try out at <a href="https://bbloomf.github.io/lilypond-songs">https://bbloomf.github.io/lilypond-songs</a>" or <a href="https://onlinesequencer.net/sequences">https://onlinesequencer.net/sequences</a>
+                You can find some midi files to download and try out at:
+                <ul>
+                    <li>
+                        <a href="https://bbloomf.github.io/lilypond-songs">https://bbloomf.github.io/lilypond-songs</a>
+                    </li>
+                    <li>
+                        <a href="https://onlinesequencer.net/sequences">https://onlinesequencer.net/sequences</a>
+                    </li>
+                </ul>
             </p>
         </div>
+        <button id="toggleButton" onclick="toggleElementById('Disclaimer')">Toggle Disclaimer</button>
         <div id="FileDrop">
             <div id="Text">
                 Drop a midi file here
@@ -243,7 +253,8 @@
             var invertedKeyNoteMap = songNoteRenderer.invertKeyNoteMap(app.selectedKeyNoteMap.keyNoteMap);
             playing = !playing;
             if (playing && currentMidi) {
-                
+                const containerElement = document.getElementById("canvasContainer");
+                containerElement.scrollIntoView({ behavior: "smooth" });
                 const now = Tone.now() - currentStart;
 
                 const synth = new Tone.PolySynth(Tone.Synth, {
