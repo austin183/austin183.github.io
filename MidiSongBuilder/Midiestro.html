@@ -87,7 +87,7 @@
         <div id="trackOptions">
             <label for="trackSelect">Select Track to play</label>
             <select id="trackSelect" v-model="selectedTrack" class="pure-input-rounded" v-on:change="renderSongNotes()">
-                <option v-for="(item, key, index) in availableTracks" :value="item">{{item}}</option>
+                <option v-for="(item, key, index) in availableTracks" :value="item">{{item.name}} ({{ item.notes.length }} notes)</option>
             </select>
         </div>     
         <button id="tonePlayToggle" onclick="togglePlay()" disabled>Play</button>
