@@ -26,6 +26,7 @@
     <script src="keyNoteMaps.js"></script>
     <script src="SongNoteRenderer.js"></script>
     <script src="keyRenderInfo.js"></script>
+    <script src="VisibleFieldFilterer.js"></script>
 </head>
 
 <body>
@@ -111,6 +112,7 @@
         var synthKeyPlayer = getSynthKeyPlayer();
         var songNoteRenderer = getSongNoteRenderer();
         var toneHelper = getToneHelper();
+        var visibleFieldFilterer = getVisibleFieldFilterer();
         var synthMap = {};
         const synthArray = [];  //Holds all the available synths
         const pressedKeys = {}; //Holds which keys are pressed down on the keyboard
@@ -294,10 +296,19 @@
                     });
                 });
                 playIntervalId = setInterval(() => {
-                    const intervalNow = Tone.now() - startTime - delay;
-                    app.renderedNotesPlaying = songNoteRenderer.renderNotesPlaying(app.notesCanvas, app.selectedTrack.notes, invertedKeyNoteMap, keyRenderInfo, intervalNow);
+                    const intervalNow = Tone.now() - startTime - delay;                                        
+                    //Set the visible field to the next 10 seconds of the song
+                    var futureLimit = intervalNow + 10;
+                    var bufferFutureLimit = intervalNow + 20;
+                    var pastLimit = intervalNow - 5; 
+                    
+                    if(debugPage == true){
+                        app.renderedNotesPlaying = songNoteRenderer.renderNotesPlaying(app.notesCanvas, app.selectedTrack.notes, invertedKeyNoteMap, keyRenderInfo, intervalNow);
+                    }                   
+                    
+                    var visibleField = visibleFieldFilterer.filterToVisibleField(app.selectedTrack.notes, pastLimit, bufferFutureLimit, futureLimit, intervalNow, invertedKeyNoteMap, app.selectedKeyCount);
                     app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
-                    songNoteRenderer.renderNotesPlayingForCanvas(app.notesCanvas, app.vueCanvas, app.selectedTrack.notes, invertedKeyNoteMap, keyRenderInfo, intervalNow, app.selectedKeyCount);
+                    songNoteRenderer.renderNotesPlayingForCanvas(app.notesCanvas, app.vueCanvas, visibleField, keyRenderInfo, intervalNow);
                 }, 20);
                 
             } else {
