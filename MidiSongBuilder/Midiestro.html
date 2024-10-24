@@ -129,7 +129,6 @@
         var defaultSongNotes = "";
         var defaultSongNotesOnKeyMap = "";
         var defaultFMSynthParams = toneHelper.getDefaultFMSynthParams();
-        var currentStart = 0;
 
         //Disposes of existing synths and creates synths based on FMSynth options
         //First call uses the default
@@ -273,35 +272,37 @@
             if (playing && currentMidi) {
                 const containerElement = document.getElementById("canvasContainer");
                 containerElement.scrollIntoView({ behavior: "smooth" });
-                const now = Tone.now() - currentStart;
+                const startTime = Tone.now();
 
-                const synth = new Tone.PolySynth(Tone.Synth, {
-                    envelope: {
-                        attack: 0.02,
-                        decay: 0.1,
-                        sustain: 0.3,
-                        release: 1,
-                    },
-                }).toDestination();
-                synths.push(synth);
-                //schedule all of the events
-                app.selectedTrack.notes.forEach((note) => {
-                    synth.triggerAttackRelease(
-                        note.name,
-                        note.duration,
-                        note.time + now,
-                        note.velocity
-                    );
+                currentMidi.tracks.forEach((track) => {
+                    //create a synth for each track
+                    const synth = new Tone.PolySynth(Tone.Synth, {
+                        envelope: {
+                            attack: 0.02,
+                            decay: 0.1,
+                            sustain: 0.3,
+                            release: 1,
+                        },
+                    }).toDestination();
+                    synths.push(synth);
+                    //schedule all of the events
+                    track.notes.forEach((note) => {
+                        synth.triggerAttackRelease(
+                            note.name,
+                            note.duration,
+                            note.time + startTime,
+                            note.velocity
+                        );
+                    });
                 });
                 playIntervalId = setInterval(() => {
-                    const intervalNow = Tone.now() - currentStart;
+                    const intervalNow = Tone.now() - startTime;
                     app.renderedNotesPlaying = songNoteRenderer.renderNotesPlaying(app.notesCanvas, app.selectedTrack.notes, invertedKeyNoteMap, keyRenderInfo, intervalNow);
                     app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
                     songNoteRenderer.renderNotesPlayingForCanvas(app.notesCanvas, app.vueCanvas, app.selectedTrack.notes, invertedKeyNoteMap, keyRenderInfo, intervalNow, app.selectedKeyCount);
                 }, 20);
                 
             } else {
-                currentStart = Tone.now();
                 Tone.Transport.stop();
                 Tone.Transport.position = 0;
                 Tone.Transport.cancel();
@@ -365,7 +366,7 @@
                 var renderedSongNotesOnKeyMap = "";
                 writeLog("selectedSongNote " + app.selectedSongNotes);
                 var song = app.selectedTrack.notes;
-                writeLog(song);
+                writeLog(JSON.stringify(song));
                 var renderedNotes = songNoteRenderer.renderSongNotes(song, app.selectedKeyNoteMap.keyNoteMap);
                 
                 app.songNotes = renderedNotes.renderedSongNotes;

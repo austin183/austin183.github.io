@@ -24,9 +24,9 @@ function getSongNoteRenderer(){
                 //The height of the border around the letter
                 border: canvasNote.time > now ? canvasNote.duration * maxSecondHeight : (canvasNote.time + canvasNote.duration - now) * maxSecondHeight,
                 //The horizontal position of the letter, based on where the letter is on the keyboard
-                x: (keyRenderInfo[canvasNote.letter].column * maxCharacterWidth) + borderWidthHalf,
+                x: Math.floor((keyRenderInfo[canvasNote.letter].column * maxCharacterWidth) + borderWidthHalf),
                 //The vertial position of the letter, based on how far away it is from now
-                y: maxHeight - ((canvasNote.time - now > 0 ? canvasNote.time - now: 0) * (maxSecondHeight + 1))
+                y: Math.floor(maxHeight - ((canvasNote.time - now > 0 ? canvasNote.time - now: 0) * (maxSecondHeight + 1)))
             };
 
         },
@@ -51,11 +51,13 @@ function getSongNoteRenderer(){
             var borderHeight = noteDrawInstructions.border; // The border should be from top to bottom, so we use the border value as height
         
             // Draw the border above the note
+            var leftBorder = Math.floor(borderOffset - borderWidthHalf);
+            var rightBorder = Math.floor(borderOffset + borderWidthHalf);
             ctx.beginPath();
-            ctx.moveTo(borderOffset - borderWidthHalf, y); // Starting point a bit left of the letter
-            ctx.lineTo(borderOffset + borderWidthHalf, y); // Ending point a bit right of the letter
-            ctx.lineTo(borderOffset + borderWidthHalf, y - borderHeight); // Move up to form the border
-            ctx.lineTo(borderOffset - borderWidthHalf, y - borderHeight); // Move back down
+            ctx.moveTo(leftBorder, y); // Starting point a bit left of the letter
+            ctx.lineTo(rightBorder, y); // Ending point a bit right of the letter
+            ctx.lineTo(rightBorder, y - borderHeight); // Move up to form the border
+            ctx.lineTo(leftBorder, y - borderHeight); // Move back down
             ctx.closePath();
             ctx.stroke();
         }        
