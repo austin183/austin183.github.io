@@ -26,8 +26,8 @@
     <script src="MyComponents/keyNoteMaps.js"></script>
     <script src="MyComponents/SongNoteRenderer.js"></script>
     <script src="MyComponents/keyRenderInfo.js"></script>
-    <script src="VisibleFieldFilterer.js"></script>
-    
+    <script src="MyComponents/VisibleFieldFilterer.js"></script>
+    <script src="MyComponents/ScoreKeeper.js"></script>
 </head>
 
 <body>
@@ -91,8 +91,9 @@
             <select id="trackSelect" v-model="selectedTrack" class="pure-input-rounded" v-on:change="renderSongNotes()">
                 <option v-for="(item, key, index) in availableTracks" :value="item">{{item.name}} ({{ item.notes.length }} notes, starts at {{ item.notes[0].time }})</option>
             </select>
-        </div>     
+        </div>
         <button id="tonePlayToggle" onclick="togglePlay()" disabled>Play</button>
+        <span>Score: {{ score }}</span>
         <div id="canvasContainer" class="bordered">
             <canvas id="notesCanvas"></canvas>
         </div>   
@@ -113,7 +114,7 @@
         var synthKeyPlayer = getSynthKeyPlayer();
         var songNoteRenderer = getSongNoteRenderer();
         var toneHelper = getToneHelper();
-        var visibleFieldFilterer = getVisibleFieldFilterer();
+        var visibleFieldFilterer = getVisibleFieldFilterer();        
         var synthMap = {};
         const synthArray = [];  //Holds all the available synths
         const pressedKeys = {}; //Holds which keys are pressed down on the keyboard
@@ -271,6 +272,7 @@
             var invertedKeyNoteMap = songNoteRenderer.invertKeyNoteMap(app.selectedKeyNoteMap.keyNoteMap);
             playing = !playing;
             if (playing && currentMidi) {
+                var scoreKeeper = getScoreKeeper();
                 const containerElement = document.getElementById("canvasContainer");
                 containerElement.scrollIntoView({ behavior: "smooth" });
                 const startTime = Tone.now();
@@ -308,6 +310,8 @@
                     }                   
                     
                     var visibleField = visibleFieldFilterer.filterToVisibleField(app.selectedTrack.notes, pastLimit, bufferFutureLimit, futureLimit, intervalNow, invertedKeyNoteMap, app.selectedKeyCount);
+                    var currentScore = scoreKeeper.calculateNewScore(visibleField, pressedKeys, intervalNow);
+                    app.score = currentScore.total;
                     app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
                     songNoteRenderer.renderNotesPlayingForCanvas(app.notesCanvas, app.vueCanvas, visibleField, keyRenderInfo, intervalNow);
                 }, 20);
@@ -354,7 +358,8 @@
                     selectedTrack: "",
                     availableTracks: [],
                     vueCanvas: null,
-                    notesCanvas: null
+                    notesCanvas: null,
+                    score: 0
                 },
                 mounted(){
                     this.notesCanvas = document.getElementById("notesCanvas")
