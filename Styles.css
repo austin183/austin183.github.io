@@ -70,6 +70,7 @@ div.app {
     border: 2px dashed black;
     color: black;
     margin: 20px auto;
+    background-color: #9fa3d3;
 }
 
 #FileDrop.Hover {
@@ -94,7 +95,7 @@ div.app {
     left: 0px;
     top: 50%;
     transform: translate(0, -50%);
-    text-align: center;
+    text-align: center;    
 }
 
 textarea {
@@ -120,9 +121,9 @@ textarea {
     font-family: sans-serif;
 }
 
-#Disclaimer {
+#Instructions {
     text-align: left;
-    background-color:lightgray;
+    background-color:lightblue;
     font-size: 16px;
     margin: 10px auto;
     font-family: sans-serif;

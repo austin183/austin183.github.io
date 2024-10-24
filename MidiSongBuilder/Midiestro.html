@@ -30,19 +30,16 @@
 
 <body>
     <div id="toneContent">
-        <div id="Disclaimer" class="bordered">
-            <h2>Disclaimer</h2>
+        <div id="Instructions" class="bordered">
+            <h2>Instructions</h2>
             <p>
                 This page is a work in progress.  I am trying to build a musical typing game, where you can take a midi file and try to match the notes played on your keyboard.
             </p>
             <p>
-                There are definitely bugs in here that I am trying to figure out how to handle like toggling play appropriately, and there are some QoL improvements I want to make, like adjusting the buffer time after pressing the play button and the first note of the song starting.  The notes play at different speeds depending on the machine running the site as well.  I need to figure out how to normalize the timings.  The play back also slows down when I start playing keys along with the notes.  I need to work on optimizations and timing.  I made it to real game development problems!
-            </p>
+                As a simple song to start with, here is a place to download <a href="https://onlinesequencer.net/4101480#">Mary Had a Little Lamb</a> .  On the website, choose "Download MIDI"
+            </p>    
             <p>
-                Also it would be nice to work on the UI / UX.  Since this is a typing game, do I want to make the user hold down keys for longer notes, or do I want to encourage touch typing?
-            </p>        
-            <p>
-                You can find some midi files to download and try out at:
+                You can find more midi files to download and try out at:
                 <ul>
                     <li>
                         <a href="https://bbloomf.github.io/lilypond-songs">https://bbloomf.github.io/lilypond-songs</a>
@@ -53,10 +50,10 @@
                 </ul>
             </p>
         </div>
-        <button id="toggleButton" onclick="toggleElementById('Disclaimer')">Toggle Disclaimer</button>
+        <button id="toggleButton" onclick="toggleElementById('Instructions')">Toggle Instructions</button>
         <div id="FileDrop">
             <div id="Text">
-                Drop a midi file here
+                Drop a midi file here, or click to select a file from the wizard.
             </div>
             <input type="file" accept="audio/midi" />
         </div>
@@ -265,6 +262,7 @@
         const synths = [];
         var playing = false;
         var playIntervalId = {};
+        const delay = 3; //This is to give the player a chance to prepare before the first note plays
 
         function togglePlay() {
             var invertedKeyNoteMap = songNoteRenderer.invertKeyNoteMap(app.selectedKeyNoteMap.keyNoteMap);
@@ -290,13 +288,13 @@
                         synth.triggerAttackRelease(
                             note.name,
                             note.duration,
-                            note.time + startTime,
+                            note.time + startTime + delay,
                             note.velocity
                         );
                     });
                 });
                 playIntervalId = setInterval(() => {
-                    const intervalNow = Tone.now() - startTime;
+                    const intervalNow = Tone.now() - startTime - delay;
                     app.renderedNotesPlaying = songNoteRenderer.renderNotesPlaying(app.notesCanvas, app.selectedTrack.notes, invertedKeyNoteMap, keyRenderInfo, intervalNow);
                     app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
                     songNoteRenderer.renderNotesPlayingForCanvas(app.notesCanvas, app.vueCanvas, app.selectedTrack.notes, invertedKeyNoteMap, keyRenderInfo, intervalNow, app.selectedKeyCount);
