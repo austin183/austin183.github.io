@@ -295,7 +295,7 @@
                 });
                 playIntervalId = setInterval(() => {
                     const intervalNow = Tone.now() - currentStart;
-                    app.renderedNotesPlaying = songNoteRenderer.renderNotesPlaying(app.selectedTrack.notes, invertedKeyNoteMap, keyRenderInfo, intervalNow);
+                    app.renderedNotesPlaying = songNoteRenderer.renderNotesPlaying(app.notesCanvas, app.selectedTrack.notes, invertedKeyNoteMap, keyRenderInfo, intervalNow);
                     app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
                     songNoteRenderer.renderNotesPlayingForCanvas(app.notesCanvas, app.vueCanvas, app.selectedTrack.notes, invertedKeyNoteMap, keyRenderInfo, intervalNow, app.selectedKeyCount);
                 }, 20);

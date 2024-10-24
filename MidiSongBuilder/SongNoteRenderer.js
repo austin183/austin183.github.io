@@ -16,12 +16,16 @@ function getSongNoteRenderer(){
             var maxCharacterWidth = maxWidth / 10;
             //We have to cover 10 seconds with the height
             var maxSecondHeight = maxHeight / 10;
+            var borderWidthHalf = (canvas.width / 20) - 3;
 
             return {
+                //The letter to display
                 letter: canvasNote.letter,
+                //The height of the border around the letter
                 border: canvasNote.time > now ? canvasNote.duration * maxSecondHeight : (canvasNote.time + canvasNote.duration - now) * maxSecondHeight,
-                //(canvasNote.time + canvasNote.duration - now) * maxSecondHeight,
-                x: (keyRenderInfo[canvasNote.letter].column * (maxCharacterWidth + 1)),
+                //The horizontal position of the letter, based on where the letter is on the keyboard
+                x: (keyRenderInfo[canvasNote.letter].column * maxCharacterWidth) + borderWidthHalf,
+                //The vertial position of the letter, based on how far away it is from now
                 y: maxHeight - ((canvasNote.time - now > 0 ? canvasNote.time - now: 0) * (maxSecondHeight + 1))
             };
 
@@ -29,14 +33,15 @@ function getSongNoteRenderer(){
         drawNote: function(canvas, ctx, noteDrawInstructions) {
             var x = noteDrawInstructions.x;
             var y = noteDrawInstructions.y;
-            var borderWidthHalf = canvas.width / 10 / 2;
+            var borderWidthHalf = (canvas.width / 20) - 3;
+            var borderOffset = x + (borderWidthHalf - (borderWidthHalf / 2) );
         
             // Set font style and fill color for the letter
             ctx.font = "18px Georgia";
             ctx.fillStyle = "blue";
         
             // Draw the note letter at the calculated position
-            ctx.fillText(noteDrawInstructions.letter, x, y - 5); // Assuming the height of the letter is about 20 pixels
+            ctx.fillText(noteDrawInstructions.letter, x, y - 2); // Assuming the height of the letter is about 20 pixels
         
             // Set border style and fill color
             ctx.strokeStyle = "blue";
@@ -47,10 +52,10 @@ function getSongNoteRenderer(){
         
             // Draw the border above the note
             ctx.beginPath();
-            ctx.moveTo(x - borderWidthHalf, y); // Starting point a bit left of the letter
-            ctx.lineTo(x + borderWidthHalf, y); // Ending point a bit right of the letter
-            ctx.lineTo(x + borderWidthHalf, y - borderHeight); // Move up to form the border
-            ctx.lineTo(x - borderWidthHalf, y - borderHeight); // Move back down
+            ctx.moveTo(borderOffset - borderWidthHalf, y); // Starting point a bit left of the letter
+            ctx.lineTo(borderOffset + borderWidthHalf, y); // Ending point a bit right of the letter
+            ctx.lineTo(borderOffset + borderWidthHalf, y - borderHeight); // Move up to form the border
+            ctx.lineTo(borderOffset - borderWidthHalf, y - borderHeight); // Move back down
             ctx.closePath();
             ctx.stroke();
         }        
@@ -86,7 +91,7 @@ function getSongNoteRenderer(){
             };
         },
         //Need to rethink this with canvas
-        renderNotesPlaying: function(song, invertedKeyNoteMap, keyRenderInfo, now){
+        renderNotesPlaying: function(canvas, song, invertedKeyNoteMap, keyRenderInfo, now){
             var notesToPlay = "";
             for(var i = 0; i < song.length; i++){
                 var note = song[i];
@@ -107,7 +112,15 @@ function getSongNoteRenderer(){
                 }
                 var keyNote = invertedKeyNoteMap[note.name];
                 if(keyNote){
-                    notesToPlay += " " + keyNote + " (" + note.time + ") (" + (note.time + note.duration) + ") ";
+                    var canvasNote = {
+                        duration : note.duration,
+                        time : note.time,
+                        letter : keyNote,
+                        id: note.name + "_" + note.time
+                    };
+                    var noteDrawInstructions = renderer.getNoteDrawInstructions(canvas, canvasNote, now, keyRenderInfo);
+                    notesToPlay += " " + keyNote + " (time: " + note.time + ") (end: " + (note.time + note.duration) + ") " + 
+                        "(x: " + noteDrawInstructions.x + ") (y: " + noteDrawInstructions.y + ")";
                 }
             }
             return notesToPlay;
@@ -127,14 +140,15 @@ function getSongNoteRenderer(){
                 }
                 //Build dataset for visible field
                 else if(bufferFutureLimit >= noteEnd){
-                    if(invertedKeyNoteMap[note.name] == null){
+                    var keyNote = invertedKeyNoteMap[note.name];
+                    if(!keyNote){
                         continue;
                     }
 
                     var canvasNote = {
                         duration : note.duration,
                         time : note.time,
-                        letter : invertedKeyNoteMap[note.name],
+                        letter : keyNote,
                         id: note.name + "_" + note.time
                     };
                     visibleField.push(canvasNote);
