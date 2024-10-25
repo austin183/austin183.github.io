@@ -66,6 +66,23 @@ function getScoreKeeper(){
             }
             previousPressedKeys = newPressedKeys;
             return score;
+        },
+        getCounts: function(){
+            var counts = {
+                goodCount: 0,
+                okCount: 0
+            };
+            for(var key in score.keyScores){
+                var keyScore = score.keyScores[key];
+                switch (keyScore.tag){
+                    case 'good':
+                        counts.goodCount++;
+                        break;
+                    case 'ok':
+                        counts.okCount++;
+                }
+            }
+            return counts;
         }
     };
 }

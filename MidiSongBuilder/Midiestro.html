@@ -122,7 +122,7 @@
         
 
         <button id="tonePlayToggle" onclick="togglePlay()" disabled>Play</button>
-        <span>Score: {{ score }}</span>
+        <span>Score: [{{ score }}]  Good [{{ goodCount }}] Ok [{{ okCount }}]</span>
         <div id="canvasContainer" class="bordered">
             <canvas id="notesCanvas"></canvas>
         </div>   
@@ -357,6 +357,9 @@
                     var visibleField = visibleFieldFilterer.filterToVisibleField(app.selectedTrack.notes, app.minNoteDistance, app.minDuration, pastLimit, bufferFutureLimit, futureLimit, intervalNow, invertedKeyNoteMap, app.selectedKeyCount);
                     var currentScore = scoreKeeper.calculateNewScore(visibleField, pressedKeys, intervalNow);
                     app.score = currentScore.total;
+                    var counts = scoreKeeper.getCounts();
+                    app.goodCount = counts.goodCount;
+                    app.okCount = counts.okCount;
                     if(debugPage == true){
                         app.renderedNotesPlaying = songNoteRenderer.renderNotesPlaying(app.notesCanvas, app.selectedTrack.notes, currentScore, invertedKeyNoteMap, keyRenderInfo, intervalNow);
                     }
@@ -408,6 +411,8 @@
                     vueCanvas: null,
                     notesCanvas: null,
                     score: 0,
+                    goodCount: 0,
+                    okCount: 0,
                     minDuration: .1,
                     minNoteDistance: .4
                 },
