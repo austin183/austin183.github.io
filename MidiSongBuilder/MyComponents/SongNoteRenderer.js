@@ -1,6 +1,6 @@
 function getSongNoteRenderer(){
     var renderer = {
-        getNoteDrawInstructions: function(canvas, canvasNote, now, keyRenderInfo){
+        getNoteDrawInstructions: function(canvas, canvasNote, currentScore, now, keyRenderInfo){
             /*
             Should draw the character closer to the bottom when the `canvasNote.time` 
             is closer to `now`. The character should have a border that stretches above 
@@ -17,6 +17,19 @@ function getSongNoteRenderer(){
             //We have to cover 10 seconds with the height
             var maxSecondHeight = maxHeight / 10;
             var borderWidthHalf = (canvas.width / 20) - 3;
+            var color = "blue";
+            if(currentScore.keyScores[canvasNote.id]){
+                var tag = currentScore.keyScores[canvasNote.id].tag;
+                if(tag == "good"){
+                    color = "green";
+                }
+                else if(tag == "ok"){
+                    color = "yello"
+                }
+                else if(tag == "bad"){
+                    color = "red";
+                }
+            }
 
             return {
                 //The letter to display
@@ -26,7 +39,8 @@ function getSongNoteRenderer(){
                 //The horizontal position of the letter, based on where the letter is on the keyboard
                 x: Math.floor((keyRenderInfo[canvasNote.letter].column * maxCharacterWidth) + borderWidthHalf),
                 //The vertial position of the letter, based on how far away it is from now
-                y: Math.floor(maxHeight - ((canvasNote.time - now > 0 ? canvasNote.time - now: 0) * (maxSecondHeight + 1)))
+                y: Math.floor(maxHeight - ((canvasNote.time - now > 0 ? canvasNote.time - now: 0) * (maxSecondHeight + 1))),
+                color: color
             };
 
         },
@@ -38,13 +52,13 @@ function getSongNoteRenderer(){
         
             // Set font style and fill color for the letter
             ctx.font = "18px Georgia";
-            ctx.fillStyle = "blue";
+            ctx.fillStyle = noteDrawInstructions.color;
         
             // Draw the note letter at the calculated position
             ctx.fillText(noteDrawInstructions.letter, x, y - 2); // Assuming the height of the letter is about 20 pixels
         
             // Set border style and fill color
-            ctx.strokeStyle = "blue";
+            ctx.strokeStyle = noteDrawInstructions.color;
             ctx.lineWidth = 1;
         
             // Calculate border coordinates
@@ -93,7 +107,7 @@ function getSongNoteRenderer(){
             };
         },
         //Need to rethink this with canvas
-        renderNotesPlaying: function(canvas, song, invertedKeyNoteMap, keyRenderInfo, now){
+        renderNotesPlaying: function(canvas, song, currentScore, invertedKeyNoteMap, keyRenderInfo, now){
             var notesToPlay = "";
             for(var i = 0; i < song.length; i++){
                 var note = song[i];
@@ -120,18 +134,18 @@ function getSongNoteRenderer(){
                         letter : keyNote,
                         id: note.name + "_" + note.time
                     };
-                    var noteDrawInstructions = renderer.getNoteDrawInstructions(canvas, canvasNote, now, keyRenderInfo);
+                    var noteDrawInstructions = renderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, keyRenderInfo);
                     notesToPlay += " " + keyNote + " (time: " + note.time + ") (end: " + (note.time + note.duration) + ") " + 
                         "(x: " + noteDrawInstructions.x + ") (y: " + noteDrawInstructions.y + ")";
                 }
             }
             return notesToPlay;
         },
-        renderNotesPlayingForCanvas: function(canvas, ctx, visibleField, keyRenderInfo, now){
+        renderNotesPlayingForCanvas: function(canvas, ctx, visibleField, currentScore, keyRenderInfo, now){
             //Render the visibleField to the canvas
             visibleField.forEach(canvasNote => {                
                 //Create new note and calculate position for it
-                var noteDrawInstructions = renderer.getNoteDrawInstructions(canvas, canvasNote, now, keyRenderInfo);
+                var noteDrawInstructions = renderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, keyRenderInfo);
                 renderer.drawNote(canvas, ctx, noteDrawInstructions);                
             });
         }

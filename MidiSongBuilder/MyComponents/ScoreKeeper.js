@@ -1,6 +1,7 @@
 function getScoreKeeper(){
     var goodRange = .1; //within 10 milliseconds of the note.time is good
-    var okRange = .2; //within 20 milliseconds of the note.time is ok
+    var okRange = .4; //within 40 milliseconds of the note.time is ok
+    var badRange = .9; //within 
     var goodPoints = 100;
     var okPoints = 50;
     var score = {
@@ -25,11 +26,11 @@ function getScoreKeeper(){
                 newPressedKeys[key] = true;
                 var closestNoteId = "";
                 var closestNoteTime = 999;
-                if(previousPressedKeys[key]){
+                if(!previousPressedKeys[key]){
                     for(var i = 0; i < visibleField.length; i++){
                         var canvasNote = visibleField[i];
                         if(canvasNote.letter == key){
-                            var distanceToNow = canvasNote.time > now ? canvasNote.time - now : now - canvasNote.time;
+                            var distanceToNow = canvasNote.time - now;
                             if(Math.abs(distanceToNow) < Math.abs(closestNoteTime) ){
                                 closestNoteTime = distanceToNow;
                                 closestNoteId = canvasNote.id;
@@ -42,11 +43,23 @@ function getScoreKeeper(){
                     if(!score.keyScores[closestNoteId]){                    
                         if(closestNoteTime <= goodRange){
                             score.total += goodPoints;
-                            score.keyScores[closestNoteId] = goodPoints;
+                            score.keyScores[closestNoteId] = {
+                                points: goodPoints,
+                                tag: "good"
+                            };
                         }
                         else if(closestNoteTime <= okRange){
                             score.total += okPoints;
-                            score.keyScores[closestNoteId] = okPoints;
+                            score.keyScores[closestNoteId] = {
+                                points: okPoints,
+                                tag: "ok"
+                            };
+                        }
+                        else if(closestNoteTime <= badRange){
+                            score.keyScores[closestNoteId] = {
+                                points: 0,
+                                tag: "bad"
+                            };
                         }
                     }
                 }

@@ -344,16 +344,15 @@
                     var bufferFutureLimit = intervalNow + 20;
                     var pastLimit = intervalNow - 5; 
                     
-                    if(debugPage == true){
-                        app.renderedNotesPlaying = songNoteRenderer.renderNotesPlaying(app.notesCanvas, app.selectedTrack.notes, invertedKeyNoteMap, keyRenderInfo, intervalNow);
-                    }                   
-                    
                     var visibleField = visibleFieldFilterer.filterToVisibleField(app.selectedTrack.notes, app.minDuration, pastLimit, bufferFutureLimit, futureLimit, intervalNow, invertedKeyNoteMap, app.selectedKeyCount);
                     var currentScore = scoreKeeper.calculateNewScore(visibleField, pressedKeys, intervalNow);
                     app.score = currentScore.total;
+                    if(debugPage == true){
+                        app.renderedNotesPlaying = songNoteRenderer.renderNotesPlaying(app.notesCanvas, app.selectedTrack.notes, currentScore, invertedKeyNoteMap, keyRenderInfo, intervalNow);
+                    }
                     app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
-                    songNoteRenderer.renderNotesPlayingForCanvas(app.notesCanvas, app.vueCanvas, visibleField, keyRenderInfo, intervalNow);
-                }, 20);
+                    songNoteRenderer.renderNotesPlayingForCanvas(app.notesCanvas, app.vueCanvas, visibleField, currentScore, keyRenderInfo, intervalNow);
+                }, 10);
                 
             } else {
                 Tone.Transport.stop();
