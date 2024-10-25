@@ -24,7 +24,7 @@ function getSongNoteRenderer(){
                     color = "green";
                 }
                 else if(tag == "ok"){
-                    color = "yello"
+                    color = "yellow"
                 }
                 else if(tag == "bad"){
                     color = "red";
