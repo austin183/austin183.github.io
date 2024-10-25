@@ -20,9 +20,9 @@ div.bordered {
     border: 1pt;
     border-color: black;
     border-style: solid;
-    margin-left: 3px;
-    margin-right: 3px;
-    margin-top: 3px;
+    margin-left: 5px;
+    margin-right: 5px;
+    margin-top: 5px;
 }
 
 div.centered{
@@ -151,4 +151,8 @@ tone-play-toggle {
     border-radius: 3px;
     padding: 5px;
     cursor:pointer;
+}
+
+#minDuration {
+    width: 95%;
 }

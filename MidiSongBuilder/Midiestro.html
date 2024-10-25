@@ -75,23 +75,42 @@
         <div id="maxKeyCount" class="side-by-side">
             <div class="bordered">
                 <label for="maxKeyCountRadio">Max Keys at Once</label>
-                <input type="radio" id="keyCount1" name="maxKeyCountRadio" v-model="selectedKeyCount" value="1" checked>
+                <input type="radio" id="keyCount1" name="maxKeyCountRadio" v-model="selectedKeyCount" value="1" checked></input>
                 <label for="keyCount1">1</label>
-                <input type="radio" id="keyCount2" name="maxKeyCountRadio" v-model="selectedKeyCount" value="2">
+                <input type="radio" id="keyCount2" name="maxKeyCountRadio" v-model="selectedKeyCount" value="2"></input>
                 <label for="keyCount2">2</label>
-                <input type="radio" id="keyCount3" name="maxKeyCountRadio" v-model="selectedKeyCount" value="3">
+                <input type="radio" id="keyCount3" name="maxKeyCountRadio" v-model="selectedKeyCount" value="3"></input>
                 <label for="keyCount3">3</label>
             </div>
             <div class="bordered">
                 This is how many keys will appear to match at one point in time. (The browser will sometimes not recognize more than 2 keys at once, so the 3rd option could appear not to work with all key combinations.)
             </div>        
         </div>
-        <div id="trackOptions">
-            <label for="trackSelect">Select Track to play</label>
-            <select id="trackSelect" v-model="selectedTrack" class="pure-input-rounded" v-on:change="renderSongNotes()">
-                <option v-for="(item, key, index) in availableTracks" :value="item">{{item.name}} ({{ item.notes.length }} notes, starts at {{ item.notes[0].time }})</option>
-            </select>
+        <div id="trackOptionConfig" class="side-by-side">
+            <div class="bordered">
+                <label for="trackSelect">Select Track to play</label>
+                <select id="trackSelect" v-model="selectedTrack" class="pure-input-rounded" v-on:change="renderSongNotes()">
+                    <option v-for="(item, key, index) in availableTracks" :value="item">{{item.name}} ({{ item.notes.length }} notes, starts at {{ item.notes[0].time }})</option>
+                </select>
+            </div>
+            <div class="bordered">
+                If you want to play the parts of a particular track, you can select an individual one to display here.  Otherwise notes from all tracks will be used to display.
+            </div>
         </div>
+
+        <div id="minDurationConfig" class="side-by-side">
+            <div class="bordered">
+                <div id="minDuration">
+                    <label for="minDuration">Min Note Duration (in seconds) {{minDuration}}</label>
+                    <input type="range" id="minDuration" v-model="minDuration" min="0" max="1" step=".01"></input>
+                </div>
+            </div>
+            <div class="bordered">
+                This sets which notes will be considered playable based on how long they appear on the screen.  the smaller the value, the more notes will show up to play.
+            </div>
+        </div>
+        
+
         <button id="tonePlayToggle" onclick="togglePlay()" disabled>Play</button>
         <span>Score: {{ score }}</span>
         <div id="canvasContainer" class="bordered">
@@ -234,6 +253,7 @@
             //read the file
             const reader = new FileReader();
             reader.onload = function (e) {
+                app.availableTracks = [];
                 const midi = new Midi(e.target.result);
                 var trimmedMidi = {"tracks": []};
                 var counter = 0;
@@ -249,6 +269,7 @@
                             "name" : trackName,
                             "notes" : track.notes
                         }
+                        app.availableTracks.push(trimmedTrack);
                         trimmedMidi.tracks.push(trimmedTrack);
                     }
                 });
@@ -256,11 +277,29 @@
                     .querySelector("#tonePlayToggle")
                     .removeAttribute("disabled");
                 currentMidi = trimmedMidi;
-                app.availableTracks = currentMidi.tracks;
+                var fullNotes = getCombinedTrackNotes(currentMidi.tracks);
+                var fullTrack = {
+                    "name" : "Full Track",
+                    "notes": fullNotes
+                }
+                // Add the fullTrack as the first array element in app.availableTracks
+                app.availableTracks.unshift(fullTrack);
+
                 app.selectedTrack = app.availableTracks[0];
                 renderSongNotes();
             };
             reader.readAsArrayBuffer(file);
+        }
+
+        function getCombinedTrackNotes(tracks){
+            var combinedNotes = [];
+            tracks.forEach(track => {
+                combinedNotes.push(...track.notes);
+            });
+
+            combinedNotes.sort((a, b) => a.time - b.time);
+
+            return combinedNotes;
         }
 
         const synths = [];
@@ -309,7 +348,7 @@
                         app.renderedNotesPlaying = songNoteRenderer.renderNotesPlaying(app.notesCanvas, app.selectedTrack.notes, invertedKeyNoteMap, keyRenderInfo, intervalNow);
                     }                   
                     
-                    var visibleField = visibleFieldFilterer.filterToVisibleField(app.selectedTrack.notes, pastLimit, bufferFutureLimit, futureLimit, intervalNow, invertedKeyNoteMap, app.selectedKeyCount);
+                    var visibleField = visibleFieldFilterer.filterToVisibleField(app.selectedTrack.notes, app.minDuration, pastLimit, bufferFutureLimit, futureLimit, intervalNow, invertedKeyNoteMap, app.selectedKeyCount);
                     var currentScore = scoreKeeper.calculateNewScore(visibleField, pressedKeys, intervalNow);
                     app.score = currentScore.total;
                     app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
@@ -359,7 +398,8 @@
                     availableTracks: [],
                     vueCanvas: null,
                     notesCanvas: null,
-                    score: 0
+                    score: 0,
+                    minDuration: .2
                 },
                 mounted(){
                     this.notesCanvas = document.getElementById("notesCanvas")
