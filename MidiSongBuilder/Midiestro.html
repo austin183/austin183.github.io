@@ -129,7 +129,7 @@
         <div id="notesPlaying">
             <div class="bordered">{{renderedNotesPlaying}}</div>
         </div>
-        <div class="side-by-side">
+        <div class="side-by-side" id="songNoteKeys">
             <div class="bordered">Mapped Keys<br />{{ songNotesOnKeyMap }}</div>
             <div class="bordered">Song Notes<br />{{ songNotes }}</div>
         </div>
@@ -140,6 +140,9 @@
         //The window.location.search field holds everything after the main url
         const queryString = window.location.search;
         const debugPage = queryString == "?debug";
+        if(!debugPage){
+            toggleElementById('songNoteKeys');
+        }
         var synthKeyPlayer = getSynthKeyPlayer();
         var songNoteRenderer = getSongNoteRenderer();
         var toneHelper = getToneHelper();
@@ -430,7 +433,7 @@
         };
 
         function renderSongNotes(){
-            if(currentMidi  && app.selectedTrack !== ""){
+            if(currentMidi  && app.selectedTrack !== "" && debugPage){
                 var invertedKeyNoteMap = songNoteRenderer.invertKeyNoteMap(app.selectedKeyNoteMap.keyNoteMap);
                 var renderedSongNotes = "";
                 var renderedSongNotesOnKeyMap = "";
