@@ -35,7 +35,15 @@
         <div id="Instructions" class="bordered">
             <h2>Instructions</h2>
             <p>
-                This page is a work in progress.  I am trying to build a musical typing game, where you can take a midi file and try to match the notes played on your keyboard.
+                This page is a musical typing game, where you can take a midi file and try to match the notes played on your keyboard for points!
+            </p>
+            <p>
+                To play: 
+                <ul>
+                    <li>Drop a midi file on the panel below.</li>
+                    <li>Press the Play button.</li>
+                    <li>Watch the falling keys, and try to press the key when it gets to the bottom of the game window.</li>
+                </ul>  
             </p>
             <p>
                 As a simple song to start with, here is a place to download <a href="https://onlinesequencer.net/4101480#">Mary Had a Little Lamb</a> .  On the website, choose "Download MIDI"
@@ -61,6 +69,17 @@
         </div>
     </div>
     <div id="app">
+        <div id="trackOptionConfig" class="side-by-side">
+            <div class="bordered">
+                <label for="trackSelect">Select Track to play</label>
+                <select id="trackSelect" v-model="selectedTrack" class="pure-input-rounded" v-on:change="renderSongNotes()">
+                    <option v-for="(item, key, index) in availableTracks" :value="item">{{item.name}} ({{ item.notes.length }} notes, starts at {{ item.notes[0].time }})</option>
+                </select>
+            </div>
+            <div class="bordered">
+                If you want to play the parts of a particular track, you can select an individual one to display here.  Otherwise notes from all tracks will be used to display.
+            </div>
+        </div>
         <div id="keyNoteMapConfigs" class="side-by-side">
             <div class="bordered">
                 <label for="keyNoteMapSelect">Select a Keyboard Layout</label>
@@ -85,18 +104,7 @@
             <div class="bordered">
                 This is how many keys will appear to match at one point in time. (The browser will sometimes not recognize more than 2 keys at once, so the 3rd option could appear not to work with all key combinations.)
             </div>        
-        </div>
-        <div id="trackOptionConfig" class="side-by-side">
-            <div class="bordered">
-                <label for="trackSelect">Select Track to play</label>
-                <select id="trackSelect" v-model="selectedTrack" class="pure-input-rounded" v-on:change="renderSongNotes()">
-                    <option v-for="(item, key, index) in availableTracks" :value="item">{{item.name}} ({{ item.notes.length }} notes, starts at {{ item.notes[0].time }})</option>
-                </select>
-            </div>
-            <div class="bordered">
-                If you want to play the parts of a particular track, you can select an individual one to display here.  Otherwise notes from all tracks will be used to display.
-            </div>
-        </div>
+        </div>        
         <div id="minDurationConfig" class="side-by-side">
             <div class="bordered">
                 <div id="minDuration">
