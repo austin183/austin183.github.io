@@ -1,11 +1,24 @@
 function getVisibleFieldFilterer(){
     return {
-        filterToVisibleField: function(song, minDuration, pastLimit, bufferFutureLimit, futureLimit, now, invertedKeyNoteMap, keyCount) {
+        filterToVisibleField: function(song, minNoteDistance, minDuration, pastLimit, bufferFutureLimit, futureLimit, now, invertedKeyNoteMap, keyCount) {
             var visibleField = [];
+            var defaultPreviousNote = {
+                time: -10,
+                duration: 0
+            };
             for (var i = 0; i < song.length; i++) {
                 var note = song[i];
+                var previousNote = defaultPreviousNote;
+                if(visibleField.length > 0){
+                    previousNote = visibleField[visibleField.length - 1];
+                }                
+                var noteDistance = note.time - (previousNote.time + previousNote.duration);
+                
+                if(noteDistance < minNoteDistance){
+                    continue; //Skipping notes too close to the previous note.
+                }                
                 if(note.duration < minDuration){
-                    continue; //Seeing if I can skip annoying short notes
+                    continue; //Skipping notes that are too short
                 }
                 var noteEnd = note.time + note.duration;
                 //Fast Forward to the section of song playing

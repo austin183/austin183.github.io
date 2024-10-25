@@ -1,7 +1,7 @@
 function getScoreKeeper(){
-    var goodRange = .1; //within 10 milliseconds of the note.time is good
+    var goodRange = .15; //within 10 milliseconds of the note.time is good
     var okRange = .4; //within 40 milliseconds of the note.time is ok
-    var badRange = .9; //within 
+    var badRange = .5; //within 
     var goodPoints = 100;
     var okPoints = 50;
     var score = {

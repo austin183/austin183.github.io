@@ -69,9 +69,7 @@ function getSongNoteRenderer(){
             var rightBorder = Math.floor(borderOffset + borderWidthHalf);
             ctx.beginPath();
             ctx.moveTo(leftBorder, y); // Starting point a bit left of the letter
-            ctx.lineTo(rightBorder, y); // Ending point a bit right of the letter
-            ctx.lineTo(rightBorder, y - borderHeight); // Move up to form the border
-            ctx.lineTo(leftBorder, y - borderHeight); // Move back down
+            ctx.lineTo(rightBorder, y); // Ending point a bit right of the letter            
             ctx.closePath();
             ctx.stroke();
         }        

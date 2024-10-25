@@ -153,6 +153,6 @@ tone-play-toggle {
     cursor:pointer;
 }
 
-#minDuration {
+input.fullRange {
     width: 95%;
 }

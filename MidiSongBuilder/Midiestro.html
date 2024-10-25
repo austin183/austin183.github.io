@@ -97,16 +97,26 @@
                 If you want to play the parts of a particular track, you can select an individual one to display here.  Otherwise notes from all tracks will be used to display.
             </div>
         </div>
-
         <div id="minDurationConfig" class="side-by-side">
             <div class="bordered">
                 <div id="minDuration">
                     <label for="minDuration">Min Note Duration (in seconds) {{minDuration}}</label>
-                    <input type="range" id="minDuration" v-model="minDuration" min="0" max="1" step=".01"></input>
+                    <input type="range" class="fullRange" id="minDuration" v-model="minDuration" min="0" max="1" step=".01"></input>
                 </div>
             </div>
             <div class="bordered">
                 This sets which notes will be considered playable based on how long they appear on the screen.  the smaller the value, the more notes will show up to play.
+            </div>
+        </div>
+        <div id="minNoteDistanceConfig" class="side-by-side">
+            <div class="bordered">
+                <div id="minNoteDistance">
+                    <label for="minNoteDistance">Min Note Distance (in seconds) {{minNoteDistance}}</label>
+                    <input type="range" class="fullRange" id="minNoteDistance" v-model="minNoteDistance" min="0" max="1" step=".01"></input>
+                </div>
+            </div>
+            <div class="bordered">
+                This sets which notes will be considered playable based on how much time is between notes.  the smaller the value, the more notes will show up to play.
             </div>
         </div>
         
@@ -341,10 +351,10 @@
                     const intervalNow = Tone.now() - startTime - delay;                                        
                     //Set the visible field to the next 10 seconds of the song
                     var futureLimit = intervalNow + 10;
-                    var bufferFutureLimit = intervalNow + 20;
-                    var pastLimit = intervalNow - 5; 
+                    var bufferFutureLimit = intervalNow + 60;
+                    var pastLimit = intervalNow - 60; 
                     
-                    var visibleField = visibleFieldFilterer.filterToVisibleField(app.selectedTrack.notes, app.minDuration, pastLimit, bufferFutureLimit, futureLimit, intervalNow, invertedKeyNoteMap, app.selectedKeyCount);
+                    var visibleField = visibleFieldFilterer.filterToVisibleField(app.selectedTrack.notes, app.minNoteDistance, app.minDuration, pastLimit, bufferFutureLimit, futureLimit, intervalNow, invertedKeyNoteMap, app.selectedKeyCount);
                     var currentScore = scoreKeeper.calculateNewScore(visibleField, pressedKeys, intervalNow);
                     app.score = currentScore.total;
                     if(debugPage == true){
@@ -398,7 +408,8 @@
                     vueCanvas: null,
                     notesCanvas: null,
                     score: 0,
-                    minDuration: .2
+                    minDuration: .1,
+                    minNoteDistance: .4
                 },
                 mounted(){
                     this.notesCanvas = document.getElementById("notesCanvas")
@@ -418,7 +429,6 @@
                 var invertedKeyNoteMap = songNoteRenderer.invertKeyNoteMap(app.selectedKeyNoteMap.keyNoteMap);
                 var renderedSongNotes = "";
                 var renderedSongNotesOnKeyMap = "";
-                writeLog("selectedSongNote " + app.selectedSongNotes);
                 var song = app.selectedTrack.notes;
                 writeLog(JSON.stringify(song));
                 var renderedNotes = songNoteRenderer.renderSongNotes(song, app.selectedKeyNoteMap.keyNoteMap);
