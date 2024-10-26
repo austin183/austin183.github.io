@@ -15,6 +15,7 @@
     <script type="text/javascript" src="https://unpkg.com/tone@latest/build/Tone.js"></script>
     <script type="text/javascript" src="https://unpkg.com/@tonejs/midi"></script>
     -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css" integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous">
     <script src="Libraries/vue.min.js"></script>
     <script type="text/javascript" src="Libraries/Tone.js"></script>
     <script type="text/javascript" src="Libraries/ToneMidi.js"></script>
@@ -60,7 +61,7 @@
                 </ul>
             </p>
         </div>
-        <button id="toggleButton" onclick="toggleElementById('Instructions')">Toggle Instructions</button>
+        <button id="toggleInstructions" onclick="toggleElementById('Instructions')">Toggle Instructions</button>
         <div id="FileDrop">
             <div id="Text">
                 Drop a midi file here, or click to select a file from the wizard.
@@ -69,68 +70,101 @@
         </div>
     </div>
     <div id="app">
-        <div id="trackOptionConfig" class="side-by-side">
-            <div class="bordered">
-                <label for="trackSelect">Select Track to play</label>
-                <select id="trackSelect" v-model="selectedTrack" class="pure-input-rounded" v-on:change="renderSongNotes()">
-                    <option v-for="(item, key, index) in availableTracks" :value="item">{{item.name}} ({{ item.notes.length }} notes, starts at {{ item.notes[0].time }})</option>
-                </select>
-            </div>
-            <div class="bordered">
-                If you want to play the parts of a particular track, you can select an individual one to display here.  Otherwise notes from all tracks will be used to display.
-            </div>
-        </div>
-        <div id="keyNoteMapConfigs" class="side-by-side">
-            <div class="bordered">
-                <label for="keyNoteMapSelect">Select a Keyboard Layout</label>
-                <select id="keyNoteMapSelect" v-model="selectedKeyNoteMap" class="pure-input-rounded" v-on:change="renderSongNotes()">
-                    <option v-for="(item, key, index) in availableKeyNoteMaps" :value="item">{{key}}</option>
-                </select>
-            </div>         
-            <div class="bordered">
-                {{selectedKeyNoteMap.description}}
-            </div>
-        </div>
-        <div id="maxKeyCount" class="side-by-side">
-            <div class="bordered">
-                <label for="maxKeyCountRadio">Max Keys at Once</label>
-                <input type="radio" id="keyCount1" name="maxKeyCountRadio" v-model="selectedKeyCount" value="1" checked></input>
-                <label for="keyCount1">1</label>
-                <input type="radio" id="keyCount2" name="maxKeyCountRadio" v-model="selectedKeyCount" value="2"></input>
-                <label for="keyCount2">2</label>
-                <input type="radio" id="keyCount3" name="maxKeyCountRadio" v-model="selectedKeyCount" value="3"></input>
-                <label for="keyCount3">3</label>
-            </div>
-            <div class="bordered">
-                This is how many keys will appear to match at one point in time. (The browser will sometimes not recognize more than 2 keys at once, so the 3rd option could appear not to work with all key combinations.)
-            </div>        
-        </div>        
-        <div id="minDurationConfig" class="side-by-side">
-            <div class="bordered">
-                <div id="minDuration">
-                    <label for="minDuration">Min Note Duration (in seconds) {{minDuration}}</label>
-                    <input type="range" class="fullRange" id="minDuration" v-model="minDuration" min="0" max="1" step=".01"></input>
+        <div id="gameConfig" class="bordered" >
+            <!-- trackOptionConfig -->
+            <div id="trackOptionConfig" class="side-by-side">
+                <div class="bordered">
+                    <label for="trackSelect">Select Track to play</label>
+                    <select id="trackSelect" v-model="selectedTrack" class="pure-input-rounded" v-on:change="renderSongNotes()">
+                        <option v-for="(item, key, index) in availableTracks" :value="item">{{item.name}} ({{ item.notes.length }} notes, starts at {{ item.notes[0].time }})</option>
+                    </select>
+                </div>
+                <div class="bordered">
+                    If you want to play the parts of a particular track, you can select an individual one to display here.  Otherwise notes from all tracks will be used to display.
                 </div>
             </div>
-            <div class="bordered">
-                This sets which notes will be considered playable based on how long they appear on the screen.  the smaller the value, the more notes will show up to play.
-            </div>
-        </div>
-        <div id="minNoteDistanceConfig" class="side-by-side">
-            <div class="bordered">
-                <div id="minNoteDistance">
-                    <label for="minNoteDistance">Min Note Distance (in seconds) {{minNoteDistance}}</label>
-                    <input type="range" class="fullRange" id="minNoteDistance" v-model="minNoteDistance" min="0" max="1" step=".01"></input>
+            <!-- keyNoteMapConfig -->
+            <div id="keyNoteMapConfig" class="side-by-side">
+                <div class="bordered">
+                    <label for="keyNoteMapSelect">Select a Keyboard Layout</label>
+                    <select id="keyNoteMapSelect" v-model="selectedKeyNoteMap" class="pure-input-rounded" v-on:change="renderSongNotes()">
+                        <option v-for="(item, key, index) in availableKeyNoteMaps" :value="item">{{key}}</option>
+                    </select>
+                </div>         
+                <div class="bordered">
+                    {{selectedKeyNoteMap.description}}
                 </div>
             </div>
-            <div class="bordered">
-                This sets which notes will be considered playable based on how much time is between notes.  the smaller the value, the more notes will show up to play.
+            <!-- maxKeyCount -->
+            <div id="maxKeyCount" class="side-by-side">
+                <div class="bordered">
+                    <label for="maxKeyCountRadio">Max Keys at Once</label>
+                    <input type="radio" id="keyCount1" name="maxKeyCountRadio" v-model="selectedKeyCount" value="1" checked></input>
+                    <label for="keyCount1">1</label>
+                    <input type="radio" id="keyCount2" name="maxKeyCountRadio" v-model="selectedKeyCount" value="2"></input>
+                    <label for="keyCount2">2</label>
+                    <input type="radio" id="keyCount3" name="maxKeyCountRadio" v-model="selectedKeyCount" value="3"></input>
+                    <label for="keyCount3">3</label>
+                </div>
+                <div class="bordered">
+                    This is how many keys will appear to match at one point in time. (The browser will sometimes not recognize more than 2 keys at once, so the 3rd option could appear not to work with all key combinations.)
+                </div>        
+            </div>
+            <!-- minDurationConfig -->     
+            <div id="minDurationConfig" class="side-by-side">
+                <div class="bordered">
+                    <div id="minDuration">
+                        <label for="minDuration">Min Note Duration (in seconds) {{minDuration}}</label>
+                        <input type="range" class="fullRange" id="minDuration" v-model="minDuration" min="0" max="1" step=".01"></input>
+                    </div>
+                </div>
+                <div class="bordered">
+                    This sets which notes will be considered playable based on how long they appear on the screen.  the smaller the value, the more notes will show up to play.
+                </div>
+            </div>
+            <!-- minNoteDistanceConfig -->
+            <div id="minNoteDistanceConfig" class="side-by-side">
+                <div class="bordered">
+                    <div id="minNoteDistance">
+                        <label for="minNoteDistance">Min Note Distance (in seconds) {{minNoteDistance}}</label>
+                        <input type="range" class="fullRange" id="minNoteDistance" v-model="minNoteDistance" min="0" max="1" step=".01"></input>
+                    </div>
+                </div>
+                <div class="bordered">
+                    This sets which notes will be considered playable based on how much time is between notes.  the smaller the value, the more notes will show up to play.
+                </div>
+            </div>
+            <!-- trackVolumeConfig -->
+            <div id="trackVolumeConfig" class="side-by-side">
+                <div class="bordered">
+                    <div id="trackVolume">
+                        <label for="trackVolume">Track Volume {{trackVolume}}</label>
+                        <input type="range" class="fullRange" id="trackVolume" v-model="trackVolume" min="0" max="1" step=".01"></input>
+                    </div>
+                </div>
+                <div class="bordered">
+                    This sets the volume of each track.  The smaller the value, the quieter the background music will be.  Please note that this config will only get applied once when the song starts playing.
+                </div>
+            </div>
+            <!-- playerVolumeConfig -->
+            <div id="playerVolumeConfig" class="side-by-side">
+                <div class="bordered">
+                    <div id="playerVolume">
+                        <label for="playerVolume">Player Volume {{playerVolume}}</label>
+                        <input type="range" class="fullRange" id="playerVolume" v-model="playerVolume" min="0" max="1" step=".01"></input>
+                    </div>
+                </div>
+                <div class="bordered">
+                    This sets the volume of the player's audio.  The smaller the value, the quieter the notes played on the keyboard will be.
+                </div>
             </div>
         </div>
-        
+        <button id="toggleGameConfig" onclick="toggleElementById('gameConfig')">Toggle Game Configurations</button>
 
-        <button id="tonePlayToggle" onclick="togglePlay()" disabled>Play</button>
-        <span>Score: [{{ score }}]  Good [{{ goodCount }}] Ok [{{ okCount }}]</span>
+        <div id="playProgress">
+            <button id="tonePlayToggle" onclick="togglePlay()" disabled>Play</button>
+            <span>Score: [{{ score }}]  Good [{{ goodCount }}] Ok [{{ okCount }}]</span>
+        </div>        
         <div id="canvasContainer" class="bordered">
             <canvas id="notesCanvas"></canvas>
         </div>   
@@ -294,9 +328,11 @@
                         trimmedMidi.tracks.push(trimmedTrack);
                     }
                 });
-                document
-                    .querySelector("#tonePlayToggle")
-                    .removeAttribute("disabled");
+
+                var playButton = document.getElementById('tonePlayToggle');
+                playButton.removeAttribute('disabled');
+                playButton.textContent = 'Play';
+                
                 currentMidi = trimmedMidi;
                 var fullNotes = getCombinedTrackNotes(currentMidi.tracks);
                 var fullTrack = {
@@ -330,7 +366,14 @@
 
         function togglePlay() {
             var invertedKeyNoteMap = songNoteRenderer.invertKeyNoteMap(app.selectedKeyNoteMap.keyNoteMap);
+            var playButton = document.getElementById('tonePlayToggle');
             playing = !playing;
+            if(playing == true){
+                playButton.textContent = 'Stop';
+            }
+            else{
+                playButton.textContent = 'Restart';
+            }
             if (playing && currentMidi) {
                 var scoreKeeper = getScoreKeeper();
                 const containerElement = document.getElementById("canvasContainer");
@@ -354,7 +397,7 @@
                             note.name,
                             note.duration,
                             note.time + startTime + delay,
-                            note.velocity
+                            note.velocity * app.trackVolume
                         );
                     });
                 });
@@ -425,7 +468,9 @@
                     goodCount: 0,
                     okCount: 0,
                     minDuration: .1,
-                    minNoteDistance: .4
+                    minNoteDistance: .4,
+                    playerVolume: .7,
+                    trackVolume: 1
                 },
                 mounted(){
                     this.notesCanvas = document.getElementById("notesCanvas")

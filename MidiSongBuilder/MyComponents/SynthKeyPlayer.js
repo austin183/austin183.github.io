@@ -11,6 +11,12 @@ function getSynthKeyPlayer(){
         playNotes: function(app, pressedKeys, synthMap, synthArray){
             //Reset Note Playing field on the page
             app.notesPlaying = "";
+            var velocity = 1;
+            if(app.playerVolume){
+                if(app.playerVolume > 0 && app.playerVolume < 1){
+                    velocity = app.playerVolume;
+                }
+            }
             //Evaluate each key in pressedKeys
             for(var key in pressedKeys){
                 if(pressedKeys[key]){
@@ -24,7 +30,7 @@ function getSynthKeyPlayer(){
                     }
                     //Start playing the note for the key through the synth
                     //based on the pressed key's not in the selected keyNoteMap
-                    synthArray[synthIndex].triggerAttack(app.selectedKeyNoteMap.keyNoteMap[key]);
+                    synthArray[synthIndex].triggerAttack(app.selectedKeyNoteMap.keyNoteMap[key], "0", velocity);
                     //Save which synth goes with the key right now
                     synthMap[key] = synthIndex;
                 } else {

@@ -118,7 +118,6 @@ textarea {
     text-align: center;
     font-size: 16px;
     margin: 10px auto;
-    font-family: sans-serif;
 }
 
 #Instructions {
@@ -126,7 +125,18 @@ textarea {
     background-color:lightblue;
     font-size: 16px;
     margin: 10px auto;
-    font-family: sans-serif;
+}
+
+#gameConfig {
+    background-color:#9fd2f3;
+    font-size: 16px;
+    margin: 10px auto;
+}
+
+#playProgress {
+    font-size: 16px;
+    margin: 10px auto;
+    width: 800px;
 }
 
 #canvasContainer {
@@ -143,11 +153,31 @@ tone-play-toggle {
     margin-top: 10px;
 }
 
-#toggleButton {
+#toggleInstructions {
     position: relative;
     bottom: 10px; /* moves the toggle button at the bottom of your div */
     left: 5%;
     background-color: lightblue;
+    border-radius: 3px;
+    padding: 5px;
+    cursor:pointer;
+}
+
+#toggleGameConfig {
+    position: relative;
+    bottom: 10px; /* moves the toggle button at the bottom of your div */
+    left: 5%;
+    background-color: #9fd2f3;
+    border-radius: 3px;
+    padding: 5px;
+    cursor:pointer;
+}
+
+#tonePlayToggle {
+    bottom: 10px; /* moves the toggle button at the bottom of your div */
+    left: 5%;
+    width: 30%;
+    background-color: lightgreen;
     border-radius: 3px;
     padding: 5px;
     cursor:pointer;

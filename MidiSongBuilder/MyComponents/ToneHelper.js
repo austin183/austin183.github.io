@@ -46,7 +46,6 @@ function getToneHelper(){
             //Clear the synthArray
             if(synthArray.length > 0){
                 for (let i = synthArray.length - 1; i >= 0; i--) {
-                    writeLog(synthArray[i]);
                     synthArray[i].dispose();
                     //delete i from array
                     synthArray.splice(i,1);
