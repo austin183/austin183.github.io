@@ -190,6 +190,7 @@
         var toneHelper = getToneHelper();
         var visibleFieldFilterer = getVisibleFieldFilterer();
         var synthMap = {};
+        var songEnd = null;
         const synthArray = [];  //Holds all the available synths
         const pressedKeys = {}; //Holds which keys are pressed down on the keyboard
         //Get all the keyNoteMaps
@@ -403,11 +404,15 @@
                 });
                 playIntervalId = setInterval(() => {
                     const intervalNow = Tone.now() - startTime - delay;
+                    const visiblePast = intervalNow - 1;
+                    if(visiblePast > songEnd){
+                        togglePlay(); //Should end the song automatically at the end.
+                    }
                     //Set the visible field to the next 10 seconds of the song
                     const futureLimit = intervalNow + 10;
                     const bufferFutureLimit = intervalNow + 60;
                     const pastLimit = intervalNow - 60;
-                    const visiblePast = intervalNow - 1;
+                    
 
                     var visibleField = visibleFieldFilterer.filterToVisibleField(app.selectedTrack.notes, app.minNoteDistance, app.minDuration, pastLimit, bufferFutureLimit, futureLimit, visiblePast, invertedKeyNoteMap, app.selectedKeyCount);
                     var currentScore = scoreKeeper.calculateNewScore(visibleField, pressedKeys, intervalNow);
@@ -503,6 +508,9 @@
                 app.songNotes = renderedNotes.renderedSongNotes;
                 app.songNotesOnKeyMap = renderedNotes.renderedSongNotesOnKeyMap;
                 app.renderedNotesPlaying = songNoteRenderer.renderNotesPlaying(song, invertedKeyNoteMap, 0);
+
+                var lastNote = song[song.length - 1];
+                songEnd = lastNote.time + lastNote.duration;
 
                 //Move focus back to the document so when the user starts trying to play notes, they
                 //won't accidentally be on one of the option fields
