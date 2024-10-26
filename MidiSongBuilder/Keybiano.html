@@ -47,7 +47,7 @@
                 </select>
                 <div class="side-by-side">
                     <div class="bordered">Mapped Keys<br />{{ songNotesOnKeyMap }}</div>
-                    <div class="bordered">Song Notes<br />{{ songNotes }}</div>                
+                    <div class="bordered">Song Notes<br />{{ songNotes }}</div>
                 </div>
             </div>
             <button onclick="toggleFMSynthConfigs()">Toggle Instrument Config</button>
@@ -123,7 +123,7 @@
                                 <label for="envelopeRelease">Release</label>
                                 <input type="number" step=".01" min="0" max="1000" id="envelopeRelease" v-model="fmSynthOptions.envelope.release" />
                                 <label for="rangeForEnvelopeRelease">Slide to change Release</label><input type="range" class="range" min="0" max="1000" step=".01" id="rangeForEnvelopeRelease" v-model="fmSynthOptions.envelope.release" />
-                                
+
                             </li>
                         </ul>
                     </li>
@@ -135,7 +135,7 @@
     <script>
         //If the user enters something after the url, like http://url.com?debug
         //The window.location.search field holds everything after the main url
-        const queryString = window.location.search; 
+        const queryString = window.location.search;
         const debugPage = queryString == "?debug";
         //Declare / Initialize global variables
         var toneHelper = getToneHelper();
@@ -144,7 +144,7 @@
         var app; //The Vue.js variable
         var synthMap = {}; //Contains which key goes with with synth when the user presses keys on the keyboard
         const conga = toneHelper.getCongaSynth();
-        
+
         const synthArray = [];  //Holds all the available synths
         const pressedKeys = {}; //Holds which keys are pressed down on the keyboard
         const oscillatorTypes = toneHelper.getOscillatorTypes(); //These types apply to both oscillator type and modulation type
@@ -160,12 +160,12 @@
         //Get a default value for the keyNoteMap
         const defaultKeyNoteMap = keyNoteMapCollection[keyNoteMapKeys[0]];
         const defaultSong = songKeys[0];
-        
+
         //The current keys
         var defaultNotesPlayed = "";
         var defaultSongNotes = "";
         var defaultSongNotesOnKeyMap = "";
-        
+
         var defaultFMSynthParams = toneHelper.getDefaultFMSynthParams();
 
         //Disposes of existing synths and creates synths based on FMSynth options
@@ -185,7 +185,7 @@
         document.addEventListener("keydown", function(event) {
             if (event.key in app.selectedKeyNoteMap.keyNoteMap) {
                 writeLog("Pressed key for " + app.selectedKeyNoteMap.keyNoteMap[event.key]);
-                
+
                 pressedKeys[event.key] = true;
                 playNotes();
             }
@@ -193,7 +193,7 @@
                 writeLog('Space bar pressed!');
                 conga.triggerAttackRelease("C4", "4n");
             }
-            
+
         });
 
         /*
@@ -216,7 +216,7 @@
                     Assigns free synths
                     Starts playing the synths
                 If any synths are playing for a key that is not pressed
-                    Stops playing the synth 
+                    Stops playing the synth
 
         */
         function playNotes(){
@@ -261,7 +261,7 @@
             var song = songCollection[app.selectedSongNotes];
             writeLog(song);
             var renderedNotes = songNoteRenderer.renderSongNotes(song, app.selectedKeyNoteMap.keyNoteMap);
-            
+
             app.songNotes = renderedNotes.renderedSongNotes;
             app.songNotesOnKeyMap = renderedNotes.renderedSongNotesOnKeyMap;
 
@@ -286,18 +286,18 @@
         //This function shows or hides the FMSynthConfigs div
         function toggleFMSynthConfigs(){
              var configDiv = document.getElementById('FMSynthConfigs'); // Get a reference to the synth configuration DIV element by its ID (you may need to replace 'id' with actual id of your HTML structure)
-            if(configDiv){ 
-                const currentDisplayState = configDiv.style.display;     
-                
+            if(configDiv){
+                const currentDisplayState = configDiv.style.display;
+
                 if(currentDisplayState === "none"){ // If it is currently hidden, then show the div (change its display style to block or inline-block as appropriate for your layout)
-                    configDiv.style.display = ""; 
-                    
+                    configDiv.style.display = "";
+
                 } else { // Otherwise assume that FMSynthConfigs are already visible and hide them by setting their display property back to none
-                    configDiv.style.display = "none";  
+                    configDiv.style.display = "none";
                 }
             }
         }
-        
+
     </script>
 </body>
 </html>

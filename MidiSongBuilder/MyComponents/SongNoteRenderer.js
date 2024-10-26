@@ -2,8 +2,8 @@ function getSongNoteRenderer(){
     var renderer = {
         getNoteDrawInstructions: function(canvas, canvasNote, currentScore, now, keyRenderInfo){
             /*
-            Should draw the character closer to the bottom when the `canvasNote.time` 
-            is closer to `now`. The character should have a border that stretches above 
+            Should draw the character closer to the bottom when the `canvasNote.time`
+            is closer to `now`. The character should have a border that stretches above
             it, according to the `canvasNote.duration`.
             If the `canvasNote.time` is less than `now`, but the `canvasNote.time` + `canvasNote.duration`
             is greater than `now`, the character should show at the bottom of the canvas
@@ -49,30 +49,30 @@ function getSongNoteRenderer(){
             var y = noteDrawInstructions.y;
             var borderWidthHalf = (canvas.width / 20) - 3;
             var borderOffset = x + (borderWidthHalf - (borderWidthHalf / 2) );
-        
+
             // Set font style and fill color for the letter
             ctx.font = "18px Georgia";
             ctx.fillStyle = noteDrawInstructions.color;
-        
+
             // Draw the note letter at the calculated position
             ctx.fillText(noteDrawInstructions.letter, x, y - 2); // Assuming the height of the letter is about 20 pixels
-        
+
             // Set border style and fill color
             ctx.strokeStyle = noteDrawInstructions.color;
             ctx.lineWidth = 1;
-        
+
             // Calculate border coordinates
             var borderHeight = noteDrawInstructions.border; // The border should be from top to bottom, so we use the border value as height
-        
+
             // Draw the border above the note
             var leftBorder = Math.floor(borderOffset - borderWidthHalf);
             var rightBorder = Math.floor(borderOffset + borderWidthHalf);
             ctx.beginPath();
             ctx.moveTo(leftBorder, y); // Starting point a bit left of the letter
-            ctx.lineTo(rightBorder, y); // Ending point a bit right of the letter            
+            ctx.lineTo(rightBorder, y); // Ending point a bit right of the letter
             ctx.closePath();
             ctx.stroke();
-        }        
+        }
     };
 
     return {
@@ -118,7 +118,7 @@ function getSongNoteRenderer(){
             }
             var lookAheadLength = 20;
             var k = i + lookAheadLength < song.length ? i + lookAheadLength: song.length;
-            
+
             for(var j = i; j < k; j++){
                 var note = song[j];
                 if(!note.note && note.name){
@@ -133,7 +133,7 @@ function getSongNoteRenderer(){
                         id: note.name + "_" + note.time
                     };
                     var noteDrawInstructions = renderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, keyRenderInfo);
-                    notesToPlay += " " + keyNote + " (time: " + note.time + ") (end: " + (note.time + note.duration) + ") " + 
+                    notesToPlay += " " + keyNote + " (time: " + note.time + ") (end: " + (note.time + note.duration) + ") " +
                         "(x: " + noteDrawInstructions.x + ") (y: " + noteDrawInstructions.y + ")";
                 }
             }
@@ -141,10 +141,10 @@ function getSongNoteRenderer(){
         },
         renderNotesPlayingForCanvas: function(canvas, ctx, visibleField, currentScore, keyRenderInfo, now){
             //Render the visibleField to the canvas
-            visibleField.forEach(canvasNote => {                
+            visibleField.forEach(canvasNote => {
                 //Create new note and calculate position for it
                 var noteDrawInstructions = renderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, keyRenderInfo);
-                renderer.drawNote(canvas, ctx, noteDrawInstructions);                
+                renderer.drawNote(canvas, ctx, noteDrawInstructions);
             });
         }
     };

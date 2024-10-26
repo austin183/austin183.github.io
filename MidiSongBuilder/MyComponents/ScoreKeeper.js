@@ -1,7 +1,7 @@
 function getScoreKeeper(){
     var goodRange = .15; //within 10 milliseconds of the note.time is good
     var okRange = .4; //within 40 milliseconds of the note.time is ok
-    var badRange = .5; //within 
+    var badRange = .5; //within
     var goodPoints = 100;
     var okPoints = 50;
     var score = {
@@ -11,7 +11,7 @@ function getScoreKeeper(){
     var previousPressedKeys = {};
     return {
         calculateNewScore: function(visibleField, pressedKeys, now){
-            
+
 
             //For each pressedKey, see if it was previously pressed
             //If it was not previously pressed, calculate its distance
@@ -40,7 +40,7 @@ function getScoreKeeper(){
                             }
                         }
                     }
-                    if(!score.keyScores[closestNoteId]){                    
+                    if(!score.keyScores[closestNoteId]){
                         if(closestNoteTime <= goodRange){
                             score.total += goodPoints;
                             score.keyScores[closestNoteId] = {

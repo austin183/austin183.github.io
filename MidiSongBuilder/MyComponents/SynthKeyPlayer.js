@@ -40,7 +40,7 @@ function getSynthKeyPlayer(){
                         var synthIndex = synthMap[key];
                         synthArray[synthIndex].triggerAttackRelease();
                         delete synthMap[key];
-                    }                    
+                    }
                 }
             }
         }

@@ -11,12 +11,12 @@ function getVisibleFieldFilterer(){
                 var previousNote = defaultPreviousNote;
                 if(visibleField.length > 0){
                     previousNote = visibleField[visibleField.length - 1];
-                }                
+                }
                 var noteDistance = note.time - (previousNote.time + previousNote.duration);
-                
+
                 if(noteDistance < minNoteDistance){
                     continue; //Skipping notes too close to the previous note.
-                }                
+                }
                 if(note.duration < minDuration){
                     continue; //Skipping notes that are too short
                 }
@@ -51,7 +51,7 @@ function getVisibleFieldFilterer(){
                 var canvasNote = visibleField[j];
                 var overlap = visibleField.filter(n => n.id !== canvasNote.id && (n.time < canvasNote.time + canvasNote.duration && n.time + n.duration > canvasNote.time));
                 if (overlap.length >= keyCount) {
-                    //Remove overlapping note                
+                    //Remove overlapping note
                     visibleField.splice(visibleField.indexOf(canvasNote), 1);
                 }
             }
@@ -59,7 +59,7 @@ function getVisibleFieldFilterer(){
             //Remove notes that ended before now
             visibleField = visibleField.filter(function(note) {
                 return note.time + note.duration >= now && note.time + note.duration <= futureLimit;
-            });  
+            });
 
             return visibleField;
         }

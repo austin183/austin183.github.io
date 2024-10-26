@@ -10,7 +10,7 @@
 
 <head>
     <title>Midiestro</title>
-    <!-- 
+    <!--
     <script src="https://unpkg.com/vue@2.6.12/dist/vue.min.js"></script>
     <script type="text/javascript" src="https://unpkg.com/tone@latest/build/Tone.js"></script>
     <script type="text/javascript" src="https://unpkg.com/@tonejs/midi"></script>
@@ -39,16 +39,16 @@
                 This page is a musical typing game, where you can take a midi file and try to match the notes played on your keyboard for points!
             </p>
             <p>
-                To play: 
+                To play:
                 <ul>
                     <li>Drop a midi file on the panel below.</li>
                     <li>Press the Play button.</li>
                     <li>Watch the falling keys, and try to press the key when it gets to the bottom of the game window.</li>
-                </ul>  
+                </ul>
             </p>
             <p>
                 As a simple song to start with, here is a place to download <a href="https://onlinesequencer.net/4101480#">Mary Had a Little Lamb</a> .  On the website, choose "Download MIDI"
-            </p>    
+            </p>
             <p>
                 You can find more midi files to download and try out at:
                 <ul>
@@ -90,7 +90,7 @@
                     <select id="keyNoteMapSelect" v-model="selectedKeyNoteMap" class="pure-input-rounded" v-on:change="renderSongNotes()">
                         <option v-for="(item, key, index) in availableKeyNoteMaps" :value="item">{{key}}</option>
                     </select>
-                </div>         
+                </div>
                 <div class="bordered">
                     {{selectedKeyNoteMap.description}}
                 </div>
@@ -108,9 +108,9 @@
                 </div>
                 <div class="bordered">
                     This is how many keys will appear to match at one point in time. (The browser will sometimes not recognize more than 2 keys at once, so the 3rd option could appear not to work with all key combinations.)
-                </div>        
+                </div>
             </div>
-            <!-- minDurationConfig -->     
+            <!-- minDurationConfig -->
             <div id="minDurationConfig" class="side-by-side">
                 <div class="bordered">
                     <div id="minDuration">
@@ -164,10 +164,10 @@
         <div id="playProgress">
             <button id="tonePlayToggle" onclick="togglePlay()" disabled>Play</button>
             <span>Score: [{{ score }}]  Good [{{ goodCount }}] Ok [{{ okCount }}]</span>
-        </div>        
+        </div>
         <div id="canvasContainer" class="bordered">
             <canvas id="notesCanvas"></canvas>
-        </div>   
+        </div>
         <div id="notesPlaying">
             <div class="bordered">{{renderedNotesPlaying}}</div>
         </div>
@@ -188,7 +188,7 @@
         var synthKeyPlayer = getSynthKeyPlayer();
         var songNoteRenderer = getSongNoteRenderer();
         var toneHelper = getToneHelper();
-        var visibleFieldFilterer = getVisibleFieldFilterer();        
+        var visibleFieldFilterer = getVisibleFieldFilterer();
         var synthMap = {};
         const synthArray = [];  //Holds all the available synths
         const pressedKeys = {}; //Holds which keys are pressed down on the keyboard
@@ -222,10 +222,10 @@
         document.addEventListener("keydown", function(event) {
             if (event.key in app.selectedKeyNoteMap.keyNoteMap) {
                 writeLog("Pressed key for " + app.selectedKeyNoteMap.keyNoteMap[event.key]);
-                
+
                 pressedKeys[event.key] = true;
                 playNotes();
-            }            
+            }
         });
 
         /*
@@ -248,7 +248,7 @@
                     Assigns free synths
                     Starts playing the synths
                 If any synths are playing for a key that is not pressed
-                    Stops playing the synth 
+                    Stops playing the synth
 
         */
         function playNotes(){
@@ -332,7 +332,7 @@
                 var playButton = document.getElementById('tonePlayToggle');
                 playButton.removeAttribute('disabled');
                 playButton.textContent = 'Play';
-                
+
                 currentMidi = trimmedMidi;
                 var fullNotes = getCombinedTrackNotes(currentMidi.tracks);
                 var fullTrack = {
@@ -402,12 +402,12 @@
                     });
                 });
                 playIntervalId = setInterval(() => {
-                    const intervalNow = Tone.now() - startTime - delay;                                        
+                    const intervalNow = Tone.now() - startTime - delay;
                     //Set the visible field to the next 10 seconds of the song
                     var futureLimit = intervalNow + 10;
                     var bufferFutureLimit = intervalNow + 60;
-                    var pastLimit = intervalNow - 60; 
-                    
+                    var pastLimit = intervalNow - 60;
+
                     var visibleField = visibleFieldFilterer.filterToVisibleField(app.selectedTrack.notes, app.minNoteDistance, app.minDuration, pastLimit, bufferFutureLimit, futureLimit, intervalNow, invertedKeyNoteMap, app.selectedKeyCount);
                     var currentScore = scoreKeeper.calculateNewScore(visibleField, pressedKeys, intervalNow);
                     app.score = currentScore.total;
@@ -420,7 +420,7 @@
                     app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
                     songNoteRenderer.renderNotesPlayingForCanvas(app.notesCanvas, app.vueCanvas, visibleField, currentScore, keyRenderInfo, intervalNow);
                 }, 10);
-                
+
             } else {
                 Tone.Transport.stop();
                 Tone.Transport.position = 0;
@@ -455,7 +455,7 @@
                 el: '#app', //The div id to put the Vue.js app in.  I can end sentences with prepositions if I want.  It's what my repo is really about!
                 data: {
                     selectedKeyNoteMap: defaultKeyNoteMap, //Which keyboard map the user has selected in the drop down.
-                    availableKeyNoteMaps: keyNoteMapCollection, //All the keyboard maps available in the drop down                    
+                    availableKeyNoteMaps: keyNoteMapCollection, //All the keyboard maps available in the drop down
                     renderedNotesPlaying: defaultNotesPlaying, //The field to show which notes are playing based on the keys pressed at the time
                     songNotes: defaultSongNotes,
                     songNotesOnKeyMap: defaultSongNotesOnKeyMap,
@@ -493,7 +493,7 @@
                 var song = app.selectedTrack.notes;
                 writeLog(JSON.stringify(song));
                 var renderedNotes = songNoteRenderer.renderSongNotes(song, app.selectedKeyNoteMap.keyNoteMap);
-                
+
                 app.songNotes = renderedNotes.renderedSongNotes;
                 app.songNotesOnKeyMap = renderedNotes.renderedSongNotesOnKeyMap;
                 app.renderedNotesPlaying = songNoteRenderer.renderNotesPlaying(song, invertedKeyNoteMap, 0);
@@ -510,7 +510,7 @@
                 }
             }
         }
-            
+
     </script>
 </body>
 

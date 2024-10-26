@@ -41,7 +41,7 @@ function getKeyNoteMaps(){
                 "7": "C#6",
                 "8": "D6",
                 "9": "D#6",
-                "0": "E6"     
+                "0": "E6"
             }
         },
         "VerticalZTo0":{
@@ -121,7 +121,7 @@ function getKeyNoteMaps(){
                 "o": "C6",
                 "p": "D6"
             }
-            
+
         },
         "HorizontalZToP":{
             "description":"This layout starts at 'z' and goes higher thru '.', then it jumps to 'a' thru ';', then jumps to 'q' thru 'p'.  It reminds me the most of a natural instrumental pattern.",
@@ -155,7 +155,7 @@ function getKeyNoteMaps(){
                 "i": "B5",
                 "o": "C6",
                 "p": "D6"
-            }            
+            }
         },
         "VerticalZToP":{
             "description":"This layout starts at 'z' and goes higher upward thru 'q', then jumps to 'x' thru 'w', then 'c' thru 'e', and so on that way.  I am not sure what type of instrument it reminds me of, but maybe it makes sense to someone!",

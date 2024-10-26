@@ -31,7 +31,7 @@ function getToneHelper(){
             return ["sine", "square", "sawtooth", "triangle"];
         },
         getCongaSynth: function(){
-            return new Tone.MembraneSynth({ 
+            return new Tone.MembraneSynth({
                 pitchDecay: 0.008,
                 octaves: 2,
                 envelope: {
@@ -50,10 +50,10 @@ function getToneHelper(){
                     //delete i from array
                     synthArray.splice(i,1);
                 }
-            }            
+            }
 
             //Since people have 10 fingers, they could play 10 notes at once
-            //Get synths set up for each possible finger       
+            //Get synths set up for each possible finger
             for (let i = 0; i < 10; i++) {
                 synthArray.push(
                     new Tone.FMSynth( params ).toDestination()
