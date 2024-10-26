@@ -35,7 +35,7 @@ function getSongNoteRenderer(){
                 //The letter to display
                 letter: canvasNote.letter,
                 //The height of the border around the letter
-                border: canvasNote.duration * maxSecondHeight,
+                border: canvasNote.time > visiblePast ? canvasNote.duration * maxSecondHeight : (canvasNote.time + canvasNote.duration - visiblePast) * maxSecondHeight,
                 //The horizontal position of the letter, based on where the letter is on the keyboard
                 x: Math.floor((keyRenderInfo[canvasNote.letter].column * maxCharacterWidth) + borderWidthHalf),
                 //The vertial position of the letter, based on how far away it is from now
