@@ -404,11 +404,12 @@
                 playIntervalId = setInterval(() => {
                     const intervalNow = Tone.now() - startTime - delay;
                     //Set the visible field to the next 10 seconds of the song
-                    var futureLimit = intervalNow + 10;
-                    var bufferFutureLimit = intervalNow + 60;
-                    var pastLimit = intervalNow - 60;
+                    const futureLimit = intervalNow + 10;
+                    const bufferFutureLimit = intervalNow + 60;
+                    const pastLimit = intervalNow - 60;
+                    const visiblePast = intervalNow - 1;
 
-                    var visibleField = visibleFieldFilterer.filterToVisibleField(app.selectedTrack.notes, app.minNoteDistance, app.minDuration, pastLimit, bufferFutureLimit, futureLimit, intervalNow, invertedKeyNoteMap, app.selectedKeyCount);
+                    var visibleField = visibleFieldFilterer.filterToVisibleField(app.selectedTrack.notes, app.minNoteDistance, app.minDuration, pastLimit, bufferFutureLimit, futureLimit, visiblePast, invertedKeyNoteMap, app.selectedKeyCount);
                     var currentScore = scoreKeeper.calculateNewScore(visibleField, pressedKeys, intervalNow);
                     app.score = currentScore.total;
                     var counts = scoreKeeper.getCounts();
@@ -417,10 +418,11 @@
                     app.badCount = counts.badCount;
                     app.missedCount = counts.missedCount;
                     if(debugPage == true){
-                        app.renderedNotesPlaying = songNoteRenderer.renderNotesPlaying(app.notesCanvas, app.selectedTrack.notes, currentScore, invertedKeyNoteMap, keyRenderInfo, intervalNow);
+                        app.renderedNotesPlaying = songNoteRenderer.renderNotesPlaying(app.notesCanvas, app.selectedTrack.notes, currentScore, invertedKeyNoteMap, keyRenderInfo, intervalNow, visiblePast);
                     }
                     app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
-                    songNoteRenderer.renderNotesPlayingForCanvas(app.notesCanvas, app.vueCanvas, visibleField, currentScore, keyRenderInfo, intervalNow);
+                    songNoteRenderer.renderNowLine(app.notesCanvas, app.vueCanvas);
+                    songNoteRenderer.renderNotesPlayingForCanvas(app.notesCanvas, app.vueCanvas, visibleField, currentScore, keyRenderInfo, intervalNow, visiblePast);
                 }, 10);
 
             } else {

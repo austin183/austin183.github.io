@@ -1,6 +1,6 @@
 function getVisibleFieldFilterer(){
     return {
-        filterToVisibleField: function(song, minNoteDistance, minDuration, pastLimit, bufferFutureLimit, futureLimit, now, invertedKeyNoteMap, keyCount) {
+        filterToVisibleField: function(song, minNoteDistance, minDuration, pastLimit, bufferFutureLimit, futureLimit, visiblePast, invertedKeyNoteMap, keyCount) {
             var visibleField = [];
             var defaultPreviousNote = {
                 time: -10,
@@ -58,7 +58,7 @@ function getVisibleFieldFilterer(){
 
             //Remove notes that ended before now
             visibleField = visibleField.filter(function(note) {
-                return note.time + note.duration >= now && note.time + note.duration <= futureLimit;
+                return note.time + note.duration >= visiblePast && note.time + note.duration <= futureLimit;
             });
 
             return visibleField;

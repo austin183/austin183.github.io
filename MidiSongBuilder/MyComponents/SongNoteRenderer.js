@@ -1,6 +1,6 @@
 function getSongNoteRenderer(){
     var renderer = {
-        getNoteDrawInstructions: function(canvas, canvasNote, currentScore, now, keyRenderInfo){
+        getNoteDrawInstructions: function(canvas, canvasNote, currentScore, now, visiblePast, keyRenderInfo){
             /*
             Should draw the character closer to the bottom when the `canvasNote.time`
             is closer to `now`. The character should have a border that stretches above
@@ -35,11 +35,11 @@ function getSongNoteRenderer(){
                 //The letter to display
                 letter: canvasNote.letter,
                 //The height of the border around the letter
-                border: canvasNote.time > now ? canvasNote.duration * maxSecondHeight : (canvasNote.time + canvasNote.duration - now) * maxSecondHeight,
+                border: canvasNote.duration * maxSecondHeight,
                 //The horizontal position of the letter, based on where the letter is on the keyboard
                 x: Math.floor((keyRenderInfo[canvasNote.letter].column * maxCharacterWidth) + borderWidthHalf),
                 //The vertial position of the letter, based on how far away it is from now
-                y: Math.floor(maxHeight - ((canvasNote.time - now > 0 ? canvasNote.time - now: 0) * (maxSecondHeight + 1))),
+                y: Math.floor(maxHeight - ((canvasNote.time - visiblePast > 0 ? canvasNote.time - visiblePast: 0) * (maxSecondHeight + 1))),
                 color: color
             };
 
@@ -67,11 +67,26 @@ function getSongNoteRenderer(){
             var leftBorder = Math.floor(borderOffset - borderWidthHalf);
             var rightBorder = Math.floor(borderOffset + borderWidthHalf);
             ctx.beginPath();
+            ctx.setLineDash([]);
             ctx.moveTo(leftBorder, y - borderHeight); //Starting at border height and going down
             ctx.lineTo(leftBorder, y); // Starting point a bit left of the letter
             ctx.lineTo(rightBorder, y); // Ending point a bit right of the letter
             ctx.lineTo(leftBorder, y); //Go back to not make a whole thing
             ctx.closePath();
+            ctx.stroke();
+        },
+        drawNowLine: function(canvas, ctx){
+            var maxHeight = canvas.height;
+            var maxWidth = canvas.width;
+            //We have to cover 10 seconds with the height
+            var maxSecondHeight = maxHeight / 10;
+            var nowLineHeight = maxHeight - maxSecondHeight;
+            ctx.beginPath();
+            ctx.strokeStyle = "green";
+            ctx.lineWidth = 2;
+            ctx.setLineDash([15, 15]);
+            ctx.moveTo(0, nowLineHeight);
+            ctx.lineTo(maxWidth, nowLineHeight);            
             ctx.stroke();
         }
     };
@@ -106,7 +121,7 @@ function getSongNoteRenderer(){
             };
         },
         //Need to rethink this with canvas
-        renderNotesPlaying: function(canvas, song, currentScore, invertedKeyNoteMap, keyRenderInfo, now){
+        renderNotesPlaying: function(canvas, song, currentScore, invertedKeyNoteMap, keyRenderInfo, now, visiblePast){
             var notesToPlay = "";
             for(var i = 0; i < song.length; i++){
                 var note = song[i];
@@ -133,20 +148,23 @@ function getSongNoteRenderer(){
                         letter : keyNote,
                         id: note.name + "_" + note.time
                     };
-                    var noteDrawInstructions = renderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, keyRenderInfo);
+                    var noteDrawInstructions = renderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, visiblePast, keyRenderInfo);
                     notesToPlay += " " + keyNote + " (time: " + note.time + ") (end: " + (note.time + note.duration) + ") " +
                         "(x: " + noteDrawInstructions.x + ") (y: " + noteDrawInstructions.y + ")";
                 }
             }
             return notesToPlay;
         },
-        renderNotesPlayingForCanvas: function(canvas, ctx, visibleField, currentScore, keyRenderInfo, now){
+        renderNotesPlayingForCanvas: function(canvas, ctx, visibleField, currentScore, keyRenderInfo, now, visiblePast){
             //Render the visibleField to the canvas
             visibleField.forEach(canvasNote => {
                 //Create new note and calculate position for it
-                var noteDrawInstructions = renderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, keyRenderInfo);
+                var noteDrawInstructions = renderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, visiblePast, keyRenderInfo);
                 renderer.drawNote(canvas, ctx, noteDrawInstructions);
             });
+        },
+        renderNowLine: function(canvas, ctx){
+            renderer.drawNowLine(canvas, ctx);
         }
     };
 }
