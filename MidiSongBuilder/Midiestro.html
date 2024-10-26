@@ -344,6 +344,8 @@
                 app.availableTracks.unshift(fullTrack);
 
                 app.selectedTrack = app.availableTracks[0];
+                var lastNote = fullTrack.notes[fullTrack.notes.length - 1];
+                songEnd = lastNote.time + lastNote.duration;
                 renderSongNotes();
             };
             reader.readAsArrayBuffer(file);
@@ -508,9 +510,6 @@
                 app.songNotes = renderedNotes.renderedSongNotes;
                 app.songNotesOnKeyMap = renderedNotes.renderedSongNotesOnKeyMap;
                 app.renderedNotesPlaying = songNoteRenderer.renderNotesPlaying(song, invertedKeyNoteMap, 0);
-
-                var lastNote = song[song.length - 1];
-                songEnd = lastNote.time + lastNote.duration;
 
                 //Move focus back to the document so when the user starts trying to play notes, they
                 //won't accidentally be on one of the option fields
