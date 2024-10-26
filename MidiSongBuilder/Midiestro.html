@@ -378,7 +378,7 @@
                 playButton.textContent = 'Restart';
             }
             if (playing && currentMidi) {
-                var scoreKeeper = getScoreKeeper();
+                const scoreKeeper = getScoreKeeper();
                 const containerElement = document.getElementById("canvasContainer");
                 containerElement.scrollIntoView({ behavior: "smooth" });
                 const startTime = Tone.now();
