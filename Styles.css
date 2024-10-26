@@ -136,12 +136,14 @@ textarea {
 #playProgress {
     font-size: 16px;
     margin: 10px auto;
+    text-align: center;
     width: 800px;
 }
 
 #canvasContainer {
     width: 810px;
     height: 610px;
+    margin: auto;
 }
 
 #notesCanvas {

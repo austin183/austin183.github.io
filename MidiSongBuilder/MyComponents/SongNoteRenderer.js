@@ -55,8 +55,7 @@ function getSongNoteRenderer(){
             ctx.fillStyle = noteDrawInstructions.color;
 
             // Draw the note letter at the calculated position
-            ctx.fillText(noteDrawInstructions.letter, x, y - 2); // Assuming the height of the letter is about 20 pixels
-
+            ctx.fillText(noteDrawInstructions.letter.toUpperCase(), x, y - 2); // Assuming the height of the letter is about 20 pixels
             // Set border style and fill color
             ctx.strokeStyle = noteDrawInstructions.color;
             ctx.lineWidth = 1;
@@ -68,8 +67,10 @@ function getSongNoteRenderer(){
             var leftBorder = Math.floor(borderOffset - borderWidthHalf);
             var rightBorder = Math.floor(borderOffset + borderWidthHalf);
             ctx.beginPath();
-            ctx.moveTo(leftBorder, y); // Starting point a bit left of the letter
+            ctx.moveTo(leftBorder, y - borderHeight); //Starting at border height and going down
+            ctx.lineTo(leftBorder, y); // Starting point a bit left of the letter
             ctx.lineTo(rightBorder, y); // Ending point a bit right of the letter
+            ctx.lineTo(leftBorder, y); //Go back to not make a whole thing
             ctx.closePath();
             ctx.stroke();
         }

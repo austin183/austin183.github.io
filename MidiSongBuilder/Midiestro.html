@@ -163,7 +163,7 @@
 
         <div id="playProgress">
             <button id="tonePlayToggle" onclick="togglePlay()" disabled>Play</button>
-            <span>Score: [{{ score }}]  Good [{{ goodCount }}] Ok [{{ okCount }}]</span>
+            <span>Score: [{{ score }}]  Good [{{ goodCount }}] Ok [{{ okCount }}] Bad [{{badCount}}] Missed [{{missedCount}}]</span>
         </div>
         <div id="canvasContainer" class="bordered">
             <canvas id="notesCanvas"></canvas>
@@ -414,6 +414,8 @@
                     var counts = scoreKeeper.getCounts();
                     app.goodCount = counts.goodCount;
                     app.okCount = counts.okCount;
+                    app.badCount = counts.badCount;
+                    app.missedCount = counts.missedCount;
                     if(debugPage == true){
                         app.renderedNotesPlaying = songNoteRenderer.renderNotesPlaying(app.notesCanvas, app.selectedTrack.notes, currentScore, invertedKeyNoteMap, keyRenderInfo, intervalNow);
                     }
@@ -467,6 +469,8 @@
                     score: 0,
                     goodCount: 0,
                     okCount: 0,
+                    badCount: 0,
+                    missedCount: 0,
                     minDuration: .1,
                     minNoteDistance: .4,
                     playerVolume: .7,
