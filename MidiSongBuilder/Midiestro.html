@@ -211,7 +211,7 @@
 
         //Disposes of existing synths and creates synths based on FMSynth options
         //First call uses the default
-        toneHelper.buildSynths(defaultFMSynthParams, synthArray);
+        toneHelper.buildSynths(defaultFMSynthParams, synthArray, 3); //Max of three keys for the whole game.
         var app; //The Vue.js variable
 
         /*
@@ -417,7 +417,6 @@
                         app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
                         renderFinalScore(app.notesCanvas, app.vueCanvas, app.score, app.goodCount, app.okCount, app.badCount, app.missedCount);
                         togglePlay(); //Should end the song automatically at the end.
-                        clearInterval();
                         return;
                     }
                     
@@ -441,8 +440,8 @@
                 Tone.Transport.position = 0;
                 Tone.Transport.cancel();
                 //dispose the synth and make a new one
-                while (synths.length) {
-                    clearInterval(playIntervalId);
+                clearInterval(playIntervalId);
+                while (synths.length) {                    
                     const synth = synths.shift();
                     synth.disconnect();
                     app.renderNotesPlaying = "";

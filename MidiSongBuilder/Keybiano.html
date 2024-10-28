@@ -170,7 +170,7 @@
 
         //Disposes of existing synths and creates synths based on FMSynth options
         //First call uses the default
-        toneHelper.buildSynths(defaultFMSynthParams, synthArray);
+        toneHelper.buildSynths(defaultFMSynthParams, synthArray, 10);
 
 
         /*
@@ -280,7 +280,7 @@
         //This function is called when the user presses the button to change Synth options
         function changeSynthOptions(){
             writeLog(app.fmSynthOptions);
-            toneHelper.buildSynths(app.fmSynthOptions, synthArray);
+            toneHelper.buildSynths(app.fmSynthOptions, synthArray, 10);
         }
 
         //This function shows or hides the FMSynthConfigs div

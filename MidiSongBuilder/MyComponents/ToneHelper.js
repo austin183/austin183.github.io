@@ -42,7 +42,7 @@ function getToneHelper(){
             }).toDestination();
         },
 
-        buildSynths: function(params, synthArray){
+        buildSynths: function(params, synthArray, maxSynths){
             //Clear the synthArray
             if(synthArray.length > 0){
                 for (let i = synthArray.length - 1; i >= 0; i--) {
@@ -54,7 +54,7 @@ function getToneHelper(){
 
             //Since people have 10 fingers, they could play 10 notes at once
             //Get synths set up for each possible finger
-            for (let i = 0; i < 10; i++) {
+            for (let i = 0; i < maxSynths; i++) {
                 synthArray.push(
                     new Tone.FMSynth( params ).toDestination()
                 );
