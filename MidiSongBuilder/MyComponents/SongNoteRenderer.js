@@ -20,14 +20,18 @@ function getSongNoteRenderer(){
             var color = "blue";
             if(currentScore.keyScores[canvasNote.id]){
                 var tag = currentScore.keyScores[canvasNote.id].tag;
-                if(tag == "good"){
-                    color = "green";
-                }
-                else if(tag == "ok"){
-                    color = "yellow"
-                }
-                else if(tag == "bad"){
-                    color = "red";
+                switch (tag) {
+                    case "good":
+                        color = "green";
+                        break;
+                    case "ok":
+                        color = "yellow"; 
+                        break;
+                    case "bad":
+                        color = "red";
+                        break;
+                    default:
+                        break; 
                 }
             }
 
