@@ -159,15 +159,19 @@ function getSongNoteRenderer(){
             }
             return notesToPlay;
         },
-        renderNotesPlayingForCanvas: function(canvas, ctx, visibleField, currentScore, keyRenderInfo, now, visiblePast, visibleFuture){
+        renderNotesPlayingForCanvas: function(canvas, ctx, visibleField, currentScore, keyRenderInfo, now, visiblePast, visibleFuture, earliestNoteIndex){
             //Render the visibleField to the canvas
-            visibleField.forEach(canvasNote => {
+            for(var i = earliestNoteIndex; i < visibleField.length; i++){
+                const canvasNote = visibleField[i];
                 if(canvasNote.time + canvasNote.duration >= visiblePast && canvasNote.time <= visibleFuture){
                     //Create new note and calculate position for it
                     var noteDrawInstructions = renderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, visiblePast, keyRenderInfo);
                     renderer.drawNote(canvas, ctx, noteDrawInstructions);
                 }                
-            });
+                if(canvasNote.time > visibleFuture){
+                    break;
+                }
+            }
         },
         renderNowLine: function(canvas, ctx){
             renderer.drawNowLine(canvas, ctx);

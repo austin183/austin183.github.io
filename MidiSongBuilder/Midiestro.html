@@ -387,6 +387,7 @@
                 const startTime = Tone.now();
                 const futureLimit = songEnd;
                 const visibleField = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, app.minNoteDistance, app.minDuration, invertedKeyNoteMap, app.selectedKeyCount);
+                var earliestNoteIndex = 0;
 
                 currentMidi.tracks.forEach((track) => {
                     //create a synth for each track
@@ -420,7 +421,17 @@
                         return;
                     }
                     
-                    var currentScore = scoreKeeper.calculateNewScore(visibleField, pressedKeys, intervalNow);
+                    for(var i = earliestNoteIndex; i < visibleField.length; i++){
+                        const note = visibleField[i];
+                        if(note.time + note.duration < visiblePast){
+                            earliestNoteIndex = i;
+                        }
+                        else{
+                            break;
+                        }
+                    }
+                    
+                    var currentScore = scoreKeeper.calculateNewScore(visibleField, pressedKeys, intervalNow, earliestNoteIndex, visibleFuture);
                     app.score = currentScore.total;
                     var counts = scoreKeeper.getCounts();
                     app.goodCount = counts.goodCount;
@@ -432,7 +443,7 @@
                     }
                     app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
                     songNoteRenderer.renderNowLine(app.notesCanvas, app.vueCanvas);
-                    songNoteRenderer.renderNotesPlayingForCanvas(app.notesCanvas, app.vueCanvas, visibleField, currentScore, keyRenderInfo, intervalNow, visiblePast, visibleFuture);
+                    songNoteRenderer.renderNotesPlayingForCanvas(app.notesCanvas, app.vueCanvas, visibleField, currentScore, keyRenderInfo, intervalNow, visiblePast, visibleFuture, earliestNoteIndex);
                 }, 10);
 
             } else {

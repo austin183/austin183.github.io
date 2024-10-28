@@ -10,7 +10,7 @@ function getScoreKeeper(){
     };
     var previousPressedKeys = {};
     return {
-        calculateNewScore: function(visibleField, pressedKeys, now){
+        calculateNewScore: function(visibleField, pressedKeys, now, earliestNoteIndex, visibleFuture){
 
 
             //For each pressedKey, see if it was previously pressed
@@ -27,8 +27,11 @@ function getScoreKeeper(){
                 var closestNoteId = "";
                 var closestNoteTime = 999;
                 if(!previousPressedKeys[key]){
-                    for(var i = 0; i < visibleField.length; i++){
+                    for(var i = earliestNoteIndex; i < visibleField.length; i++){
                         var canvasNote = visibleField[i];
+                        if(canvasNote.time > visibleFuture){
+                            break;
+                        }
                         if(canvasNote.letter == key){
                             var distanceToNow = canvasNote.time - now;
                             if(Math.abs(distanceToNow) < Math.abs(closestNoteTime) ){
@@ -66,7 +69,7 @@ function getScoreKeeper(){
             }
 
             //Now to figure out which keys have been missed
-            for(var i = 0; i < visibleField.length; i++){
+            for(var i = earliestNoteIndex; i < visibleField.length; i++){
                 var canvasNote = visibleField[i];
                 var keyDistanceToNow = now - canvasNote.time;
                 if(!score.keyScores[canvasNote.id]){                    
