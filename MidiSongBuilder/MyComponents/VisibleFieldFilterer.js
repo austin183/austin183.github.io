@@ -1,6 +1,6 @@
 function getVisibleFieldFilterer(){
     return {
-        filterToVisibleField: function(song, minNoteDistance, minDuration, pastLimit, bufferFutureLimit, futureLimit, visiblePast, invertedKeyNoteMap, keyCount) {
+        filterToFullVisibleField(song, minNoteDistance, minDuration, invertedKeyNoteMap, keyCount){
             var visibleField = [];
             var defaultPreviousNote = {
                 time: -10,
@@ -20,14 +20,9 @@ function getVisibleFieldFilterer(){
                 if(note.duration < minDuration){
                     continue; //Skipping notes that are too short
                 }
-                var noteEnd = note.time + note.duration;
-                //Fast Forward to the section of song playing
-                if (pastLimit > noteEnd) {
-                    continue;
-                }
-
+                
                 //Build dataset for visible field
-                else if (bufferFutureLimit >= noteEnd) {
+                else {
                     var keyNote = invertedKeyNoteMap[note.name];
                     if (!keyNote) {
                         continue;
@@ -41,9 +36,6 @@ function getVisibleFieldFilterer(){
                     };
                     visibleField.push(canvasNote);
                 }
-                else {
-                    break;
-                }
             }
 
             //Remove overlaps greater than the keyCount
@@ -55,12 +47,6 @@ function getVisibleFieldFilterer(){
                     visibleField.splice(visibleField.indexOf(canvasNote), 1);
                 }
             }
-
-            //Remove notes that ended before now
-            visibleField = visibleField.filter(function(note) {
-                return note.time + note.duration >= visiblePast && note.time + note.duration <= futureLimit;
-            });
-
             return visibleField;
         }
     };

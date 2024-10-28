@@ -71,6 +71,9 @@
     </div>
     <div id="app">
         <div id="gameConfig" class="bordered" >
+            <div class="bordered">
+                Please note: most of these options require the song to be restarted in order to take affect.
+            </div>
             <!-- trackOptionConfig -->
             <div id="trackOptionConfig" class="side-by-side">
                 <div class="bordered">
@@ -382,6 +385,8 @@
                 const containerElement = document.getElementById("canvasContainer");
                 containerElement.scrollIntoView({ behavior: "smooth" });
                 const startTime = Tone.now();
+                const futureLimit = songEnd;
+                const visibleField = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, app.minNoteDistance, app.minDuration, invertedKeyNoteMap, app.selectedKeyCount);
 
                 currentMidi.tracks.forEach((track) => {
                     //create a synth for each track
@@ -407,6 +412,7 @@
                 playIntervalId = setInterval(() => {
                     const intervalNow = Tone.now() - startTime - delay;
                     const visiblePast = intervalNow - 1;
+                    const visibleFuture = intervalNow + 9;
                     if(visiblePast > songEnd){
                         app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
                         renderFinalScore(app.notesCanvas, app.vueCanvas, app.score, app.goodCount, app.okCount, app.badCount, app.missedCount);
@@ -414,13 +420,7 @@
                         clearInterval();
                         return;
                     }
-                    //Set the visible field to the next 10 seconds of the song
-                    const futureLimit = intervalNow + 10;
-                    const bufferFutureLimit = intervalNow + 60;
-                    const pastLimit = intervalNow - 60;
                     
-
-                    var visibleField = visibleFieldFilterer.filterToVisibleField(app.selectedTrack.notes, app.minNoteDistance, app.minDuration, pastLimit, bufferFutureLimit, futureLimit, visiblePast, invertedKeyNoteMap, app.selectedKeyCount);
                     var currentScore = scoreKeeper.calculateNewScore(visibleField, pressedKeys, intervalNow);
                     app.score = currentScore.total;
                     var counts = scoreKeeper.getCounts();
@@ -433,7 +433,7 @@
                     }
                     app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
                     songNoteRenderer.renderNowLine(app.notesCanvas, app.vueCanvas);
-                    songNoteRenderer.renderNotesPlayingForCanvas(app.notesCanvas, app.vueCanvas, visibleField, currentScore, keyRenderInfo, intervalNow, visiblePast);
+                    songNoteRenderer.renderNotesPlayingForCanvas(app.notesCanvas, app.vueCanvas, visibleField, currentScore, keyRenderInfo, intervalNow, visiblePast, visibleFuture);
                 }, 10);
 
             } else {
