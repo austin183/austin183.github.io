@@ -30,7 +30,7 @@ function getSynthKeyPlayer(){
                     }
                     //Start playing the note for the key through the synth
                     //based on the pressed key's not in the selected keyNoteMap
-                    synthArray[synthIndex].triggerAttack(app.selectedKeyNoteMap.keyNoteMap[key], "0", velocity);
+                    synthArray[synthIndex].triggerAttack(app.selectedKeyNoteMap.keyNoteMap[key], ".01", velocity);
                     //Save which synth goes with the key right now
                     synthMap[key] = synthIndex;
                 } else {
