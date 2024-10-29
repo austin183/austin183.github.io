@@ -1,6 +1,6 @@
 function getVisibleFieldFilterer(){
     return {
-        filterToFullVisibleField(song, minNoteDistance, minDuration, invertedKeyNoteMap, keyCount){
+        filterToFullVisibleField(song, minNoteDistance, minDuration, invertedKeyNoteMap, keyCount, keyRenderInfo, canvas, songNoteRenderer){
             var visibleField = [];
             var defaultPreviousNote = {
                 time: -10,
@@ -28,11 +28,17 @@ function getVisibleFieldFilterer(){
                         continue;
                     }
 
+                    var prerenderedDrawInstructions = null;
+                    if(songNoteRenderer && canvas && keyRenderInfo){
+                        prerenderedDrawInstructions = songNoteRenderer.getPrerenderedDrawInstructions(canvas, keyRenderInfo, note, keyNote);
+                    }                    
+
                     var canvasNote = {
                         duration: note.duration,
                         time: note.time,
-                        letter: keyNote,
-                        id: note.name + "_" + note.time
+                        letter: keyNote.toUpperCase(),
+                        id: note.name + "_" + note.time,
+                        x: prerenderedDrawInstructions.x
                     };
                     visibleField.push(canvasNote);
                 }

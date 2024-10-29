@@ -1,6 +1,19 @@
 function getSongNoteRenderer(){
     var renderer = {
-        getNoteDrawInstructions: function(canvas, canvasNote, currentScore, now, visiblePast, keyRenderInfo){
+        getPrerenderedDrawInstructions: function(canvas, keyRenderInfo, note, letter){
+            var maxHeight = canvas.height;
+            var maxWidth = canvas.width;
+            //We have 10 keys to stretch across the maxWidth
+            var maxCharacterWidth = maxWidth / 10;
+            //We have to cover 10 seconds with the height
+            var maxSecondHeight = maxHeight / 10;
+            var borderWidthHalf = (canvas.width / 20) - 3;
+            var prerenderedInstructions = {
+                x: Math.floor((keyRenderInfo[letter].column * maxCharacterWidth) + borderWidthHalf)
+            };
+            return prerenderedInstructions;
+        },
+        getNoteDrawInstructions: function(canvas, canvasNote, currentScore, now, visiblePast){
             /*
             Should draw the character closer to the bottom when the `canvasNote.time`
             is closer to `now`. The character should have a border that stretches above
@@ -11,12 +24,8 @@ function getSongNoteRenderer(){
             approaches `now`
             */
             var maxHeight = canvas.height;
-            var maxWidth = canvas.width;
-            //We have 10 keys to stretch across the maxWidth
-            var maxCharacterWidth = maxWidth / 10;
             //We have to cover 10 seconds with the height
             var maxSecondHeight = maxHeight / 10;
-            var borderWidthHalf = (canvas.width / 20) - 3;
             var color = "blue";
             if(currentScore.keyScores[canvasNote.id]){
                 var tag = currentScore.keyScores[canvasNote.id].tag;
@@ -41,7 +50,7 @@ function getSongNoteRenderer(){
                 //The height of the border around the letter
                 border: canvasNote.time > visiblePast ? canvasNote.duration * maxSecondHeight : (canvasNote.time + canvasNote.duration - visiblePast) * maxSecondHeight,
                 //The horizontal position of the letter, based on where the letter is on the keyboard
-                x: Math.floor((keyRenderInfo[canvasNote.letter].column * maxCharacterWidth) + borderWidthHalf),
+                x: canvasNote.x,
                 //The vertial position of the letter, based on how far away it is from now
                 y: Math.floor(maxHeight - ((canvasNote.time - visiblePast > 0 ? canvasNote.time - visiblePast: 0) * (maxSecondHeight + 1))),
                 color: color
@@ -59,7 +68,7 @@ function getSongNoteRenderer(){
             ctx.fillStyle = noteDrawInstructions.color;
 
             // Draw the note letter at the calculated position
-            ctx.fillText(noteDrawInstructions.letter.toUpperCase(), x, y - 2); // Assuming the height of the letter is about 20 pixels
+            ctx.fillText(noteDrawInstructions.letter, x, y - 2); // Assuming the height of the letter is about 20 pixels
             // Set border style and fill color
             ctx.strokeStyle = noteDrawInstructions.color;
             ctx.lineWidth = 1;
@@ -125,7 +134,7 @@ function getSongNoteRenderer(){
             };
         },
         //Need to rethink this with canvas
-        renderNotesPlaying: function(canvas, song, currentScore, invertedKeyNoteMap, keyRenderInfo, now, visiblePast){
+        renderDebugNotesPlaying: function(canvas, song, currentScore, invertedKeyNoteMap, now, visiblePast){
             var notesToPlay = "";
             for(var i = 0; i < song.length; i++){
                 var note = song[i];
@@ -152,20 +161,20 @@ function getSongNoteRenderer(){
                         letter : keyNote,
                         id: note.name + "_" + note.time
                     };
-                    var noteDrawInstructions = renderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, visiblePast, keyRenderInfo);
+                    var noteDrawInstructions = renderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, visiblePast);
                     notesToPlay += " " + keyNote + " (time: " + note.time + ") (end: " + (note.time + note.duration) + ") " +
                         "(x: " + noteDrawInstructions.x + ") (y: " + noteDrawInstructions.y + ")";
                 }
             }
             return notesToPlay;
         },
-        renderNotesPlayingForCanvas: function(canvas, ctx, visibleField, currentScore, keyRenderInfo, now, visiblePast, visibleFuture, earliestNoteIndex){
+        renderNotesPlayingForCanvas: function(canvas, ctx, visibleField, currentScore, now, visiblePast, visibleFuture, earliestNoteIndex){
             //Render the visibleField to the canvas
             for(var i = earliestNoteIndex; i < visibleField.length; i++){
                 const canvasNote = visibleField[i];
                 if(canvasNote.time + canvasNote.duration >= visiblePast && canvasNote.time <= visibleFuture){
                     //Create new note and calculate position for it
-                    var noteDrawInstructions = renderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, visiblePast, keyRenderInfo);
+                    var noteDrawInstructions = renderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, visiblePast);
                     renderer.drawNote(canvas, ctx, noteDrawInstructions);
                 }                
                 if(canvasNote.time > visibleFuture){
@@ -175,6 +184,9 @@ function getSongNoteRenderer(){
         },
         renderNowLine: function(canvas, ctx){
             renderer.drawNowLine(canvas, ctx);
+        },
+        getPrerenderedDrawInstructions: function(canvas, keyRenderInfo, note, letter){
+            return renderer.getPrerenderedDrawInstructions(canvas, keyRenderInfo, note, letter);
         }
     };
 }
