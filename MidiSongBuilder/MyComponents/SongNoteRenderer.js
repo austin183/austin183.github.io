@@ -44,10 +44,10 @@ function getSongNoteRenderer(){
                                 cachedLetterCanvas = cachedLetterSet.goodNoteCanvas;
                                 break;
                             case "ok":
-                                cachedLetterCanvas = cachedLetterSet.goodNoteCanvas;
+                                cachedLetterCanvas = cachedLetterSet.okNoteCanvas;
                                 break;
                             case "bad":
-                                cachedLetterCanvas = cachedLetterSet.goodNoteCanvas;
+                                cachedLetterCanvas = cachedLetterSet.badNoteCanvas;
                                 break;
                             default:
                                 break; 
