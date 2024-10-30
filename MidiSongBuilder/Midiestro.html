@@ -98,7 +98,8 @@
                     {{selectedKeyNoteMap.description}}
                 </div>
             </div>
-            <!-- maxKeyCount -->
+            <!-- maxKeyCount 
+             Commenting this one out right now because the multi key behavior stopped working.  May try this out again later, when I stop being such a scrub at the game.
             <div id="maxKeyCount" class="side-by-side">
                 <div class="bordered">
                     <label for="maxKeyCountRadio">Max Keys at Once</label>
@@ -113,6 +114,7 @@
                     This is how many keys will appear to match at one point in time. (The browser will sometimes not recognize more than 2 keys at once, so the 3rd option could appear not to work with all key combinations.)
                 </div>
             </div>
+            -->
             <!-- minDurationConfig -->
             <div id="minDurationConfig" class="side-by-side">
                 <div class="bordered">
@@ -212,7 +214,7 @@
 
         //Disposes of existing synths and creates synths based on FMSynth options
         //First call uses the default
-        toneHelper.buildSynths(defaultFMSynthParams, synthArray, 3); //Max of three keys for the whole game.
+        toneHelper.buildSynths(defaultFMSynthParams, synthArray, 10); //Max of three keys for the whole game.
         var app; //The Vue.js variable
 
         /*
@@ -382,6 +384,10 @@
                 playButton.textContent = 'Restart';
             }
             if (playing && currentMidi) {
+                                // Remove focus from any focused element
+                if (document.activeElement) {
+                    document.activeElement.blur();
+                }
                 const scoreKeeper = getScoreKeeper();
                 const containerElement = document.getElementById("canvasContainer");
                 containerElement.scrollIntoView({ behavior: "smooth" });
@@ -403,12 +409,14 @@
                     synths.push(synth);
                     //schedule all of the events
                     track.notes.forEach((note) => {
-                        synth.triggerAttackRelease(
-                            note.name,
-                            note.duration,
-                            note.time + startTime + delay,
-                            note.velocity * app.trackVolume
-                        );
+                        if(note.duration > 0){
+                            synth.triggerAttackRelease(
+                                note.name,
+                                note.duration,
+                                note.time + startTime + delay,
+                                note.velocity * app.trackVolume
+                            );
+                        }                        
                     });
                 });
                 playIntervalId = setInterval(() => {
@@ -448,6 +456,7 @@
                 }, 10);
 
             } else {
+                clearInterval(playIntervalId);
                 app.renderNotesPlaying = "";                
                 Tone.Transport.stop();
                 Tone.Transport.position = 0;
@@ -458,9 +467,7 @@
                     const synth = synths.shift();
                     synth.disconnect();
                     synth.dispose();                                  
-                }                
-                
-                clearInterval(playIntervalId);                
+                }
             }
         };
 
