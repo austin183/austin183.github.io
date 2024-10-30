@@ -190,6 +190,8 @@
         }
         var synthKeyPlayer = getSynthKeyPlayer();
         var songNoteRenderer = getSongNoteRenderer();
+        const keyRenderInfo = getKeyRenderInfo();
+        var noteLetterCache = songNoteRenderer.buildSongNoteLetterCache(keyRenderInfo);
         var toneHelper = getToneHelper();
         var visibleFieldFilterer = getVisibleFieldFilterer();
         var synthMap = {};
@@ -197,8 +199,7 @@
         const synthArray = [];  //Holds all the available synths
         const pressedKeys = {}; //Holds which keys are pressed down on the keyboard
         //Get all the keyNoteMaps
-        const keyNoteMapCollection = getKeyNoteMaps();  //Supplied from ./keyNoteMap.js
-        const keyRenderInfo = getKeyRenderInfo();
+        const keyNoteMapCollection = getKeyNoteMaps();  //Supplied from ./keyNoteMap.js        
         //Get all the available keyNoteMapKeys keys
         const keyNoteMapKeys = Object.keys(keyNoteMapCollection);
         //Get a default value for the keyNoteMap
@@ -443,20 +444,23 @@
                     }
                     app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
                     songNoteRenderer.renderNowLine(app.notesCanvas, app.vueCanvas);
-                    songNoteRenderer.renderNotesPlayingForCanvas(app.notesCanvas, app.vueCanvas, visibleField, currentScore, intervalNow, visiblePast, visibleFuture, earliestNoteIndex);
+                    songNoteRenderer.renderNotesPlayingForCanvas(app.notesCanvas, app.vueCanvas, visibleField, currentScore, intervalNow, visiblePast, visibleFuture, earliestNoteIndex, noteLetterCache);
                 }, 10);
 
             } else {
+                app.renderNotesPlaying = "";                
                 Tone.Transport.stop();
                 Tone.Transport.position = 0;
                 Tone.Transport.cancel();
+
                 //dispose the synth and make a new one
-                clearInterval(playIntervalId);
                 while (synths.length) {                    
                     const synth = synths.shift();
                     synth.disconnect();
-                    app.renderNotesPlaying = "";
-                }
+                    synth.dispose();                                  
+                }                
+                
+                clearInterval(playIntervalId);                
             }
         };
 

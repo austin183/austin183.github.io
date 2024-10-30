@@ -36,7 +36,7 @@ function getVisibleFieldFilterer(){
                     var canvasNote = {
                         duration: note.duration,
                         time: note.time,
-                        letter: keyNote.toUpperCase(),
+                        letter: keyNote,
                         id: note.name + "_" + note.time,
                         x: prerenderedDrawInstructions.x
                     };

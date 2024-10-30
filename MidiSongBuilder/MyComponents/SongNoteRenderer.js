@@ -13,7 +13,7 @@ function getSongNoteRenderer(){
             };
             return prerenderedInstructions;
         },
-        getNoteDrawInstructions: function(canvas, canvasNote, currentScore, now, visiblePast){
+        getNoteDrawInstructions: function(canvas, canvasNote, currentScore, now, visiblePast, noteLetterCache){
             /*
             Should draw the character closer to the bottom when the `canvasNote.time`
             is closer to `now`. The character should have a border that stretches above
@@ -27,8 +27,33 @@ function getSongNoteRenderer(){
             //We have to cover 10 seconds with the height
             var maxSecondHeight = maxHeight / 10;
             var color = "blue";
+            var cachedLetterCanvas = null;
+            var cachedLetterSet = null;
+            if(noteLetterCache){
+                if(noteLetterCache[canvasNote.letter]){
+                    cachedLetterSet = noteLetterCache[canvasNote.letter];
+                    cachedLetterCanvas = cachedLetterSet.unplayedNoteCanvas;
+                }
+            }
             if(currentScore.keyScores[canvasNote.id]){
                 var tag = currentScore.keyScores[canvasNote.id].tag;
+                if(noteLetterCache){
+                    if(noteLetterCache[canvasNote.letter]){
+                        switch (tag) {
+                            case "good":
+                                cachedLetterCanvas = cachedLetterSet.goodNoteCanvas;
+                                break;
+                            case "ok":
+                                cachedLetterCanvas = cachedLetterSet.goodNoteCanvas;
+                                break;
+                            case "bad":
+                                cachedLetterCanvas = cachedLetterSet.goodNoteCanvas;
+                                break;
+                            default:
+                                break; 
+                        }
+                    }
+                }
                 switch (tag) {
                     case "good":
                         color = "green";
@@ -41,8 +66,9 @@ function getSongNoteRenderer(){
                         break;
                     default:
                         break; 
-                }
+                }                
             }
+            
 
             return {
                 //The letter to display
@@ -53,7 +79,8 @@ function getSongNoteRenderer(){
                 x: canvasNote.x,
                 //The vertial position of the letter, based on how far away it is from now
                 y: Math.floor(maxHeight - ((canvasNote.time - visiblePast > 0 ? canvasNote.time - visiblePast: 0) * (maxSecondHeight + 1))),
-                color: color
+                color: color,
+                cachedLetterCanvas: cachedLetterCanvas
             };
 
         },
@@ -68,7 +95,13 @@ function getSongNoteRenderer(){
             ctx.fillStyle = noteDrawInstructions.color;
 
             // Draw the note letter at the calculated position
-            ctx.fillText(noteDrawInstructions.letter, x, y - 2); // Assuming the height of the letter is about 20 pixels
+            if(noteDrawInstructions.cachedLetterCanvas){
+                ctx.drawImage(noteDrawInstructions.cachedLetterCanvas, x, y - 23);
+            }
+            else{
+                ctx.fillText(noteDrawInstructions.letter, x, y - 2); // Assuming the height of the letter is about 20 pixels
+            }
+            
             // Set border style and fill color
             ctx.strokeStyle = noteDrawInstructions.color;
             ctx.lineWidth = 1;
@@ -101,6 +134,16 @@ function getSongNoteRenderer(){
             ctx.moveTo(0, nowLineHeight);
             ctx.lineTo(maxWidth, nowLineHeight);            
             ctx.stroke();
+        },
+        drawCacheNote: function(key, fillStyle){
+            const tempUnplayedCanvas = document.createElement('canvas');
+            tempUnplayedCanvas.width = 28;
+            tempUnplayedCanvas.height = 28;
+            const tempUnplayedCtx = tempUnplayedCanvas.getContext('2d');
+            tempUnplayedCtx.font = "18px Georgia";
+            tempUnplayedCtx.fillStyle = fillStyle;
+            tempUnplayedCtx.fillText(key.toUpperCase(), 0,20);
+            return tempUnplayedCanvas;
         }
     };
 
@@ -168,13 +211,13 @@ function getSongNoteRenderer(){
             }
             return notesToPlay;
         },
-        renderNotesPlayingForCanvas: function(canvas, ctx, visibleField, currentScore, now, visiblePast, visibleFuture, earliestNoteIndex){
+        renderNotesPlayingForCanvas: function(canvas, ctx, visibleField, currentScore, now, visiblePast, visibleFuture, earliestNoteIndex, noteLetterCache){
             //Render the visibleField to the canvas
             for(var i = earliestNoteIndex; i < visibleField.length; i++){
                 const canvasNote = visibleField[i];
                 if(canvasNote.time + canvasNote.duration >= visiblePast && canvasNote.time <= visibleFuture){
                     //Create new note and calculate position for it
-                    var noteDrawInstructions = renderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, visiblePast);
+                    var noteDrawInstructions = renderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, visiblePast, noteLetterCache);
                     renderer.drawNote(canvas, ctx, noteDrawInstructions);
                 }                
                 if(canvasNote.time > visibleFuture){
@@ -187,6 +230,23 @@ function getSongNoteRenderer(){
         },
         getPrerenderedDrawInstructions: function(canvas, keyRenderInfo, note, letter){
             return renderer.getPrerenderedDrawInstructions(canvas, keyRenderInfo, note, letter);
+        },
+        buildSongNoteLetterCache: function(keyRenderInfo){
+            var cache = {};
+            for(var key in keyRenderInfo){                
+                const tempUnplayedCanvas = renderer.drawCacheNote(key, "blue");
+                const tempGoodCanvas = renderer.drawCacheNote(key, "green");
+                const tempOkCanvas = renderer.drawCacheNote(key, "yellow");
+                const tempBadCanvas = renderer.drawCacheNote(key, "red");
+
+                cache[key] = {
+                    unplayedNoteCanvas: tempUnplayedCanvas,
+                    goodNoteCanvas: tempGoodCanvas,
+                    okNoteCanvas: tempOkCanvas,
+                    badNoteCanvas: tempBadCanvas
+                };
+            }
+            return cache;
         }
     };
 }
