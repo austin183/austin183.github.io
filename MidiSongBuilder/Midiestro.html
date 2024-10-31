@@ -29,10 +29,10 @@
     <script src="MyComponents/keyRenderInfo.js"></script>
     <script src="MyComponents/VisibleFieldFilterer.js"></script>
     <script src="MyComponents/ScoreKeeper.js"></script>
+    <script src="MyComponents/SongCompression.js"></script>
 
     <!-- local songs -->
-    <script src="PublicDomainSongs/gollywongcakewalk.js"></script>
-    <script src="PublicDomainSongs/arbeaumatachins.js"></script>
+    <script src="PublicDomainSongs/matachins_small.js"></script>
 </head>
 
 <body>
@@ -210,7 +210,6 @@
             toggleElementById('notesPlaying');
         }
         const jsonSongs = {
-            "Claude Debussy - Golliwog's Cakewalk" : getGollyWongCakeWalk(),
             "Thoinot Arbeau - Les Bouffons (Mattachins)": getArbeauMatachins()
         };
         var synthKeyPlayer = getSynthKeyPlayer();
@@ -234,6 +233,7 @@
         var defaultSongNotes = "";
         var defaultSongNotesOnKeyMap = "";
         var defaultFMSynthParams = toneHelper.getDefaultFMSynthParams();
+        const songCompression = getSongCompression();
 
         //Disposes of existing synths and creates synths based on FMSynth options
         //First call uses the default
@@ -377,7 +377,7 @@
                 songEnd = lastNote.time + lastNote.duration;
                 renderSongNotes();
                 //To get the premade function file version
-                app.midiJson = "function getRENAMEMETHOD() { return " + JSON.stringify(currentMidi) + "};"
+                app.midiJson = "function getRENAMEMETHOD() { return " + JSON.stringify(getCompressedJson()) + "};"
                 //To get the prettified version
                 //app.midiJson = JSON.stringify(currentMidi, null, 2);
             };
@@ -422,7 +422,7 @@
                 const futureLimit = songEnd;
                 const visibleField = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, app.minNoteDistance, app.minDuration, invertedKeyNoteMap, app.selectedKeyCount, keyRenderInfo, app.notesCanvas, songNoteRenderer);
                 var earliestNoteIndex = 0;
-
+                debugger;
                 currentMidi.tracks.forEach((track) => {
                     //create a synth for each track
                     const synth = new Tone.PolySynth(Tone.Synth, {
@@ -609,7 +609,9 @@
 
         function handleJsonSongSelection(){
             if(app.selectedJsonSong){
-                currentMidi = app.selectedJsonSong;
+                app.availableTracks = []
+                var decompressedSong = getDecompressedSong();
+                currentMidi = decompressedSong;
                 currentMidi.tracks.forEach(track => {
                     app.availableTracks.push(track);
                 });
@@ -639,13 +641,21 @@
             // Use setTimeout() to delay the display of the copied message
             setTimeout(function(){
                 document.getElementById('copyMidiJson').textContent = 'Copied!';
-            }, 200);
+            }, 100);
 
             // Use setTimeout() again to reset the text to its original value
             setTimeout(function(){
                 document.getElementById('copyMidiJson').textContent = 'Copy Json to Clipboard';
             }, 3000);
 
+        }
+
+        function getDecompressedSong(){ 
+            return songCompression.getDecompressedSong(app.selectedJsonSong.tracks);
+        }
+
+        function getCompressedJson(){
+            return songCompression.getCompressedJson(app.availableTracks);
         }
 
     </script>
