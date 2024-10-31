@@ -207,6 +207,7 @@
         const debugPage = queryString == "?debug";
         if(!debugPage){
             toggleElementById('songNoteKeys');
+            toggleElementById('notesPlaying');
         }
         const jsonSongs = {
             "Claude Debussy - Golliwog's Cakewalk" : getGollyWongCakeWalk(),
