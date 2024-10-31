@@ -23,6 +23,7 @@ div.bordered {
     margin-left: 5px;
     margin-right: 5px;
     margin-top: 5px;
+    margin-bottom: 5px;
 }
 
 div.centered{
@@ -71,6 +72,13 @@ div.app {
     color: black;
     margin: 20px auto;
     background-color: #9fa3d3;
+}
+
+#jsonSongConfig{
+    margin-top: 10px;
+    margin-bottom: 10px;
+    background-color: #9fd3b8;
+    font-size: large;
 }
 
 #FileDrop.Hover {
@@ -156,23 +164,13 @@ tone-play-toggle {
 }
 
 #toggleInstructions {
-    position: relative;
-    bottom: 10px; /* moves the toggle button at the bottom of your div */
-    left: 5%;
-    background-color: lightblue;
-    border-radius: 3px;
     padding: 5px;
-    cursor:pointer;
+    background-color: lightblue;
 }
 
 #toggleGameConfig {
-    position: relative;
-    bottom: 10px; /* moves the toggle button at the bottom of your div */
-    left: 5%;
     background-color: #9fd2f3;
-    border-radius: 3px;
     padding: 5px;
-    cursor:pointer;
 }
 
 #tonePlayToggle {

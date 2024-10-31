@@ -29,6 +29,10 @@
     <script src="MyComponents/keyRenderInfo.js"></script>
     <script src="MyComponents/VisibleFieldFilterer.js"></script>
     <script src="MyComponents/ScoreKeeper.js"></script>
+
+    <!-- local songs -->
+    <script src="PublicDomainSongs/gollywongcakewalk.js"></script>
+    <script src="PublicDomainSongs/arbeaumatachins.js"></script>
 </head>
 
 <body>
@@ -50,7 +54,7 @@
                 As a simple song to start with, here is a place to download <a href="https://onlinesequencer.net/4101480#">Mary Had a Little Lamb</a> .  On the website, choose "Download MIDI"
             </p>
             <p>
-                You can find more midi files to download and try out at:
+                You can find more midi files to download and try out at the links below.  Also searching the internet with a phrase like "Nightmare Before Christmas MIDI" will find songs to download as well.
                 <ul>
                     <li>
                         <a href="https://bbloomf.github.io/lilypond-songs">https://bbloomf.github.io/lilypond-songs</a>
@@ -58,18 +62,30 @@
                     <li>
                         <a href="https://onlinesequencer.net/sequences">https://onlinesequencer.net/sequences</a>
                     </li>
+                    <li>
+                        <a href="http://www.soundswell.co.uk/pages/swmids.htm">http://www.soundswell.co.uk/pages/swmids.htm</a>
+                    </li>
                 </ul>
             </p>
-        </div>
-        <button id="toggleInstructions" onclick="toggleElementById('Instructions')">Toggle Instructions</button>
-        <div id="FileDrop">
-            <div id="Text">
-                Drop a midi file here, or click to select a file from the wizard.
+            <div id="FileDrop">
+                <div id="Text">
+                    Drop a midi file here, or click to select a file from the wizard.  Or use the select box below to choose a Preloaded Song instead.
+                </div>
+                <input type="file" accept="audio/midi" />
             </div>
-            <input type="file" accept="audio/midi" />
         </div>
+        <button id="toggleInstructions" onclick="toggleElementById('Instructions')">Toggle Instructions And Advanced Song Selection</button>
+        
     </div>
     <div id="app">
+        <div id="jsonSongConfig" class="bordered">
+            <div class="bordered">
+                <label for="jsonSongSelect">Select a Preloaded Song</label>
+                <select id="jsonSongSelect" v-model="selectedJsonSong" class="pure-input-rounded" v-on:change="handleJsonSongSelection()">
+                    <option v-for="(item, key, index) in jsonSongs" :value="item">{{key}}</option>
+                </select>
+            </div>
+        </div>
         <div id="gameConfig" class="bordered" >
             <div class="bordered">
                 Please note: most of these options require the song to be restarted in order to take affect.
@@ -175,6 +191,8 @@
         </div>
         <div id="notesPlaying">
             <div class="bordered">{{renderedNotesPlaying}}</div>
+            <button id="copyMidiJson" onclick="copyMidiJsonToClipboard()">Copy Json to Clipboard</button>
+            <div class="bordered">{{ midiJson }}</div>
         </div>
         <div class="side-by-side" id="songNoteKeys">
             <div class="bordered">Mapped Keys<br />{{ songNotesOnKeyMap }}</div>
@@ -190,6 +208,10 @@
         if(!debugPage){
             toggleElementById('songNoteKeys');
         }
+        const jsonSongs = {
+            "Claude Debussy - Golliwog's Cakewalk" : getGollyWongCakeWalk(),
+            "Thoinot Arbeau - Les Bouffons (Mattachins)": getArbeauMatachins()
+        };
         var synthKeyPlayer = getSynthKeyPlayer();
         var songNoteRenderer = getSongNoteRenderer();
         const keyRenderInfo = getKeyRenderInfo();
@@ -353,6 +375,10 @@
                 var lastNote = fullTrack.notes[fullTrack.notes.length - 1];
                 songEnd = lastNote.time + lastNote.duration;
                 renderSongNotes();
+                //To get the premade function file version
+                app.midiJson = "function getRENAMEMETHOD() { return " + JSON.stringify(currentMidi) + "};"
+                //To get the prettified version
+                //app.midiJson = JSON.stringify(currentMidi, null, 2);
             };
             reader.readAsArrayBuffer(file);
         }
@@ -510,6 +536,8 @@
                 }
             }
         }
+        toggleElementById('Instructions');
+        toggleElementById('gameConfig')
 
         //Once everything is downloaded, and the page has loaded, start rendering the Vue.js app
         window.onload = function(){
@@ -534,7 +562,10 @@
                     minDuration: .1,
                     minNoteDistance: .4,
                     playerVolume: .7,
-                    trackVolume: 1
+                    trackVolume: 1,
+                    midiJson: "",
+                    jsonSongs: jsonSongs,
+                    selectedJsonSong: null
                 },
                 mounted(){
                     this.notesCanvas = document.getElementById("notesCanvas")
@@ -573,6 +604,47 @@
                     document.activeElement.blur();
                 }
             }
+        }
+
+        function handleJsonSongSelection(){
+            if(app.selectedJsonSong){
+                currentMidi = app.selectedJsonSong;
+                currentMidi.tracks.forEach(track => {
+                    app.availableTracks.push(track);
+                });
+                var fullNotes = getCombinedTrackNotes(currentMidi.tracks);
+                var fullTrack = {
+                    "name" : "Full Track",
+                    "notes": fullNotes
+                }
+                // Add the fullTrack as the first array element in app.availableTracks
+                app.availableTracks.unshift(fullTrack);
+                
+                app.selectedTrack = app.availableTracks[0];
+                var lastNote = fullTrack.notes[fullTrack.notes.length - 1];
+                songEnd = lastNote.time + lastNote.duration;
+                renderSongNotes();
+                app.midiJson = JSON.stringify(currentMidi, null, 2);
+                renderSongNotes();
+                var playButton = document.getElementById('tonePlayToggle');
+                playButton.removeAttribute('disabled');
+                playButton.textContent = 'Play';
+            }
+        }
+
+        function copyMidiJsonToClipboard(){
+            navigator.clipboard.writeText(app.midiJson);
+            //Change the copyMidiJson text to "Copied!" for a second, and then change it back to "Copy Json to Clipboard" after a few seconds
+            // Use setTimeout() to delay the display of the copied message
+            setTimeout(function(){
+                document.getElementById('copyMidiJson').textContent = 'Copied!';
+            }, 200);
+
+            // Use setTimeout() again to reset the text to its original value
+            setTimeout(function(){
+                document.getElementById('copyMidiJson').textContent = 'Copy Json to Clipboard';
+            }, 3000);
+
         }
 
     </script>
