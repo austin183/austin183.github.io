@@ -33,6 +33,10 @@
 
     <!-- local songs -->
     <script src="PublicDomainSongs/matachins_small.js"></script>
+    <script src="PublicDomainSongs/bach_2partinvention.js"></script>
+    <script src="PublicDomainSongs/bach_prelude.js"></script>
+    <script src="PublicDomainSongs/teleman_sonata.js"></script>
+    <script src="PublicDomainSongs/debussy_gollycake.js"></script>
 </head>
 
 <body>
@@ -210,7 +214,11 @@
             toggleElementById('notesPlaying');
         }
         const jsonSongs = {
-            "Thoinot Arbeau - Les Bouffons (Mattachins)": getArbeauMatachins()
+            "Thoinot Arbeau - Les Bouffons (Mattachins)": getArbeauMatachins(),
+            "Johann Sebastian Bach - 2 Part Inventions": getBach2PartInvention(),
+            "Johann Sebastian Bach - Prelude Number 1": getBachPrelude(),
+            "Georg Philipp Telemann - Sonata": getTelemannSonata(),
+            "Claude Debussy - Golliwog's Cakewalk": getGollyCake()
         };
         var synthKeyPlayer = getSynthKeyPlayer();
         var songNoteRenderer = getSongNoteRenderer();
@@ -422,7 +430,6 @@
                 const futureLimit = songEnd;
                 const visibleField = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, app.minNoteDistance, app.minDuration, invertedKeyNoteMap, app.selectedKeyCount, keyRenderInfo, app.notesCanvas, songNoteRenderer);
                 var earliestNoteIndex = 0;
-                debugger;
                 currentMidi.tracks.forEach((track) => {
                     //create a synth for each track
                     const synth = new Tone.PolySynth(Tone.Synth, {
