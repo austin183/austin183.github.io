@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Austin183's Blog Posts</title>
+    <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
+</head>
+<body>
+    <h1>The Beginning</h1>
+
+    <div>
+        <a href="https://github.com/austin183/austin183.github.io/commit/b1c1aa4fda9ae3d7e0d76e751a6c58949e7466b3">See Commit on Github</a>
+        <h2>Why a rhythm typing game?</h2>
+        <p>
+            I have been watching <a href="https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://www.youtube.com/%40CainOnGames&ved=2ahUKEwigseDojLyJAxW05ckDHZeINx0QFnoECAoQAQ&usg=AOvVaw2ptLLwLLg2FsHu1wGHYHMY">Tim Cain on Youtube</a> , the creator of Fallout.  And one of his videos discussed an approach to starting off in game development at <a href="https://www.youtube.com/watch?v=mHMFG8uvOb0">Coding Toys (Insomnia Edition)</a> .  It inspired me to build a toy, and that lead to the idea of a video game.  First, I had to take an inventory of myself, my skills, and my perseverance.  Thanks for the inspiration, Tim!  I am glad you couldn't sleep that night.  I always appreciate your insights.
+        </p>
+        <p>
+            There are a few things I like to do:
+            <ul>
+                <li>Learn</li>
+                <li>Code</li>
+                <li>Play Games</li>
+                <li>Share Knowledge</li>
+            </ul>
+        </p>
+        <p>
+            And there are a few things I am bad at:
+            <ul>
+                <li>Storytelling</li>
+                <li>Other Complex Game Design Requirements</li>
+                <li>Music</li>
+                <li>Original Ideas</li>
+            </ul>
+        </p>
+        <p>
+            I first wanted to figure out how to use my keyboard as a piano, because that seemed like a good Learning and Coding activity to get familiar with my new set up <a href="../AboutThisDevelopmentEnvironment.html">Development Environment</a> .  I also wanted the result to be usable as broadly as possible, so it had to run in a plain old modern day web browser.  I used <a href="https://tonejs.github.io/">ToneJS</a> for the music synthesis because I didn't want to reinvent the sound engineering wheel.  I would be terrible at that. I also used <a href="https://vuejs.org/">VueJS</a> to make the UI easier to work with, and I used it previously on a couple of other page already.
+        </p>
+        <p>
+            Once I built <a href="../MidiSongBuilder/Keybiano.html">the Keybiano page</a> , I needed to figure out how I could play it since I don't have any musical background.  At first I transcribed notes into json files by hand with the songs from that page. I had to play the songs using my memory of the note timings.  It worked great, but adding new songs was a pain, and playing them on a static page was not much fun.  It was time to try new things.  Then I recalled the fun I had with games like Guitar Hero, Rock Band, Dance Dance Revolution, Just Dance, etc... and I wanted to take my keyboard based piano to that experience.
+        </p>
+        <p>
+            My task was to figure out a way to get json with all the data I would need for a song, and that proved to be too much for my tiny attention span.  So I searched for ways to make use of existing midi files instead.  That led me to <a href="https://github.com/Tonejs/Midi">ToneJS/Midi</a> , which can take midi files and turn them into json objects usable with ToneJS.  I started with <a href="https://tonejs.github.io/Midi/">the ToneJS Midi Demo Page</a> , and I worked on incorporating the game elements on top of that.  This commit is the first result of that work.  All it did at this point was accept a midi file, and when you clicked on play, all the notes for the first track would fall down the canvas and play the provided song.  It was enough to convince me I was on a good path to building out a whole game.
+        </p>
+    </div>
+</body>
+</html>
+
