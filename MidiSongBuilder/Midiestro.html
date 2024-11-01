@@ -193,9 +193,6 @@
         <div id="canvasContainer" class="bordered">
             <canvas id="notesCanvas"></canvas>
         </div>
-        <div id="keyboardForcer">
-            <input type="text" value="" id="keyboardInput" v-model="keyInput"></input>
-        </div>
         <div id="notesPlaying">
             <div class="bordered">{{renderedNotesPlaying}}</div>
             <button id="copyMidiJson" onclick="copyMidiJsonToClipboard()">Copy Json to Clipboard</button>
@@ -263,7 +260,7 @@
         document.addEventListener("keydown", function(event) {
             if (event.key in app.selectedKeyNoteMap.keyNoteMap) {
                 writeLog("Pressed key for " + app.selectedKeyNoteMap.keyNoteMap[event.key]);
-                app.keyInput = "";
+
                 pressedKeys[event.key] = true;
                 playNotes();
             }
@@ -422,7 +419,10 @@
                 playButton.textContent = 'Restart';
             }
             if (playing && currentMidi) {
-                document.getElementById('keyboardInput').focus();
+                                // Remove focus from any focused element
+                if (document.activeElement) {
+                    document.activeElement.blur();
+                }
                 const scoreKeeper = getScoreKeeper();
                 const containerElement = document.getElementById("canvasContainer");
                 containerElement.scrollIntoView({ behavior: "smooth" });
@@ -573,8 +573,7 @@
                     trackVolume: 1,
                     midiJson: "",
                     jsonSongs: jsonSongs,
-                    selectedJsonSong: null,
-                    keyInput: ""
+                    selectedJsonSong: null
                 },
                 mounted(){
                     this.notesCanvas = document.getElementById("notesCanvas")
@@ -601,6 +600,17 @@
                 app.songNotes = renderedNotes.renderedSongNotes;
                 app.songNotesOnKeyMap = renderedNotes.renderedSongNotesOnKeyMap;
                 app.renderedNotesPlaying = songNoteRenderer.renderDebugNotesPlaying(song, invertedKeyNoteMap, 0);
+
+                //Move focus back to the document so when the user starts trying to play notes, they
+                //won't accidentally be on one of the option fields
+                //Found at https://stackoverflow.com/questions/6976486/is-there-any-way-in-javascript-to-focus-the-document-content-area
+                // Give the document focus
+                window.focus();
+
+                // Remove focus from any focused element
+                if (document.activeElement) {
+                    document.activeElement.blur();
+                }
             }
         }
 
@@ -653,10 +663,6 @@
 
         function getCompressedJson(){
             return songCompression.getCompressedJson(app.availableTracks);
-        }
-
-        function clearKeyboardInput(){
-            app.keyboardInput = "";
         }
 
     </script>
