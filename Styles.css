@@ -159,6 +159,16 @@ textarea {
     height: 600px;
 }
 
+#keyboardForcer {
+    display: flex;
+    justify-content: space-around; /* Optional */
+  }
+  
+  #keyboardInput {
+    margin: auto; /* Horizontal centering within parent */
+  }
+  
+
 tone-play-toggle {
     margin-top: 10px;
 }
