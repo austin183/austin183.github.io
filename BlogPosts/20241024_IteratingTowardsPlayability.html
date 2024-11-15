@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>10-24-2024 - Iterating Towards Playability</title>
+    <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
+</head>
+<body>
+    <h1>The Minutiae</h1>
+
+    <div>        
+        <h2>Debugging</h2>
+        <p>
+            I had an idea of how the notes fell down the canvas along with the time, and I had a rough understanding of Tone.now() worked, but there were things happening on the page I could not wrap my head around when I started pressing the Toggle Play button.  Trying to add a debugger was not very helpful due to how the game progressed in 20 millisecond increments.  So one of the first commits I made was to give myself more data while the game played.  You can see where I started adding more info to the debug version of the page in <a href="https://github.com/austin183/austin183.github.io/commit/785f642bf8dc01d560c6f92c615c8923ecf326b4#diff-ac15ccf800e379bbd014973af85ca9620939a4b6228487432380666ab6beaaa1R122">this line on this commit.</a> .  This commit also had some code in it tied to the horizontal placement of the letters on the canvas, because some letters hung off the edges, and I needed to start making changes to understand how they would affect the frames.  By examining the time, duration, and initial x and y values, I was able to reverse engineer the calculations needed to get all the letters to appear within their boxes and within the canvas the way I expected them to appear.  The debug page was a valuable tool in getting things aligned correctly.
+        </p>
+        <h2>UI / UX Experience</h2>
+        <p>
+            I spent alot of time trying to get things to be more useful, like <a href="https://github.com/austin183/austin183.github.io/commit/4aa9e5599510b4e46d59816b9dee7678959efcd5#diff-d35fb48993fef7008d8e8885a3663313f5d87516bd3d0f0434969e75b1ffee7cR291">setting a delay so the player could have a chance to get ready before the notes were playing.</a> and <a href="https://github.com/austin183/austin183.github.io/commit/965a36dec109f9894888605535a907a376bbb907#diff-d35fb48993fef7008d8e8885a3663313f5d87516bd3d0f0434969e75b1ffee7cR90">adding a better naming scheme for the options in the Tracks dropdown menu.</a>
+        </p>
+        <h2>Scoring</h2>
+        <p>
+            No game is complete without a way to measure how well you played.  The code did not put me in a good position to add scoring as it was, so I had to take a bit of time to rearrange things to make room for scoring outside the Song Renderer.  One thing I had to do was move the concern of calculating the visible notes for the game from the Song Renderer and move it into the main page so that code for score keeping could happen between getting the visible notes and rendering them out to the page.  That change is captured in <a href="https://github.com/austin183/austin183.github.io/commit/8197ac319d8743d2e81f6776b0f5c463024682c0">this commit.</a>
+        </p>
+        <p>
+            Once I had the concerns separated out, I could introduce <a href="https://github.com/austin183/austin183.github.io/commit/98be5a2ae161e112655837cdf605eb6c71b9e6ad">ScoreKeeper Component</a> and start keeping track of a score for the game.
+        </p>
+        <h2>Performance and Playability</h2>
+        <p>
+            The most I did to improve performance was to <a href="https://github.com/austin183/austin183.github.io/commit/8197ac319d8743d2e81f6776b0f5c463024682c0#diff-d35fb48993fef7008d8e8885a3663313f5d87516bd3d0f0434969e75b1ffee7cR305-R307">hide the text renderer when the page was not in debug mode.</a> It saved me a few extra loops, but nothing huge.  The addition of a score helped to give the game a feeling of interactivity, and it was the first time it really felt like a game.  It was not enough though.  I would need to add more interactivity to the canvas directly, and that is what I aimed to work on next.
+        </p>
+    </div>
+</body>
+</html>
