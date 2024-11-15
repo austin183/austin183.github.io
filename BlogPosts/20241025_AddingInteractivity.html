@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>10-25-2024 - Adding Interactivity</title>
+    <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
+</head>
+<body>
+    <h1>Improving the Player Experience</h1>
+
+    <div>        
+        <h2>Game Options</h2>
+        <p>
+            The first thing I did was to make it so all the tracks' notes <a href="https://github.com/austin183/austin183.github.io/commit/3fbec572c811a989d9441392012ad073f7bbd878#diff-d35fb48993fef7008d8e8885a3663313f5d87516bd3d0f0434969e75b1ffee7cR280">were available to play at once.</a> I also added a minimum note duration to try to adjust how frequently keys needed to be played.  The notes all stacked on top of eachother in an overwhelming way, so I needed to work on how I could tune the rate of notes so the game didn't feel frustrating.
+        </p>
+        <p>
+            Later in the day, I also added an option for <a href="https://github.com/austin183/austin183.github.io/commit/3e857d034723348b0c391983325c967121208317#diff-73199e1619509d91631719f5b8ccad0f95f78ff4df4435bd32614a3a2b90d0e2R3">Minimum Note Distance</a>.  Note Duration did not turn out to be a very effective filtering tool, but the distance between two notes helped to keep the notes from stacking up overwhelmingly.  I exposed these settings so the player could set their own difficulty.
+        </p>
+        <h2>Visual Scoring</h2>
+        <p>
+            I needed a way to indicate how the player was doing as the game progressed, and the score board over the top of the canvas was inconvenient to look at with notes moving steadily down the playing field.  So I <a href="https://github.com/austin183/austin183.github.io/commit/30f0e0ba31b864a8eb3c1a81d00dc1f96e6f2414#diff-093af03c277b620cb74b977b7ec0696a1a393e34b5faa0c20c01dcbc0dc9d58bR48">worked on adding code to change the color of the notes indicating how they were scored.</a>  I went with a Green, Yellow, Red pattern because I am familiar with their meaning due to how stop lights work.  Green is good, yellow is caution, and red is bad.  
+        </p>
+        <h2>Performance and Playability</h2>
+        <p>
+            I still hadn't addressed my performance issues yet.  I figured there would be no point in optimizing yet because I didn't know how much more I would need to say the game was functionally complete.  The game was still choppy, although I had moved to 10 millisecond intervals instead of 20 millisecond intervals because at 20 milliseconds, the scoring felt sluggish to respond.  With the change, the game still stuttered, but the scoring felt more responsive.  
+        </p>
+        <p>
+            I started building up a set of optimizations in my head.  I believed my issue was looping over the notes so much every interval, so I started thinking of ways to trim them down.  I still had more bugs and and UI improvements I wanted to make too.  Having so much to do on my list and seeing how many things I was crossing off left me energised to keep working towards this game I really wanted to play.  I told my friends I was having just as much fun tweaking the game as play testing it.  In the back of my mind, I know I should write some Playwright tests for it.  One day I will!
+        </p>
+    </div>
+</body>
+</html>
