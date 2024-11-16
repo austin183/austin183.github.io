@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>10-28-2024 - Modest Optimizations</title>
+    <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
+</head>
+<body>
+    <h1>Optimizing at Random</h1>
+    <p>
+        At this point, I didn't know what was slowing down the interval processing, so I tried using Firefox and Chromium to find bottlenecks in the system.  I ignored things that didn't look like they were coming from my code.  I felt like the libraries and the canvas api call itself were probably already optimized by the browser developers.  Nothing really jumped out at me this way, so I started looking for things in my code that were unnecessary or could be written in a faster way.  I also asked the AI's what they thought, but since I didn't have anything in particular, they gave me vagure or hallucinatory answers.  Nothing I felt worth pursuing.
+    </p>
+    <div>
+        <h2>Building the Visible Field</h2>
+        <p>
+            One of the first things I did was <a href="https://github.com/austin183/austin183.github.io/commit/e18253bc70720b94c0e4a1f0ba7c5639bc8fffdb">pull the Visible Field filter process out of the interval and ran it once for the whole song.</a>  That took a whole loop out of the interval.  I know what <a href="https://web.mit.edu/16.070/www/lecture/big_o.pdf">Big O notation is, </a> but I didn't really use it formally when I was choosing what to optimize, but I know at a high level, I want to process as few loops per interval as possible.  If I were to imagine that whatever my current complexity was per interval was, "T(n)", my complexity now would be "T(n) - O(n)".  This by itself may have been noticeable, but I was only ever playing the game after making a change.  To me it felt a little smoother, but it did not make a big difference over all.  Still, lots of tiny optimizations are better than no optimizations!
+        </p>
+        <h2>Reducing Iterations Per Loop</h2>
+        <p>
+            After some small tweaks like <a href="https://github.com/austin183/austin183.github.io/commit/5219ceee16fdf7bb547438dab4e3f6b594aa1113">decreasing the number of player synths</a> and <a href="https://github.com/austin183/austin183.github.io/commit/4a004d3648d399c70b7c6d935f2e9faf9d7fa3d1">trying to change some if's to switches</a>, I decided to try to cut down on the number of iterations the loops were spending going over notes in the song that were outside the current window.  Let's say the song was 4 minutes long, with 1000 notes.  During a 10 second window into the song, there may only be 30 notes to consider (don't judge my math).  So I <a href="https://github.com/austin183/austin183.github.io/commit/18d6c650a409a8155963899af480f759dccebf6d">tried to cut down to just the segment of the song I needed to process for the game at each moment</a>.  So my new level of complexity would be something like "T(n) - O(n) - 0(n - n/100)" (don't judge my Big O notation).  This again felt a little smoother, and it was definitely more efficient.  It still did not move the needle enough for me to hit the 100 frames per second goal, so I needed to figure out where else I could squeeze water from the stone.
+        </p>
+        <h2>Adding Time Delays to Help ToneJS with Scheduling</h2>
+        <p>
+            Sometimes when the game stuttered, it also made popping noises during play.  I found <a href="https://github.com/Tonejs/Tone.js/wiki/Performance#scheduling-in-advance">some helpful ToneJS documentation regarding performance</a> and implemented a <a href="https://github.com/austin183/austin183.github.io/commit/e1f7d8911956beffd678b4b3f820c2b12f463184">change to add slight delays</a> to try to keep the popping from occuring.  
+        </p>
+        <h2>Performance and Playability</h2>
+        <p>
+            Nothing much changed with the performance or playability of the game.  I felt like I was learning things, and I was getting into a more efficient mindset.  So even though it felt like there was very little tangible progress, I was already eager to try new things the next day.
+        </p>
+    </div>
+</body>
+</html>
