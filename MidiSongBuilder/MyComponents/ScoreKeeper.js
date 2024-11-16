@@ -72,7 +72,7 @@ function getScoreKeeper(){
             for(var i = earliestNoteIndex; i < visibleField.length; i++){
                 var canvasNote = visibleField[i];
                 var keyDistanceToNow = now - canvasNote.time;
-                if(!score.keyScores[canvasNote.id]){                    
+                if(!score.keyScores[canvasNote.id]){
                     if(keyDistanceToNow > badRange){
                         score.keyScores[canvasNote.id] = {
                             points: 0,

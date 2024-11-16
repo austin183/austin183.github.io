@@ -20,7 +20,7 @@ function getVisibleFieldFilterer(){
                 if(note.duration < minDuration){
                     continue; //Skipping notes that are too short
                 }
-                
+
                 //Build dataset for visible field
                 else {
                     var keyNote = invertedKeyNoteMap[note.name];
@@ -31,7 +31,7 @@ function getVisibleFieldFilterer(){
                     var prerenderedDrawInstructions = null;
                     if(songNoteRenderer && canvas && keyRenderInfo){
                         prerenderedDrawInstructions = songNoteRenderer.getPrerenderedDrawInstructions(canvas, keyRenderInfo, note, keyNote);
-                    }                    
+                    }
 
                     var canvasNote = {
                         duration: note.duration,

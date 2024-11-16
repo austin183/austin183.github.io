@@ -79,7 +79,7 @@
             </div>
         </div>
         <button id="toggleInstructions" onclick="toggleElementById('Instructions')">Toggle Instructions And Advanced Song Selection</button>
-        
+
     </div>
     <div id="app">
         <div id="jsonSongConfig" class="bordered">
@@ -118,7 +118,7 @@
                     {{selectedKeyNoteMap.description}}
                 </div>
             </div>
-            <!-- maxKeyCount 
+            <!-- maxKeyCount
              Commenting this one out right now because the multi key behavior stopped working.  May try this out again later, when I stop being such a scrub at the game.
             <div id="maxKeyCount" class="side-by-side">
                 <div class="bordered">
@@ -231,7 +231,7 @@
         const synthArray = [];  //Holds all the available synths
         const pressedKeys = {}; //Holds which keys are pressed down on the keyboard
         //Get all the keyNoteMaps
-        const keyNoteMapCollection = getKeyNoteMaps();  //Supplied from ./keyNoteMap.js        
+        const keyNoteMapCollection = getKeyNoteMaps();  //Supplied from ./keyNoteMap.js
         //Get all the available keyNoteMapKeys keys
         const keyNoteMapKeys = Object.keys(keyNoteMapCollection);
         //Get a default value for the keyNoteMap
@@ -450,7 +450,7 @@
                                 note.time + startTime + delay,
                                 note.velocity * app.trackVolume
                             );
-                        }                        
+                        }
                     });
                 });
                 playIntervalId = setInterval(() => {
@@ -463,7 +463,7 @@
                         togglePlay(); //Should end the song automatically at the end.
                         return;
                     }
-                    
+
                     for(var i = earliestNoteIndex; i < visibleField.length; i++){
                         const note = visibleField[i];
                         if(note.time + note.duration < visiblePast){
@@ -473,7 +473,7 @@
                             break;
                         }
                     }
-                    
+
                     var currentScore = scoreKeeper.calculateNewScore(visibleField, pressedKeys, intervalNow, earliestNoteIndex, visibleFuture);
                     app.score = currentScore.total;
                     var counts = scoreKeeper.getCounts();
@@ -491,16 +491,16 @@
 
             } else {
                 clearInterval(playIntervalId);
-                app.renderNotesPlaying = "";                
+                app.renderNotesPlaying = "";
                 Tone.Transport.stop();
                 Tone.Transport.position = 0;
                 Tone.Transport.cancel();
 
                 //dispose the synth and make a new one
-                while (synths.length) {                    
+                while (synths.length) {
                     const synth = synths.shift();
                     synth.disconnect();
-                    synth.dispose();                                  
+                    synth.dispose();
                 }
             }
         };
@@ -629,7 +629,7 @@
                 }
                 // Add the fullTrack as the first array element in app.availableTracks
                 app.availableTracks.unshift(fullTrack);
-                
+
                 app.selectedTrack = app.availableTracks[0];
                 var lastNote = fullTrack.notes[fullTrack.notes.length - 1];
                 songEnd = lastNote.time + lastNote.duration;
@@ -657,7 +657,7 @@
 
         }
 
-        function getDecompressedSong(){ 
+        function getDecompressedSong(){
             return songCompression.getDecompressedSong(app.selectedJsonSong.tracks);
         }
 

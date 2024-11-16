@@ -34,16 +34,16 @@
             Please see the interactive examples below.  You can show and hide sections of the page when you are done with them.
         </p>
         <p>
-            In addition to the charts below, you can view a 3D graph of taxes paid on a range of incomes over time at the link below: 
+            In addition to the charts below, you can view a 3D graph of taxes paid on a range of incomes over time at the link below:
         </p>
         <p>
             <a href="theTaxCube.html">3D - Tax on Incomes over Time</a>
         </p>
         <br />
     </div>
-    
+
     <div id="app">
-        
+
         <button id="toggleBreakDown" class="pure-button button-toggle" onclick="toggleVisibility('breakdown', 'Breakdown', this)">Hide Breakdown</button>
         <div id="breakdown" class="bordered centered">
             <h3>Specific Income Breakdown for a Single Year</h3>
@@ -71,7 +71,7 @@
             </div>
             <br />
             <label for="rangeForBreakdownInput">Slide to change Income</label><input type="range" class="range" min="5000" max="800000" id="rangeForBreakdownInput" v-model="specificIncomeBreakdown.startingAmount" v-on:input="calculateBreakdown()" />
-            
+
             <table class="pure-table pure-table-bordered">
                 <tr>
                     <th>Income Bracket</th>
@@ -91,7 +91,7 @@
                 <tr>
                     <td>Income specified was</td>
                     <td>${{ formatNumberForDisplay(specificIncomeBreakdown.calculatedIncome) }}</td>
-                </tr>                
+                </tr>
                 <tr>
                     <td>Standard Deduction was</td>
                     <td>${{ formatNumberForDisplay(taxDeductionAmount) }}</td>
@@ -117,7 +117,7 @@
             </table>
             <br />
         </div>
-        
+
         <button id="toggleSingleIncomeByYearChart" class="pure-button button-toggle" onclick="toggleVisibility('SingleIncomeByYearChart', 'Incomes for Year', this)">Hide Incomes for Year</button>
         <div id="SingleIncomeByYearChart" class="bordered centered">
             <h4>
@@ -139,7 +139,7 @@
                 </select>
             </div>
             <br />
-            Compare To: 
+            Compare To:
             <div>
                 <label for="selectedTaxYearIncomeRangeGraphComparison">Tax Year</label>
                 <select id="selectedTaxYearIncomeRangeGraphComparison" v-model="selectedTaxYearIncomeRangeGraphComparison" v-on:change="rebuildGraph()"
@@ -153,18 +153,18 @@
             <ul id="graphConfigurationSingleYear" class="no-bullets">
                 <li><label for="minSingleYear">Start </label><input type="number" id="minSingleYear" v-model="minSingleYear" step="1000" /></li>
                 <li><label for="maxSingleYear">End </label><input type="number" id="maxSingleYear" v-model="maxSingleYear" step="1000" /></li>
-                <li><label for="stepSingleYear">Step Count </label><input type="number" id="stepSingleYear" min="5" max="30" v-model="stepSingleYear" /></li> 
+                <li><label for="stepSingleYear">Step Count </label><input type="number" id="stepSingleYear" min="5" max="30" v-model="stepSingleYear" /></li>
                 <li><button id="rebuildGraphSingleYear" onclick="rebuildGraph()" class="pure-button">Rebuild Graphs</button></li>
             </ul>
-            
+
             <label for="rangeForStepCountSingleYear">Slide to change Step Count</label><input type="range" class="range" min="5" max="30" id="rangeForStepCountSingleYear" v-model="stepSingleYear" v-on:input="rebuildGraph()" />
-            
+
             <div class="canvas">
                 <canvas id="canvas"></canvas>
             </div>
             <br />
         </div>
-        
+
         <button id="toggleTaxAmountYearly" class="pure-button button-toggle" onclick="toggleVisibility('TaxAmountYearly', 'Taxes over Time', this)">Hide Taxes over Time</button>
         <div id="TaxAmountYearly" class="bordered centered">
             <h4>
@@ -184,7 +184,7 @@
         </div>
         <br />
     </div>
-    
+
     <div id="furtherResources" class="centered">
         <h4>Further Resources</h4>
         <p>
@@ -201,7 +201,7 @@
         var singleTaxPayerDefinitionKeys = getSingleTaxPayerDefinitionKeys();
         var chartHelper = getChartHelper();
         var taxCalculator = getTaxCalculator();
-        
+
         function formatNumberForDisplay(value) {
             if (Number(value) > 0) {
                 return Number(value).toFixed(2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -285,7 +285,7 @@
             chartHelper.buildChartAxisDefinition('Total Income', 'year-axis', 'bottom', true, function (value) { return value; })
         ];
         config.options.scales.yAxes = buildCommonYAxisDefinitions();
-        
+
         var graphLineIndex = {
             taxAmount: 0,
             netIncome: 1,

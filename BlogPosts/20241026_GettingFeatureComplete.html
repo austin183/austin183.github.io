@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>10-26-2024 - Getting to Feature Complete</title>
+    <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
+</head>
+<body>
+    <h1>Getting to Feature Complete</h1>
+
+    <div>
+        <h2>Configurations</h2>
+        <p>
+            I needed to try to get them out of the way when a player wanted to start the game.  The number of settings kept growing, and the Play button kept creeping further and further down out of sight.  In <a href="https://github.com/austin183/austin183.github.io/commit/d871fb0632038c78337aa512bc2c859032912dfe?diff=split">this commit</a>, I put a collapsible div around the game settings and added volume configurations so the player could set the track volume and key volume.
+        </p>
+        <h2>Updating Playing Field to Include some Past</h2>
+        <p>
+
+        </p>
+        <h2>Scoring all the Notes</h2>
+        <p>
+            I knew I wanted a scoreboard, but I did not want to leave the player with an incomplete understanding of how they performed.  I needed to add events for notes that were outside the "good" and "ok" range in order to show how far away the player was from a perfect game.  The points are an arbitrary measure of success, but the counts of notes shows how much room the player has for improvement.  So I <a href="https://github.com/austin183/austin183.github.io/commit/1209fa4d86df3eda7fcef91317146d373218a44f#diff-d1b0737101e0f3090db006772fef899daeebba8ec9c12d1dd483672b5eeff828R58">added tags for "bad" and "missed" and added code to keep track of them in the Scorekeeper.</a>  The ranges are hard coded into the game <a href="https://github.com/austin183/austin183.github.io/blob/1209fa4d86df3eda7fcef91317146d373218a44f/MidiSongBuilder/MyComponents/ScoreKeeper.js#L2-L6">here.</a>
+        </p>
+        <p>
+            I have not spent much time tuning these thresholds.  If I look at <a href="https://steemit.com/gaming/@shello/welcome-to-the-zone-part-1-a-game-of-milliseconds-speed-of-light-gameplay-and-the-feeling-of-time-slowing-down">this article about rhythm game timings</a>, it claims that reaction time rankings could look like this:
+            <ul>
+                <li>Marvelous: +/- 16.7 ms</li>
+                <li>Perfect: +/- 33 ms</li>
+                <li>Great: +/- 92 ms</li>
+                <li>Good: +/- 142 ms</li>
+                <li>Boo: +/- 225 ms</li>
+            </ul>
+            I could not for the life of me get anything other than bad when I played with this spread.  I am not sure if it was due to my performance issues regarding stuttering and interval processing, and I wanted to make sure that all the ranges really worked, I went with a much more lenient time randing system captured in the ScoreKeeper code.  Perhaps now that the game has some headroom in each of those 10ms intervals, I could go back and try to make them more strict again.
+        </p>
+        <p>
+            Once I had all the time rankings I wanted, and I had the notes changing colors according to their ranking as they passed the threshold, I was ready to <a href="https://github.com/austin183/austin183.github.io/commit/30eb35cd319ef0efbbc86ba62e1a8962807ea13d">added a Scoreboard after the song</a> to let the player review how they did.  It is not very eye catching, but it has the full raw score so the player understands everything that happened during the round at once.  There could be opportunities here to add some judgement animations, like a score out of 5 music notes or something.
+        </p>
+        <h2>Bug Fixes</h2>
+        <p>
+            There were several bug fixes at this point that needed to be addressed before I could say I was happy with how the game worked mechanically.  I made a change to <a href="https://github.com/austin183/austin183.github.io/commit/986275f006d674bc1bfec250733aab3ba39f5dc2">stop the game when the song ended</a>, and <a href="https://github.com/austin183/austin183.github.io/commit/eb8c453814e160ebe64d2a130b81f97d5568aba5">addressed a bug with trying to end the song</a>, and tried to clarify the notes further by <a href="https://github.com/austin183/austin183.github.io/commit/773cdceae6c535106bbe983ac188fe3d859b6522">removing the top and right hand sides of the note borders</a>.  This kept the notes from being obscured by the top of previous note boxes.
+        </p>
+        <h2>Performance and Playability</h2>
+        <p>
+            I spent some time tweaking the behavior of the page to approach how I wanted the game to play.  For instance, I changed what the Play button said depending on the game state <a href="https://github.com/austin183/austin183.github.io/commit/d871fb0632038c78337aa512bc2c859032912dfe?diff=split#diff-d35fb48993fef7008d8e8885a3663313f5d87516bd3d0f0434969e75b1ffee7cR371">here to let the player know what will happen next time they hit the button.</a>
+        </p>
+        <p>
+            I also tried to make the notes more readable by <a href="https://github.com/austin183/austin183.github.io/commit/1209fa4d86df3eda7fcef91317146d373218a44f#diff-d1b0737101e0f3090db006772fef899daeebba8ec9c12d1dd483672b5eeff828R58">capitalizing them.</a>  This had the effect of keeping the whole letter above the underlining border, where characters like "j" and "y" would cross through the border, obscuring the letter the player needed to press.
+        </p>
+        <p>
+            I also <a href="https://github.com/austin183/austin183.github.io/commit/5fa9ae56d5902e8de2c98073ed7c5b483b6807c3">shifted the playing field up so the bottom portion of the represented a second in the past.</a>  This let the player see how they were doing based on the colors of the letters before the letters disappeared.  It also gave them a chance to try to catch notes they missed that were still in the scoring ranges.
+        </p>
+        <p>
+            Now that I had reached Feature Complete in my head, it was time to remove as much processing from the game intervals as possible.  Even though the game was a stuttering mess, I felt accomplished writing a working game.  I went to bed with dreams of optimizations and how good the game would feel when it played at a smooth 100 frames per second.  At this point, I started sharing a link to the game with people to see how they felt about it.  There was some interest, but alot of people said they were just on their phones and could not get to a keyboard. Potential players in front of a browser with a keyboard still had the hurdles of searching for their own midi file to play, downloading the file, and dragging the file into the midi drop area.  As the developer of the game, with several midi files downloaded and well practiced at organizing my screen for dragging, dropping, playing, debugging, and coding, I didn't actually understand what kept players from playing at this point.
+        </p>
+        <p>
+            I decided that they would love it once I optimized it.  Surely it was the players who were wrong.
+        </p>
+        <p>
+            <img src="images/principal_wrong.jpg" />
+        </p>
+    </div>
+</body>
+</html>

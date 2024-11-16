@@ -5,7 +5,7 @@ function getPlotlyHelper() {
                 title: title,
                 scene: {
                     aspectmode:'manual',
-		            aspectratio: {x:1, y:1.5, z:1},
+                    aspectratio: {x:1, y:1.5, z:1},
                     xaxis: {
                         title: {
                             text: 'Income'

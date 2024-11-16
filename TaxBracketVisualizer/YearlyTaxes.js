@@ -746,7 +746,7 @@ function getTaxYears() {
                 "bracketMax": Number.MAX_SAFE_INTEGER
                 }
             ]
-        },  
+        },
         "Single1977": {
             "standardDeduction": 2200,
             "brackets": [
@@ -852,7 +852,7 @@ function getTaxYears() {
                 },
                 {
                 "taxRate": 70.0,
-                "bracketMax": Number.MAX_SAFE_INTEGER   
+                "bracketMax": Number.MAX_SAFE_INTEGER
                 }
             ]
         },
@@ -961,7 +961,7 @@ function getTaxYears() {
                 },
                 {
                 "taxRate": 70.0,
-                "bracketMax": Number.MAX_SAFE_INTEGER   
+                "bracketMax": Number.MAX_SAFE_INTEGER
                 }
             ]
         },
@@ -1484,7 +1484,7 @@ function getTaxYears() {
                 "bracketMax": Number.MAX_SAFE_INTEGER
                 }
             ]
-        },  
+        },
         "Single1987": {
             "standardDeduction": 2540,
             "brackets": [
@@ -1509,7 +1509,7 @@ function getTaxYears() {
                 "bracketMax": Number.MAX_SAFE_INTEGER
               }
             ]
-          },   
+          },
         "Single1988": {
             "standardDeduction": 3000,
             "brackets": [
@@ -1522,7 +1522,7 @@ function getTaxYears() {
                 "bracketMax": Number.MAX_SAFE_INTEGER
             }
             ]
-        },            
+        },
         "Single1989": {
             "standardDeduction": 3100,
             "brackets": [
@@ -1535,7 +1535,7 @@ function getTaxYears() {
                 "bracketMax": Number.MAX_SAFE_INTEGER
             }
             ]
-        },          
+        },
         "Single1990": {
             "standardDeduction": 3250,
             "brackets": [
@@ -1806,7 +1806,7 @@ function getTaxYears() {
                   "taxRate": 39.1,
                   "bracketMax": Number.MAX_SAFE_INTEGER
                 }
-            ] 
+            ]
         },
         "Single2002": {
             "standardDeduction": 4700,
@@ -1842,7 +1842,7 @@ function getTaxYears() {
             "brackets": [
                 {
                     "taxRate": 10.0,
-                    "bracketMax": 7000  
+                    "bracketMax": 7000
                 },
                 {
                     "taxRate": 15.0,
@@ -1885,7 +1885,7 @@ function getTaxYears() {
                     "taxRate": 28,
                     "bracketMax": 89325
                 },
-                { 
+                {
                     "taxRate": 33,
                     "bracketMax": 159550
                 },

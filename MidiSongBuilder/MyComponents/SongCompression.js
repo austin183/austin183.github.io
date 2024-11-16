@@ -19,7 +19,7 @@ function getSongCompression(){
                         v: note.velocity.toFixed(6),
                         n: note.name
                     }
-                    
+
                     track.notes.push(note);
                 });
                 compressedJson.tracks.push(track);

@@ -9,7 +9,7 @@
 <body>
     <h1>Developing the Player Experience</h1>
 
-    <div>        
+    <div>
         <h2>Debugging</h2>
         <p>
             I had an idea of how the notes fell down the canvas along with the time, and I had a rough understanding of Tone.now() worked, but there were things happening on the page I could not wrap my head around when I started pressing the Toggle Play button.  Trying to add a debugger was not very helpful due to how the game progressed in 20 millisecond increments.  So one of the first commits I made was to give myself more data while the game played.  You can see where I started adding more info to the debug version of the page in <a href="https://github.com/austin183/austin183.github.io/commit/785f642bf8dc01d560c6f92c615c8923ecf326b4#diff-ac15ccf800e379bbd014973af85ca9620939a4b6228487432380666ab6beaaa1R122">this line on this commit.</a> .  This commit also had some code in it tied to the horizontal placement of the letters on the canvas, because some letters hung off the edges, and I needed to start making changes to understand how they would affect the frames.  By examining the time, duration, and initial x and y values, I was able to reverse engineer the calculations needed to get all the letters to appear within their boxes and within the canvas the way I expected them to appear.  The debug page was a valuable tool in getting things aligned correctly.

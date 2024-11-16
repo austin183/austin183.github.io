@@ -9,7 +9,7 @@
 <body>
     <h1>The Beginning</h1>
 
-    <div>        
+    <div>
         <h2>Why a rhythm typing game?</h2>
         <p>
             I have been watching <a href="https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://www.youtube.com/%40CainOnGames&ved=2ahUKEwigseDojLyJAxW05ckDHZeINx0QFnoECAoQAQ&usg=AOvVaw2ptLLwLLg2FsHu1wGHYHMY">Tim Cain on Youtube</a> , the creator of Fallout.  And one of his videos discussed an approach to starting off in game development at <a href="https://www.youtube.com/watch?v=mHMFG8uvOb0">Coding Toys (Insomnia Edition)</a> .  It inspired me to build a toy, and that lead to the idea of a video game.  First, I had to take an inventory of myself, my skills, and my perseverance.  Thanks for the inspiration, Tim!  I am glad you couldn't sleep that night.  I always appreciate your insights.
@@ -26,7 +26,7 @@
         <p>
             And there are a few things I am bad at:
             <ul>
-                <li>Storytelling</li>                
+                <li>Storytelling</li>
                 <li>Music</li>
                 <li>UI/UX Design</li>
                 <li>Complex Game Design</li>
@@ -56,7 +56,7 @@
                 <li>Calculating the Visible Field over the next 10 seconds</li>
                 <li>Generating instructions for each note in the Visible Field, like which note, position, and length of the box around the note</li>
                 <li>Rendering the provided notes according to the provided instructions</li>
-            </ul>            
+            </ul>
         </p>
         <p>
             This process happened <a href="https://github.com/austin183/austin183.github.io/blob/b1c1aa4fda9ae3d7e0d76e751a6c58949e7466b3/MidiSongBuilder/Midiestro.html#L274-L279">on this interval in the main page</a> every 20 milliseconds, which meant the game would play at about 50 frames per second.
@@ -66,7 +66,12 @@
             At this point, the page needed all 20 milliseconds to process each frame of the game.  I tested the site on several machines, some of which had different performance profiles when plugged in or unplugged.  The lowest spec machine I tested with was an Asus ROG i7 4700HQ laptop.  It has an NVIDIA 850m graphics chip, but I ran the laptop on battery, with Linux Mint 22 with the GPU disabled.  When I played Nightmare Before Christmas, the page stuttered noticeably, but overall the effect was smooth enough for a first try.  The music stayed aligned with the notes on the canvas thanks to the use of Tone.now() to set the value of now in the song renderer method.  I knew I would need to make some changes to try to improve performance, because this game should be able to run on a potato.
         </p>
         <p>
-            The game was not really a game yet.  It was just disparate systems running at the same time.  I preciently had thoughts on what I should tackle and included them in <a href="https://github.com/austin183/austin183.github.io/commit/498287b5488bcb2cccf515f5abccc647bed13ac8">an update to the Disclaimer</a>, knowing that a future me would want to remember what I was thinking at the time.  And now that future me is you!
+            The game was not really a game yet.  It was just disparate systems running at the same time.  I preciently had thoughts on what I should tackle and included them in <a href="https://github.com/austin183/austin183.github.io/commit/498287b5488bcb2cccf515f5abccc647bed13ac8">an update to the Disclaimer</a>, knowing that a future me would want to remember what I was thinking at the time.
+        </p>
+        <p>
+            And now that future me is you!
+        </p>
+        <p>
             <img src="images/spiderman.jpg" />
         </p>
     </div>
