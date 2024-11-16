@@ -14,10 +14,6 @@
         <p>
             I needed to try to get them out of the way when a player wanted to start the game.  The number of settings kept growing, and the Play button kept creeping further and further down out of sight.  In <a href="https://github.com/austin183/austin183.github.io/commit/d871fb0632038c78337aa512bc2c859032912dfe?diff=split">this commit</a>, I put a collapsible div around the game settings and added volume configurations so the player could set the track volume and key volume.
         </p>
-        <h2>Updating Playing Field to Include some Past</h2>
-        <p>
-
-        </p>
         <h2>Scoring all the Notes</h2>
         <p>
             I knew I wanted a scoreboard, but I did not want to leave the player with an incomplete understanding of how they performed.  I needed to add events for notes that were outside the "good" and "ok" range in order to show how far away the player was from a perfect game.  The points are an arbitrary measure of success, but the counts of notes shows how much room the player has for improvement.  So I <a href="https://github.com/austin183/austin183.github.io/commit/1209fa4d86df3eda7fcef91317146d373218a44f#diff-d1b0737101e0f3090db006772fef899daeebba8ec9c12d1dd483672b5eeff828R58">added tags for "bad" and "missed" and added code to keep track of them in the Scorekeeper.</a>  The ranges are hard coded into the game <a href="https://github.com/austin183/austin183.github.io/blob/1209fa4d86df3eda7fcef91317146d373218a44f/MidiSongBuilder/MyComponents/ScoreKeeper.js#L2-L6">here.</a>
@@ -51,7 +47,11 @@
             I also <a href="https://github.com/austin183/austin183.github.io/commit/5fa9ae56d5902e8de2c98073ed7c5b483b6807c3">shifted the playing field up so the bottom portion of the represented a second in the past.</a>  This let the player see how they were doing based on the colors of the letters before the letters disappeared.  It also gave them a chance to try to catch notes they missed that were still in the scoring ranges.
         </p>
         <p>
-            Now that I had reached Feature Complete in my head, it was time to remove as much processing from the game intervals as possible.  Even though the game was a stuttering mess, I felt accomplished writing a working game.  I went to bed with dreams of optimizations and how good the game would feel when it played at a smooth 100 frames per second.  At this point, I started sharing a link to the game with people to see how they felt about it.  There was some interest, but alot of people said they were just on their phones and could not get to a keyboard. Potential players in front of a browser with a keyboard still had the hurdles of searching for their own midi file to play, downloading the file, and dragging the file into the midi drop area.  As the developer of the game, with several midi files downloaded and well practiced at organizing my screen for dragging, dropping, playing, debugging, and coding, I didn't actually understand what kept players from playing at this point.
+            Now that I had reached Feature Complete in my head, it was time to remove as much processing from the game intervals as possible.  Even though the game was a stuttering mess, I felt accomplished writing a working game.  I went to bed with dreams of optimizations and how good the game would feel when it played at a smooth 100 frames per second.  
+        </p>
+        <h2>Gathering Feedback</h2>
+        <p>
+            At this point, I started sharing a link to the game with people to see how they felt about it.  There was some interest, but alot of people said they were just on their phones and could not get to a keyboard. Potential players in front of a browser with a keyboard still had the hurdles of searching for their own midi file to play, downloading the file, and dragging the file into the midi drop area.  As the developer of the game, with several midi files downloaded and well practiced at organizing my screen for dragging, dropping, playing, debugging, and coding, I didn't actually understand what kept players from playing at this point.
         </p>
         <p>
             I decided that they would love it once I optimized it.  Surely it was the players who were wrong.
