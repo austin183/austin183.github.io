@@ -83,23 +83,12 @@
 
     </div>
     <div id="app">
-        <div id="jsonSongConfig" class="bordered">
-            <div class="bordered">
-                <label for="jsonSongSelect">Select a Preloaded Song</label>
-                <select id="jsonSongSelect" v-model="selectedJsonSong" class="pure-input-rounded" v-on:change="handleJsonSongSelection()">
-                    <option v-for="(item, key, index) in jsonSongs" :value="item">{{key}}</option>
-                </select>
-            </div>
-        </div>
         <div id="midiSongConfig" class="bordered">
             <div class="bordered">
-                <label for="midiSongSelect">Select a Midi Song</label>
+                <label for="midiSongSelect">Select a Preloaded Song</label>
                 <select id="midiSongSelect" v-model="selectedMidiSong" class="pure-input-rounded" v-on:change="handleMidiSongSelection()">
                     <option v-for="(item, key, index) in midiSongs" :value="item">{{key}}</option>
                 </select>
-            </div>
-            <div>
-                (Midi Song Select will probably replace the Preloaded Song Select after I get all the songs in the list.)
             </div>
         </div>
         <div id="gameConfig" class="bordered" >
@@ -193,8 +182,6 @@
         </div>
         <div id="notesPlaying">
             <div class="bordered">{{renderedNotesPlaying}}</div>
-            <button id="copyMidiJson" onclick="copyMidiJsonToClipboard()">Copy Json to Clipboard</button>
-            <div class="bordered">{{ midiJson }}</div>
         </div>
         <div class="side-by-side" id="songNoteKeys">
             <div class="bordered">Mapped Keys<br />{{ songNotesOnKeyMap }}</div>
@@ -211,11 +198,11 @@
             toggleElementById('songNoteKeys');
             toggleElementById('notesPlaying');
         }
-        const midiSongs = getMidiSongList();
-        const jsonSongs = {
-            "Georg Philipp Telemann - Sonata": getTelemannSonata(),
-            "Debussy - Golliwog's Cakewalk": getGollyCake()
-        };
+
+        var midiSongs = getMidiSongList();
+        const sortedMidiSongs = Object.fromEntries(Object.keys(midiSongs).sort().map(key => [key, midiSongs[key]]));
+        midiSongs = sortedMidiSongs;
+
         var synthKeyPlayer = getSynthKeyPlayer();
         var songNoteRenderer = getSongNoteRenderer();
         const keyRenderInfo = getKeyRenderInfo();
@@ -384,10 +371,6 @@
                 var lastNote = fullTrack.notes[fullTrack.notes.length - 1];
                 songEnd = lastNote.time + lastNote.duration;
                 renderSongNotes();
-                //To get the premade function file version
-                app.midiJson = "function getRENAMEMETHOD() { return " + JSON.stringify(getCompressedJson()) + "};"
-                //To get the prettified version
-                //app.midiJson = JSON.stringify(currentMidi, null, 2);
         }
 
         function getCombinedTrackNotes(tracks){
@@ -569,9 +552,7 @@
                     minNoteDistance: .4,
                     playerVolume: .7,
                     trackVolume: 1,
-                    midiJson: "",
-                    jsonSongs: jsonSongs,
-                    selectedJsonSong: null,
+                    midiJson: "",                    
                     midiSongs: midiSongs,
                     selectedMidiSong: null,
                     songEnd: null
@@ -629,57 +610,6 @@
                 }));
             }            
         }
-
-        function handleJsonSongSelection(){
-            if(app.selectedJsonSong){
-                app.availableTracks = []
-                var decompressedSong = getDecompressedSong();
-                currentMidi = decompressedSong;
-                currentMidi.tracks.forEach(track => {
-                    app.availableTracks.push(track);
-                });
-                var fullNotes = getCombinedTrackNotes(currentMidi.tracks);
-                var fullTrack = {
-                    "name" : "Full Track",
-                    "notes": fullNotes
-                }
-                // Add the fullTrack as the first array element in app.availableTracks
-                app.availableTracks.unshift(fullTrack);
-
-                app.selectedTrack = app.availableTracks[0];
-                var lastNote = fullTrack.notes[fullTrack.notes.length - 1];
-                songEnd = lastNote.time + lastNote.duration;
-                app.midiJson = JSON.stringify(currentMidi, null, 2);
-                renderSongNotes();
-                var playButton = document.getElementById('tonePlayToggle');
-                playButton.removeAttribute('disabled');
-                playButton.textContent = 'Play';
-            }
-        }
-
-        function copyMidiJsonToClipboard(){
-            navigator.clipboard.writeText(app.midiJson);
-            //Change the copyMidiJson text to "Copied!" for a second, and then change it back to "Copy Json to Clipboard" after a few seconds
-            // Use setTimeout() to delay the display of the copied message
-            setTimeout(function(){
-                document.getElementById('copyMidiJson').textContent = 'Copied!';
-            }, 100);
-
-            // Use setTimeout() again to reset the text to its original value
-            setTimeout(function(){
-                document.getElementById('copyMidiJson').textContent = 'Copy Json to Clipboard';
-            }, 3000);
-
-        }
-
-        function getDecompressedSong(){
-            return songCompression.getDecompressedSong(app.selectedJsonSong.tracks);
-        }
-
-        function getCompressedJson(){
-            return songCompression.getCompressedJson(app.availableTracks);
-        }
-
     </script>
 </body>
 

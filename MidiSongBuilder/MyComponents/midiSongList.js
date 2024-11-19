@@ -1,12 +1,12 @@
 function getMidiSongList() {
     return {
-        "For All the Seasons": {
+        "Anonymous - For All the Seasons": {
             filename: "anon_als_com.mid"
         },
-        "The First Noel": {
+        "Anonymous - The First Noel": {
             filename: "anon_firnoel_com.mid"
         },
-        "Jingle Bells": {
+        "Anonymous - Jingle Bells": {
             filename: "anon_jbells_com.mid"
         },
         "Thoinot Arbeau - Les Bouffons (Mattachins)": {
@@ -35,6 +35,12 @@ function getMidiSongList() {
         },
         "Beethoven - Symphony 6": {
             filename: "beetho_sym6F_I_com.mid"
+        },
+        "Georg Philipp Telemann - Sonata": {
+            filename: "teleman_sonata_f.mid"
+        },
+        "Debussy - Golliwog's Cakewalk": {
+            filename: "debussy_gollycake.mid"
         }
     };
 }
