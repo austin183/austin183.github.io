@@ -33,9 +33,6 @@
     <script src="MyComponents/midiSongList.js"></script>
 
     <!-- local songs -->
-    <script src="PublicDomainSongs/matachins_small.js"></script>
-    <script src="PublicDomainSongs/bach_2partinvention.js"></script>
-    <script src="PublicDomainSongs/bach_prelude.js"></script>
     <script src="PublicDomainSongs/teleman_sonata.js"></script>
     <script src="PublicDomainSongs/debussy_gollycake.js"></script>
 </head>
@@ -70,6 +67,9 @@
                     <li>
                         <a href="http://www.soundswell.co.uk/pages/swmids.htm">http://www.soundswell.co.uk/pages/swmids.htm</a>
                     </li>
+                    <li>
+                        <a href="http://midi.music.arizona.edu/purpose.php">http://midi.music.arizona.edu/search.php</a>
+                    </li>
                 </ul>
             </p>
             <div id="FileDrop">
@@ -93,10 +93,13 @@
         </div>
         <div id="midiSongConfig" class="bordered">
             <div class="bordered">
-                <label for="midiSongSelect">(Experimental Feature) Select a Midi Song</label>
+                <label for="midiSongSelect">Select a Midi Song</label>
                 <select id="midiSongSelect" v-model="selectedMidiSong" class="pure-input-rounded" v-on:change="handleMidiSongSelection()">
                     <option v-for="(item, key, index) in midiSongs" :value="item">{{key}}</option>
                 </select>
+            </div>
+            <div>
+                (Midi Song Select will probably replace the Preloaded Song Select after I get all the songs in the list.)
             </div>
         </div>
         <div id="gameConfig" class="bordered" >
@@ -179,6 +182,9 @@
         <button id="toggleGameConfig" onclick="toggleElementById('gameConfig')">Toggle Game Configurations</button>
 
         <div id="playProgress">
+            <div id="Song Time">
+                Song EndTime: [{{ songEnd }}]
+            </div>
             <button id="tonePlayToggle" onclick="togglePlay()" disabled>Play</button>
             <span>Score: [{{ score }}]  Good [{{ goodCount }}] Ok [{{ okCount }}] Bad [{{badCount}}] Missed [{{missedCount}}]</span>
         </div>
@@ -207,9 +213,6 @@
         }
         const midiSongs = getMidiSongList();
         const jsonSongs = {
-            "Thoinot Arbeau - Les Bouffons (Mattachins)": getArbeauMatachins(),
-            "Johann Sebastian Bach - 2 Part Inventions": getBach2PartInvention(),
-            "Johann Sebastian Bach - Prelude Number 1": getBachPrelude(),
             "Georg Philipp Telemann - Sonata": getTelemannSonata(),
             "Debussy - Golliwog's Cakewalk": getGollyCake()
         };
@@ -570,7 +573,8 @@
                     jsonSongs: jsonSongs,
                     selectedJsonSong: null,
                     midiSongs: midiSongs,
-                    selectedMidiSong: null
+                    selectedMidiSong: null,
+                    songEnd: null
                 },
                 mounted(){
                     this.notesCanvas = document.getElementById("notesCanvas")
@@ -586,6 +590,7 @@
         };
 
         function renderSongNotes(){
+            app.songEnd = (songEnd / 60).toFixed(2) + " minutes";
             if(currentMidi  && app.selectedTrack !== "" && debugPage){
                 var invertedKeyNoteMap = songNoteRenderer.invertKeyNoteMap(app.selectedKeyNoteMap.keyNoteMap);
                 var renderedSongNotes = "";
@@ -593,7 +598,7 @@
                 var song = app.selectedTrack.notes;
                 writeLog(JSON.stringify(song));
                 var renderedNotes = songNoteRenderer.renderSongNotes(song, app.selectedKeyNoteMap.keyNoteMap);
-
+                
                 app.songNotes = renderedNotes.renderedSongNotes;
                 app.songNotesOnKeyMap = renderedNotes.renderedSongNotesOnKeyMap;
                 app.renderedNotesPlaying = songNoteRenderer.renderDebugNotesPlaying(song, invertedKeyNoteMap, 0);
@@ -644,7 +649,6 @@
                 app.selectedTrack = app.availableTracks[0];
                 var lastNote = fullTrack.notes[fullTrack.notes.length - 1];
                 songEnd = lastNote.time + lastNote.duration;
-                renderSongNotes();
                 app.midiJson = JSON.stringify(currentMidi, null, 2);
                 renderSongNotes();
                 var playButton = document.getElementById('tonePlayToggle');
