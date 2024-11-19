@@ -30,6 +30,7 @@
     <script src="MyComponents/VisibleFieldFilterer.js"></script>
     <script src="MyComponents/ScoreKeeper.js"></script>
     <script src="MyComponents/SongCompression.js"></script>
+    <script src="MyComponents/midiSongList.js"></script>
 
     <!-- local songs -->
     <script src="PublicDomainSongs/matachins_small.js"></script>
@@ -90,6 +91,14 @@
                 </select>
             </div>
         </div>
+        <div id="midiSongConfig" class="bordered">
+            <div class="bordered">
+                <label for="midiSongSelect">(Experimental Feature) Select a Midi Song</label>
+                <select id="midiSongSelect" v-model="selectedMidiSong" class="pure-input-rounded" v-on:change="handleMidiSongSelection()">
+                    <option v-for="(item, key, index) in midiSongs" :value="item">{{key}}</option>
+                </select>
+            </div>
+        </div>
         <div id="gameConfig" class="bordered" >
             <div class="bordered">
                 Please note: most of these options require the song to be restarted in order to take affect.
@@ -118,23 +127,6 @@
                     {{selectedKeyNoteMap.description}}
                 </div>
             </div>
-            <!-- maxKeyCount
-             Commenting this one out right now because the multi key behavior stopped working.  May try this out again later, when I stop being such a scrub at the game.
-            <div id="maxKeyCount" class="side-by-side">
-                <div class="bordered">
-                    <label for="maxKeyCountRadio">Max Keys at Once</label>
-                    <input type="radio" id="keyCount1" name="maxKeyCountRadio" v-model="selectedKeyCount" value="1" checked></input>
-                    <label for="keyCount1">1</label>
-                    <input type="radio" id="keyCount2" name="maxKeyCountRadio" v-model="selectedKeyCount" value="2"></input>
-                    <label for="keyCount2">2</label>
-                    <input type="radio" id="keyCount3" name="maxKeyCountRadio" v-model="selectedKeyCount" value="3"></input>
-                    <label for="keyCount3">3</label>
-                </div>
-                <div class="bordered">
-                    This is how many keys will appear to match at one point in time. (The browser will sometimes not recognize more than 2 keys at once, so the 3rd option could appear not to work with all key combinations.)
-                </div>
-            </div>
-            -->
             <!-- minDurationConfig -->
             <div id="minDurationConfig" class="side-by-side">
                 <div class="bordered">
@@ -213,6 +205,7 @@
             toggleElementById('songNoteKeys');
             toggleElementById('notesPlaying');
         }
+        const midiSongs = getMidiSongList();
         const jsonSongs = {
             "Thoinot Arbeau - Les Bouffons (Mattachins)": getArbeauMatachins(),
             "Johann Sebastian Bach - 2 Part Inventions": getBach2PartInvention(),
@@ -345,8 +338,12 @@
         function parseFile(file) {
             //read the file
             const reader = new FileReader();
-            reader.onload = function (e) {
-                app.availableTracks = [];
+            reader.onload = setupSongFromArrayBuffer;
+            reader.readAsArrayBuffer(file);
+        }
+
+        function setupSongFromArrayBuffer(e){
+            app.availableTracks = [];
                 const midi = new Midi(e.target.result);
                 var trimmedMidi = {"tracks": []};
                 var counter = 0;
@@ -388,8 +385,6 @@
                 app.midiJson = "function getRENAMEMETHOD() { return " + JSON.stringify(getCompressedJson()) + "};"
                 //To get the prettified version
                 //app.midiJson = JSON.stringify(currentMidi, null, 2);
-            };
-            reader.readAsArrayBuffer(file);
         }
 
         function getCombinedTrackNotes(tracks){
@@ -573,7 +568,9 @@
                     trackVolume: 1,
                     midiJson: "",
                     jsonSongs: jsonSongs,
-                    selectedJsonSong: null
+                    selectedJsonSong: null,
+                    midiSongs: midiSongs,
+                    selectedMidiSong: null
                 },
                 mounted(){
                     this.notesCanvas = document.getElementById("notesCanvas")
@@ -612,6 +609,17 @@
                     document.activeElement.blur();
                 }
             }
+        }
+
+        function handleMidiSongSelection(){
+            if(app.selectedMidiSong){
+                app.availableTracks = [];
+                //Use fetch api to retrieve the file from "PublicDomainSongs/midi/" + app.selectedMidiSong.filename
+                const midiFilename = app.selectedMidiSong.filename;
+                fetch(`PublicDomainSongs/midi/${midiFilename}`)
+                    .then(response => response.arrayBuffer())
+                    .then(arrayBuffer => setupSongFromArrayBuffer({ target: arrayBuffer }));
+            }            
         }
 
         function handleJsonSongSelection(){
