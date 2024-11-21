@@ -31,6 +31,7 @@
     <script src="MyComponents/ScoreKeeper.js"></script>
     <script src="MyComponents/SongCompression.js"></script>
     <script src="MyComponents/midiSongList.js"></script>
+    <script src="MyComponents/difficultySettings.js"></script>
 
     <!-- local songs -->
     <script src="PublicDomainSongs/teleman_sonata.js"></script>
@@ -119,28 +120,18 @@
                     {{selectedKeyNoteMap.description}}
                 </div>
             </div>
-            <!-- minDurationConfig -->
-            <div id="minDurationConfig" class="side-by-side">
+            <!-- difficultyConfig -->
+            <div id="difficultyConfig" class="side-by-side">
                 <div class="bordered">
-                    <div id="minDuration">
-                        <label for="minDuration">Min Note Duration (in seconds) {{minDuration}}</label>
-                        <input type="range" class="fullRange" id="minDuration" v-model="minDuration" min="0" max="1" step=".01"></input>
+                    <div id="difficulty">
+                        <label for="difficultySelect">Select a Difficulty</label>
+                        <select id="difficultySelect" v-model="selectedDifficulty" class="pure-input-rounded" v-on:change="setDifficulty()">
+                            <option v-for="(item, key, index) in difficultySettings" :value="item">{{key}}</option>
+                        </select>
                     </div>
                 </div>
                 <div class="bordered">
-                    This sets which notes will be considered playable based on how long they appear on the screen.  the smaller the value, the more notes will show up to play.
-                </div>
-            </div>
-            <!-- minNoteDistanceConfig -->
-            <div id="minNoteDistanceConfig" class="side-by-side">
-                <div class="bordered">
-                    <div id="minNoteDistance">
-                        <label for="minNoteDistance">Min Note Distance (in seconds) {{minNoteDistance}}</label>
-                        <input type="range" class="fullRange" id="minNoteDistance" v-model="minNoteDistance" min="0" max="1" step=".01"></input>
-                    </div>
-                </div>
-                <div class="bordered">
-                    This sets which notes will be considered playable based on how much time is between notes.  the smaller the value, the more notes will show up to play.
+                    This sets how close together notes will be during play.  More notes will appear on harder difficulties, and they will be a bit harder to read due to how they letters stack up.  Good luck!
                 </div>
             </div>
             <!-- trackVolumeConfig -->
@@ -173,6 +164,7 @@
         <div id="playProgress">
             <div id="Song Time">
                 Song EndTime: [{{ songEnd }}]
+                <input type="checkbox" v-model="toggleTrackHighScores" v-on:change="handleToggleTrackHighScores()" title="Uses Cookies to keep track of personal scores for each song"> Track High Scores (uses cookies)</input>
             </div>
             <button id="tonePlayToggle" onclick="togglePlay()" disabled>Play</button>
             <span>Score: [{{ score }}]  Good [{{ goodCount }}] Ok [{{ okCount }}] Bad [{{badCount}}] Missed [{{missedCount}}]</span>
@@ -206,6 +198,7 @@
         var synthKeyPlayer = getSynthKeyPlayer();
         var songNoteRenderer = getSongNoteRenderer();
         const keyRenderInfo = getKeyRenderInfo();
+        const difficultySettings = getDifficultySettings();
         var noteLetterCache = songNoteRenderer.buildSongNoteLetterCache(keyRenderInfo);
         var toneHelper = getToneHelper();
         var visibleFieldFilterer = getVisibleFieldFilterer();
@@ -548,14 +541,17 @@
                     okCount: 0,
                     badCount: 0,
                     missedCount: 0,
-                    minDuration: .1,
-                    minNoteDistance: .4,
+                    minDuration: difficultySettings["Normal"].minNoteDuration,
+                    minNoteDistance: difficultySettings["Normal"].minNoteDistance,
                     playerVolume: .7,
                     trackVolume: 1,
                     midiJson: "",                    
                     midiSongs: midiSongs,
                     selectedMidiSong: null,
-                    songEnd: null
+                    songEnd: null,
+                    difficultySettings: difficultySettings,
+                    selectedDifficulty: difficultySettings["Normal"],
+                    toggleTrackHighScores: false
                 },
                 mounted(){
                     this.notesCanvas = document.getElementById("notesCanvas")
@@ -565,6 +561,7 @@
                     this.vueCanvas.font = "18px Georgia";
                     this.vueCanvas.fillStyle = "black";
                     this.vueCanvas.fillText("Watch for falling note keys!", 0, 50); // Assuming the height of the letter is about 20 pixels
+                    this.toggleTrackHighScores = document.cookie.length > 0;
                 }
             });
 
@@ -609,6 +606,20 @@
                     }
                 }));
             }            
+        }
+
+        function setDifficulty(){
+            app.minNoteDistance = app.selectedDifficulty.minNoteDistance;
+            app.minDuration = app.selectedDifficulty.minNoteDuration;
+        }
+
+        function handleToggleTrackHighScores(){
+            if(app.toggleTrackHighScores){
+                document.cookie = "trackHighScores=true; expires=Fri, 31 Dec 9999 23:59:59 GMT";
+            }
+            else{
+                document.cookie = "trackHighScores=false; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+            }
         }
     </script>
 </body>
