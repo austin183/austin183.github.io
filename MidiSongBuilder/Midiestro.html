@@ -32,6 +32,7 @@
     <script src="MyComponents/SongCompression.js"></script>
     <script src="MyComponents/midiSongList.js"></script>
     <script src="MyComponents/difficultySettings.js"></script>
+    <script src="MyComponents/highScoreTracker.js"></script>
 
     <!-- local songs -->
     <script src="PublicDomainSongs/teleman_sonata.js"></script>
@@ -162,12 +163,15 @@
         <button id="toggleGameConfig" onclick="toggleElementById('gameConfig')">Toggle Game Configurations</button>
 
         <div id="playProgress">
-            <div id="Song Time">
+            <div id="SongTime">
                 Song EndTime: [{{ songEnd }}]
-                <input type="checkbox" v-model="toggleTrackHighScores" v-on:change="handleToggleTrackHighScores()" title="Uses Cookies to keep track of personal scores for each song"> Track High Scores (uses cookies)</input>
+                <input type="checkbox" v-model="toggleTrackHighScores" v-on:change="handleToggleTrackHighScores()"> Track High Scores (uses <a href="https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage">localStorage)</a></input>
             </div>
             <button id="tonePlayToggle" onclick="togglePlay()" disabled>Play</button>
             <span>Score: [{{ score }}]  Good [{{ goodCount }}] Ok [{{ okCount }}] Bad [{{badCount}}] Missed [{{missedCount}}]</span>
+            <div id="SongHighScore">
+                High Score [{{ highScore }}]
+            </div>
         </div>
         <div id="canvasContainer" class="bordered">
             <canvas id="notesCanvas"></canvas>
@@ -194,6 +198,7 @@
         var midiSongs = getMidiSongList();
         const sortedMidiSongs = Object.fromEntries(Object.keys(midiSongs).sort().map(key => [key, midiSongs[key]]));
         midiSongs = sortedMidiSongs;
+        const highScoreTracker = getHighScoreTracker();
 
         var synthKeyPlayer = getSynthKeyPlayer();
         var songNoteRenderer = getSongNoteRenderer();
@@ -435,6 +440,11 @@
                         app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
                         renderFinalScore(app.notesCanvas, app.vueCanvas, app.score, app.goodCount, app.okCount, app.badCount, app.missedCount);
                         togglePlay(); //Should end the song automatically at the end.
+                        if(app.toggleTrackHighScores){
+                            debugger;
+                            highScoreTracker.setHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey, app.score);
+                            app.highScore = highScoreTracker.getHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey)
+                        }
                         return;
                     }
 
@@ -551,7 +561,8 @@
                     songEnd: null,
                     difficultySettings: difficultySettings,
                     selectedDifficulty: difficultySettings["Normal"],
-                    toggleTrackHighScores: false
+                    toggleTrackHighScores: false,
+                    highScore: 0
                 },
                 mounted(){
                     this.notesCanvas = document.getElementById("notesCanvas")
@@ -561,7 +572,10 @@
                     this.vueCanvas.font = "18px Georgia";
                     this.vueCanvas.fillStyle = "black";
                     this.vueCanvas.fillText("Watch for falling note keys!", 0, 50); // Assuming the height of the letter is about 20 pixels
-                    this.toggleTrackHighScores = document.cookie.length > 0;
+                    this.toggleTrackHighScores = localStorage.getItem("TrackScores") == "true";
+                    if(!this.toggleTrackHighScores){
+                        toggleElementById("SongHighScore");
+                    }
                 }
             });
 
@@ -596,6 +610,9 @@
 
         function handleMidiSongSelection(){
             if(app.selectedMidiSong){
+                if(app.toggleTrackHighScores){
+                    app.highScore = highScoreTracker.getHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
+                }
                 app.availableTracks = [];
                 //Use fetch api to retrieve the file from "PublicDomainSongs/midi/" + app.selectedMidiSong.filename
                 const midiFilename = app.selectedMidiSong.filename;
@@ -611,14 +628,18 @@
         function setDifficulty(){
             app.minNoteDistance = app.selectedDifficulty.minNoteDistance;
             app.minDuration = app.selectedDifficulty.minNoteDuration;
+            if(app.toggleTrackHighScores && app.selectedMidiSong){
+                app.highScore = highScoreTracker.getHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
+            }
         }
 
         function handleToggleTrackHighScores(){
+            toggleElementById("SongHighScore")
             if(app.toggleTrackHighScores){
-                document.cookie = "trackHighScores=true; expires=Fri, 31 Dec 9999 23:59:59 GMT";
+                localStorage.setItem("TrackScores", "true");
             }
             else{
-                document.cookie = "trackHighScores=false; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+                localStorage.clear();
             }
         }
     </script>
