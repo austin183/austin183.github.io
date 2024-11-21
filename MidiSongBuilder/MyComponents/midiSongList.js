@@ -33,9 +33,6 @@ function getMidiSongList() {
         "Johann Sebastian Bach - The Gigue Fugue": {
             filename: "bach_theGigueFugue.mid"
         },
-        "Beethoven - Symphony 6": {
-            filename: "beetho_sym6F_I_com.mid"
-        },
         "Georg Philipp Telemann - Sonata": {
             filename: "teleman_sonata_f.mid"
         },
