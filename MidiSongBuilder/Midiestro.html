@@ -637,6 +637,7 @@
             app.minDuration = app.selectedDifficulty.minNoteDuration;
             if(app.toggleTrackHighScores && app.selectedMidiSong){
                 app.highScore = highScoreTracker.getHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
+                app.challengeScore = challengeScores.getSelectedScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
             }
         }
 
