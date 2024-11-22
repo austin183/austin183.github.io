@@ -33,6 +33,7 @@
     <script src="MyComponents/midiSongList.js"></script>
     <script src="MyComponents/difficultySettings.js"></script>
     <script src="MyComponents/highScoreTracker.js"></script>
+    <script src="MyComponents/challengeScores.js"></script>
 
     <!-- local songs -->
     <script src="PublicDomainSongs/teleman_sonata.js"></script>
@@ -170,7 +171,7 @@
             <button id="tonePlayToggle" onclick="togglePlay()" disabled>Play</button>
             <span>Score: [{{ score }}]  Good [{{ goodCount }}] Ok [{{ okCount }}] Bad [{{badCount}}] Missed [{{missedCount}}]</span>
             <div id="SongHighScore">
-                High Score [{{ highScore }}]
+                High Score: [{{ highScore }}] Challenge Score: [{{ challengeScore }}]
                 <button id="exportHighScores" onclick="exportHighScores()">Copy High Scores to Clipboard</button>
             </div>
         </div>
@@ -201,6 +202,7 @@
         const sortedMidiSongs = Object.fromEntries(Object.keys(midiSongs).sort().map(key => [key, midiSongs[key]]));
         midiSongs = sortedMidiSongs;
         const highScoreTracker = getHighScoreTracker();
+        const challengeScores = getChallengeScores();
 
         var synthKeyPlayer = getSynthKeyPlayer();
         var songNoteRenderer = getSongNoteRenderer();
@@ -564,7 +566,8 @@
                     difficultySettings: difficultySettings,
                     selectedDifficulty: difficultySettings["Normal"],
                     toggleTrackHighScores: false,
-                    highScore: 0
+                    highScore: 0,
+                    challengeScore: 0
                 },
                 mounted(){
                     this.notesCanvas = document.getElementById("notesCanvas")
@@ -614,6 +617,7 @@
             if(app.selectedMidiSong){
                 if(app.toggleTrackHighScores){
                     app.highScore = highScoreTracker.getHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
+                    app.challengeScore = challengeScores.getSelectedScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
                 }
                 app.availableTracks = [];
                 //Use fetch api to retrieve the file from "PublicDomainSongs/midi/" + app.selectedMidiSong.filename
