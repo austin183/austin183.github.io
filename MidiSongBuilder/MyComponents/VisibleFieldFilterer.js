@@ -12,7 +12,7 @@ function getVisibleFieldFilterer(){
                 if(visibleField.length > 0){
                     previousNote = visibleField[visibleField.length - 1];
                 }
-                var noteDistance = note.time - (previousNote.time + previousNote.duration);
+                var noteDistance = note.time - previousNote.time;
 
                 if(noteDistance < minNoteDistance){
                     continue; //Skipping notes too close to the previous note.

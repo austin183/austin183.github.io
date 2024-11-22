@@ -446,7 +446,6 @@
                         renderFinalScore(app.notesCanvas, app.vueCanvas, app.score, app.goodCount, app.okCount, app.badCount, app.missedCount);
                         togglePlay(); //Should end the song automatically at the end.
                         if(app.toggleTrackHighScores){
-                            debugger;
                             highScoreTracker.setHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey, app.score);
                             app.highScore = highScoreTracker.getHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey)
                         }
