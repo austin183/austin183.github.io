@@ -172,6 +172,7 @@
             <span>Score: [{{ score }}]  Good [{{ goodCount }}] Ok [{{ okCount }}] Bad [{{badCount}}] Missed [{{missedCount}}]</span>
             <div id="SongHighScore">
                 High Score: [{{ highScore }}] Challenge Score: [{{ challengeScore }}]
+                <button id="clearHighScores" onclick="clearHighScores()">Clear High Scores</button>
                 <button id="exportHighScores" onclick="exportHighScores()">Copy High Scores to Clipboard</button>
             </div>
         </div>
@@ -640,13 +641,19 @@
         }
 
         function handleToggleTrackHighScores(){
-            toggleElementById("SongHighScore")
+            toggleElementById("SongHighScore");
             if(app.toggleTrackHighScores){
                 localStorage.setItem("TrackScores", "true");
             }
             else{
-                localStorage.clear();
+                localStorage.removeItem("TrackScores");
             }
+        }
+
+        function clearHighScores(){
+            localStorage.clear();
+            app.toggleTrackHighScores = false;
+            toggleElementById("SongHighScore");
         }
 
         function exportHighScores(){
