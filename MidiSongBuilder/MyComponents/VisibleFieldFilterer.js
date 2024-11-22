@@ -17,7 +17,7 @@ function getVisibleFieldFilterer(){
                 if(noteDistance < minNoteDistance){
                     continue; //Skipping notes too close to the previous note.
                 }
-                if(note.duration < minDuration){
+                else if(note.duration < minDuration){
                     continue; //Skipping notes that are too short
                 }
 
@@ -48,7 +48,7 @@ function getVisibleFieldFilterer(){
             for (var j = visibleField.length - 1; j >= 0; j--) {
                 var canvasNote = visibleField[j];
                 var overlap = visibleField.filter(n => n.id !== canvasNote.id && (n.time < canvasNote.time + canvasNote.duration && n.time + n.duration > canvasNote.time));
-                if (overlap.length >= keyCount) {
+                if (overlap.length > keyCount) {
                     //Remove overlapping note
                     visibleField.splice(visibleField.indexOf(canvasNote), 1);
                 }
