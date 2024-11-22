@@ -171,6 +171,7 @@
             <span>Score: [{{ score }}]  Good [{{ goodCount }}] Ok [{{ okCount }}] Bad [{{badCount}}] Missed [{{missedCount}}]</span>
             <div id="SongHighScore">
                 High Score [{{ highScore }}]
+                <button id="exportHighScores" onclick="exportHighScores()">Copy High Scores to Clipboard</button>
             </div>
         </div>
         <div id="canvasContainer" class="bordered">
@@ -193,6 +194,7 @@
         if(!debugPage){
             toggleElementById('songNoteKeys');
             toggleElementById('notesPlaying');
+            toggleElementById('exportHighScores');
         }
 
         var midiSongs = getMidiSongList();
@@ -641,6 +643,10 @@
             else{
                 localStorage.clear();
             }
+        }
+
+        function exportHighScores(){
+            highScoreTracker.exportHighScoresToClipBoardAsJsonString();
         }
     </script>
 </body>
