@@ -1,0 +1,214 @@
+/Users/austin/workspace/austin183.github.io/MidiSongBuilder/MyComponents/VisibleFieldFiltererTest.html
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Midiestro Test</title>
+    <script src="../Libraries/mocha.js"></script>
+    <link rel="stylesheet" href="../Libraries/mocha.css" />
+    <script type="text/javascript" src="../Libraries/ToneMidi.js"></script>
+    <script src="VisibleFieldFilterer.js"></script>
+    <script src="../Libraries/chai.min.js"></script>
+
+    <script>
+        mocha.setup('bdd');
+        const { expect } = chai;
+
+        let filterer, canvas, invertedKeyNoteMap, keyRenderInfo, songNoteRenderer;
+
+        function setup() {
+            canvas = document.createElement('canvas'); // Create a mock canvas
+            invertedKeyNoteMap = { 'C4': 'A', 'D4': 'B', 'E4': 'C', 'F4': 'D' };
+            keyRenderInfo = {}; // Assuming this is not needed for the test
+            songNoteRenderer = {
+                getPrerenderedDrawInstructions: () => ({ x: 0 })
+            };
+
+            filterer = getVisibleFieldFilterer();
+        }
+
+        function runTests() {
+            setup();
+
+            describe('filterToFullVisibleField', () => {
+
+                it('should filter out overlapping notes', () => {                    
+                    const song = [
+                        { time: 0, duration: 1, name: 'C4' },
+                        { time: 0.5, duration: 1, name: 'D4' },
+                        { time: 1, duration: 1, name: 'E4' }
+                    ];
+                    const minNoteDistance = 0;
+                    const minDuration = 0.5;
+
+                    const visibleField = filterer.filterToFullVisibleField(song, minNoteDistance, minDuration, invertedKeyNoteMap, keyRenderInfo, canvas, songNoteRenderer);
+
+                    //Should skip the time 0.5 entry because it overlaps with 0
+                    //Because the note with time 0 has a duration of 1
+                    //Which overlaps with the note with time 0.5 (`0 time` + `1 duration` + `0 minNoteDistance` overlaps with `0.5 time`)
+                    //The note with time 1 appears because it does not overlap  (`0 time` + `1 duration` + `0 minNoteDistance` does not overlap with `1 time`)
+                    expect(visibleField).to.have.lengthOf(2);
+                    expect(visibleField[0].time).to.equal(0);
+                    expect(visibleField[1].time).to.equal(1);                    
+                });
+
+                it('should filter out overlapping notes based on minNoteDistance', () => {                    
+                    const song = [
+                        { time: 0, duration: 1, name: 'C4' },
+                        { time: 1.25, duration: 1, name: 'D4' },
+                        { time: 1.5, duration: 1, name: 'E4' }
+                    ];
+                    const minNoteDistance = 0.5;
+                    const minDuration = 0;
+                    debugger;
+                    const visibleField = filterer.filterToFullVisibleField(song, minNoteDistance, minDuration, invertedKeyNoteMap, keyRenderInfo, canvas, songNoteRenderer);
+
+                    //Should skip the time 1.25 entry because it is too close to the note at 0
+                    //The note with time 1.5 appears because it is 0.5 passed the previous note
+                    //Which ended at a time of 1 (`0 time` + `1 duration` + `.5 minNoteDistance` does not overlap with `1.5 time`)
+                    expect(visibleField).to.have.lengthOf(2);
+                    expect(visibleField[0].time).to.equal(0);
+                    expect(visibleField[1].time).to.equal(1.5);
+                });
+
+                it('should filter out overlapping notes based on minDuration', () => {                    
+                    const song = [
+                        { time: 0, duration: 0.25, name: 'C4' },
+                        { time: 0.5, duration: 1, name: 'D4' },
+                        { time: 1.5, duration: 1, name: 'E4' }
+                    ];
+                    const minNoteDistance = 0;
+                    const minDuration = 0.5;
+
+                    const visibleField = filterer.filterToFullVisibleField(song, minNoteDistance, minDuration, invertedKeyNoteMap, keyRenderInfo, canvas, songNoteRenderer);
+
+                    //Should skip the time 0 entry because its duration is less than the minimum
+                    //The note with time 1.5 should appear because it will not overlap with the note with time 0.5
+                    //(0.5 + 1 + 0 does not overlap with 1.5)
+                    expect(visibleField).to.have.lengthOf(2);
+                    expect(visibleField[0].time).to.equal(0.5);
+                    expect(visibleField[1].time).to.equal(1.5);                    
+                });
+
+                it('should handle an empty song', () => {                    
+                    const song = [];
+                    const minNoteDistance = 0;
+                    const minDuration = 0;
+
+                    const visibleField = filterer.filterToFullVisibleField(song, minNoteDistance, minDuration, invertedKeyNoteMap, keyRenderInfo, canvas, songNoteRenderer);
+
+                    expect(visibleField).to.have.lengthOf(0);
+                });
+
+                it('should handle a single note', () => {                    
+                    const song = [
+                        { time: 0, duration: 1, name: 'C4' }
+                    ];
+                    const minNoteDistance = 0;
+                    const minDuration = 0;
+
+                    const visibleField = filterer.filterToFullVisibleField(song, minNoteDistance, minDuration, invertedKeyNoteMap, keyRenderInfo, canvas, songNoteRenderer);
+
+                    expect(visibleField).to.have.lengthOf(1);
+                    expect(visibleField[0].time).to.equal(0);
+                });
+
+                it('should handle multiple consecutive notes with overlapping durations', () => {
+                    const song = [
+                        { time: 0, duration: 1, name: 'C4' },
+                        { time: 0.5, duration: 1, name: 'D4' },
+                        { time: 1, duration: 1, name: 'E4' },
+                        { time: 1.25, duration: 1, name: 'F4' }
+                    ];
+                    const minNoteDistance = 0;
+                    const minDuration = 0;
+
+                    const visibleField = filterer.filterToFullVisibleField(song, minNoteDistance, minDuration, invertedKeyNoteMap, keyRenderInfo, canvas, songNoteRenderer);
+
+                    expect(visibleField).to.have.lengthOf(2);
+                    expect(visibleField[0].time).to.equal(0);
+                    expect(visibleField[1].time).to.equal(1);
+                });
+
+                it('should handle notes with different durations or positions within the same time frame', () => {
+                    const song = [
+                        { time: 0, duration: 2, name: 'C4' },
+                        { time: 1, duration: 0.5, name: 'D4' },
+                        { time: 2, duration: 1, name: 'E4' },
+                        { time: 2, duration: 1, name: 'F4' },
+                        { time: 3, duration: .5, name: 'C4'},
+                        { time: 3, duration: .75, name: 'D4' },
+                        { time: 3.5, duration: 1, name: 'E4' }
+                    ];
+                    const minNoteDistance = 0;
+                    const minDuration = 0;
+
+                    const visibleField = filterer.filterToFullVisibleField(song, minNoteDistance, minDuration, invertedKeyNoteMap, keyRenderInfo, canvas, songNoteRenderer);
+
+                    expect(visibleField).to.have.lengthOf(4);
+                    expect(visibleField[0].time).to.equal(0);
+                    expect(visibleField[1].time).to.equal(2);
+                    expect(visibleField[1].letter).to.equal(invertedKeyNoteMap['E4']);
+                    expect(visibleField[2].time).to.equal(3);
+                    expect(visibleField[2].letter).to.equal(invertedKeyNoteMap['C4']);
+                    expect(visibleField[3].time).to.equal(3.5);
+                    expect(visibleField[3].letter).to.equal(invertedKeyNoteMap['E4']);
+                });
+
+                it('should handle edge cases for the minNoteDistance parameter', () => {
+                    const song = [
+                        { time: 0, duration: 1, name: 'C4' },
+                        { time: 1.25, duration: 1, name: 'D4' }
+                    ];
+                    const minNoteDistance = -1; // Negative value
+                    const minDuration = 0;
+
+                    expect(() => filterer.filterToFullVisibleField(song, minNoteDistance, minDuration, invertedKeyNoteMap, keyRenderInfo, canvas, songNoteRenderer)).to.throw();
+
+                    const minNoteDistance2 = 10; // Very large value
+                    const visibleField = filterer.filterToFullVisibleField(song, minNoteDistance2, minDuration, invertedKeyNoteMap, keyRenderInfo, canvas, songNoteRenderer);
+
+                    expect(visibleField).to.have.lengthOf(1);
+                    expect(visibleField[0].time).to.equal(0);
+                });
+
+                it('should handle edge cases for the minDuration parameter', () => {
+                    const song = [
+                        { time: 0, duration: 1, name: 'C4' },
+                        { time: 2, duration: 0.25, name: 'D4' }
+                    ];
+                    const minNoteDistance = 0;
+                    const minDuration = -1; // Negative value
+
+                    expect(() => filterer.filterToFullVisibleField(song, minNoteDistance, minDuration, invertedKeyNoteMap, keyRenderInfo, canvas, songNoteRenderer)).to.throw();
+
+                    const minDuration2 = 10; // Very large value
+                    const visibleField = filterer.filterToFullVisibleField(song, minNoteDistance, minDuration2, invertedKeyNoteMap, keyRenderInfo, canvas, songNoteRenderer);
+
+                    expect(visibleField).to.have.lengthOf(0);
+                });
+
+                it('should skip notes that do not have a value in the invertedKeyNoteMap', () =>{
+                    const song = [
+                        { time: 0, duration: 1, name: 'Z4' },
+                        { time: 2, duration: 0.25, name: 'C4' }
+                    ];
+                    const minNoteDistance = 0;
+                    const minDuration = 0;
+
+                    const visibleField = filterer.filterToFullVisibleField(song, minNoteDistance, minDuration, invertedKeyNoteMap, keyRenderInfo, canvas, songNoteRenderer);
+                    expect(visibleField).to.have.lengthOf(1);
+                    expect(visibleField[0].time).to.equal(2);
+                });
+            });
+
+            mocha.run();
+        }
+    </script>
+</head>
+
+<body onload="runTests()">
+    <div id="mocha"></div>
+</body>
+
+</html>

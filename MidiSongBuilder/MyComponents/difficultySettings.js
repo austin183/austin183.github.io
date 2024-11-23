@@ -12,12 +12,12 @@ function getDifficultySettings(){
         },
         "A Bit More Please": {
             difficultyKey: "hard",
-            minNoteDistance: .3,
+            minNoteDistance: .4,
             minNoteDuration: .1
         },
         "Insanity": {
             difficultyKey: "crazy",
-            minNoteDistance: .05,
+            minNoteDistance: .1,
             minNoteDuration: .01
         }
     };

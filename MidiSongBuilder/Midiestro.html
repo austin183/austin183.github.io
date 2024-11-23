@@ -34,10 +34,6 @@
     <script src="MyComponents/difficultySettings.js"></script>
     <script src="MyComponents/highScoreTracker.js"></script>
     <script src="MyComponents/challengeScores.js"></script>
-
-    <!-- local songs -->
-    <script src="PublicDomainSongs/teleman_sonata.js"></script>
-    <script src="PublicDomainSongs/debussy_gollycake.js"></script>
 </head>
 
 <body>
@@ -412,7 +408,7 @@
                 containerElement.scrollIntoView({ behavior: "smooth" });
                 const startTime = Tone.now();
                 const futureLimit = songEnd;
-                const visibleField = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, app.minNoteDistance, app.minDuration, invertedKeyNoteMap, app.selectedKeyCount, keyRenderInfo, app.notesCanvas, songNoteRenderer);
+                const visibleField = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, app.minNoteDistance, app.minDuration, invertedKeyNoteMap, keyRenderInfo, app.notesCanvas, songNoteRenderer);
                 var earliestNoteIndex = 0;
                 currentMidi.tracks.forEach((track) => {
                     //create a synth for each track
@@ -545,7 +541,6 @@
                     renderedNotesPlaying: defaultNotesPlaying, //The field to show which notes are playing based on the keys pressed at the time
                     songNotes: defaultSongNotes,
                     songNotesOnKeyMap: defaultSongNotesOnKeyMap,
-                    selectedKeyCount: 1,
                     selectedTrack: "",
                     availableTracks: [],
                     vueCanvas: null,
