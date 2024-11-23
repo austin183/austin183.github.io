@@ -2,12 +2,12 @@ function getDifficultySettings(){
     return {
         "A Bit Less Please": {
             difficultyKey: "easy",
-            minNoteDistance: .5,
+            minNoteDistance: .7,
             minNoteDuration: .2
         },
         "Normal": {
             difficultyKey: "normal",
-            minNoteDistance: .4,
+            minNoteDistance: .5,
             minNoteDuration: .1
         },
         "A Bit More Please": {

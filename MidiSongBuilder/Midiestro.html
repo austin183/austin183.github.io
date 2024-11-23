@@ -620,6 +620,11 @@
                     app.challengeScore = challengeScores.getSelectedScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
                 }
                 app.availableTracks = [];
+                app.score = 0;
+                app.goodCount = 0;
+                app.okCount = 0;
+                app.badCount = 0;
+                app.missedCount = 0;
                 //Use fetch api to retrieve the file from "PublicDomainSongs/midi/" + app.selectedMidiSong.filename
                 const midiFilename = app.selectedMidiSong.filename;
                 fetch(`PublicDomainSongs/midi/${midiFilename}`)
@@ -635,6 +640,11 @@
             app.minNoteDistance = app.selectedDifficulty.minNoteDistance;
             app.minDuration = app.selectedDifficulty.minNoteDuration;
             if(app.toggleTrackHighScores && app.selectedMidiSong){
+                app.score = 0;
+                app.goodCount = 0;
+                app.okCount = 0;
+                app.badCount = 0;
+                app.missedCount = 0;
                 app.highScore = highScoreTracker.getHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
                 app.challengeScore = challengeScores.getSelectedScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
             }
