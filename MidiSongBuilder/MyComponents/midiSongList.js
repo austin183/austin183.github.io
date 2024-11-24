@@ -54,15 +54,6 @@ function getMidiSongList() {
         "Wolfgang Amadeus Mozart - Elvira Madigan from Piano Concerto No. 21 in C major, K. 467": {
             filename: "mozart_elvira_m.mid"
         },
-        "Erik Satie - Gymnopedie No. 1 for Piano Solo": {
-            filename: "satie_gymno1.mid"
-        },
-        "Erik Satie - Gymnopedie No. 2 for Piano Solo": {
-            filename: "satie_gymno2.mid"
-        },
-        "Erik Satie - Gymnopedie No. 3 for Piano Solo": {
-            filename: "satie_gymno3.mid"
-        },
         "Franz Schubert - Serenade from Schwanengesang, D. 957": {
             filename: "schubert_serenade.mid"
         },

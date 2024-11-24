@@ -4,7 +4,7 @@ function getVisibleFieldFilterer(){
             if (minNoteDistance < 0 || minDuration < 0) {
                 throw new Error('minNoteDistance and minDuration must be non-negative numbers');
             }
-
+            const maxDuration = 2;
             var visibleField = [];
             var defaultPreviousNote = {
                 time: -10,
@@ -12,7 +12,7 @@ function getVisibleFieldFilterer(){
             };
             for (var i = 0; i < song.length; i++) {
                 var currentNote = song[i];
-                if (currentNote.duration >= minDuration && invertedKeyNoteMap[currentNote.name] !== undefined) {
+                if (currentNote.duration >= minDuration && currentNote.duration <= maxDuration && invertedKeyNoteMap[currentNote.name] !== undefined) {
                     var previousNote = visibleField[visibleField.length - 1] || defaultPreviousNote;
                     if (currentNote.time - minNoteDistance >= previousNote.time + previousNote.duration) {
                         var prerenderedDrawInstructions = null;

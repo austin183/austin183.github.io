@@ -2,23 +2,23 @@ function getDifficultySettings(){
     return {
         "A Bit Less Please": {
             difficultyKey: "easy",
-            minNoteDistance: .7,
+            minNoteDistance: .5,
             minNoteDuration: .2
         },
         "Normal": {
             difficultyKey: "normal",
-            minNoteDistance: .5,
-            minNoteDuration: .1
+            minNoteDistance: .25,
+            minNoteDuration: .2
         },
         "A Bit More Please": {
             difficultyKey: "hard",
-            minNoteDistance: .4,
-            minNoteDuration: .1
+            minNoteDistance: .15,
+            minNoteDuration: .2
         },
         "Insanity": {
             difficultyKey: "crazy",
-            minNoteDistance: .1,
-            minNoteDuration: .01
+            minNoteDistance: 0.1,
+            minNoteDuration: .1
         }
     };
 }
