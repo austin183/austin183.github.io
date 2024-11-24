@@ -82,22 +82,26 @@ return {
           "easy": {
             difficultyKey: "easy",
             minNoteDistance: distanceQuantileValues[0] < absoluteMinimumDistance ? absoluteMinimumDistance : distanceQuantileValues[0],
-            minNoteDuration: durationQuantileValues[0]
+            minNoteDuration: durationQuantileValues[0],
+            targetNotesPerMinute: 60
           },
           "normal": {
             difficultyKey: "normal",
             minNoteDistance: distanceQuantileValues[1] < absoluteMinimumDistance ? absoluteMinimumDistance : distanceQuantileValues[1],
-            minNoteDuration: durationQuantileValues[1]
+            minNoteDuration: durationQuantileValues[1],
+            targetNotesPerMinute: 100
           },
           "hard": {
             difficultyKey: "hard",
             minNoteDistance: distanceQuantileValues[2] < absoluteMinimumDistance ? absoluteMinimumDistance : distanceQuantileValues[2],
-            minNoteDuration: durationQuantileValues[2]
+            minNoteDuration: durationQuantileValues[2],
+            targetNotesPerMinute: 120
           },
           "crazy": {
             difficultyKey: "crazy",
             minNoteDistance: distanceQuantileValues[3] < absoluteMinimumDistance ? absoluteMinimumDistance : distanceQuantileValues[3],
-            minNoteDuration: durationQuantileValues[3]
+            minNoteDuration: durationQuantileValues[3],
+            targetNotesPerMinute: 160
           }
         };
     },
