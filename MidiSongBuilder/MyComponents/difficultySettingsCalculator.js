@@ -74,7 +74,7 @@ return {
         const noteDistribution = statCalculators.gatherNoteDistributions(song, invertedKeyNoteMap);
         const distanceQuantiles = [0.65, 0.50, 0.40, .25];
         const durationQuantiles = [0.35, 0.30, 0.15, .15];
-        const absoluteMinimumDistance = .1; //This is to keep the game from becoming overwhelming for some songs.
+        const absoluteMinimumDistance = .17; //This is to keep the game from becoming overwhelming for some songs.
         
         const distanceQuantileValues = distanceQuantiles.map(q => statCalculators.getQuantile(q, noteDistribution.noteDistanceStats));
         const durationQuantileValues = durationQuantiles.map(q => statCalculators.getQuantile(q, noteDistribution.noteDurationStats));
@@ -82,31 +82,28 @@ return {
           "easy": {
             difficultyKey: "easy",
             minNoteDistance: distanceQuantileValues[0] < absoluteMinimumDistance ? absoluteMinimumDistance : distanceQuantileValues[0],
-            minNoteDuration: durationQuantileValues[0],
-            targetNotesPerMinute: 60
+            minNoteDuration: durationQuantileValues[0]
           },
           "normal": {
             difficultyKey: "normal",
             minNoteDistance: distanceQuantileValues[1] < absoluteMinimumDistance ? absoluteMinimumDistance : distanceQuantileValues[1],
-            minNoteDuration: durationQuantileValues[1],
-            targetNotesPerMinute: 100
+            minNoteDuration: durationQuantileValues[1]
           },
           "hard": {
             difficultyKey: "hard",
             minNoteDistance: distanceQuantileValues[2] < absoluteMinimumDistance ? absoluteMinimumDistance : distanceQuantileValues[2],
-            minNoteDuration: durationQuantileValues[2],
-            targetNotesPerMinute: 120
+            minNoteDuration: durationQuantileValues[2]
           },
           "crazy": {
             difficultyKey: "crazy",
             minNoteDistance: distanceQuantileValues[3] < absoluteMinimumDistance ? absoluteMinimumDistance : distanceQuantileValues[3],
-            minNoteDuration: durationQuantileValues[3],
-            targetNotesPerMinute: 160
+            minNoteDuration: durationQuantileValues[3]
           }
         };
     },
     getDifficultiesForSongByMedianDistanceAndWeightedAverage: function(song, invertedKeyNoteMap){
         const noteDistribution = statCalculators.gatherNoteDistributions(song, invertedKeyNoteMap);
+        const absoluteMinimumDistance = .17; //This is to keep the game from becoming overwhelming for some songs.
 
         // Calculate median note distance
         const noteDistances = Object.keys(noteDistribution.noteDistanceStats).map(key => parseFloat(key));
@@ -119,23 +116,23 @@ return {
         return {
             "easy": {
                 difficultyKey: "easy",
-                minNoteDistance: medianNoteDistance * 1.1,
+                minNoteDistance: (medianNoteDistance * 1.1) < absoluteMinimumDistance ? absoluteMinimumDistance : (medianNoteDistance * 1.1),
                 minNoteDuration: weightedAverageDuration / 3.3
             },
             "normal": {
                 difficultyKey: "normal",
-                minNoteDistance: medianNoteDistance * 1,
+                minNoteDistance: (medianNoteDistance * 1) <  absoluteMinimumDistance ? absoluteMinimumDistance : (medianNoteDistance * 1),
                 minNoteDuration: weightedAverageDuration / 4
             },
             "hard": {
                 difficultyKey: "hard",
-                minNoteDistance: medianNoteDistance * .9,
+                minNoteDistance: (medianNoteDistance * .9) <  absoluteMinimumDistance ? absoluteMinimumDistance : (medianNoteDistance * .9),
                 minNoteDuration: weightedAverageDuration / 4
             },
             "crazy": {
                 difficultyKey: "crazy",
-                minNoteDistance: medianNoteDistance * .7,
-                minNoteDuration: weightedAverageDuration / 4
+                minNoteDistance: (medianNoteDistance * .7)  <  absoluteMinimumDistance ? absoluteMinimumDistance : (medianNoteDistance * .7),
+                minNoteDuration: weightedAverageDuration / 5
             }
         };
     }
