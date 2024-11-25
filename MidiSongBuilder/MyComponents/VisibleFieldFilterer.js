@@ -20,16 +20,18 @@ function getVisibleFieldFilterer(){
                         if(songNoteRenderer && canvas && keyRenderInfo){
                             prerenderedDrawInstructions = songNoteRenderer.getPrerenderedDrawInstructions(canvas, keyRenderInfo, currentNote, keyNote);
                         }
-                        // Create a new visible field element
-                        var visibleFieldElement = {
-                            time: currentNote.time,
-                            duration: currentNote.duration,
-                            letter: keyNote,
-                            x: prerenderedDrawInstructions.x,
-                            id: currentNote.name + "_" + currentNote.time
-                        };
+                        if(prerenderedDrawInstructions){
+                            // Create a new visible field element
+                            var visibleFieldElement = {
+                                time: currentNote.time,
+                                duration: currentNote.duration,
+                                letter: keyNote,
+                                x: prerenderedDrawInstructions.x,
+                                id: currentNote.name + "_" + currentNote.time
+                            };
 
-                        visibleField.push(visibleFieldElement);
+                            visibleField.push(visibleFieldElement);
+                        }                        
                     }
                 }
             }

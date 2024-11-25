@@ -154,7 +154,29 @@ textarea {
     margin: auto;
 }
 
+#quantilesCanvasContainer {
+    width: 810px;
+    height: 610px;
+    margin: auto;
+}
+
+#medianAndWeightedAverageCanvasContainer {
+    width: 810px;
+    height: 610px;
+    margin: auto;
+}
+
 #notesCanvas {
+    width: 800px;
+    height: 600px;
+}
+
+#quantileNotesCanvas {
+    width: 800px;
+    height: 600px;
+}
+
+#medianAndWeightedNotesCanvas {
     width: 800px;
     height: 600px;
 }
@@ -195,4 +217,15 @@ tone-play-toggle {
 
 input.fullRange {
     width: 95%;
+}
+
+#canvasContainer, #quantilesCanvasContainer, #medianAndWeightedAverageCanvasContainer {
+    display: inline-block;
+}
+
+/* Add this class to a container element that wraps all three canvas containers */
+.canvas-container-wrapper {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px; /* Optional */
 }
