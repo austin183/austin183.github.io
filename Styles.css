@@ -166,6 +166,17 @@ textarea {
     margin: auto;
 }
 
+#songLevelCanvasContainer {
+    width: 810px;
+    height: 610px;
+    margin: auto;
+}
+
+#songLevelNotesCanvas {
+    width: 800px;
+    height: 600px;
+}
+
 #notesCanvas {
     width: 800px;
     height: 600px;

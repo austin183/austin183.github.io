@@ -162,6 +162,14 @@
                 </div>
                 <canvas id="medianAndWeightedNotesCanvas"></canvas>
             </div>
+
+            <div id="songLevelCanvasContainer" class="bordered">
+                <div>
+                    Difficulty based on Song Options -- 
+                    minNoteDistance {{ songLevelDifficultySettings.minNoteDistance }} minNoteDuration {{ songLevelDifficultySettings.minNoteDuration }} notesPerMinute {{ songLevelNotesPerMinute }}
+                </div>
+                <canvas id="songLevelNotesCanvas"></canvas>
+            </div>
         </div>
     </div>
 
@@ -173,9 +181,9 @@
         const keyRenderInfo = getKeyRenderInfo();
         const difficultySettings = getDifficultySettings();
         const difficultySettingsCalculator = getDifficultySettingsCalculator();
+        var songDifficultySettings = null;
         var noteLetterCache = songNoteRenderer.buildSongNoteLetterCache(keyRenderInfo);
         var visibleFieldFilterer = getVisibleFieldFilterer();
-        var songEnd = null;
         //Get all the keyNoteMaps
         const keyNoteMapCollection = getKeyNoteMaps();  //Supplied from ./keyNoteMap.js
         //Get all the available keyNoteMapKeys keys
@@ -192,12 +200,24 @@
             Maybe these will get reused to scroll the canvas down and up
         */
         document.addEventListener('keydown', function(event) {
-            if (event.key === 'ArrowLeft') {
+            if (event.key === 'a' || event.key === 'A') {
                 // Decrease song time when up arrow key is pressed
+                app.songTime -= 10;
+            } 
+            else if (event.key === 'd' || event.key === 'D') {
+                // Increase song time when down arrow key is pressed
+                app.songTime += 10;
+            }
+            else if (event.key === 'w' || event.key === 'W') {
+                // Increase song time when down arrow key is pressed
                 app.songTime -= 1;
-            } else if (event.key === 'ArrowRight') {
+            }
+            else if (event.key === 's' || event.key === 'S') {
                 // Increase song time when down arrow key is pressed
                 app.songTime += 1;
+            }
+            if(app.songTime < 0 || app.songTime > app.songEnd){
+                app.songTime = 0;
             }
             renderSong(app.songTime);
         });
@@ -288,7 +308,7 @@
 
                 app.selectedTrack = app.availableTracks[0];
                 var lastNote = fullTrack.notes[fullTrack.notes.length - 1];
-                songEnd = lastNote.time + lastNote.duration;
+                app.songEnd = lastNote.time + lastNote.duration;
                 app.songTime = 0;
                 renderSong(app.songTime);
         }
@@ -315,22 +335,22 @@
                 const containerElement = document.getElementById("canvasContainer");
 
                 const startTime = Tone.now();
-                const futureLimit = songEnd;
+                const futureLimit = app.songEnd;
                 //Default Visible Field
                 const visibleFieldDefault = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, app.minNoteDistance, app.minDuration, invertedKeyNoteMap, keyRenderInfo, app.notesCanvas, songNoteRenderer);
-                const defaultNotesPerMinute = Math.floor((visibleFieldDefault.length / songEnd) * 60);
+                const defaultNotesPerMinute = Math.floor((visibleFieldDefault.length / app.songEnd) * 60);
                 app.defaultNotesPerMinute = defaultNotesPerMinute;
                 //Visible field based on quantiles
                 const calculatedDifficultiesByQuantiles = difficultySettingsCalculator.getDifficultiesForSongByQuantiles(app.selectedTrack.notes, invertedKeyNoteMap)[app.selectedDifficulty.difficultyKey];
                 app.quantileDifficultySettings = calculatedDifficultiesByQuantiles;
                 const visibleFieldQuantiles = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, calculatedDifficultiesByQuantiles.minNoteDistance, calculatedDifficultiesByQuantiles.minNoteDuration, invertedKeyNoteMap, keyRenderInfo, app.notesCanvas, songNoteRenderer);
-                const quantilesNotesPerMinute = Math.floor((visibleFieldQuantiles.length / songEnd) * 60);
+                const quantilesNotesPerMinute = Math.floor((visibleFieldQuantiles.length / app.songEnd) * 60);
                 app.quantileNotesPerMinute = quantilesNotesPerMinute;
                 //Visible field based on median distance and weighted average duration
                 const calculatedDifficultiesByMedianDistanceAndWeightedAverage = difficultySettingsCalculator.getDifficultiesForSongByMedianDistanceAndWeightedAverage(app.selectedTrack.notes, invertedKeyNoteMap)[app.selectedDifficulty.difficultyKey];
                 app.weightedDifficultySettings = calculatedDifficultiesByMedianDistanceAndWeightedAverage;
                 const visibleFieldMedianAndWeightedAverage = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, calculatedDifficultiesByMedianDistanceAndWeightedAverage.minNoteDistance, calculatedDifficultiesByMedianDistanceAndWeightedAverage.minNoteDuration, invertedKeyNoteMap, keyRenderInfo, app.notesCanvas, songNoteRenderer);                
-                const medianAndWeightedAveragePerMinute = Math.floor((visibleFieldMedianAndWeightedAverage.length / songEnd) * 60);
+                const medianAndWeightedAveragePerMinute = Math.floor((visibleFieldMedianAndWeightedAverage.length / app.songEnd) * 60);
                 app.weightedNotesPerMinute = medianAndWeightedAveragePerMinute;
 
                 //Custom field based on defined minNoteDistance and minNoteDuration
@@ -356,6 +376,18 @@
                 app.vueWeightedCanvas.clearRect(0, 0, app.notesWeightedCanvas.width, app.notesWeightedCanvas.height);
                 songNoteRenderer.renderNowLine(app.notesWeightedCanvas, app.vueWeightedCanvas);
                 songNoteRenderer.renderNotesPlayingForCanvas(app.notesWeightedCanvas, app.vueWeightedCanvas, visibleFieldMedianAndWeightedAverage, {keyScores: {}}, intervalNow, visiblePast, visibleFuture, earliestNoteIndex, noteLetterCache);
+                if(songDifficultySettings){
+                    const songDifficulty = songDifficultySettings[app.selectedDifficulty.difficultyKey];
+                    //todo fill in new canvas for the song difficulty settings
+                    app.songLevelDifficultySettings = songDifficulty;
+                    const visibleFieldSongLevel = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, songDifficulty.minNoteDistance, songDifficulty.minNoteDuration, invertedKeyNoteMap, keyRenderInfo, app.notesCanvas, songNoteRenderer);
+                    app.songLevelNotesPerMinute = Math.floor((visibleFieldSongLevel.length / app.songEnd) * 60);
+
+                    app.vueSongLevelCanvas.clearRect(0, 0, app.notesSongLevelCanvas.width, app.notesSongLevelCanvas.height);
+                    songNoteRenderer.renderNowLine(app.notesSongLevelCanvas, app.vueSongLevelCanvas);
+                    songNoteRenderer.renderNotesPlayingForCanvas(app.notesSongLevelCanvas, app.vueSongLevelCanvas, visibleFieldSongLevel, {keyScores: {}}, intervalNow, visiblePast, visibleFuture, earliestNoteIndex, noteLetterCache);
+                }
+                
             }
         };
         
@@ -394,11 +426,14 @@
                     notesQuantileCanvas: null,
                     vueWeightedCanvas: null,
                     notesWeightedCanvas: null,
+                    vueSongLevelCanvas: null,
+                    notesSongLevelCanvas: null,
                     minDuration: difficultySettings["Normal"].minNoteDuration,
                     minNoteDistance: difficultySettings["Normal"].minNoteDistance,
                     defaultNotesPerMinute: 0,
                     quantileNotesPerMinute: 0,
                     weightedNotesPerMinute: 0,
+                    songLevelNotesPerMinute: 0,
                     midiJson: "",                    
                     midiSongs: midiSongs,
                     selectedMidiSong: null,
@@ -411,6 +446,10 @@
                         minNoteDistance: difficultySettings["Normal"].minNoteDistance,                        
                     },
                     quantileDifficultySettings: {
+                        minNoteDuration: difficultySettings["Normal"].minNoteDuration,
+                        minNoteDistance: difficultySettings["Normal"].minNoteDistance,
+                    },
+                    songLevelDifficultySettings: {
                         minNoteDuration: difficultySettings["Normal"].minNoteDuration,
                         minNoteDistance: difficultySettings["Normal"].minNoteDistance,
                     }
@@ -431,6 +470,10 @@
                     this.notesWeightedCanvas = document.getElementById("medianAndWeightedNotesCanvas");
                     var weightedCtx = this.notesWeightedCanvas.getContext('2d');
                     this.vueWeightedCanvas = weightedCtx;
+
+                    this.notesSongLevelCanvas = document.getElementById("songLevelNotesCanvas");
+                    var songLevelCtx = this.notesSongLevelCanvas.getContext('2d');
+                    this.vueSongLevelCanvas = songLevelCtx;
                 }
             });
 
@@ -438,10 +481,13 @@
 
         function handleMidiSongSelection(){
             if(app.selectedMidiSong){
-                if(app.toggleTrackHighScores){
-                    app.highScore = highScoreTracker.getHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
-                    app.challengeScore = challengeScores.getSelectedScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
+                if(app.selectedMidiSong.difficultySettings){
+                    songDifficultySettings = app.selectedMidiSong.difficultySettings;                    
                 }
+                else{
+                    songDifficultySettings = null;
+                }
+                
                 app.availableTracks = [];
                 //Use fetch api to retrieve the file from "PublicDomainSongs/midi/" + app.selectedMidiSong.filename
                 const midiFilename = app.selectedMidiSong.filename;

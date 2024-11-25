@@ -37,7 +37,29 @@ function getMidiSongList() {
             filename: "teleman_sonata_f.mid"
         },
         "Debussy - Golliwog's Cakewalk": {
-            filename: "debussy_gollycake.mid"
+            filename: "debussy_gollycake.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .45,
+                    minNoteDuration: .05
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .4,
+                    minNoteDuration: .047
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: .28,
+                    minNoteDuration: .047
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: 0.18,
+                    minNoteDuration: .047
+                }
+            }
         },
         "Edvard Grieg - Hall of the Mountain King from Peer Gynt Suite No. 1": {
             filename: "grieg_hallofking.mid"

@@ -207,6 +207,7 @@
         const keyRenderInfo = getKeyRenderInfo();
         const difficultySettings = getDifficultySettings();
         const difficultySettingsCalculator = getDifficultySettingsCalculator();
+        var songDifficultySettings = null;
         var noteLetterCache = songNoteRenderer.buildSongNoteLetterCache(keyRenderInfo);
         var toneHelper = getToneHelper();
         var visibleFieldFilterer = getVisibleFieldFilterer();
@@ -410,28 +411,36 @@
                 containerElement.scrollIntoView({ behavior: "smooth" });
                 const startTime = Tone.now();
                 const futureLimit = songEnd;
-                //Default Visible Field
-                const visibleFieldDefault = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, app.minNoteDistance, app.minDuration, invertedKeyNoteMap, keyRenderInfo, app.notesCanvas, songNoteRenderer);
-                const defaultNotesPerMinute = Math.floor((visibleFieldDefault.length / songEnd) * 60);
-                //Visible field based on quantiles
-                const calculatedDifficultiesByQuantiles = difficultySettingsCalculator.getDifficultiesForSongByQuantiles(app.selectedTrack.notes, invertedKeyNoteMap)[app.selectedDifficulty.difficultyKey];
-                const visibleFieldQuantiles = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, calculatedDifficultiesByQuantiles.minNoteDistance, calculatedDifficultiesByQuantiles.minNoteDuration, invertedKeyNoteMap, keyRenderInfo, app.notesCanvas, songNoteRenderer);
-                const quantilesNotesPerMinute = Math.floor((visibleFieldQuantiles.length / songEnd) * 60);
-                //Visible field based on median distance and weighted average duration
-                const calculatedDifficultiesByMedianDistanceAndWeightedAverage = difficultySettingsCalculator.getDifficultiesForSongByMedianDistanceAndWeightedAverage(app.selectedTrack.notes, invertedKeyNoteMap)[app.selectedDifficulty.difficultyKey];
-                const visibleFieldMedianAndWeightedAverage = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, calculatedDifficultiesByMedianDistanceAndWeightedAverage.minNoteDistance, calculatedDifficultiesByMedianDistanceAndWeightedAverage.minNoteDuration, invertedKeyNoteMap, keyRenderInfo, app.notesCanvas, songNoteRenderer);                
-                const medianAndWeightedAveragePerMinute = Math.floor((visibleFieldMedianAndWeightedAverage.length / songEnd) * 60);
                 var visibleField = [];
-                const targetNotesPerMinute = app.selectedDifficulty.targetNotesPerMinute;
-                const options = [
-                    { diff: Math.abs(defaultNotesPerMinute - targetNotesPerMinute), visibleField: visibleFieldDefault },
-                    { diff: Math.abs(quantilesNotesPerMinute - targetNotesPerMinute), visibleField: visibleFieldQuantiles },
-                    { diff: Math.abs(medianAndWeightedAveragePerMinute - targetNotesPerMinute), visibleField: visibleFieldMedianAndWeightedAverage }
-                ];
+                if(songDifficultySettings){
+                    const songDifficulty = songDifficultySettings[app.selectedDifficulty.difficultyKey];
+                    visibleField = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, songDifficulty.minNoteDistance, songDifficulty.minNoteDuration, invertedKeyNoteMap, keyRenderInfo, app.notesCanvas, songNoteRenderer);
+                }
+                else{
+                    //Default Visible Field
+                    const visibleFieldDefault = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, app.minNoteDistance, app.minDuration, invertedKeyNoteMap, keyRenderInfo, app.notesCanvas, songNoteRenderer);
+                    const defaultNotesPerMinute = Math.floor((visibleFieldDefault.length / songEnd) * 60);
+                    //Visible field based on quantiles
+                    const calculatedDifficultiesByQuantiles = difficultySettingsCalculator.getDifficultiesForSongByQuantiles(app.selectedTrack.notes, invertedKeyNoteMap)[app.selectedDifficulty.difficultyKey];
+                    const visibleFieldQuantiles = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, calculatedDifficultiesByQuantiles.minNoteDistance, calculatedDifficultiesByQuantiles.minNoteDuration, invertedKeyNoteMap, keyRenderInfo, app.notesCanvas, songNoteRenderer);
+                    const quantilesNotesPerMinute = Math.floor((visibleFieldQuantiles.length / songEnd) * 60);
+                    //Visible field based on median distance and weighted average duration
+                    const calculatedDifficultiesByMedianDistanceAndWeightedAverage = difficultySettingsCalculator.getDifficultiesForSongByMedianDistanceAndWeightedAverage(app.selectedTrack.notes, invertedKeyNoteMap)[app.selectedDifficulty.difficultyKey];
+                    const visibleFieldMedianAndWeightedAverage = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, calculatedDifficultiesByMedianDistanceAndWeightedAverage.minNoteDistance, calculatedDifficultiesByMedianDistanceAndWeightedAverage.minNoteDuration, invertedKeyNoteMap, keyRenderInfo, app.notesCanvas, songNoteRenderer);                
+                    const medianAndWeightedAveragePerMinute = Math.floor((visibleFieldMedianAndWeightedAverage.length / songEnd) * 60);
+                    
+                    const targetNotesPerMinute = app.selectedDifficulty.targetNotesPerMinute;
+                    const options = [
+                        { diff: Math.abs(defaultNotesPerMinute - targetNotesPerMinute), visibleField: visibleFieldDefault },
+                        { diff: Math.abs(quantilesNotesPerMinute - targetNotesPerMinute), visibleField: visibleFieldQuantiles },
+                        { diff: Math.abs(medianAndWeightedAveragePerMinute - targetNotesPerMinute), visibleField: visibleFieldMedianAndWeightedAverage }
+                    ];
+                    visibleField = options.reduce((min, current) => {
+                        return (current.diff < min.diff) ? current : min;
+                    }, options[0]).visibleField;
+                }
 
-                visibleField = options.reduce((min, current) => {
-                    return (current.diff < min.diff) ? current : min;
-                }, options[0]).visibleField;
+
 
                 var earliestNoteIndex = 0;
                 currentMidi.tracks.forEach((track) => {
@@ -634,6 +643,12 @@
 
         function handleMidiSongSelection(){
             if(app.selectedMidiSong){
+                if(app.selectedMidiSong.difficultySettings){
+                    songDifficultySettings = app.selectedMidiSong.difficultySettings;                    
+                }
+                else{
+                    songDifficultySettings = null;
+                }
                 if(app.toggleTrackHighScores){
                     app.highScore = highScoreTracker.getHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
                     app.challengeScore = challengeScores.getSelectedScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
