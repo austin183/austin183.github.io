@@ -219,7 +219,7 @@ input.fullRange {
     width: 95%;
 }
 
-#canvasContainer, #quantilesCanvasContainer, #medianAndWeightedAverageCanvasContainer {
+#quantilesCanvasContainer, #medianAndWeightedAverageCanvasContainer {
     display: inline-block;
 }
 
