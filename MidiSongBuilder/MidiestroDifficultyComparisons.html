@@ -337,7 +337,26 @@
         function renderSong(specificTime) {
             var invertedKeyNoteMap = songNoteRenderer.invertKeyNoteMap(app.selectedKeyNoteMap.keyNoteMap);
             if (currentMidi) {
-                app.songStats =  JSON.stringify(difficultySettingsCalculator.getSongStats(app.selectedTrack.notes, invertedKeyNoteMap), null, 2);
+                const songStats = difficultySettingsCalculator.getSongStats(app.selectedTrack.notes, invertedKeyNoteMap);
+
+                // Sort noteDistanceStats and noteDurationStats by key
+                if (songStats.noteDistanceStats) {
+                const sortedNoteDistanceStats = Object.keys(songStats.noteDistanceStats).sort().reduce((acc, key) => {
+                    acc[key] = songStats.noteDistanceStats[key];
+                    return acc;
+                }, {});
+                songStats.noteDistanceStats = sortedNoteDistanceStats;
+                }
+
+                if (songStats.noteDurationStats) {
+                const sortedNoteDurationStats = Object.keys(songStats.noteDurationStats).sort().reduce((acc, key) => {
+                    acc[key] = songStats.noteDurationStats[key];
+                    return acc;
+                }, {});
+                songStats.noteDurationStats = sortedNoteDurationStats;
+                }
+
+                app.songStats = JSON.stringify(songStats, null, 2);
                 const containerElement = document.getElementById("canvasContainer");
 
                 const startTime = Tone.now();

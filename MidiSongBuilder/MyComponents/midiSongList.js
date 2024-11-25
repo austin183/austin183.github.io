@@ -178,19 +178,129 @@ function getMidiSongList() {
             }
         },
         "Johann Sebastian Bach - Invention 1 c": {
-            filename: "bach_inv1C_COM.MID"
+            filename: "bach_inv1C_COM.MID",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .3,
+                    minNoteDuration: .2
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .5,
+                    minNoteDuration: .1
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: .4,
+                    minNoteDuration: .1
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: 0.3,
+                    minNoteDuration: .1
+                }
+            }
         },
         "Johann Sebastian Bach - Gavotte": {
-            filename: "bach_gavotte.mid"
+            filename: "bach_gavotte.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .45,
+                    minNoteDuration: .2
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .3,
+                    minNoteDuration: .17
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: .17,
+                    minNoteDuration: .16
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: 0.17,
+                    minNoteDuration: .1
+                }
+            }
         },
         "Johann Sebastian Bach - Prelude 1": {
-            filename: "bach_prelude1.mid"
+            filename: "bach_prelude1.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .15,
+                    minNoteDuration: .24
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .1,
+                    minNoteDuration: .1
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: .04,
+                    minNoteDuration: .03
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: 0,
+                    minNoteDuration: 0
+                }
+            }
         },
         "Johann Sebastian Bach - The Gigue Fugue": {
-            filename: "bach_theGigueFugue.mid"
+            filename: "bach_theGigueFugue.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .5,
+                    minNoteDuration: .2
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .45,
+                    minNoteDuration: .15
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: .41,
+                    minNoteDuration: .15
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: .22,
+                    minNoteDuration: .15
+                }
+            }
         },
         "Georg Philipp Telemann - Sonata": {
-            filename: "teleman_sonata_f.mid"
+            filename: "teleman_sonata_f.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .45,
+                    minNoteDuration: .15
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .19,
+                    minNoteDuration: .14
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: .15,
+                    minNoteDuration: .13
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: .17,
+                    minNoteDuration: .1
+                }
+            }
         },
         "Debussy - Golliwog's Cakewalk": {
             filename: "debussy_gollycake.mid",
