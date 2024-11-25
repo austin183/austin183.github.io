@@ -103,13 +103,79 @@ function getMidiSongList() {
             }
         },
         "Johann Sebastian Bach - 2 Part Inventions": {
-            filename: "bach_2partInvention.mid"
+            filename: "bach_2partInvention.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .39,
+                    minNoteDuration: .17
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .3,
+                    minNoteDuration: .17
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: .28,
+                    minNoteDuration: .15
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: 0.15,
+                    minNoteDuration: .15
+                }
+            }
         },
         "Johann Sebastian Bach - Brandenburg Concerto #2 in F": {
-            filename: "bach_branconc2F_I_com.mid"
+            filename: "bach_branconc2F_I_com.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .5,
+                    minNoteDuration: .2
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .5,
+                    minNoteDuration: .1
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: .42,
+                    minNoteDuration: .1
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: 0.2,
+                    minNoteDuration: .1
+                }
+            }
         },
         "Johann Sebastian Bach - Brandenburg Concerto #2 in F (III)": {
-            filename: "bach_branconc2F_III_com.mid"
+            filename: "bach_branconc2F_III_com.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .5,
+                    minNoteDuration: .2
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .32,
+                    minNoteDuration: .2
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: .3,
+                    minNoteDuration: .1
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: 0.165,
+                    minNoteDuration: .1
+                }
+            }
         },
         "Johann Sebastian Bach - Invention 1 c": {
             filename: "bach_inv1C_COM.MID"
