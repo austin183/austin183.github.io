@@ -503,31 +503,229 @@ function getMidiSongList() {
             }
         },
         "Robert Schumann - Soldier's March from Album für die Jugend, Op. 68": {
-            filename: "schumann_soldier_m.mid"
+            filename: "schumann_soldier_m.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .41,
+                    minNoteDuration: .12
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .35,
+                    minNoteDuration: .12
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: 0.2,
+                    minNoteDuration: 0.1
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: .11,
+                    minNoteDuration: .05
+                }
+            }
         },
         "Johann Strauss II - The Blue Danube Waltz, Op. 314 (II. Trio)": {
-            filename: "straus_blued_II_com.mid"
+            filename: "straus_blued_II_com.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .64,
+                    minNoteDuration: .3
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .4,
+                    minNoteDuration: .16
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: 0.3,
+                    minNoteDuration: 0.1
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: .01,
+                    minNoteDuration: .01
+                }
+            }
         },
         "Johann Strauss II - The Blue Danube Waltz, Op. 314 (III. Refrain)": {
-            filename: "straus_blued_III_com.mid"
+            filename: "straus_blued_III_com.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .5,
+                    minNoteDuration: .3
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .31,
+                    minNoteDuration: .3
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: 0.3,
+                    minNoteDuration: 0.15
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: .15,
+                    minNoteDuration: .15
+                }
+            }
         },
         "Johann Strauss II - The Blue Danube Waltz, Op. 314 (IV. Finale)": {
-            filename: "straus_blued_IV_com.mid"
+            filename: "straus_blued_IV_com.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .5,
+                    minNoteDuration: .15
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .32,
+                    minNoteDuration: .15
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: 0.15,
+                    minNoteDuration: 0.15
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: 0,
+                    minNoteDuration: .17
+                }
+            }
         },
         "Pyotr Ilyich Tchaikovsky - Swan Lake from Ballet Suite": {
-            filename: "tchaik_lakescene.mid"
+            filename: "tchaik_lakescene.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .15,
+                    minNoteDuration: .15
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .05,
+                    minNoteDuration: .15
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: 0.05,
+                    minNoteDuration: 0.12
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: 0,
+                    minNoteDuration: .03
+                }
+            }
         },
         "Pyotr Ilyich Tchaikovsky - Danse russe: Trepak": {
-            filename: "tchaik_trepak.mid"
+            filename: "tchaik_trepak.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .3,
+                    minNoteDuration: .17
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .28,
+                    minNoteDuration: .15
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: 0.1,
+                    minNoteDuration: 0.15
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: 0.05,
+                    minNoteDuration: .15
+                }
+            }
         },
         "Antonio Vivaldi - Spring from The Four Seasons, RV 269": {
-            filename: "vivaldi_4s_spring.mid"
+            filename: "vivaldi_4s_spring.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .4,
+                    minNoteDuration: .17
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .3,
+                    minNoteDuration: .17
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: 0.17,
+                    minNoteDuration: 0.15
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: 0.05,
+                    minNoteDuration: .15
+                }
+            }
         },
         "Antonio Vivaldi - Winter from The Four Seasons, RV 297": {
-            filename: "vivaldi_4s_winter.mid"
+            filename: "vivaldi_4s_winter.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .3,
+                    minNoteDuration: .14
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: 0,
+                    minNoteDuration: .1
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: 0.01,
+                    minNoteDuration: 0.05
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: 0,
+                    minNoteDuration: 0
+                }
+            }
         },
         "Unknown Composer - The Maidens": {
-            filename: "wanton_maidens.mid"
+            filename: "wanton_maidens.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .3,
+                    minNoteDuration: .17
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: 0.17,
+                    minNoteDuration: .15
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: 0,
+                    minNoteDuration: .09
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: 0,
+                    minNoteDuration: 0
+                }
+            }
         }
     };
 }
