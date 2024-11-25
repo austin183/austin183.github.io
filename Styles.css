@@ -148,49 +148,7 @@ textarea {
     width: 800px;
 }
 
-#canvasContainer {
-    width: 810px;
-    height: 610px;
-    margin: auto;
-}
 
-#quantilesCanvasContainer {
-    width: 810px;
-    height: 610px;
-    margin: auto;
-}
-
-#medianAndWeightedAverageCanvasContainer {
-    width: 810px;
-    height: 610px;
-    margin: auto;
-}
-
-#songLevelCanvasContainer {
-    width: 810px;
-    height: 610px;
-    margin: auto;
-}
-
-#songLevelNotesCanvas {
-    width: 800px;
-    height: 600px;
-}
-
-#notesCanvas {
-    width: 800px;
-    height: 600px;
-}
-
-#quantileNotesCanvas {
-    width: 800px;
-    height: 600px;
-}
-
-#medianAndWeightedNotesCanvas {
-    width: 800px;
-    height: 600px;
-}
 
 #keyboardForcer {
     display: flex;
@@ -230,13 +188,25 @@ input.fullRange {
     width: 95%;
 }
 
-#quantilesCanvasContainer, #medianAndWeightedAverageCanvasContainer {
+#canvasContainer {
+    width: 810px;
+    height: 610px;
+    margin: auto;
+}
+
+#notesCanvas, #defaultNotesCanvas, #songLevelNotesCanvas, #quantileNotesCanvas, #medianAndWeightedNotesCanvas {
+    width: 800px;
+    height: 600px;
+}
+
+#defaultCanvasContainer, #quantilesCanvasContainer, #medianAndWeightedAverageCanvasContainer, #songLevelCanvasContainer {
     display: inline-block;
+    height: 610px;
+    width: 810px;
+    margin: auto;
 }
 
 /* Add this class to a container element that wraps all three canvas containers */
 .canvas-container-wrapper {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
     gap: 10px; /* Optional */
 }

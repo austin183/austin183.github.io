@@ -1,16 +1,106 @@
 function getMidiSongList() {
     return {
         "Anonymous - For All the Seasons": {
-            filename: "anon_als_com.mid"
+            filename: "anon_als_com.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .2,
+                    minNoteDuration: .6
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .2,
+                    minNoteDuration: .3
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: 0,
+                    minNoteDuration: .3
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: 0,
+                    minNoteDuration: .3
+                }
+            }
         },
         "Anonymous - The First Noel": {
-            filename: "anon_firnoel_com.mid"
+            filename: "anon_firnoel_com.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .6,
+                    minNoteDuration: .20
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .30,
+                    minNoteDuration: .20
+                },
+                //Produces same as normal, but there does
+                //Not appear to be room here for a middle option
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: .00000001,
+                    minNoteDuration: .20
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: 0,
+                    minNoteDuration: .20
+                }
+            }
         },
         "Anonymous - Jingle Bells": {
-            filename: "anon_jbells_com.mid"
+            filename: "anon_jbells_com.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .6,
+                    minNoteDuration: .30
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .38,
+                    minNoteDuration: .30
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: .1,
+                    minNoteDuration: .30
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: 0,
+                    minNoteDuration: .30
+                }
+            }
         },
         "Thoinot Arbeau - Les Bouffons (Mattachins)": {
-            filename: "arbeau_matachins.mid"
+            filename: "arbeau_matachins.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .5,
+                    minNoteDuration: .2
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .14,
+                    minNoteDuration: .1
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: .1,
+                    minNoteDuration: .1
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: 0.05,
+                    minNoteDuration: .1
+                }
+            }
         },
         "Johann Sebastian Bach - 2 Part Inventions": {
             filename: "bach_2partInvention.mid"

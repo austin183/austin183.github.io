@@ -74,6 +74,14 @@
                     If you want to play the parts of a particular track, you can select an individual one to display here.  Otherwise notes from all tracks will be used to display.
                 </div>
             </div>
+            <div id="statsDisplay" class="side-by-side">
+                <div class="bordered">
+                        {{ songStats }}
+                </div>
+                <div class="bordered">
+                    stats
+                </div>
+            </div>
             <!-- keyNoteMapConfig -->
             <div id="keyNoteMapConfig" class="side-by-side">
                 <div class="bordered">
@@ -124,7 +132,7 @@
                     This sets which notes will be considered playable based on how much time is between notes.  the smaller the value, the more notes will show up to play.
                 </div>
             </div>
-        </div>
+        </div>        
         <button id="toggleGameConfig" onclick="toggleElementById('gameConfig')">Toggle Game Configurations</button>
         <div id="songTimeConfig" class="side-by-side">
             <div class="bordered">
@@ -134,17 +142,14 @@
                 </div>
             </div>
             <button id="renderSong" onclick="renderSongFromSettings()">Update Song Render</button>
-            <div class="bordered">
-                This sets what time in the song notes are rendered for.
-            </di>
-        </div>
+        </div>        
         <div class="canvas-container-wrapper"></div>
-            <div id="canvasContainer" class="bordered">   
+            <div id="defaultCanvasContainer" class="bordered">   
                 <div>
                     Custom Difficulty (drop down or slide bar)--
                     minNoteDistance {{ minNoteDistance }} minNoteDuration {{ minDuration }} notesPerMinute {{ defaultNotesPerMinute }}
                 </div>         
-                <canvas id="notesCanvas"></canvas>
+                <canvas id="defaultNotesCanvas"></canvas>
             </div>
             
             <div id="quantilesCanvasContainer" class="bordered">            
@@ -332,6 +337,7 @@
         function renderSong(specificTime) {
             var invertedKeyNoteMap = songNoteRenderer.invertKeyNoteMap(app.selectedKeyNoteMap.keyNoteMap);
             if (currentMidi) {
+                app.songStats =  JSON.stringify(difficultySettingsCalculator.getSongStats(app.selectedTrack.notes, invertedKeyNoteMap), null, 2);
                 const containerElement = document.getElementById("canvasContainer");
 
                 const startTime = Tone.now();
@@ -452,10 +458,11 @@
                     songLevelDifficultySettings: {
                         minNoteDuration: difficultySettings["Normal"].minNoteDuration,
                         minNoteDistance: difficultySettings["Normal"].minNoteDistance,
-                    }
+                    },
+                    songStats: ""
                 },
                 mounted(){
-                    this.notesCanvas = document.getElementById("notesCanvas")
+                    this.notesCanvas = document.getElementById("defaultNotesCanvas")
                     var ctx = this.notesCanvas.getContext('2d');
                     this.vueCanvas = ctx;
                     this.vueCanvas.clearRect(0, 0, this.notesCanvas.width, this.notesCanvas.height);

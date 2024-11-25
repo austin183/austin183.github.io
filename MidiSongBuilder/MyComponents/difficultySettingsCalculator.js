@@ -70,6 +70,9 @@ var statCalculators = {
 };
 
 return {
+    getSongStats: function(song, invertedKeyNoteMap){
+        return statCalculators.gatherNoteDistributions(song, invertedKeyNoteMap);
+    },
     getDifficultiesForSongByQuantiles: function(song, invertedKeyNoteMap){
         const noteDistribution = statCalculators.gatherNoteDistributions(song, invertedKeyNoteMap);
         const distanceQuantiles = [0.65, 0.50, 0.40, .25];
