@@ -328,25 +328,179 @@ function getMidiSongList() {
             }
         },
         "Edvard Grieg - Hall of the Mountain King from Peer Gynt Suite No. 1": {
-            filename: "grieg_hallofking.mid"
+            filename: "grieg_hallofking.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .1,
+                    minNoteDuration: .16
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .1,
+                    minNoteDuration: .14
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: .1,
+                    minNoteDuration: .12
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: 0.1,
+                    minNoteDuration: .11
+                }
+            }
         },
         "George Frideric Handel - Music for the Royal Fireworks, HWV 351": {
-            filename: "handel_firewk_mus.mid"
+            filename: "handel_firewk_mus.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .17,
+                    minNoteDuration: .25
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .17,
+                    minNoteDuration: .17
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: .07,
+                    minNoteDuration: .17
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: 0.03,
+                    minNoteDuration: .17
+                }
+            }
         },
         "George Frideric Handel - Sheba from Judas Maccabeus, HWV 63 (piano arrangement)": {
-            filename: "handel_sheba_pno.mid"
+            filename: "handel_sheba_pno.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .17,
+                    minNoteDuration: .16
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .17,
+                    minNoteDuration: .15
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: .1,
+                    minNoteDuration: .14
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: 0.1,
+                    minNoteDuration: .13
+                }
+            }
         },
         "Wolfgang Amadeus Mozart - Piano Concerto No. 21 in C major, K. 467 (II. Andante) - Elvira Madigan": {
-            filename: "mozart-piano-concerto-21-2-elvira-madigan-piano-solo.mid"
+            filename: "mozart-piano-concerto-21-2-elvira-madigan-piano-solo.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .4,
+                    minNoteDuration: .2
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .34,
+                    minNoteDuration: .2
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: 0,
+                    minNoteDuration: 0.33
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: 0,
+                    minNoteDuration: 0.26
+                }
+            }
         },
         "Wolfgang Amadeus Mozart - Elvira Madigan from Piano Concerto No. 21 in C major, K. 467": {
-            filename: "mozart_elvira_m.mid"
+            filename: "mozart_elvira_m.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .3,
+                    minNoteDuration: .15
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .15,
+                    minNoteDuration: .15
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: 0.15,
+                    minNoteDuration: 0.13
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: 0.1,
+                    minNoteDuration: 0.11
+                }
+            }
         },
         "Franz Schubert - Serenade from Schwanengesang, D. 957": {
-            filename: "schubert_serenade.mid"
+            filename: "schubert_serenade.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .15,
+                    minNoteDuration: .15
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .15,
+                    minNoteDuration: .13
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: 0.14,
+                    minNoteDuration: 0.02
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: 0,
+                    minNoteDuration: 0
+                }
+            }
         },
         "Franz Schubert - Symphony No. 5 in B-flat major, D. 485 (I. Allegro)": {
-            filename: "schubert_symph_5.mid"
+            filename: "schubert_symph_5.mid",
+            difficultySettings: {
+                "easy": {
+                    difficultyKey: "easy",
+                    minNoteDistance: .3,
+                    minNoteDuration: .17
+                },
+                "normal": {
+                    difficultyKey: "normal",
+                    minNoteDistance: .18,
+                    minNoteDuration: .14
+                },
+                "hard": {
+                    difficultyKey: "hard",
+                    minNoteDistance: 0.18,
+                    minNoteDuration: 0.1
+                },
+                "crazy": {
+                    difficultyKey: "crazy",
+                    minNoteDistance: .18,
+                    minNoteDuration: .07
+                }
+            }
         },
         "Robert Schumann - Soldier's March from Album für die Jugend, Op. 68": {
             filename: "schumann_soldier_m.mid"
