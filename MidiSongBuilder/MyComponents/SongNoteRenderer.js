@@ -32,6 +32,7 @@ function getSongNoteRenderer(){
                 if(noteLetterCache[canvasNote.letter]){
                     cachedLetterSet = noteLetterCache[canvasNote.letter];
                     cachedLetterCanvas = cachedLetterSet.unplayedNoteCanvas;
+                    color = cachedLetterSet.unplayedNoteCanvas.fillStyle;
                 }
             }
             if(currentScore.keyScores[canvasNote.id]){
@@ -90,7 +91,7 @@ function getSongNoteRenderer(){
             var borderOffset = x + (borderWidthHalf - (borderWidthHalf / 2) );
 
             // Draw the note letter at the calculated position
-            ctx.drawImage(noteDrawInstructions.cachedLetterCanvas, x, y - 23);
+            ctx.drawImage(noteDrawInstructions.cachedLetterCanvas.canvas, x, y - 23);
             
             // Set border style and fill color
             ctx.strokeStyle = noteDrawInstructions.color;
@@ -123,15 +124,41 @@ function getSongNoteRenderer(){
             ctx.lineTo(maxWidth, nowLineHeight);
             ctx.stroke();
         },
-        drawCacheNote: function(key, fillStyle){
+        drawCacheNote: function(key, fillStyle, keyInfo){
             const tempUnplayedCanvas = document.createElement('canvas');
             tempUnplayedCanvas.width = 28;
             tempUnplayedCanvas.height = 28;
             const tempUnplayedCtx = tempUnplayedCanvas.getContext('2d');
             tempUnplayedCtx.font = "16px Verdana";
+            if(fillStyle == "blue"){
+                //Get bluish color based on key.row value, 0 - 3
+                //pretty dark rgb(52, 18, 224)
+                //darker rgb(17, 21, 105)
+                //light rgb(3, 128, 231)
+                //midnightish rgb(66, 37, 211)
+                switch (keyInfo.row) {
+                    case 0: // Dark Blue
+                        fillStyle = "#031f57"; // A deep, rich blue
+                        break;
+                    case 1: // Medium-Blue
+                        fillStyle = "#025b97"; // A gentle, soothing blue
+                        break;
+                    case 2: // Light-Medium Blue
+                        fillStyle = "#0077c7"; // A balanced, calming blue
+                      
+                        break;
+                    case 3: // Light Blue
+                        fillStyle = "#51bbe6"; // A pale, serene blue
+                        break;
+                  }
+
+            }
             tempUnplayedCtx.fillStyle = fillStyle;
             tempUnplayedCtx.fillText(key.toUpperCase(), 0,20);
-            return tempUnplayedCanvas;
+            return {
+                canvas: tempUnplayedCanvas,
+                fillStyle: fillStyle
+            };
         }
     };
 
@@ -222,10 +249,11 @@ function getSongNoteRenderer(){
         buildSongNoteLetterCache: function(keyRenderInfo){
             var cache = {};
             for(var key in keyRenderInfo){
-                const tempUnplayedCanvas = renderer.drawCacheNote(key, "blue");
-                const tempGoodCanvas = renderer.drawCacheNote(key, "green");
-                const tempOkCanvas = renderer.drawCacheNote(key, "yellow");
-                const tempBadCanvas = renderer.drawCacheNote(key, "red");
+                const keyInfo = keyRenderInfo[key];
+                const tempUnplayedCanvas = renderer.drawCacheNote(key, "blue", keyInfo);
+                const tempGoodCanvas = renderer.drawCacheNote(key, "green", keyInfo);
+                const tempOkCanvas = renderer.drawCacheNote(key, "yellow", keyInfo);
+                const tempBadCanvas = renderer.drawCacheNote(key, "red", keyInfo);
 
                 cache[key] = {
                     unplayedNoteCanvas: tempUnplayedCanvas,
