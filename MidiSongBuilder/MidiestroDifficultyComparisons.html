@@ -144,30 +144,13 @@
             <button id="renderSong" onclick="renderSongFromSettings()">Update Song Render</button>
         </div>        
         <div class="canvas-container-wrapper"></div>
-            <div id="defaultCanvasContainer" class="bordered">   
+            <div id="calculatedCanvasContainer" class="bordered">   
                 <div>
-                    Custom Difficulty (drop down or slide bar)--
-                    minNoteDistance {{ minNoteDistance }} minNoteDuration {{ minDuration }} notesPerMinute {{ defaultNotesPerMinute }}
+                    Calculated Difficulty based on drop down--
+                    minNoteDistance {{ calculatedDifficultySettings.minNoteDistance }} minNoteDuration {{ calculatedDifficultySettings.minNoteDuration }} notesPerMinute {{ calculatedNotesPerMinute }}
                 </div>         
-                <canvas id="defaultNotesCanvas"></canvas>
+                <canvas id="calculatedNotesCanvas"></canvas>
             </div>
-            
-            <div id="quantilesCanvasContainer" class="bordered">            
-                <div>
-                    Quantile Difficulty based on drop down option--
-                    minNoteDistance {{ quantileDifficultySettings.minNoteDistance }} minNoteDuration {{ quantileDifficultySettings.minNoteDuration }}  notesPerMinute {{ quantileNotesPerMinute }}
-                </div>
-                <canvas id="quantileNotesCanvas"></canvas>
-            </div>
-            
-            <div id="medianAndWeightedAverageCanvasContainer" class="bordered">
-                <div>
-                    Weighted Difficutly based on drop down option -- 
-                    minNoteDistance {{ weightedDifficultySettings.minNoteDistance }} minNoteDuration {{ weightedDifficultySettings.minNoteDuration }} notesPerMinute {{ weightedNotesPerMinute }}
-                </div>
-                <canvas id="medianAndWeightedNotesCanvas"></canvas>
-            </div>
-
             <div id="songLevelCanvasContainer" class="bordered">
                 <div>
                     Difficulty based on Song Options -- 
@@ -339,45 +322,17 @@
             if (currentMidi) {
                 const songStats = difficultySettingsCalculator.getSongStats(app.selectedTrack.notes, invertedKeyNoteMap);
 
-                // Sort noteDistanceStats and noteDurationStats by key
-                if (songStats.noteDistanceStats) {
-                const sortedNoteDistanceStats = Object.keys(songStats.noteDistanceStats).sort().reduce((acc, key) => {
-                    acc[key] = songStats.noteDistanceStats[key];
-                    return acc;
-                }, {});
-                songStats.noteDistanceStats = sortedNoteDistanceStats;
-                }
-
-                if (songStats.noteDurationStats) {
-                const sortedNoteDurationStats = Object.keys(songStats.noteDurationStats).sort().reduce((acc, key) => {
-                    acc[key] = songStats.noteDurationStats[key];
-                    return acc;
-                }, {});
-                songStats.noteDurationStats = sortedNoteDurationStats;
-                }
-
                 app.songStats = JSON.stringify(songStats, null, 2);
                 const containerElement = document.getElementById("canvasContainer");
 
                 const startTime = Tone.now();
                 const futureLimit = app.songEnd;
-                //Default Visible Field
-                const visibleFieldDefault = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, app.minNoteDistance, app.minDuration, invertedKeyNoteMap, keyRenderInfo, app.notesCanvas, songNoteRenderer);
-                const defaultNotesPerMinute = Math.floor((visibleFieldDefault.length / app.songEnd) * 60);
-                app.defaultNotesPerMinute = defaultNotesPerMinute;
-                //Visible field based on quantiles
-                const calculatedDifficultiesByQuantiles = difficultySettingsCalculator.getDifficultiesForSongByQuantiles(app.selectedTrack.notes, invertedKeyNoteMap)[app.selectedDifficulty.difficultyKey];
-                app.quantileDifficultySettings = calculatedDifficultiesByQuantiles;
-                const visibleFieldQuantiles = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, calculatedDifficultiesByQuantiles.minNoteDistance, calculatedDifficultiesByQuantiles.minNoteDuration, invertedKeyNoteMap, keyRenderInfo, app.notesCanvas, songNoteRenderer);
-                const quantilesNotesPerMinute = Math.floor((visibleFieldQuantiles.length / app.songEnd) * 60);
-                app.quantileNotesPerMinute = quantilesNotesPerMinute;
-                //Visible field based on median distance and weighted average duration
-                const calculatedDifficultiesByMedianDistanceAndWeightedAverage = difficultySettingsCalculator.getDifficultiesForSongByMedianDistanceAndWeightedAverage(app.selectedTrack.notes, invertedKeyNoteMap)[app.selectedDifficulty.difficultyKey];
-                app.weightedDifficultySettings = calculatedDifficultiesByMedianDistanceAndWeightedAverage;
-                const visibleFieldMedianAndWeightedAverage = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, calculatedDifficultiesByMedianDistanceAndWeightedAverage.minNoteDistance, calculatedDifficultiesByMedianDistanceAndWeightedAverage.minNoteDuration, invertedKeyNoteMap, keyRenderInfo, app.notesCanvas, songNoteRenderer);                
-                const medianAndWeightedAveragePerMinute = Math.floor((visibleFieldMedianAndWeightedAverage.length / app.songEnd) * 60);
-                app.weightedNotesPerMinute = medianAndWeightedAveragePerMinute;
-
+                //Calculated Visible Field
+                const calculatedDifficultySettings = difficultySettingsCalculator.getTargetVisibleField(app.selectedDifficulty.targetNotesPerMinute, app.selectedTrack.notes, invertedKeyNoteMap, visibleFieldFilterer, keyRenderInfo, app.notesCanvas, songNoteRenderer, app.songEnd);
+                const visibleFieldCalculated = calculatedDifficultySettings.visibleField;
+                app.calculatedDifficultySettings = calculatedDifficultySettings;
+                app.calculatedNotesPerMinute = calculatedDifficultySettings.notesPerMinute;
+                
                 //Custom field based on defined minNoteDistance and minNoteDuration
                 const visibleFieldCustom = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, app.minNoteDistance, app.minDuration, invertedKeyNoteMap, keyRenderInfo, app.notesCanvas, songNoteRenderer);
 
@@ -390,17 +345,10 @@
                 const visiblePast = intervalNow - 1;
                 const visibleFuture = intervalNow + 9;
 
-                app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
-                songNoteRenderer.renderNowLine(app.notesCanvas, app.vueCanvas);
-                songNoteRenderer.renderNotesPlayingForCanvas(app.notesCanvas, app.vueCanvas, visibleFieldCustom, {keyScores: {}}, intervalNow, visiblePast, visibleFuture, earliestNoteIndex, noteLetterCache);
+                app.vueCalculatedCanvas.clearRect(0, 0, app.notesCalculatedCanvas.width, app.notesCalculatedCanvas.height);
+                songNoteRenderer.renderNowLine(app.notesCalculatedCanvas, app.vueCalculatedCanvas);
+                songNoteRenderer.renderNotesPlayingForCanvas(app.notesCalculatedCanvas, app.vueCalculatedCanvas, visibleFieldCalculated, {keyScores: {}}, intervalNow, visiblePast, visibleFuture, earliestNoteIndex, noteLetterCache);
 
-                app.vueQuantileCanvas.clearRect(0, 0, app.notesQuantileCanvas.width, app.notesQuantileCanvas.height);
-                songNoteRenderer.renderNowLine(app.notesQuantileCanvas, app.vueQuantileCanvas);
-                songNoteRenderer.renderNotesPlayingForCanvas(app.notesQuantileCanvas, app.vueQuantileCanvas, visibleFieldQuantiles, {keyScores: {}}, intervalNow, visiblePast, visibleFuture, earliestNoteIndex, noteLetterCache);
-
-                app.vueWeightedCanvas.clearRect(0, 0, app.notesWeightedCanvas.width, app.notesWeightedCanvas.height);
-                songNoteRenderer.renderNowLine(app.notesWeightedCanvas, app.vueWeightedCanvas);
-                songNoteRenderer.renderNotesPlayingForCanvas(app.notesWeightedCanvas, app.vueWeightedCanvas, visibleFieldMedianAndWeightedAverage, {keyScores: {}}, intervalNow, visiblePast, visibleFuture, earliestNoteIndex, noteLetterCache);
                 if(songDifficultySettings){
                     const songDifficulty = songDifficultySettings[app.selectedDifficulty.difficultyKey];
                     //todo fill in new canvas for the song difficulty settings
@@ -445,6 +393,8 @@
                     songNotesOnKeyMap: defaultSongNotesOnKeyMap,
                     selectedTrack: "",
                     availableTracks: [],
+                    vueCalculatedCanvas: null,
+                    notesCalculatedCanvas: null,
                     vueCanvas: null,
                     notesCanvas: null,
                     vueQuantileCanvas: null,
@@ -459,6 +409,7 @@
                     quantileNotesPerMinute: 0,
                     weightedNotesPerMinute: 0,
                     songLevelNotesPerMinute: 0,
+                    calculatedNotesPerMinute: 0,
                     midiJson: "",                    
                     midiSongs: midiSongs,
                     selectedMidiSong: null,
@@ -478,10 +429,16 @@
                         minNoteDuration: difficultySettings["Normal"].minNoteDuration,
                         minNoteDistance: difficultySettings["Normal"].minNoteDistance,
                     },
+                    calculatedDifficultySettings: {
+                        minNoteDistance: difficultySettings["Normal"].minNoteDistance,
+                        minNoteDuration: difficultySettings["Normal"].minNoteDuration,
+                        vibleField: [],
+                        notesPerMinute: 0
+                    },
                     songStats: ""
                 },
                 mounted(){
-                    this.notesCanvas = document.getElementById("defaultNotesCanvas")
+                    this.notesCanvas = document.getElementById("songLevelNotesCanvas")
                     var ctx = this.notesCanvas.getContext('2d');
                     this.vueCanvas = ctx;
                     this.vueCanvas.clearRect(0, 0, this.notesCanvas.width, this.notesCanvas.height);
@@ -489,17 +446,13 @@
                     this.vueCanvas.fillStyle = "black";
                     this.vueCanvas.fillText("Visible Field Area", 0, 50); // Assuming the height of the letter is about 20 pixels
 
-                    this.notesQuantileCanvas = document.getElementById("quantileNotesCanvas");
-                    var quantileCtx = this.notesQuantileCanvas.getContext('2d');
-                    this.vueQuantileCanvas = quantileCtx;
-
-                    this.notesWeightedCanvas = document.getElementById("medianAndWeightedNotesCanvas");
-                    var weightedCtx = this.notesWeightedCanvas.getContext('2d');
-                    this.vueWeightedCanvas = weightedCtx;
-
                     this.notesSongLevelCanvas = document.getElementById("songLevelNotesCanvas");
                     var songLevelCtx = this.notesSongLevelCanvas.getContext('2d');
                     this.vueSongLevelCanvas = songLevelCtx;
+
+                    this.notesCalculatedCanvas = document.getElementById("calculatedNotesCanvas");
+                    var calculatedCtx = this.notesCalculatedCanvas.getContext('2d');
+                    this.vueCalculatedCanvas = calculatedCtx;
                 }
             });
 

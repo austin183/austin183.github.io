@@ -194,17 +194,11 @@ input.fullRange {
     margin: auto;
 }
 
-#notesCanvas, #defaultNotesCanvas, #songLevelNotesCanvas, #quantileNotesCanvas, #medianAndWeightedNotesCanvas {
+#notesCanvas {
     width: 800px;
     height: 600px;
 }
 
-#defaultCanvasContainer, #quantilesCanvasContainer, #medianAndWeightedAverageCanvasContainer, #songLevelCanvasContainer {
-    display: inline-block;
-    height: 610px;
-    width: 810px;
-    margin: auto;
-}
 
 /* Add this class to a container element that wraps all three canvas containers */
 .canvas-container-wrapper {
