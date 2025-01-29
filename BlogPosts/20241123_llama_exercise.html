@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>11-23-2024 - Fixing the Filterer with Llama 3.3 70b</title>
+    <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
+</head>
+<body>
+    <h1>Writing Unit Tests to Keep from Making New Bugs</h1>
+    <div>
+        <h2>What was my Problem?</h2>
+        <p>
+            I kept introducing new songs that kept cropping up new odd behaviors in the <a href="https://github.com/austin183/austin183.github.io/blob/main/MidiSongBuilder/MyComponents/VisibleFieldFilterer.js">Visible Field Filterer implementation.</a>  After trying new algorithms with some rewrites and suggestions from the AI muddying the waters, I decided I needed to pull back and do some honest Unit Testing around what I wanted out of the method.
+        </p>
+        <h2>Writing the Tests</h2>
+        <p>
+            I wanted to stay consistent with this project being fully runnable from the Web Browser.  I found Mocha.js to have a good html only implementation.  Since I was already familiar with how to write unit tests in Mocha that run from a node server, I ran with it so I didn't have to create a new learning topic for the project.  I was able to get the specifications for the filter method defined in <a href="https://github.com/austin183/austin183.github.io/blob/main/MidiSongBuilder/MyComponents/VisibleFieldFiltererTest.html">the VisibleFieldFiltererTest Webpage.</a>
+        </p>
+        <h2>Getting Llama to Understand the Intent Behind the Tests</h2>
+        <p>
+            I wanted Llama to write the method for me, but first I wanted to make sure it understood what the method should do.  I had a discussion with it to go over the tests firsts and then asked it to write the method.  You can see the discussion here: <a href="./references/Llama3.370bVisibleFieldDiscussion.html">Llama 3.3 70b - Visible Field Filterer Discussion</a>
+        </p>
+    </div>
+</body>
+</html>
