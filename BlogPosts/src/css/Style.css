@@ -5,6 +5,12 @@
   --accent-color: #00ff00;
 }
 
+[data-theme="dark"] {
+  --primary-bg: #1a1a1a;
+  --primary-text: #ffffff;
+  --accent-color: #00ff00;
+}
+
 [data-theme="light"] {
   --primary-bg: #ffffff;
   --primary-text: #1a1a1a;
@@ -74,6 +80,7 @@ section {
 @media (max-width: 768px) {
   body {
     padding: 10px;
+    max-width: 100%;
   }
   
   h1 {
@@ -82,5 +89,16 @@ section {
 
   section {
     margin: 1rem 0;
+    padding: 0.5rem;
+  }
+
+  .content {
+    width: calc(100% - 20 px);
+  }
+
+  img {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
   }
 }
