@@ -1,42 +1,75 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Austin183's Blog Posts</title>
     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
+    <link rel="stylesheet" href="Style.css">
 </head>
-<body>
+
+<body class="light-theme">
     <h1>Midiestro Posts</h1>
+
+    <!-- Theme Switcher Button -->
+    <button id="theme-switcher" class="theme-switcher">Switch Theme</button>
 
     <div>
         <p>
-            These posts go into more detail about particular commits to the Midestro project.  Mainly why I thought I needed to make them and how I came to the implementation.
+            These posts go into more detail about particular commits to the Midestro project. Mainly why I thought I
+            needed to make them and how I came to the implementation.
         </p>
         <ul>
             <li>
-                <a href="20241023_theBeginning.html">The Beginning (October 23, 2024)</a> - TL;DR - Made a page that wasn't very good at being a game yet.  Took notes about what to do better for the next several iterations.
+                <a href="20241023_theBeginning.html">The Beginning (October 23, 2024)</a> - TL;DR - Made a page that
+                wasn't very good at being a game yet. Took notes about what to do better for the next several
+                iterations.
             </li>
             <li>
-                <a href="20241024_IteratingTowardsPlayability.html">Iterating Towards Playability (October 24, 2024)</a> - TL;DR - Added more debugging and worked on UI / UX concerns with selecting notes to play and seeing them at the right places on the canvas.
+                <a href="20241024_IteratingTowardsPlayability.html">Iterating Towards Playability (October 24, 2024)</a>
+                - TL;DR - Added more debugging and worked on UI / UX concerns with selecting notes to play and seeing
+                them at the right places on the canvas.
             </li>
             <li>
-                <a href="20241025_AddingInteractivity.html">Adding Interactivity (October 25, 2024)</a> - TL;DR - Added some game options and better visual feedback for scoring points during the game.
+                <a href="20241025_AddingInteractivity.html">Adding Interactivity (October 25, 2024)</a> - TL;DR - Added
+                some game options and better visual feedback for scoring points during the game.
             </li>
             <li>
-                <a href="20241026_GettingFeatureComplete.html">Getting to Feature Complete (October 26, 2024)</a> - TL;DR - Added a scoreboard, fixed bugs, and got to Feature Complete!
+                <a href="20241026_GettingFeatureComplete.html">Getting to Feature Complete (October 26, 2024)</a> -
+                TL;DR - Added a scoreboard, fixed bugs, and got to Feature Complete!
             </li>
             <li>
-                <a href="20241028_modestOptimizations.html">Modest Optimizations (October 28, 2024)</a> - TL;DR - Trimmed down on loops and iterations in loops while the game interval ran.
+                <a href="20241028_modestOptimizations.html">Modest Optimizations (October 28, 2024)</a> - TL;DR -
+                Trimmed down on loops and iterations in loops while the game interval ran.
             </li>
             <li>
-                <a href="20241029_effectiveOptimizations.html">Effective Optimizations (October 29, 2024)</a> - TL;DR - Added Precached rendered notes and measured performance with browser developer tools.
+                <a href="20241029_effectiveOptimizations.html">Effective Optimizations (October 29, 2024)</a> - TL;DR -
+                Added Precached rendered notes and measured performance with browser developer tools.
             </li>
             <li>
-                <a href="20241123_llama_exercise.html">Unit Testing and Software Development with Llama 3.3 70b (November 23, 2024)</a> - TL;DR - Wrote Unit Tests and rewrote complex method that had bugs in it.
+                <a href="20241123_llama_exercise.html">Unit Testing and Software Development with Llama 3.3 70b
+                    (November 23, 2024)</a> - TL;DR - Wrote Unit Tests and rewrote complex method that had bugs in it.
             </li>
         </ul>
 
+        <!-- JavaScript for Theme Switching -->
+        <script>
+            document.getElementById('theme-switcher').addEventListener('click', function () {
+                const body = document.body;
+
+                // Toggle the theme
+                if (body.classList.contains('light-theme')) {
+                    body.classList.remove('light-theme');
+                    body.classList.add('dark-theme');
+                } else {
+                    body.classList.remove('dark-theme');
+                    body.classList.add('light-theme');
+                }
+            });
+        </script>
+
     </div>
 </body>
+
 </html>

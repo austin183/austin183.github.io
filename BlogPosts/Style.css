@@ -1,0 +1,59 @@
+/* style.css */
+
+/* Basic styles */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+h1, h2, h3, p {
+    margin-bottom: 15px;
+}
+
+/* Ensuring responsiveness */
+@media (max-width: 768px) {
+    body {
+        font-size: 16px; /* Adjust the base font size for smaller screens */
+    }
+}
+
+/* Theme Styles */
+:root {
+    --text-color-light: #000;
+    --background-color-light: #fff;
+    --text-color-dark: #fff;
+    --background-color-dark: #000;
+}
+
+body.light-theme {
+    color: var(--text-color-light);
+    background-color: var(--background-color-light);
+}
+
+body.dark-theme {
+    color: var(--text-color-dark);
+    background-color: var(--background-color-dark);
+}
+
+/* Button for theme switching */
+.theme-switcher {
+    position: fixed; 
+    top: 20px;
+    right: 20px;
+    padding: 10px;
+    cursor: pointer;
+    border: none;
+    outline: none;
+    background-color: #333;
+    color: white;
+}
+
+/* Visual distinctions for sections */
+section {
+    margin-bottom: 30px;
+    padding: 15px;
+    border-left: 5px solid #007BFF; /* Example color for distinction */
+    background-color: rgba(0, 123, 255, 0.1);
+}
