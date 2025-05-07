@@ -1,0 +1,68 @@
+/* General Styles */
+body {
+    font-family: sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #333; /* Default dark background */
+    color: #fff; /* Default white text */
+    line-height: 1.6;
+  }
+  
+  header, footer {
+    background-color: #222;
+    padding: 1em;
+    text-align: center;
+  }
+  
+  section {
+    padding: 2em;
+    margin-bottom: 2em;
+    border-bottom: 1px solid #444;
+  }
+  
+  h1, h2, h3 {
+    color: #ddd;
+  }
+  
+  /* Dark/Light Theme Toggle */
+  .theme-toggle {
+    background-color: #555;
+    color: #fff;
+    padding: 0.5em 1em;
+    cursor: pointer;
+    border: none;
+    border-radius: 5px;
+  }
+  
+  .theme-toggle:hover {
+    background-color: #666;
+  }
+  
+  /* Light Theme */
+  .light-theme {
+    background-color: #fff;
+    color: #333;
+  }
+  
+  .light-theme header, .light-theme footer {
+    background-color: #f0f0f0;
+  }
+  
+  .light-theme h1, .light-theme h2, .light-theme h3 {
+    color: #555;
+  }
+  
+  /* Responsive Design */
+  @media (max-width: 768px) {
+    section {
+      padding: 1em;
+    }
+  
+    h1 {
+      font-size: 2em;
+    }
+  
+    h2 {
+      font-size: 1.5em;
+    }
+  }
