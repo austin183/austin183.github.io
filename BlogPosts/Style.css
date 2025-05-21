@@ -62,4 +62,49 @@ li {
 li:last-child {
   border-bottom: none;
 }
+/* Additional Style.css updates to force full-width text flow */
 
+/* Target all direct children of body (adjust as needed) */
+body > * {
+  width: 100vw; /* Set width to full viewport width */
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* Ensure text elements within these containers also take full width */
+body > * > p,
+body > * > ul,
+body > * > li {
+  width: 100%;
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* Update media query to maintain consistency across screen sizes */
+@media (max-width: 720px) {
+  body > * {
+    width: 100vw; /* Maintain full viewport width on smaller screens */
+    max-width: none;
+    margin-left: 0;
+    margin-right: 0;
+  }
+  
+  body > * > p,
+  body > * > ul,
+  body > * > li {
+    width: 100%;
+    max-width: none;
+    margin-left: 0;
+    margin-right: 0;
+  }
+  /* Fix provided by DeepCoder */
+  img {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+  }
+}
