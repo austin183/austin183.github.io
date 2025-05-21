@@ -1,0 +1,65 @@
+/* Global Styles for BlogPosts */
+
+/* Style.css (example snippets) */
+
+body {
+  font-family: 'Open Sans', sans-serif;
+  line-height: 1.6;
+}
+
+.light-theme {
+  background-color: #F7F7F7;
+  color: #333333;
+}
+
+.light-theme a {
+  color: #007bff;
+  text-decoration: none;
+}
+
+.light-theme a:hover {
+  color: #0056b3;
+}
+
+.dark-theme {
+  background-color: #333333;
+  color: #FFFFFF;
+}
+
+.dark-theme a {
+  color: #66d9ef;
+  text-decoration: none;
+}
+
+.dark-theme a:hover {
+  color: #3e8e41;
+}
+
+h1, h2 {
+  font-weight: bold;
+  margin-bottom: 0.5em;
+}
+
+h1 {
+  font-size: 26px;
+}
+
+h2 {
+  font-size: 20px;
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+li {
+  padding: 10px;
+  border-bottom: 1px solid #ccc; /* Adjust color based on theme */
+}
+
+li:last-child {
+  border-bottom: none;
+}
+
