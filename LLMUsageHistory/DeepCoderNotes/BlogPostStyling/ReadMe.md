@@ -20,7 +20,7 @@ There is collection of Pull Requests that reflect the changes offered by each LL
     * [Session 2 on Youtube - 30 mins](https://youtu.be/PwHpRNKE_CI?si=rqwHnSanI-JoX_5f)
     * It did not go very well, but part of that could have been me ramping up with what I wanted from the experiments
 * [DeepCoder](https://ollama.com/library/deepcoder)
-    * [Pull Request #2)) [https://github.com/austin183/austin183.github.io/pull/2)
+    * [Pull Request #2](https://github.com/austin183/austin183.github.io/pull/2)
     * [Session 1 on Youtube - 48 mins](https://youtu.be/e8g7e-XE8Eo?si=sMEYuGJXU60eP_4H)
     * [Session 2 on Youtube - 27 mins](https://youtu.be/7vBNuTRz-tQ?si=1oIzsKQ72iFyoE-C)
     * This one was the winner, so it went pretty well
