@@ -96,3 +96,5 @@ models:
 
 # Building the Final Branch
 I want to take the good from the LLMs and apply them as a final branch.  I liked the style from DeepCoder.  I need to check to see if the theme switching behavior works best on that branch already.  Then perhaps I can go back and see how else I could clean up that implementation.
+
+After reviewing the branches, it looks like the Tulu3 branch does the theme switching most smoothly, and DeepCoder has the best Style.  I will take the javascript from Tulu3 and the css from DeepCoder and put them in a src folder on the DeepCoder branch and then merge it.
