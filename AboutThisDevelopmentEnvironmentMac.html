@@ -1,53 +1,76 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Austin183's Development Environment</title>
     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
+    <link rel="stylesheet" href="./src/css/Style.css">
 </head>
+
 <body>
+    <button class="theme-toggle" onclick="toggleTheme()">Toggle Theme</button>
+    <script src="./src/js/themeSwitcher.js"></script>
     <h1>Hardware</h1>
     <p>
-        <ul>
-            <li>Model - Apple MacBook Pro 16"</li>
-            <li>CPU - M4 Max </li>
-            <li>Memory - 128 GB</li>
-            <li>GPU Memory - Shared up to 96GB</li>
-            <li>SDD - 2TB</li>
-        </ul>
+    <ul>
+        <li>Model - Apple MacBook Pro 16"</li>
+        <li>CPU - M4 Max </li>
+        <li>Memory - 128 GB</li>
+        <li>GPU Memory - Shared up to 96GB</li>
+        <li>SDD - 2TB</li>
+    </ul>
     </p>
     <h1>Software</h1>
     <p>
+    <ul>
+        <li>Mac OS 15.2</li>
+        <li>Visual Studio Code (latest from <a
+                href="https://code.visualstudio.com/download">https://code.visualstudio.com/download</a>)</li>
+        <li>Visual Studio Code Extension - Continue (<a
+                href="https://docs.continue.dev/quickstart">https://docs.continue.dev/quickstart</a>)</li>
         <ul>
-            <li>Mac OS 15.2</li>
-            <li>Visual Studio Code (latest from <a href="https://code.visualstudio.com/download">https://code.visualstudio.com/download</a>)</li>
-            <li>Visual Studio Code Extension - Continue (<a href="https://docs.continue.dev/quickstart">https://docs.continue.dev/quickstart</a>)</li>
-            <ul>
-                <li><a href="SupportingFiles/ContinueConfig.json">My abridged ContinueConfig.json</a></li>
-            </ul>
-            <li>Git CLI - <a href="https://git-scm.com/book/en/v2/Getting-Started-Installing-Git">https://git-scm.com/book/en/v2/Getting-Started-Installing-Git</a></li>
-            <li>Ollama - <a href="https://ollama.com/download">https://ollama.com/download</a></li>
+            <li><a href="SupportingFiles/ContinueConfig.json">My abridged ContinueConfig.json</a></li>
         </ul>
+        <li>Git CLI - <a
+                href="https://git-scm.com/book/en/v2/Getting-Started-Installing-Git">https://git-scm.com/book/en/v2/Getting-Started-Installing-Git</a>
+        </li>
+        <li>Ollama - <a href="https://ollama.com/download">https://ollama.com/download</a></li>
+    </ul>
     </p>
 
     <h1>How it all ties together</h1>
     <p>
-        I use Git CLI to interact with my github repos, and I use Visual Studio Code as my editor.  In Visual Studio Code, I can open the whole repo folder and have access to all the files. With the Visual Studio Code Extension, Continue, I can interact with LLMs through a Chat interface or request code blocks directly in files using an inline prompt wizard.  Continue also offers auto-completion functionality, but I have not enabled it here because it requires much more sustained processing, which generates more heat and uses more battery power than when I explicitly request some inferencing.
+        I use Git CLI to interact with my github repos, and I use Visual Studio Code as my editor. In Visual Studio
+        Code, I can open the whole repo folder and have access to all the files. With the Visual Studio Code Extension,
+        Continue, I can interact with LLMs through a Chat interface or request code blocks directly in files using an
+        inline prompt wizard. Continue also offers auto-completion functionality, but I have not enabled it here because
+        it requires much more sustained processing, which generates more heat and uses more battery power than when I
+        explicitly request some inferencing.
     </p>
 
     <h1>Why is it like this?</h1>
     <p>
-        I wanted to get ahead of any potential tarrifs that could push the cost of a new computer up, and Apple had just released a new one that could pack 128GB of RAM onto a very capable processor.  I decided now was the right time to invest in a new laptop.
+        I wanted to get ahead of any potential tarrifs that could push the cost of a new computer up, and Apple had just
+        released a new one that could pack 128GB of RAM onto a very capable processor. I decided now was the right time
+        to invest in a new laptop.
     </p>
 
     <h1>How is it working out?</h1>
     <p>
-        With 128GB of RAM, I was able to start using 70b parameter models, like Llama 3.1, Tulu 3, Reflection, and Llama 3.3.  I found Llama 3.3 70b to be more useful than the 3.1 7b I was relying on in my previous environment.  I still need to be careful on what to use for my context, but it seems like it is better at handling more complex requests.
+        With 128GB of RAM, I was able to start using 70b parameter models, like Llama 3.1, Tulu 3, Reflection, and Llama
+        3.3. I found Llama 3.3 70b to be more useful than the 3.1 7b I was relying on in my previous environment. I
+        still need to be careful on what to use for my context, but it seems like it is better at handling more complex
+        requests.
     </p>
     <br />
     <p>
-        I also installed Steam on it, and Warhammer 40k Rogue Trader, so while the laptop is capable of helping me develop more complex methods, it is also more capable of distracting me.  This is an acceptable trade off for my personal projects, because I have no expectations or deadlines that I worry about me coming down on myself for missing.
+        I also installed Steam on it, and Warhammer 40k Rogue Trader, so while the laptop is capable of helping me
+        develop more complex methods, it is also more capable of distracting me. This is an acceptable trade off for my
+        personal projects, because I have no expectations or deadlines that I worry about me coming down on myself for
+        missing.
     </p>
 </body>
+
 </html>
