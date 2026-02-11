@@ -29,7 +29,6 @@
     <script src="MyComponents/keyRenderInfo.js"></script>
     <script src="MyComponents/VisibleFieldFilterer.js"></script>
     <script src="MyComponents/ScoreKeeper.js"></script>
-    <script src="MyComponents/SongCompression.js"></script>
     <script src="MyComponents/midiSongList.js"></script>
     <script src="MyComponents/difficultySettings.js"></script>
     <script src="MyComponents/highScoreTracker.js"></script>
@@ -37,6 +36,7 @@
     <script src="MyComponents/difficultySettingsCalculator.js"></script>
     <script src="MyComponents/DomUtils.js"></script>
     <script src="MyComponents/InputHandler.js"></script>
+    <script src="MyComponents/MidiParser.js"></script>
 </head>
 
 <body>
@@ -232,7 +232,6 @@
         var defaultSongNotes = "";
         var defaultSongNotesOnKeyMap = "";
         var defaultFMSynthParams = toneHelper.getDefaultFMSynthParams();
-        const songCompression = getSongCompression();
 
         //Disposes of existing synths and creates synths based on FMSynth options
         //First call uses the default
@@ -298,64 +297,36 @@
         }
 
         let currentMidi = null;
+        var midiParser = getMidiParser();
 
         function parseFile(file) {
-            //read the file
-            const reader = new FileReader();
-            reader.onload = setupSongFromArrayBuffer;
-            reader.readAsArrayBuffer(file);
-        }
-
-        function setupSongFromArrayBuffer(e){
-            app.availableTracks = [];
-                const midi = new Midi(e.target.result);
-                var trimmedMidi = {"tracks": []};
-                var counter = 0;
-                midi.tracks.forEach((track) => {
-                    counter++;
-                    if(track.notes.length > 0){
-                        var trackName = track.name;
-                        if(trackName == ""){
-                            trackName = "Track";
-                        }
-                        trackName += " " + counter;
-                        var trimmedTrack = {
-                            "name" : trackName,
-                            "notes" : track.notes
-                        }
-                        app.availableTracks.push(trimmedTrack);
-                        trimmedMidi.tracks.push(trimmedTrack);
-                    }
-                });
-
-                var playButton = document.getElementById('tonePlayToggle');
-                playButton.removeAttribute('disabled');
-                playButton.textContent = 'Play';
-
-                currentMidi = trimmedMidi;
-                var fullNotes = getCombinedTrackNotes(currentMidi.tracks);
-                var fullTrack = {
-                    "name" : "Full Track",
-                    "notes": fullNotes
-                }
-                // Add the fullTrack as the first array element in app.availableTracks
-                app.availableTracks.unshift(fullTrack);
-
-                app.selectedTrack = app.availableTracks[0];
-                var lastNote = fullTrack.notes[fullTrack.notes.length - 1];
-                songEnd = lastNote.time + lastNote.duration;
-                renderSongNotes();
-        }
-
-        function getCombinedTrackNotes(tracks){
-            var combinedNotes = [];
-            tracks.forEach(track => {
-                combinedNotes.push(...track.notes);
+            midiParser.parseMidiFile(file, function(midiResult) {
+                setupSongFromMidiResult(midiResult);
             });
+        }
 
-            combinedNotes.sort((a, b) => a.time - b.time);
+        function setupSongFromMidiResult(midiResult) {
+            const parsed = midiParser.extractTracks(midiResult);
 
-            return combinedNotes;
+            app.availableTracks = parsed.tracks;
+            app.availableTracks.unshift(parsed.fullTrack);
+            app.selectedTrack = app.availableTracks[0];
+
+            songEnd = parsed.songEnd;
+            // Store the parsed tracks in currentMidi for togglePlay to use
+            currentMidi = { tracks: parsed.tracks };
+
+            // Enable the play button
+            var playButton = document.getElementById('tonePlayToggle');
+            playButton.removeAttribute('disabled');
+            playButton.textContent = 'Play';
+
+            renderSongNotes();
+        }
+
+        // Keep getCombinedTrackNotes for backwards compatibility if needed elsewhere
+        function getCombinedTrackNotes(tracks) {
+            return midiParser.combineAllTrackNotes(tracks);
         }
 
         const synths = [];
@@ -604,10 +575,10 @@
                 const midiFilename = app.selectedMidiSong.filename;
                 fetch(`PublicDomainSongs/midi/${midiFilename}`)
                     .then(response => response.arrayBuffer())
-                    .then(arrayBuffer => setupSongFromArrayBuffer({ target: {
-                        result: arrayBuffer 
-                    }
-                }));
+                    .then(arrayBuffer => {
+                    const midiResult = midiParser.parseMidiArrayBuffer(arrayBuffer);
+                    setupSongFromMidiResult(midiResult);
+                });
             }            
         }
 
