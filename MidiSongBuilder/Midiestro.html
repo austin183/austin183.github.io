@@ -35,6 +35,7 @@
     <script src="MyComponents/challengeScores.js"></script>
     <script src="MyComponents/difficultySettingsCalculator.js"></script>
     <script src="MyComponents/DomUtils.js"></script>
+    <script src="MyComponents/FileDropHandler.js"></script>
     <script src="MyComponents/InputHandler.js"></script>
     <script src="MyComponents/MidiParser.js"></script>
 </head>
@@ -263,37 +264,16 @@
             }
         }
 
-        if (!domUtils.isFileAPISupported()) {
+        var fileDropHandler = getFileDropHandler();
+
+        if (fileDropHandler.isFileAPISupported()) {
+            fileDropHandler.setupFileDrop("FileDrop", function(file) {
+                document.querySelector("#FileDrop #Text").textContent = file.name;
+                parseFile(file);
+            });
+        } else {
             document.querySelector("#FileDrop #Text").textContent =
                 "Reading files not supported by this browser";
-        } else {
-            const fileDrop = document.querySelector("#FileDrop");
-
-            fileDrop.addEventListener("dragenter", () =>
-                fileDrop.classList.add("Hover")
-            );
-
-            fileDrop.addEventListener("dragleave", () =>
-                fileDrop.classList.remove("Hover")
-            );
-
-            fileDrop.addEventListener("drop", () =>
-                fileDrop.classList.remove("Hover")
-            );
-
-            document
-                .querySelector("#FileDrop input")
-                .addEventListener("change", (e) => {
-                    //get the files
-                    const files = e.target.files;
-                    if (files.length > 0) {
-                        const file = files[0];
-                        document.querySelector(
-                            "#FileDrop #Text"
-                        ).textContent = file.name;
-                        parseFile(file);
-                    }
-                });
         }
 
         let currentMidi = null;
