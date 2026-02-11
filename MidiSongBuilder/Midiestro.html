@@ -36,6 +36,7 @@
     <script src="MyComponents/challengeScores.js"></script>
     <script src="MyComponents/difficultySettingsCalculator.js"></script>
     <script src="MyComponents/DomUtils.js"></script>
+    <script src="MyComponents/InputHandler.js"></script>
 </head>
 
 <body>
@@ -193,6 +194,8 @@
         const debugPage = queryString == "?debug";
         const domUtils = getDomUtils();
         domUtils.toggleElementById('Instructions');
+        domUtils.toggleElementById('gameConfig');
+        
         if(!debugPage){
             domUtils.toggleElementById('songNoteKeys');
             domUtils.toggleElementById('notesPlaying');
@@ -236,35 +239,8 @@
         toneHelper.buildSynths(defaultFMSynthParams, synthArray, 10); //Max of three keys for the whole game.
         var app; //The Vue.js variable
 
-        /*
-            Any time a user presses a key down on the keyboard:
-                Check if the key is in the selected keyNoteMap
-                If it is, add it as pressed in the pressedKeys object
-                Then run the playNotes method to handle reading the pressedKeys and handling them
-
-                If the key is the space key, just play the conga for "4n" time units
-                More about time units: https://tonejs.github.io/docs/14.9.17/types/Unit.Time.html
-        */
-        document.addEventListener("keydown", function(event) {
-            if (event.key in app.selectedKeyNoteMap.keyNoteMap) {
-                writeLog("Pressed key for " + app.selectedKeyNoteMap.keyNoteMap[event.key]);
-
-                pressedKeys[event.key] = true;
-                playNotes();
-            }
-        });
-
-        /*
-            When the user releases a key, the pressedKey for it should stop appearing as pressed
-                Then run playNotes again to handle playing the notes in pressedKeys
-        */
-        document.addEventListener("keyup", function() {
-            if(event.key in app.selectedKeyNoteMap.keyNoteMap && event.key in synthMap){
-                writeLog("Release key for " + app.selectedKeyNoteMap.keyNoteMap[event.key]);
-                pressedKeys[event.key] = false;
-                playNotes();
-            }
-        });
+        // Create the InputHandler instance (app will be set when Vue mounts)
+        var inputHandler = getInputHandler();
 
         /*
             Resets the Notes Playing field on the page
@@ -567,6 +543,13 @@
                     if(!this.toggleTrackHighScores){
                         domUtils.toggleElementById("SongHighScore");
                     }
+                    // Update inputHandler with the Vue app reference and set up key listeners
+                    inputHandler.app = this;
+                    inputHandler.setupKeyListeners(this, pressedKeys, synthMap, synthArray, playNotes);
+                },
+                beforeDestroy() {
+                    // Clean up event listeners when the app is destroyed
+                    inputHandler.removeKeyListeners();
                 }
             });
 
