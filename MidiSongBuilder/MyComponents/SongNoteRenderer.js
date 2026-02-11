@@ -1,4 +1,12 @@
-function getSongNoteRenderer(){
+function getSongNoteRenderer(keyNoteMapService) {
+    // Validate required dependency
+    if (!keyNoteMapService) {
+        throw new Error('SongNoteRenderer requires a KeyNoteMapService instance. Please pass getKeyNoteMapService() to the constructor.');
+    }
+
+    // Store service as private variable (closure)
+    var _service = keyNoteMapService;
+
     var renderer = {
         getPrerenderedDrawInstructions: function(canvas, keyRenderInfo, note, letter){
             var maxHeight = canvas.height;
@@ -163,17 +171,11 @@ function getSongNoteRenderer(){
     };
 
     return {
-        invertKeyNoteMap: function(keyNoteMap){
-            var invertedKeyNoteMap = {};
-            for(var key in keyNoteMap){
-                invertedKeyNoteMap[keyNoteMap[key]] = key;
-            }
-            return invertedKeyNoteMap;
-        },
-        renderSongNotes: function(song, keyNoteMap){
+        renderSongNotes: function(song, keyNoteMap) {
             var renderedSongNotes = "";
             var renderedSongNotesOnKeyMap = "";
-            var invertedKeyNoteMap = this.invertKeyNoteMap(keyNoteMap);
+            // Use the service directly
+            var invertedKeyNoteMap = _service.getInvertedMap(keyNoteMap);
 
             song.forEach(function(note){
                 if(!note.note && note.name){
@@ -263,6 +265,36 @@ function getSongNoteRenderer(){
                 };
             }
             return cache;
+        },
+        renderFinalScore: function(canvas, ctx, total, goodCount, okCount, badCount, missedCount) {
+            var maxHeight = canvas.height;
+            var maxWidth = canvas.width;
+            var rowHeight = canvas.height / 10;
+            var initialXPosition = (canvas.width / 10) * 2;
+            var initialYPosition = rowHeight * 2;
+            ctx.font = "20px Georgia";
+
+            // Create gradient
+            var gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+            gradient.addColorStop("0", "magenta");
+            gradient.addColorStop("0.5", "blue");
+            gradient.addColorStop("1.0", "red");
+
+            // Fill with gradient
+            ctx.fillStyle = gradient;
+            ctx.fillText("Total: " + total, initialXPosition, initialYPosition);
+
+            ctx.fillStyle = "green";
+            ctx.fillText("Good: " + goodCount, initialXPosition, initialYPosition + rowHeight + 10);
+
+            ctx.fillStyle = "yellow";
+            ctx.fillText("OK: " + okCount, initialXPosition, initialYPosition + (rowHeight * 2) + 20);
+
+            ctx.fillStyle = "red";
+            ctx.fillText("Bad: " + badCount, initialXPosition, initialYPosition + (rowHeight * 3) + 30);
+
+            ctx.fillStyle = "blue";
+            ctx.fillText("Missed: " + missedCount, initialXPosition, initialYPosition + (rowHeight * 4) + 40);
         }
     };
 }

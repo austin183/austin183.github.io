@@ -16,6 +16,7 @@
     <script src="MyComponents/keyNoteMaps.js"></script>
     <script src="MyComponents/SongNoteRenderer.js"></script>
     <script src="MyComponents/songs.js"></script>
+    <script src="MyComponents/KeyNoteMapService.js"></script>
 </head>
 <body>
     <h1>Type To Play Notes</h1>
@@ -140,7 +141,8 @@
         //Declare / Initialize global variables
         var toneHelper = getToneHelper();
         var synthKeyPlayer = getSynthKeyPlayer();
-        var songNoteRenderer = getSongNoteRenderer();
+        var keyNoteMapService = getKeyNoteMapService();
+        var songNoteRenderer = getSongNoteRenderer(keyNoteMapService);
         var app; //The Vue.js variable
         var synthMap = {}; //Contains which key goes with with synth when the user presses keys on the keyboard
         const conga = toneHelper.getCongaSynth();

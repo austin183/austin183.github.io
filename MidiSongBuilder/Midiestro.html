@@ -25,16 +25,21 @@
     <script src="MyComponents/ToneHelper.js"></script>
     <script src="MyComponents/SynthKeyPlayer.js"></script>
     <script src="MyComponents/keyNoteMaps.js"></script>
+    <script src="MyComponents/KeyNoteMapService.js"></script>
     <script src="MyComponents/SongNoteRenderer.js"></script>
     <script src="MyComponents/keyRenderInfo.js"></script>
     <script src="MyComponents/VisibleFieldFilterer.js"></script>
     <script src="MyComponents/ScoreKeeper.js"></script>
-    <script src="MyComponents/SongCompression.js"></script>
+    <script src="MyComponents/GameController.js"></script>
     <script src="MyComponents/midiSongList.js"></script>
     <script src="MyComponents/difficultySettings.js"></script>
     <script src="MyComponents/highScoreTracker.js"></script>
     <script src="MyComponents/challengeScores.js"></script>
     <script src="MyComponents/difficultySettingsCalculator.js"></script>
+    <script src="MyComponents/DomUtils.js"></script>
+    <script src="MyComponents/FileDropHandler.js"></script>
+    <script src="MyComponents/InputHandler.js"></script>
+    <script src="MyComponents/MidiParser.js"></script>
 </head>
 
 <body>
@@ -79,7 +84,7 @@
                 <input type="file" accept="audio/midi" />
             </div>
         </div>
-        <button id="toggleInstructions" onclick="toggleElementById('Instructions')">Toggle Instructions And Advanced Song Selection</button>
+        <button id="toggleInstructions" onclick="getDomUtils().toggleElementById('Instructions')">Toggle Instructions And Advanced Song Selection</button>
 
     </div>
     <div id="app">
@@ -158,7 +163,7 @@
                 </div>
             </div>
         </div>
-        <button id="toggleGameConfig" onclick="toggleElementById('gameConfig')">Toggle Game Configurations</button>
+        <button id="toggleGameConfig" onclick="getDomUtils().toggleElementById('gameConfig')">Toggle Game Configurations</button>
 
         <div id="playProgress">
             <div id="SongTime">
@@ -190,10 +195,14 @@
         //The window.location.search field holds everything after the main url
         const queryString = window.location.search;
         const debugPage = queryString == "?debug";
+        const domUtils = getDomUtils();
+        domUtils.toggleElementById('Instructions');
+        domUtils.toggleElementById('gameConfig');
+        
         if(!debugPage){
-            toggleElementById('songNoteKeys');
-            toggleElementById('notesPlaying');
-            toggleElementById('exportHighScores');
+            domUtils.toggleElementById('songNoteKeys');
+            domUtils.toggleElementById('notesPlaying');
+            domUtils.toggleElementById('exportHighScores');
         }
 
         var midiSongs = getMidiSongList();
@@ -203,7 +212,9 @@
         const challengeScores = getChallengeScores();
 
         var synthKeyPlayer = getSynthKeyPlayer();
-        var songNoteRenderer = getSongNoteRenderer();
+        // Create the KeyNoteMapService instance
+        var keyNoteMapService = getKeyNoteMapService();
+        var songNoteRenderer = getSongNoteRenderer(keyNoteMapService);
         const keyRenderInfo = getKeyRenderInfo();
         const difficultySettings = getDifficultySettings();
         const difficultySettingsCalculator = getDifficultySettingsCalculator();
@@ -226,42 +237,14 @@
         var defaultSongNotes = "";
         var defaultSongNotesOnKeyMap = "";
         var defaultFMSynthParams = toneHelper.getDefaultFMSynthParams();
-        const songCompression = getSongCompression();
 
         //Disposes of existing synths and creates synths based on FMSynth options
         //First call uses the default
         toneHelper.buildSynths(defaultFMSynthParams, synthArray, 10); //Max of three keys for the whole game.
         var app; //The Vue.js variable
 
-        /*
-            Any time a user presses a key down on the keyboard:
-                Check if the key is in the selected keyNoteMap
-                If it is, add it as pressed in the pressedKeys object
-                Then run the playNotes method to handle reading the pressedKeys and handling them
-
-                If the key is the space key, just play the conga for "4n" time units
-                More about time units: https://tonejs.github.io/docs/14.9.17/types/Unit.Time.html
-        */
-        document.addEventListener("keydown", function(event) {
-            if (event.key in app.selectedKeyNoteMap.keyNoteMap) {
-                writeLog("Pressed key for " + app.selectedKeyNoteMap.keyNoteMap[event.key]);
-
-                pressedKeys[event.key] = true;
-                playNotes();
-            }
-        });
-
-        /*
-            When the user releases a key, the pressedKey for it should stop appearing as pressed
-                Then run playNotes again to handle playing the notes in pressedKeys
-        */
-        document.addEventListener("keyup", function() {
-            if(event.key in app.selectedKeyNoteMap.keyNoteMap && event.key in synthMap){
-                writeLog("Release key for " + app.selectedKeyNoteMap.keyNoteMap[event.key]);
-                pressedKeys[event.key] = false;
-                playNotes();
-            }
-        });
+        // Create the InputHandler instance (app will be set when Vue mounts)
+        var inputHandler = getInputHandler();
 
         /*
             Resets the Notes Playing field on the page
@@ -285,263 +268,108 @@
             }
         }
 
-        if (
-            !(
-                window.File &&
-                window.FileReader &&
-                window.FileList &&
-                window.Blob
-            )
-        ) {
+        var fileDropHandler = getFileDropHandler();
+
+        if (fileDropHandler.isFileAPISupported()) {
+            fileDropHandler.setupFileDrop("FileDrop", function(file) {
+                document.querySelector("#FileDrop #Text").textContent = file.name;
+                parseFile(file);
+            });
+        } else {
             document.querySelector("#FileDrop #Text").textContent =
                 "Reading files not supported by this browser";
-        } else {
-            const fileDrop = document.querySelector("#FileDrop");
-
-            fileDrop.addEventListener("dragenter", () =>
-                fileDrop.classList.add("Hover")
-            );
-
-            fileDrop.addEventListener("dragleave", () =>
-                fileDrop.classList.remove("Hover")
-            );
-
-            fileDrop.addEventListener("drop", () =>
-                fileDrop.classList.remove("Hover")
-            );
-
-            document
-                .querySelector("#FileDrop input")
-                .addEventListener("change", (e) => {
-                    //get the files
-                    const files = e.target.files;
-                    if (files.length > 0) {
-                        const file = files[0];
-                        document.querySelector(
-                            "#FileDrop #Text"
-                        ).textContent = file.name;
-                        parseFile(file);
-                    }
-                });
         }
 
         let currentMidi = null;
+        var midiParser = getMidiParser();
 
         function parseFile(file) {
-            //read the file
-            const reader = new FileReader();
-            reader.onload = setupSongFromArrayBuffer;
-            reader.readAsArrayBuffer(file);
-        }
-
-        function setupSongFromArrayBuffer(e){
-            app.availableTracks = [];
-                const midi = new Midi(e.target.result);
-                var trimmedMidi = {"tracks": []};
-                var counter = 0;
-                midi.tracks.forEach((track) => {
-                    counter++;
-                    if(track.notes.length > 0){
-                        var trackName = track.name;
-                        if(trackName == ""){
-                            trackName = "Track";
-                        }
-                        trackName += " " + counter;
-                        var trimmedTrack = {
-                            "name" : trackName,
-                            "notes" : track.notes
-                        }
-                        app.availableTracks.push(trimmedTrack);
-                        trimmedMidi.tracks.push(trimmedTrack);
-                    }
-                });
-
-                var playButton = document.getElementById('tonePlayToggle');
-                playButton.removeAttribute('disabled');
-                playButton.textContent = 'Play';
-
-                currentMidi = trimmedMidi;
-                var fullNotes = getCombinedTrackNotes(currentMidi.tracks);
-                var fullTrack = {
-                    "name" : "Full Track",
-                    "notes": fullNotes
-                }
-                // Add the fullTrack as the first array element in app.availableTracks
-                app.availableTracks.unshift(fullTrack);
-
-                app.selectedTrack = app.availableTracks[0];
-                var lastNote = fullTrack.notes[fullTrack.notes.length - 1];
-                songEnd = lastNote.time + lastNote.duration;
-                renderSongNotes();
-        }
-
-        function getCombinedTrackNotes(tracks){
-            var combinedNotes = [];
-            tracks.forEach(track => {
-                combinedNotes.push(...track.notes);
+            midiParser.parseMidiFile(file, function(midiResult) {
+                setupSongFromMidiResult(midiResult);
             });
-
-            combinedNotes.sort((a, b) => a.time - b.time);
-
-            return combinedNotes;
         }
 
-        const synths = [];
+        function setupSongFromMidiResult(midiResult) {
+            const parsed = midiParser.extractTracks(midiResult);
+
+            app.availableTracks = parsed.tracks;
+            app.availableTracks.unshift(parsed.fullTrack);
+            app.selectedTrack = app.availableTracks[0];
+
+            songEnd = parsed.songEnd;
+            // Store the parsed tracks in currentMidi for togglePlay to use
+            currentMidi = { tracks: parsed.tracks };
+
+            // Enable the play button
+            var playButton = document.getElementById('tonePlayToggle');
+            playButton.removeAttribute('disabled');
+            playButton.textContent = 'Play';
+
+            renderSongNotes();
+        }
+
+        // Keep getCombinedTrackNotes for backwards compatibility if needed elsewhere
+        function getCombinedTrackNotes(tracks) {
+            return midiParser.combineAllTrackNotes(tracks);
+        }
+
+        // Create the GameController instance
+        var gameController = getGameController();
+
         var playing = false;
-        var playIntervalId = {};
-        const delay = 3; //This is to give the player a chance to prepare before the first note plays
 
         function togglePlay() {
-            var invertedKeyNoteMap = songNoteRenderer.invertKeyNoteMap(app.selectedKeyNoteMap.keyNoteMap);
             var playButton = document.getElementById('tonePlayToggle');
             playing = !playing;
-            if(playing == true){
+            if (playing) {
                 playButton.textContent = 'Stop';
-            }
-            else{
+            } else {
                 playButton.textContent = 'Restart';
             }
+
             if (playing && currentMidi) {
-                                // Remove focus from any focused element
+                // Remove focus from any focused element
                 if (document.activeElement) {
                     document.activeElement.blur();
                 }
+
+                const invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
                 const scoreKeeper = getScoreKeeper();
                 const containerElement = document.getElementById("canvasContainer");
                 containerElement.scrollIntoView({ behavior: "smooth" });
-                const startTime = Tone.now();
-                const futureLimit = songEnd;
+
+                // Calculate the visible field for rendering
                 var visibleField = [];
-                if(songDifficultySettings){
+                if (songDifficultySettings) {
                     const songDifficulty = songDifficultySettings[app.selectedDifficulty.difficultyKey];
                     visibleField = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, songDifficulty.minNoteDistance, songDifficulty.minNoteDuration, invertedKeyNoteMap, keyRenderInfo, app.notesCanvas, songNoteRenderer);
-                }
-                else{
+                } else {
                     const targetNotesPerMinute = app.selectedDifficulty.targetNotesPerMinute;
                     visibleField = difficultySettingsCalculator.getTargetVisibleField(targetNotesPerMinute, app.selectedTrack.notes, invertedKeyNoteMap, visibleFieldFilterer, keyRenderInfo, app.notesCanvas, songNoteRenderer, songEnd).visibleField;
                 }
 
-                var earliestNoteIndex = 0;
-                currentMidi.tracks.forEach((track) => {
-                    //create a synth for each track
-                    const synth = new Tone.PolySynth(Tone.Synth, {
-                        envelope: {
-                            attack: 0.02,
-                            decay: 0.1,
-                            sustain: 0.3,
-                            release: 1,
-                        },
-                    }).toDestination();
-                    synths.push(synth);
-                    //schedule all of the events
-                    track.notes.forEach((note) => {
-                        if(note.duration > 0){
-                            synth.triggerAttackRelease(
-                                note.name,
-                                note.duration,
-                                note.time + startTime + delay,
-                                note.velocity * app.trackVolume
-                            );
-                        }
-                    });
-                });
-                playIntervalId = setInterval(() => {
-                    const intervalNow = Tone.now() - startTime - delay;
-                    const visiblePast = intervalNow - 1;
-                    const visibleFuture = intervalNow + 9;
-                    if(visiblePast > songEnd){
-                        app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
-                        renderFinalScore(app.notesCanvas, app.vueCanvas, app.score, app.goodCount, app.okCount, app.badCount, app.missedCount);
-                        togglePlay(); //Should end the song automatically at the end.
-                        if(app.toggleTrackHighScores){
-                            highScoreTracker.setHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey, app.score);
-                            app.highScore = highScoreTracker.getHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey)
-                        }
-                        return;
-                    }
+                // Build note letter cache for rendering
+                app.noteLetterCache = songNoteRenderer.buildSongNoteLetterCache(keyRenderInfo);
 
-                    for(var i = earliestNoteIndex; i < visibleField.length; i++){
-                        const note = visibleField[i];
-                        if(note.time + note.duration < visiblePast){
-                            earliestNoteIndex = i;
-                        }
-                        else{
-                            break;
-                        }
-                    }
-
-                    var currentScore = scoreKeeper.calculateNewScore(visibleField, pressedKeys, intervalNow, earliestNoteIndex, visibleFuture);
-                    app.score = currentScore.total;
-                    var counts = scoreKeeper.getCounts();
-                    app.goodCount = counts.goodCount;
-                    app.okCount = counts.okCount;
-                    app.badCount = counts.badCount;
-                    app.missedCount = counts.missedCount;
-                    if(debugPage == true){
-                        app.renderedNotesPlaying = songNoteRenderer.renderDebugNotesPlaying(app.notesCanvas, app.selectedTrack.notes, currentScore, invertedKeyNoteMap, keyRenderInfo, intervalNow, visiblePast);
-                    }
-                    app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
-                    songNoteRenderer.renderNowLine(app.notesCanvas, app.vueCanvas);
-                    songNoteRenderer.renderNotesPlayingForCanvas(app.notesCanvas, app.vueCanvas, visibleField, currentScore, intervalNow, visiblePast, visibleFuture, earliestNoteIndex, noteLetterCache);
-                }, 10);
+                // Start the game using the game controller
+                gameController.startGame(
+                    app,
+                    currentMidi,
+                    songDifficultySettings,
+                    songEnd,
+                    visibleField,
+                    scoreKeeper,
+                    songNoteRenderer,
+                    keyNoteMapService,
+                    highScoreTracker,
+                    challengeScores
+                );
 
             } else {
-                clearInterval(playIntervalId);
-                app.renderNotesPlaying = "";
-                Tone.Transport.stop();
-                Tone.Transport.position = 0;
-                Tone.Transport.cancel();
-
-                //dispose the synth and make a new one
-                while (synths.length) {
-                    const synth = synths.shift();
-                    synth.disconnect();
-                    synth.dispose();
-                }
-            }
-        };
-
-        function renderFinalScore(canvas, ctx, total, goodCount, okCount, badCount, missedCount) {
-            var maxHeight = canvas.height;
-            var maxWidth = canvas.width;
-            var rowHeight = canvas.height / 10;
-            var initialXPosition = (canvas.width / 10) * 2;
-            var initialYPosition = rowHeight * 2;
-            ctx.font="20px Georgia";
-            // Create gradient
-            var gradient=ctx.createLinearGradient(0,0,canvas.width,0);
-            gradient.addColorStop("0","magenta");
-            gradient.addColorStop("0.5","blue");
-            gradient.addColorStop("1.0","red");
-            // Fill with gradient
-            ctx.fillStyle=gradient;
-            ctx.fillText("Total: " + total, initialXPosition, initialYPosition);
-            ctx.fillStyle = "green";
-            ctx.fillText("Good: " + goodCount, initialXPosition, initialYPosition + rowHeight + 10);
-            ctx.fillStyle = "yellow";
-            ctx.fillText("OK: " + okCount, initialXPosition, initialYPosition + (rowHeight * 2) + 20);
-            ctx.fillStyle = "red";
-            ctx.fillText("Bad: " + badCount, initialXPosition, initialYPosition + (rowHeight * 3) + 30);
-            ctx.fillStyle = "blue";
-            ctx.fillText("Missed: " + missedCount, initialXPosition, initialYPosition + (rowHeight * 4) + 40);
-        };
-
-        //This function shows or hides the FMSynthConfigs div
-        function toggleElementById(id) {
-            var configDiv = document.getElementById(id); // Get a reference to the synth configuration DIV element by its ID (you may need to replace 'id' with actual id of your HTML structure)
-            if (configDiv) {
-                const currentDisplayState = configDiv.style.display;
-
-                if (currentDisplayState === "none") { // If it is currently hidden, then show the div (change its display style to block or inline-block as appropriate for your layout)
-                    configDiv.style.display = "";
-
-                } else { // Otherwise assume that FMSynthConfigs are already visible and hide them by setting their display property back to none
-                    configDiv.style.display = "none";
-                }
+                // Stop the game using the game controller
+                gameController.stopGame(app);
             }
         }
-        toggleElementById('Instructions');
-        toggleElementById('gameConfig')
 
         //Once everything is downloaded, and the page has loaded, start rendering the Vue.js app
         window.onload = function(){
@@ -586,8 +414,15 @@
                     this.vueCanvas.fillText("Watch for falling note keys!", 0, 50); // Assuming the height of the letter is about 20 pixels
                     this.toggleTrackHighScores = localStorage.getItem("TrackScores") == "true";
                     if(!this.toggleTrackHighScores){
-                        toggleElementById("SongHighScore");
+                        domUtils.toggleElementById("SongHighScore");
                     }
+                    // Update inputHandler with the Vue app reference and set up key listeners
+                    inputHandler.app = this;
+                    inputHandler.setupKeyListeners(this, pressedKeys, synthMap, synthArray, playNotes);
+                },
+                beforeDestroy() {
+                    // Clean up event listeners when the app is destroyed
+                    inputHandler.removeKeyListeners();
                 }
             });
 
@@ -596,7 +431,7 @@
         function renderSongNotes(){
             app.songEnd = (songEnd / 60).toFixed(2) + " minutes";
             if(currentMidi  && app.selectedTrack !== "" && debugPage){
-                var invertedKeyNoteMap = songNoteRenderer.invertKeyNoteMap(app.selectedKeyNoteMap.keyNoteMap);
+                var invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
                 var renderedSongNotes = "";
                 var renderedSongNotesOnKeyMap = "";
                 var song = app.selectedTrack.notes;
@@ -605,7 +440,7 @@
                 
                 app.songNotes = renderedNotes.renderedSongNotes;
                 app.songNotesOnKeyMap = renderedNotes.renderedSongNotesOnKeyMap;
-                app.renderedNotesPlaying = songNoteRenderer.renderDebugNotesPlaying(song, invertedKeyNoteMap, 0);
+                app.renderedNotesPlaying = songNoteRenderer.renderDebugNotesPlaying(app.notesCanvas, song, {keyScores: {}}, invertedKeyNoteMap, 0, 0);
 
                 //Move focus back to the document so when the user starts trying to play notes, they
                 //won't accidentally be on one of the option fields
@@ -642,10 +477,10 @@
                 const midiFilename = app.selectedMidiSong.filename;
                 fetch(`PublicDomainSongs/midi/${midiFilename}`)
                     .then(response => response.arrayBuffer())
-                    .then(arrayBuffer => setupSongFromArrayBuffer({ target: {
-                        result: arrayBuffer 
-                    }
-                }));
+                    .then(arrayBuffer => {
+                    const midiResult = midiParser.parseMidiArrayBuffer(arrayBuffer);
+                    setupSongFromMidiResult(midiResult);
+                });
             }            
         }
 
@@ -664,7 +499,7 @@
         }
 
         function handleToggleTrackHighScores(){
-            toggleElementById("SongHighScore");
+            domUtils.toggleElementById("SongHighScore");
             if(app.toggleTrackHighScores){
                 localStorage.setItem("TrackScores", "true");
             }
@@ -676,7 +511,7 @@
         function clearHighScores(){
             localStorage.clear();
             app.toggleTrackHighScores = false;
-            toggleElementById("SongHighScore");
+            domUtils.toggleElementById("SongHighScore");
         }
 
         function exportHighScores(){
