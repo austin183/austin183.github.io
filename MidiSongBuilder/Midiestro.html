@@ -29,6 +29,7 @@
     <script src="MyComponents/keyRenderInfo.js"></script>
     <script src="MyComponents/VisibleFieldFilterer.js"></script>
     <script src="MyComponents/ScoreKeeper.js"></script>
+    <script src="MyComponents/GameController.js"></script>
     <script src="MyComponents/midiSongList.js"></script>
     <script src="MyComponents/difficultySettings.js"></script>
     <script src="MyComponents/highScoreTracker.js"></script>
@@ -309,145 +310,62 @@
             return midiParser.combineAllTrackNotes(tracks);
         }
 
-        const synths = [];
+        // Create the GameController instance
+        var gameController = getGameController();
+
         var playing = false;
-        var playIntervalId = {};
-        const delay = 3; //This is to give the player a chance to prepare before the first note plays
 
         function togglePlay() {
-            var invertedKeyNoteMap = songNoteRenderer.invertKeyNoteMap(app.selectedKeyNoteMap.keyNoteMap);
             var playButton = document.getElementById('tonePlayToggle');
             playing = !playing;
-            if(playing == true){
+            if (playing) {
                 playButton.textContent = 'Stop';
-            }
-            else{
+            } else {
                 playButton.textContent = 'Restart';
             }
+
             if (playing && currentMidi) {
-                                // Remove focus from any focused element
+                // Remove focus from any focused element
                 if (document.activeElement) {
                     document.activeElement.blur();
                 }
+
+                const invertedKeyNoteMap = songNoteRenderer.invertKeyNoteMap(app.selectedKeyNoteMap.keyNoteMap);
                 const scoreKeeper = getScoreKeeper();
                 const containerElement = document.getElementById("canvasContainer");
                 containerElement.scrollIntoView({ behavior: "smooth" });
-                const startTime = Tone.now();
-                const futureLimit = songEnd;
+
+                // Calculate the visible field for rendering
                 var visibleField = [];
-                if(songDifficultySettings){
+                if (songDifficultySettings) {
                     const songDifficulty = songDifficultySettings[app.selectedDifficulty.difficultyKey];
                     visibleField = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, songDifficulty.minNoteDistance, songDifficulty.minNoteDuration, invertedKeyNoteMap, keyRenderInfo, app.notesCanvas, songNoteRenderer);
-                }
-                else{
+                } else {
                     const targetNotesPerMinute = app.selectedDifficulty.targetNotesPerMinute;
                     visibleField = difficultySettingsCalculator.getTargetVisibleField(targetNotesPerMinute, app.selectedTrack.notes, invertedKeyNoteMap, visibleFieldFilterer, keyRenderInfo, app.notesCanvas, songNoteRenderer, songEnd).visibleField;
                 }
 
-                var earliestNoteIndex = 0;
-                currentMidi.tracks.forEach((track) => {
-                    //create a synth for each track
-                    const synth = new Tone.PolySynth(Tone.Synth, {
-                        envelope: {
-                            attack: 0.02,
-                            decay: 0.1,
-                            sustain: 0.3,
-                            release: 1,
-                        },
-                    }).toDestination();
-                    synths.push(synth);
-                    //schedule all of the events
-                    track.notes.forEach((note) => {
-                        if(note.duration > 0){
-                            synth.triggerAttackRelease(
-                                note.name,
-                                note.duration,
-                                note.time + startTime + delay,
-                                note.velocity * app.trackVolume
-                            );
-                        }
-                    });
-                });
-                playIntervalId = setInterval(() => {
-                    const intervalNow = Tone.now() - startTime - delay;
-                    const visiblePast = intervalNow - 1;
-                    const visibleFuture = intervalNow + 9;
-                    if(visiblePast > songEnd){
-                        app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
-                        renderFinalScore(app.notesCanvas, app.vueCanvas, app.score, app.goodCount, app.okCount, app.badCount, app.missedCount);
-                        togglePlay(); //Should end the song automatically at the end.
-                        if(app.toggleTrackHighScores){
-                            highScoreTracker.setHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey, app.score);
-                            app.highScore = highScoreTracker.getHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey)
-                        }
-                        return;
-                    }
+                // Build note letter cache for rendering
+                app.noteLetterCache = songNoteRenderer.buildSongNoteLetterCache(keyRenderInfo);
 
-                    for(var i = earliestNoteIndex; i < visibleField.length; i++){
-                        const note = visibleField[i];
-                        if(note.time + note.duration < visiblePast){
-                            earliestNoteIndex = i;
-                        }
-                        else{
-                            break;
-                        }
-                    }
-
-                    var currentScore = scoreKeeper.calculateNewScore(visibleField, pressedKeys, intervalNow, earliestNoteIndex, visibleFuture);
-                    app.score = currentScore.total;
-                    var counts = scoreKeeper.getCounts();
-                    app.goodCount = counts.goodCount;
-                    app.okCount = counts.okCount;
-                    app.badCount = counts.badCount;
-                    app.missedCount = counts.missedCount;
-                    if(debugPage == true){
-                        app.renderedNotesPlaying = songNoteRenderer.renderDebugNotesPlaying(app.notesCanvas, app.selectedTrack.notes, currentScore, invertedKeyNoteMap, keyRenderInfo, intervalNow, visiblePast);
-                    }
-                    app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
-                    songNoteRenderer.renderNowLine(app.notesCanvas, app.vueCanvas);
-                    songNoteRenderer.renderNotesPlayingForCanvas(app.notesCanvas, app.vueCanvas, visibleField, currentScore, intervalNow, visiblePast, visibleFuture, earliestNoteIndex, noteLetterCache);
-                }, 10);
+                // Start the game using the game controller
+                gameController.startGame(
+                    app,
+                    currentMidi,
+                    songDifficultySettings,
+                    songEnd,
+                    visibleField,
+                    scoreKeeper,
+                    songNoteRenderer,
+                    highScoreTracker,
+                    challengeScores
+                );
 
             } else {
-                clearInterval(playIntervalId);
-                app.renderNotesPlaying = "";
-                Tone.Transport.stop();
-                Tone.Transport.position = 0;
-                Tone.Transport.cancel();
-
-                //dispose the synth and make a new one
-                while (synths.length) {
-                    const synth = synths.shift();
-                    synth.disconnect();
-                    synth.dispose();
-                }
+                // Stop the game using the game controller
+                gameController.stopGame(app);
             }
-        };
-
-        function renderFinalScore(canvas, ctx, total, goodCount, okCount, badCount, missedCount) {
-            var maxHeight = canvas.height;
-            var maxWidth = canvas.width;
-            var rowHeight = canvas.height / 10;
-            var initialXPosition = (canvas.width / 10) * 2;
-            var initialYPosition = rowHeight * 2;
-            ctx.font="20px Georgia";
-            // Create gradient
-            var gradient=ctx.createLinearGradient(0,0,canvas.width,0);
-            gradient.addColorStop("0","magenta");
-            gradient.addColorStop("0.5","blue");
-            gradient.addColorStop("1.0","red");
-            // Fill with gradient
-            ctx.fillStyle=gradient;
-            ctx.fillText("Total: " + total, initialXPosition, initialYPosition);
-            ctx.fillStyle = "green";
-            ctx.fillText("Good: " + goodCount, initialXPosition, initialYPosition + rowHeight + 10);
-            ctx.fillStyle = "yellow";
-            ctx.fillText("OK: " + okCount, initialXPosition, initialYPosition + (rowHeight * 2) + 20);
-            ctx.fillStyle = "red";
-            ctx.fillText("Bad: " + badCount, initialXPosition, initialYPosition + (rowHeight * 3) + 30);
-            ctx.fillStyle = "blue";
-            ctx.fillText("Missed: " + missedCount, initialXPosition, initialYPosition + (rowHeight * 4) + 40);
-        };
+        }
 
         //Once everything is downloaded, and the page has loaded, start rendering the Vue.js app
         window.onload = function(){
