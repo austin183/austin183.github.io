@@ -25,6 +25,7 @@
     <script src="MyComponents/ToneHelper.js"></script>
     <script src="MyComponents/SynthKeyPlayer.js"></script>
     <script src="MyComponents/keyNoteMaps.js"></script>
+    <script src="MyComponents/KeyNoteMapService.js"></script>
     <script src="MyComponents/SongNoteRenderer.js"></script>
     <script src="MyComponents/keyRenderInfo.js"></script>
     <script src="MyComponents/VisibleFieldFilterer.js"></script>
@@ -211,7 +212,9 @@
         const challengeScores = getChallengeScores();
 
         var synthKeyPlayer = getSynthKeyPlayer();
-        var songNoteRenderer = getSongNoteRenderer();
+        // Create the KeyNoteMapService instance
+        var keyNoteMapService = getKeyNoteMapService();
+        var songNoteRenderer = getSongNoteRenderer(keyNoteMapService);
         const keyRenderInfo = getKeyRenderInfo();
         const difficultySettings = getDifficultySettings();
         const difficultySettingsCalculator = getDifficultySettingsCalculator();
@@ -330,7 +333,7 @@
                     document.activeElement.blur();
                 }
 
-                const invertedKeyNoteMap = songNoteRenderer.invertKeyNoteMap(app.selectedKeyNoteMap.keyNoteMap);
+                const invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
                 const scoreKeeper = getScoreKeeper();
                 const containerElement = document.getElementById("canvasContainer");
                 containerElement.scrollIntoView({ behavior: "smooth" });
@@ -357,6 +360,7 @@
                     visibleField,
                     scoreKeeper,
                     songNoteRenderer,
+                    keyNoteMapService,
                     highScoreTracker,
                     challengeScores
                 );
@@ -427,7 +431,7 @@
         function renderSongNotes(){
             app.songEnd = (songEnd / 60).toFixed(2) + " minutes";
             if(currentMidi  && app.selectedTrack !== "" && debugPage){
-                var invertedKeyNoteMap = songNoteRenderer.invertKeyNoteMap(app.selectedKeyNoteMap.keyNoteMap);
+                var invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
                 var renderedSongNotes = "";
                 var renderedSongNotesOnKeyMap = "";
                 var song = app.selectedTrack.notes;
@@ -436,7 +440,7 @@
                 
                 app.songNotes = renderedNotes.renderedSongNotes;
                 app.songNotesOnKeyMap = renderedNotes.renderedSongNotesOnKeyMap;
-                app.renderedNotesPlaying = songNoteRenderer.renderDebugNotesPlaying(song, invertedKeyNoteMap, 0);
+                app.renderedNotesPlaying = songNoteRenderer.renderDebugNotesPlaying(app.notesCanvas, song, {keyScores: {}}, invertedKeyNoteMap, 0, 0);
 
                 //Move focus back to the document so when the user starts trying to play notes, they
                 //won't accidentally be on one of the option fields

@@ -1,4 +1,12 @@
-function getSongNoteRenderer(){
+function getSongNoteRenderer(keyNoteMapService) {
+    // Validate required dependency
+    if (!keyNoteMapService) {
+        throw new Error('SongNoteRenderer requires a KeyNoteMapService instance. Please pass getKeyNoteMapService() to the constructor.');
+    }
+
+    // Store service as private variable (closure)
+    var _service = keyNoteMapService;
+
     var renderer = {
         getPrerenderedDrawInstructions: function(canvas, keyRenderInfo, note, letter){
             var maxHeight = canvas.height;
@@ -163,17 +171,11 @@ function getSongNoteRenderer(){
     };
 
     return {
-        invertKeyNoteMap: function(keyNoteMap){
-            var invertedKeyNoteMap = {};
-            for(var key in keyNoteMap){
-                invertedKeyNoteMap[keyNoteMap[key]] = key;
-            }
-            return invertedKeyNoteMap;
-        },
-        renderSongNotes: function(song, keyNoteMap){
+        renderSongNotes: function(song, keyNoteMap) {
             var renderedSongNotes = "";
             var renderedSongNotesOnKeyMap = "";
-            var invertedKeyNoteMap = this.invertKeyNoteMap(keyNoteMap);
+            // Use the service directly
+            var invertedKeyNoteMap = _service.getInvertedMap(keyNoteMap);
 
             song.forEach(function(note){
                 if(!note.note && note.name){

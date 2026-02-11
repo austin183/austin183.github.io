@@ -18,11 +18,12 @@ function getGameController() {
          * @param {Array} visibleField - The filtered notes ready for rendering
          * @param {Object} scoreKeeper - The ScoreKeeper instance for scoring
          * @param {Object} songNoteRenderer - The SongNoteRenderer instance
+         * @param {Object} keyNoteMapService - The KeyNoteMapService instance for inversion
          * @param {Object} highScoreTracker - The high score tracker instance
          * @param {Object} challengeScores - The challenge scores instance
          * @returns {number} - The interval ID for cleanup
          */
-        startGame: function(app, currentMidi, difficultySettings, songEnd, visibleField, scoreKeeper, songNoteRenderer, highScoreTracker, challengeScores) {
+        startGame: function(app, currentMidi, difficultySettings, songEnd, visibleField, scoreKeeper, songNoteRenderer, keyNoteMapService, highScoreTracker, challengeScores) {
             // Clear any existing synths
             this.stopGame(app);
 
@@ -63,7 +64,7 @@ function getGameController() {
                 songNoteRenderer: songNoteRenderer,
                 highScoreTracker: highScoreTracker,
                 challengeScores: challengeScores,
-                invertedKeyNoteMap: songNoteRenderer.invertKeyNoteMap(app.selectedKeyNoteMap.keyNoteMap),
+                invertedKeyNoteMap: keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap),
                 noteLetterCache: songNoteRenderer.buildSongNoteLetterCache(getKeyRenderInfo())
             };
 

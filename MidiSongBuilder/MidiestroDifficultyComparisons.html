@@ -24,6 +24,7 @@
     <script src="MyComponents/midiSongList.js"></script>
     <script src="MyComponents/difficultySettings.js"></script>
     <script src="MyComponents/difficultySettingsCalculator.js"></script>
+    <script src="MyComponents/KeyNoteMapService.js"></script>
 </head>
 
 <body>
@@ -165,7 +166,8 @@
         var midiSongs = getMidiSongList();
         const sortedMidiSongs = Object.fromEntries(Object.keys(midiSongs).sort().map(key => [key, midiSongs[key]]));
         midiSongs = sortedMidiSongs;
-        var songNoteRenderer = getSongNoteRenderer();
+        const keyNoteMapService = getKeyNoteMapService();
+        const songNoteRenderer = getSongNoteRenderer(keyNoteMapService);
         const keyRenderInfo = getKeyRenderInfo();
         const difficultySettings = getDifficultySettings();
         const difficultySettingsCalculator = getDifficultySettingsCalculator();
@@ -318,7 +320,7 @@
         const delay = 3; //This is to give the player a chance to prepare before the first note plays
 
         function renderSong(specificTime) {
-            var invertedKeyNoteMap = songNoteRenderer.invertKeyNoteMap(app.selectedKeyNoteMap.keyNoteMap);
+            var invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
             if (currentMidi) {
                 const songStats = difficultySettingsCalculator.getSongStats(app.selectedTrack.notes, invertedKeyNoteMap);
 
