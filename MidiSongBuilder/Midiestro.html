@@ -35,6 +35,7 @@
     <script src="MyComponents/highScoreTracker.js"></script>
     <script src="MyComponents/challengeScores.js"></script>
     <script src="MyComponents/difficultySettingsCalculator.js"></script>
+    <script src="MyComponents/DomUtils.js"></script>
 </head>
 
 <body>
@@ -79,7 +80,7 @@
                 <input type="file" accept="audio/midi" />
             </div>
         </div>
-        <button id="toggleInstructions" onclick="toggleElementById('Instructions')">Toggle Instructions And Advanced Song Selection</button>
+        <button id="toggleInstructions" onclick="getDomUtils().toggleElementById('Instructions')">Toggle Instructions And Advanced Song Selection</button>
 
     </div>
     <div id="app">
@@ -158,7 +159,7 @@
                 </div>
             </div>
         </div>
-        <button id="toggleGameConfig" onclick="toggleElementById('gameConfig')">Toggle Game Configurations</button>
+        <button id="toggleGameConfig" onclick="getDomUtils().toggleElementById('gameConfig')">Toggle Game Configurations</button>
 
         <div id="playProgress">
             <div id="SongTime">
@@ -190,10 +191,12 @@
         //The window.location.search field holds everything after the main url
         const queryString = window.location.search;
         const debugPage = queryString == "?debug";
+        const domUtils = getDomUtils();
+        domUtils.toggleElementById('Instructions');
         if(!debugPage){
-            toggleElementById('songNoteKeys');
-            toggleElementById('notesPlaying');
-            toggleElementById('exportHighScores');
+            domUtils.toggleElementById('songNoteKeys');
+            domUtils.toggleElementById('notesPlaying');
+            domUtils.toggleElementById('exportHighScores');
         }
 
         var midiSongs = getMidiSongList();
@@ -285,14 +288,7 @@
             }
         }
 
-        if (
-            !(
-                window.File &&
-                window.FileReader &&
-                window.FileList &&
-                window.Blob
-            )
-        ) {
+        if (!domUtils.isFileAPISupported()) {
             document.querySelector("#FileDrop #Text").textContent =
                 "Reading files not supported by this browser";
         } else {
@@ -526,23 +522,6 @@
             ctx.fillText("Missed: " + missedCount, initialXPosition, initialYPosition + (rowHeight * 4) + 40);
         };
 
-        //This function shows or hides the FMSynthConfigs div
-        function toggleElementById(id) {
-            var configDiv = document.getElementById(id); // Get a reference to the synth configuration DIV element by its ID (you may need to replace 'id' with actual id of your HTML structure)
-            if (configDiv) {
-                const currentDisplayState = configDiv.style.display;
-
-                if (currentDisplayState === "none") { // If it is currently hidden, then show the div (change its display style to block or inline-block as appropriate for your layout)
-                    configDiv.style.display = "";
-
-                } else { // Otherwise assume that FMSynthConfigs are already visible and hide them by setting their display property back to none
-                    configDiv.style.display = "none";
-                }
-            }
-        }
-        toggleElementById('Instructions');
-        toggleElementById('gameConfig')
-
         //Once everything is downloaded, and the page has loaded, start rendering the Vue.js app
         window.onload = function(){
             app = new Vue({
@@ -586,7 +565,7 @@
                     this.vueCanvas.fillText("Watch for falling note keys!", 0, 50); // Assuming the height of the letter is about 20 pixels
                     this.toggleTrackHighScores = localStorage.getItem("TrackScores") == "true";
                     if(!this.toggleTrackHighScores){
-                        toggleElementById("SongHighScore");
+                        domUtils.toggleElementById("SongHighScore");
                     }
                 }
             });
@@ -664,7 +643,7 @@
         }
 
         function handleToggleTrackHighScores(){
-            toggleElementById("SongHighScore");
+            domUtils.toggleElementById("SongHighScore");
             if(app.toggleTrackHighScores){
                 localStorage.setItem("TrackScores", "true");
             }
@@ -676,7 +655,7 @@
         function clearHighScores(){
             localStorage.clear();
             app.toggleTrackHighScores = false;
-            toggleElementById("SongHighScore");
+            domUtils.toggleElementById("SongHighScore");
         }
 
         function exportHighScores(){

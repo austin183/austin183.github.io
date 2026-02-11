@@ -27,7 +27,8 @@ function getVisibleFieldFilterer(){
                                 duration: currentNote.duration,
                                 letter: keyNote,
                                 x: prerenderedDrawInstructions.x,
-                                id: currentNote.name + "_" + currentNote.time
+                                id: currentNote.name + "_" + currentNote.time,
+                                keyInfo: keyRenderInfo[keyNote]
                             };
 
                             visibleField.push(visibleFieldElement);
