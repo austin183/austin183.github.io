@@ -1,0 +1,14 @@
+Implement
+```
+Can you please implement Phase 2 in @/Users/austin/workspace/austin183.github.io/MidiSong Builder/agent_docs/3d_plans/ThreeJSRendererPlan.md and create a Phase2Progress.md file in the same folder after the phase has been validated showing the work that was done?
+```
+
+Web Page Verification
+```
+We implemented Phase 2 of our plans in @/Users/austin/workspace/austin183.github.io/MidiSongBuilder/agent_docs/3d_plans , and now we can see our changes at http://localhost:8000/MidiSongBuilder/Midiestro3D.html .  Can you please visit the page and verify it meets our Phase 1 expectations?  The code for the page is in @Midiestro3D.html
+```
+
+Self Code Review
+```
+Can you please review the changes made in @/Users/austin/workspace/austin183.github.io/MidiSongBuilder/Midiestro3D.html during the implementation of Phase 2 in @/Users/austin/workspace/austin183.github.io/MidiSongBuilder/agent_docs/3d_plans/ThreeJSRendererPlan.md and see if there are any opportunities to refactor code for better readability or to reduce repetition?
+```

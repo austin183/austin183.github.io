@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<!--
+    This is almost vanilla from https://tonejs.github.io/Midi/ right now,
+    but I want to work some of Keybiano.html into it.  A user can drag a midi file
+    onto the page, and it will have the ability to choose one of the tracks.
+    The tracks will appear as notes and mapped keys at first, but eventually, I want to
+    animate the mapped keys based on when they will play and how long they need to be played.
+-->
+<html>
+
+<head>    
+    <title>Midiestro</title>
+    <!--
+    <script src="https://unpkg.com/vue@2.6.12/dist/vue.min.js"></script>
+    <script type="text/javascript" src="https://unpkg.com/tone@latest/build/Tone.js"></script>
+    <script type="text/javascript" src="https://unpkg.com/@tonejs/midi"></script>
+    -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css" integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous">
+    <script src="Libraries/vue.min.js"></script>
+    <script type="text/javascript" src="Libraries/Tone.js"></script>
+    <script type="text/javascript" src="Libraries/ToneMidi.js"></script>
+    <script src="Libraries/three.min.js"></script>
+    <link href="../Styles.css" rel="stylesheet" />
+    <link rel="shortcut icon" href="./favicon.ico" />
+    <script src="MyComponents/ToneHelper.js"></script>
+    <script src="MyComponents/SynthKeyPlayer.js"></script>
+    <script src="MyComponents/keyNoteMaps.js"></script>
+    <script src="MyComponents/KeyNoteMapService.js"></script>
+    <script src="MyComponents/SongNoteRenderer.js"></script>
+    <script src="MyComponents/keyRenderInfo.js"></script>
+    <script src="MyComponents/VisibleFieldFilterer.js"></script>
+    <script src="MyComponents/ScoreKeeper.js"></script>
+    <script src="MyComponents/GameController.js"></script>
+    <script src="MyComponents/midiSongList.js"></script>
+    <script src="MyComponents/difficultySettings.js"></script>
+    <script src="MyComponents/highScoreTracker.js"></script>
+    <script src="MyComponents/challengeScores.js"></script>
+    <script src="MyComponents/difficultySettingsCalculator.js"></script>
+    <script src="MyComponents/DomUtils.js"></script>
+    <script src="MyComponents/FileDropHandler.js"></script>
+    <script src="MyComponents/InputHandler.js"></script>
+    <script src="MyComponents/MidiParser.js"></script>
+    <script src="MyComponents/ThreeJSRenderer.js"></script>
+</head>
+
+<body>
+    <div id="toneContent">
+        <div id="Instructions" class="bordered">
+            <h2>Instructions</h2>
+            <p>
+                This page is a musical typing game, where you can take a midi file and try to match the notes played on your keyboard for points!
+            </p>
+            <p>
+                To play:
+                <ul>
+                    <li>Drop a midi file on the panel below.</li>
+                    <li>Press the Play button.</li>
+                    <li>Watch the falling keys, and try to press the key when it gets to the bottom of the game window.</li>
+                </ul>
+            </p>
+            <p>
+                As a simple song to start with, here is a place to download <a href="https://onlinesequencer.net/4101480#">Mary Had a Little Lamb</a> .  On the website, choose "Download MIDI"
+            </p>
+            <p>
+                You can find more midi files to download and try out at the links below.  Also searching the internet with a phrase like "Nightmare Before Christmas MIDI" or "Portal Still Alive MIDI" will find songs to download as well.
+                <ul>
+                    <li>
+                        <a href="https://bbloomf.github.io/lilypond-songs">https://bbloomf.github.io/lilypond-songs</a>
+                    </li>
+                    <li>
+                        <a href="https://onlinesequencer.net/sequences">https://onlinesequencer.net/sequences</a>
+                    </li>
+                    <li>
+                        <a href="http://www.soundswell.co.uk/pages/swmids.htm">http://www.soundswell.co.uk/pages/swmids.htm</a>
+                    </li>
+                    <li>
+                        <a href="http://midi.music.arizona.edu/purpose.php">http://midi.music.arizona.edu/search.php</a>
+                    </li>
+                </ul>
+            </p>
+            <div id="FileDrop">
+                <div id="Text">
+                    Drop a midi file here, or click to select a file from the wizard.  Or use the select box below to choose a Preloaded Song instead.
+                </div>
+                <input type="file" accept="audio/midi" />
+            </div>
+        </div>
+        <button id="toggleInstructions" onclick="getDomUtils().toggleElementById('Instructions')">Toggle Instructions And Advanced Song Selection</button>
+
+    </div>
+    <div id="app">
+        <div id="midiSongConfig" class="bordered">
+            <div class="bordered">
+                <label for="midiSongSelect">Select a Preloaded Song</label>
+                <select id="midiSongSelect" v-model="selectedMidiSong" class="pure-input-rounded" v-on:change="handleMidiSongSelection()">
+                    <option v-for="(item, key, index) in midiSongs" :value="item">{{key}}</option>
+                </select>
+            </div>
+        </div>
+        <div id="gameConfig" class="bordered" >
+            <div class="bordered">
+                Please note: most of these options require the song to be restarted in order to take affect.
+            </div>
+            <!-- trackOptionConfig -->
+            <div id="trackOptionConfig" class="side-by-side">
+                <div class="bordered">
+                    <label for="trackSelect">Select Track to play</label>
+                    <select id="trackSelect" v-model="selectedTrack" class="pure-input-rounded" v-on:change="renderSongNotes()">
+                        <option v-for="(item, key, index) in availableTracks" :value="item">{{item.name}} ({{ item.notes.length }} notes, starts at {{ item.notes[0].time }})</option>
+                    </select>
+                </div>
+                <div class="bordered">
+                    If you want to play the parts of a particular track, you can select an individual one to display here.  Otherwise notes from all tracks will be used to display.
+                </div>
+            </div>
+            <!-- keyNoteMapConfig -->
+            <div id="keyNoteMapConfig" class="side-by-side">
+                <div class="bordered">
+                    <label for="keyNoteMapSelect">Select a Keyboard Layout</label>
+                    <select id="keyNoteMapSelect" v-model="selectedKeyNoteMap" class="pure-input-rounded" v-on:change="renderSongNotes()">
+                        <option v-for="(item, key, index) in availableKeyNoteMaps" :value="item">{{key}}</option>
+                    </select>
+                </div>
+                <div class="bordered">
+                    {{selectedKeyNoteMap.description}}
+                </div>
+            </div>
+            <!-- difficultyConfig -->
+            <div id="difficultyConfig" class="side-by-side">
+                <div class="bordered">
+                    <div id="difficulty">
+                        <label for="difficultySelect">Select a Difficulty</label>
+                        <select id="difficultySelect" v-model="selectedDifficulty" class="pure-input-rounded" v-on:change="setDifficulty()">
+                            <option v-for="(item, key, index) in difficultySettings" :value="item">{{key}}</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="bordered">
+                    This sets how close together notes will be during play.  More notes will appear on harder difficulties, and they will be a bit harder to read due to how they letters stack up.  Not all songs are affected by difficulty changes similarly.  Some songs will barely change, and some will change drastically.  Good luck!
+                </div>
+            </div>
+            <!-- trackVolumeConfig -->
+            <div id="trackVolumeConfig" class="side-by-side">
+                <div class="bordered">
+                    <div id="trackVolume">
+                        <label for="trackVolume">Track Volume {{trackVolume}}</label>
+                        <input type="range" class="fullRange" id="trackVolume" v-model="trackVolume" min="0" max="1" step=".01"></input>
+                    </div>
+                </div>
+                <div class="bordered">
+                    This sets the volume of each track.  The smaller the value, the quieter the background music will be.  Please note that this config will only get applied once when the song starts playing.
+                </div>
+            </div>
+            <!-- playerVolumeConfig -->
+            <div id="playerVolumeConfig" class="side-by-side">
+                <div class="bordered">
+                    <div id="playerVolume">
+                        <label for="playerVolume">Player Volume {{playerVolume}}</label>
+                        <input type="range" class="fullRange" id="playerVolume" v-model="playerVolume" min="0" max="1" step=".01"></input>
+                    </div>
+                </div>
+                <div class="bordered">
+                    This sets the volume of the player's audio.  The smaller the value, the quieter the notes played on the keyboard will be.
+                </div>
+            </div>
+        </div>
+        <button id="toggleGameConfig" onclick="getDomUtils().toggleElementById('gameConfig')">Toggle Game Configurations</button>
+
+        <div id="playProgress">
+            <div id="SongTime">
+                Song EndTime: [{{ songEnd }}]
+                <input type="checkbox" v-model="toggleTrackHighScores" v-on:change="handleToggleTrackHighScores()"> Track High Scores (uses <a href="https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage">localStorage)</a></input>
+            </div>
+            <button id="tonePlayToggle" onclick="togglePlay()" disabled>Play</button>
+            <span>Score: [{{ score }}]  Good [{{ goodCount }}] Ok [{{ okCount }}] Bad [{{badCount}}] Missed [{{missedCount}}]</span>
+            <div id="SongHighScore">
+                High Score: [{{ highScore }}] Challenge Score: [{{ challengeScore }}]
+                <button id="clearHighScores" onclick="clearHighScores()">Clear High Scores</button>
+                <button id="exportHighScores" onclick="exportHighScores()">Copy High Scores to Clipboard</button>
+            </div>
+        </div>
+        <div id="canvasContainer" class="bordered">
+            <canvas id="notesCanvas"></canvas>
+        </div>
+        <div id="threeJSContainer" class="bordered">
+            <h3>3D View</h3>
+            <canvas id="threeCanvas"></canvas>
+        </div>
+        <div id="notesPlaying">
+            <div class="bordered">{{renderedNotesPlaying}}</div>
+        </div>
+        <div class="side-by-side" id="songNoteKeys">
+            <div class="bordered">Mapped Keys<br />{{ songNotesOnKeyMap }}</div>
+            <div class="bordered">Song Notes<br />{{ songNotes }}</div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        //If the user enters something after the url, like http://url.com?debug
+        //The window.location.search field holds everything after the main url
+        const queryString = window.location.search;
+        const debugPage = queryString == "?debug";
+        const domUtils = getDomUtils();
+        domUtils.toggleElementById('Instructions');
+        domUtils.toggleElementById('gameConfig');
+        
+        if(!debugPage){
+            domUtils.toggleElementById('songNoteKeys');
+            domUtils.toggleElementById('notesPlaying');
+            domUtils.toggleElementById('exportHighScores');
+        }
+
+        var midiSongs = getMidiSongList();
+        const sortedMidiSongs = Object.fromEntries(Object.keys(midiSongs).sort().map(key => [key, midiSongs[key]]));
+        midiSongs = sortedMidiSongs;
+        const highScoreTracker = getHighScoreTracker();
+        const challengeScores = getChallengeScores();
+
+        var synthKeyPlayer = getSynthKeyPlayer();
+        // Create the KeyNoteMapService instance
+        var keyNoteMapService = getKeyNoteMapService();
+        var songNoteRenderer = getSongNoteRenderer(keyNoteMapService);
+        const keyRenderInfo = getKeyRenderInfo();
+        const difficultySettings = getDifficultySettings();
+        const difficultySettingsCalculator = getDifficultySettingsCalculator();
+        var songDifficultySettings = null;
+        var noteLetterCache = songNoteRenderer.buildSongNoteLetterCache(keyRenderInfo);
+        var toneHelper = getToneHelper();
+        var visibleFieldFilterer = getVisibleFieldFilterer();
+        var synthMap = {};
+        var songEnd = null;
+        const synthArray = [];  //Holds all the available synths
+        const pressedKeys = {}; //Holds which keys are pressed down on the keyboard
+        //Get all the keyNoteMaps
+        const keyNoteMapCollection = getKeyNoteMaps();  //Supplied from ./keyNoteMap.js
+        //Get all the available keyNoteMapKeys keys
+        const keyNoteMapKeys = Object.keys(keyNoteMapCollection);
+        //Get a default value for the keyNoteMap
+        const defaultKeyNoteMap = keyNoteMapCollection[keyNoteMapKeys[0]];
+        //The current keys
+        var defaultNotesPlaying = "";
+        var defaultSongNotes = "";
+        var defaultSongNotesOnKeyMap = "";
+        var defaultFMSynthParams = toneHelper.getDefaultFMSynthParams();
+
+        //Disposes of existing synths and creates synths based on FMSynth options
+        //First call uses the default
+        toneHelper.buildSynths(defaultFMSynthParams, synthArray, 10); //Max of three keys for the whole game.
+        var app; //The Vue.js variable
+
+        // Create the InputHandler instance (app will be set when Vue mounts)
+        var inputHandler = getInputHandler();
+
+        /*
+            Resets the Notes Playing field on the page
+            Evaluates which keys are pressed
+                If any keys are pressed
+                    Gets the notes mapped to the pressed keys
+                    Assigns free synths
+                    Starts playing the synths
+                If any synths are playing for a key that is not pressed
+                    Stops playing the synth
+
+        */
+        function playNotes(){
+            synthKeyPlayer.playNotes(app, pressedKeys, synthMap, synthArray);
+        }
+
+        //Hiding console debug logs behind the "?debug" string in the url, like https://austin183.github.io/MidiSongBuilder/Keybiano.html?debug
+        function writeLog(logEntry){
+            if(debugPage == true){
+                console.log(logEntry);
+            }
+        }
+
+        var fileDropHandler = getFileDropHandler();
+
+        if (fileDropHandler.isFileAPISupported()) {
+            fileDropHandler.setupFileDrop("FileDrop", function(file) {
+                document.querySelector("#FileDrop #Text").textContent = file.name;
+                parseFile(file);
+            });
+        } else {
+            document.querySelector("#FileDrop #Text").textContent =
+                "Reading files not supported by this browser";
+        }
+
+        let currentMidi = null;
+        var midiParser = getMidiParser();
+
+        function parseFile(file) {
+            midiParser.parseMidiFile(file, function(midiResult) {
+                setupSongFromMidiResult(midiResult);
+            });
+        }
+
+        function setupSongFromMidiResult(midiResult) {
+            const parsed = midiParser.extractTracks(midiResult);
+
+            app.availableTracks = parsed.tracks;
+            app.availableTracks.unshift(parsed.fullTrack);
+            app.selectedTrack = app.availableTracks[0];
+
+            songEnd = parsed.songEnd;
+            // Store the parsed tracks in currentMidi for togglePlay to use
+            currentMidi = { tracks: parsed.tracks };
+
+            // Enable the play button
+            var playButton = document.getElementById('tonePlayToggle');
+            playButton.removeAttribute('disabled');
+            playButton.textContent = 'Play';
+
+            renderSongNotes();
+        }
+
+        // Keep getCombinedTrackNotes for backwards compatibility if needed elsewhere
+        function getCombinedTrackNotes(tracks) {
+            return midiParser.combineAllTrackNotes(tracks);
+        }
+
+        // Create the GameController instance
+        var gameController = getGameController();
+
+        var playing = false;
+
+        function togglePlay() {
+            var playButton = document.getElementById('tonePlayToggle');
+            playing = !playing;
+            if (playing) {
+                playButton.textContent = 'Stop';
+            } else {
+                playButton.textContent = 'Restart';
+            }
+
+            if (playing && currentMidi) {
+                // Remove focus from any focused element
+                if (document.activeElement) {
+                    document.activeElement.blur();
+                }
+
+                const invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
+                const scoreKeeper = getScoreKeeper();
+                const containerElement = document.getElementById("canvasContainer");
+                containerElement.scrollIntoView({ behavior: "smooth" });
+
+                // Calculate the visible field for rendering
+                var visibleField = [];
+                if (songDifficultySettings) {
+                    const songDifficulty = songDifficultySettings[app.selectedDifficulty.difficultyKey];
+                    visibleField = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, songDifficulty.minNoteDistance, songDifficulty.minNoteDuration, invertedKeyNoteMap, keyRenderInfo, app.notesCanvas, songNoteRenderer);
+                } else {
+                    const targetNotesPerMinute = app.selectedDifficulty.targetNotesPerMinute;
+                    visibleField = difficultySettingsCalculator.getTargetVisibleField(targetNotesPerMinute, app.selectedTrack.notes, invertedKeyNoteMap, visibleFieldFilterer, keyRenderInfo, app.notesCanvas, songNoteRenderer, songEnd).visibleField;
+                }
+
+                // Build note letter cache for rendering
+                app.noteLetterCache = songNoteRenderer.buildSongNoteLetterCache(keyRenderInfo);
+
+                // Start the game using the game controller
+                gameController.startGame(
+                    app,
+                    currentMidi,
+                    songDifficultySettings,
+                    songEnd,
+                    visibleField,
+                    scoreKeeper,
+                    songNoteRenderer,
+                    keyNoteMapService,
+                    highScoreTracker,
+                    challengeScores
+                );
+
+            } else {
+                // Stop the game using the game controller
+                gameController.stopGame(app);
+            }
+        }
+
+        // Handle window resize for 3D canvas
+        window.addEventListener('resize', function() {
+            if (app && app.threeJSRenderer) {
+                app.threeJSRenderer.resize();
+            }
+        });
+
+        //Once everything is downloaded, and the page has loaded, start rendering the Vue.js app
+        window.onload = function(){
+            app = new Vue({
+                el: '#app', //The div id to put the Vue.js app in.  I can end sentences with prepositions if I want.  It's what my repo is really about!
+                data: {
+                    selectedKeyNoteMap: defaultKeyNoteMap, //Which keyboard map the user has selected in the drop down.
+                    availableKeyNoteMaps: keyNoteMapCollection, //All the keyboard maps available in the drop down
+                    renderedNotesPlaying: defaultNotesPlaying, //The field to show which notes are playing based on the keys pressed at the time
+                    songNotes: defaultSongNotes,
+                    songNotesOnKeyMap: defaultSongNotesOnKeyMap,
+                    selectedTrack: "",
+                    availableTracks: [],
+                    vueCanvas: null,
+                    notesCanvas: null,
+                    threeJSRenderer: null,
+                    score: 0,
+                    goodCount: 0,
+                    okCount: 0,
+                    badCount: 0,
+                    missedCount: 0,
+                    minDuration: difficultySettings["Normal"].minNoteDuration,
+                    minNoteDistance: difficultySettings["Normal"].minNoteDistance,
+                    playerVolume: .7,
+                    trackVolume: 1,
+                    midiJson: "",
+                    midiSongs: midiSongs,
+                    selectedMidiSong: null,
+                    songEnd: null,
+                    difficultySettings: difficultySettings,
+                    selectedDifficulty: difficultySettings["Normal"],
+                    toggleTrackHighScores: false,
+                    highScore: 0,
+                    challengeScore: 0
+                },
+                mounted(){
+                    this.notesCanvas = document.getElementById("notesCanvas")
+                    var ctx = notesCanvas.getContext('2d');
+                    this.vueCanvas = ctx;
+                    this.vueCanvas.clearRect(0, 0, this.notesCanvas.width, this.notesCanvas.height);
+                    this.vueCanvas.font = "18px Georgia";
+                    this.vueCanvas.fillStyle = "black";
+                    this.vueCanvas.fillText("Watch for falling note keys!", 0, 50); // Assuming the height of the letter is about 20 pixels
+                    this.toggleTrackHighScores = localStorage.getItem("TrackScores") == "true";
+                    if(!this.toggleTrackHighScores){
+                        domUtils.toggleElementById("SongHighScore");
+                    }
+                    // Update inputHandler with the Vue app reference and set up key listeners
+                    inputHandler.app = this;
+                    inputHandler.setupKeyListeners(this, pressedKeys, synthMap, synthArray, playNotes);
+
+                    // Initialize Three.js renderer
+                    var threeJSRenderer = getThreeJSRenderer();
+                    threeJSRenderer.init("threeCanvas");
+                    this.threeJSRenderer = threeJSRenderer;
+                    threeJSRenderer.startAnimation();
+                },
+                beforeDestroy() {
+                    // Clean up Three.js renderer
+                    if (this.threeJSRenderer) {
+                        this.threeJSRenderer.dispose();
+                    }
+                    // Clean up event listeners when the app is destroyed
+                    inputHandler.removeKeyListeners();
+                }
+            });
+
+        };
+
+        function renderSongNotes(){
+            app.songEnd = (songEnd / 60).toFixed(2) + " minutes";
+            if(currentMidi  && app.selectedTrack !== "" && debugPage){
+                var invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
+                var renderedSongNotes = "";
+                var renderedSongNotesOnKeyMap = "";
+                var song = app.selectedTrack.notes;
+                writeLog(JSON.stringify(song));
+                var renderedNotes = songNoteRenderer.renderSongNotes(song, app.selectedKeyNoteMap.keyNoteMap);
+                
+                app.songNotes = renderedNotes.renderedSongNotes;
+                app.songNotesOnKeyMap = renderedNotes.renderedSongNotesOnKeyMap;
+                app.renderedNotesPlaying = songNoteRenderer.renderDebugNotesPlaying(app.notesCanvas, song, {keyScores: {}}, invertedKeyNoteMap, 0, 0);
+
+                //Move focus back to the document so when the user starts trying to play notes, they
+                //won't accidentally be on one of the option fields
+                //Found at https://stackoverflow.com/questions/6976486/is-there-any-way-in-javascript-to-focus-the-document-content-area
+                // Give the document focus
+                window.focus();
+
+                // Remove focus from any focused element
+                if (document.activeElement) {
+                    document.activeElement.blur();
+                }
+            }
+        }
+
+        function handleMidiSongSelection(){
+            if(app.selectedMidiSong){
+                if(app.selectedMidiSong.difficultySettings){
+                    songDifficultySettings = app.selectedMidiSong.difficultySettings;                    
+                }
+                else{
+                    songDifficultySettings = null;
+                }
+                if(app.toggleTrackHighScores){
+                    app.highScore = highScoreTracker.getHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
+                    app.challengeScore = challengeScores.getSelectedScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
+                }
+                app.availableTracks = [];
+                app.score = 0;
+                app.goodCount = 0;
+                app.okCount = 0;
+                app.badCount = 0;
+                app.missedCount = 0;
+                //Use fetch api to retrieve the file from "PublicDomainSongs/midi/" + app.selectedMidiSong.filename
+                const midiFilename = app.selectedMidiSong.filename;
+                fetch(`PublicDomainSongs/midi/${midiFilename}`)
+                    .then(response => response.arrayBuffer())
+                    .then(arrayBuffer => {
+                    const midiResult = midiParser.parseMidiArrayBuffer(arrayBuffer);
+                    setupSongFromMidiResult(midiResult);
+                });
+            }            
+        }
+
+        function setDifficulty(){
+            app.minNoteDistance = app.selectedDifficulty.minNoteDistance;
+            app.minDuration = app.selectedDifficulty.minNoteDuration;
+            if(app.toggleTrackHighScores && app.selectedMidiSong){
+                app.score = 0;
+                app.goodCount = 0;
+                app.okCount = 0;
+                app.badCount = 0;
+                app.missedCount = 0;
+                app.highScore = highScoreTracker.getHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
+                app.challengeScore = challengeScores.getSelectedScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
+            }
+        }
+
+        function handleToggleTrackHighScores(){
+            domUtils.toggleElementById("SongHighScore");
+            if(app.toggleTrackHighScores){
+                localStorage.setItem("TrackScores", "true");
+            }
+            else{
+                localStorage.removeItem("TrackScores");
+            }
+        }
+
+        function clearHighScores(){
+            localStorage.clear();
+            app.toggleTrackHighScores = false;
+            domUtils.toggleElementById("SongHighScore");
+        }
+
+        function exportHighScores(){
+            highScoreTracker.exportHighScoresToClipBoardAsJsonString();
+        }
+    </script>
+</body>
+
+</html>

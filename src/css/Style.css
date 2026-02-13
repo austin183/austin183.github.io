@@ -130,3 +130,22 @@ section {
     height: auto;
   }
 }
+
+/* Midiestro3D 3D Canvas Styles */
+#threeCanvas {
+    width: 800px;
+    height: 400px;
+    border: 1px solid #ccc;
+    margin: 0 auto;
+    display: block;
+}
+
+#threeJSContainer {
+    text-align: center;
+}
+
+#threeJSContainer h3 {
+    margin-top: 10px;
+    margin-bottom: 10px;
+    color: var(--primary-text);
+}
