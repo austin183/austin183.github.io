@@ -20,6 +20,8 @@
     <script type="text/javascript" src="Libraries/Tone.js"></script>
     <script type="text/javascript" src="Libraries/ToneMidi.js"></script>
     <script src="Libraries/three.min.js"></script>
+    <script src="Libraries/threejsExamples/FontLoader.js"></script>
+    <script src="Libraries/threejsExamples/TextGeometry.js"></script>
     <link href="../Styles.css" rel="stylesheet" />
     <link rel="shortcut icon" href="./favicon.ico" />
     <script src="MyComponents/ToneHelper.js"></script>
@@ -356,6 +358,11 @@
                 // Build note letter cache for rendering
                 app.noteLetterCache = songNoteRenderer.buildSongNoteLetterCache(keyRenderInfo);
 
+                // Also render to 3D canvas
+                if (app.threeJSRenderer && app.keyRenderInfo) {
+                    app.threeJSRenderer.addNotesFromVisibleField(visibleField, app.keyRenderInfo);
+                }
+
                 // Start the game using the game controller
                 gameController.startGame(
                     app,
@@ -373,6 +380,10 @@
             } else {
                 // Stop the game using the game controller
                 gameController.stopGame(app);
+                // Clear 3D notes when game stops
+                if (app.threeJSRenderer) {
+                    app.threeJSRenderer.clearNotes();
+                }
             }
         }
 
@@ -398,6 +409,7 @@
                     vueCanvas: null,
                     notesCanvas: null,
                     threeJSRenderer: null,
+                    keyRenderInfo: keyRenderInfo,  // Keyboard layout info for 3D positioning
                     score: 0,
                     goodCount: 0,
                     okCount: 0,
@@ -460,10 +472,30 @@
                 var song = app.selectedTrack.notes;
                 writeLog(JSON.stringify(song));
                 var renderedNotes = songNoteRenderer.renderSongNotes(song, app.selectedKeyNoteMap.keyNoteMap);
-                
+
                 app.songNotes = renderedNotes.renderedSongNotes;
                 app.songNotesOnKeyMap = renderedNotes.renderedSongNotesOnKeyMap;
                 app.renderedNotesPlaying = songNoteRenderer.renderDebugNotesPlaying(app.notesCanvas, song, {keyScores: {}}, invertedKeyNoteMap, 0, 0);
+
+                // Also render to 3D canvas
+                if (app.threeJSRenderer && app.keyRenderInfo) {
+                    // Create a simple visible field for 3D rendering
+                    var visibleField = song.map(function(note) {
+                        var keyNote = invertedKeyNoteMap[note.name];
+                        if (keyNote) {
+                            return {
+                                id: note.name + "_" + note.time,
+                                letter: keyNote,
+                                time: note.time,
+                                duration: note.duration,
+                                state: 'unplayed'
+                            };
+                        }
+                        return null;
+                    }).filter(function(n) { return n !== null; });
+
+                    app.threeJSRenderer.addNotesFromVisibleField(visibleField, app.keyRenderInfo);
+                }
 
                 //Move focus back to the document so when the user starts trying to play notes, they
                 //won't accidentally be on one of the option fields

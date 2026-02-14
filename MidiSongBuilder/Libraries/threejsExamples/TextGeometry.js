@@ -1,4 +1,6 @@
-/**
+( function () {
+
+	/**
  * Text = 3D Text
  *
  * parameters = {
@@ -14,44 +16,38 @@
  *  bevelOffset: <float> // how far from text outline does bevel start
  * }
  */
+	class TextGeometry extends THREE.ExtrudeGeometry {
 
-import {
-	ExtrudeGeometry
-} from 'three';
+		constructor( text, parameters = {} ) {
 
-class TextGeometry extends ExtrudeGeometry {
+			const font = parameters.font;
+			if ( font === undefined ) {
 
-	constructor( text, parameters = {} ) {
+				super(); // generate default extrude geometry
 
-		const font = parameters.font;
+			} else {
 
-		if ( font === undefined ) {
+				const shapes = font.generateShapes( text, parameters.size );
 
-			super(); // generate default extrude geometry
+				// translate parameters to THREE.ExtrudeGeometry API
 
-		} else {
+				parameters.depth = parameters.height !== undefined ? parameters.height : 50;
 
-			const shapes = font.generateShapes( text, parameters.size );
+				// defaults
 
-			// translate parameters to ExtrudeGeometry API
+				if ( parameters.bevelThickness === undefined ) parameters.bevelThickness = 10;
+				if ( parameters.bevelSize === undefined ) parameters.bevelSize = 8;
+				if ( parameters.bevelEnabled === undefined ) parameters.bevelEnabled = false;
+				super( shapes, parameters );
 
-			parameters.depth = parameters.height !== undefined ? parameters.height : 50;
+			}
 
-			// defaults
-
-			if ( parameters.bevelThickness === undefined ) parameters.bevelThickness = 10;
-			if ( parameters.bevelSize === undefined ) parameters.bevelSize = 8;
-			if ( parameters.bevelEnabled === undefined ) parameters.bevelEnabled = false;
-
-			super( shapes, parameters );
+			this.type = 'TextGeometry';
 
 		}
 
-		this.type = 'TextGeometry';
-
 	}
 
-}
+	THREE.TextGeometry = TextGeometry;
 
-
-export { TextGeometry };
+} )();

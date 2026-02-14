@@ -110,6 +110,16 @@ The plan consists of **5 phases** that incrementally build the 3D functionality:
 - Performance is smooth (60fps)
 - All existing features work (difficulty settings, track selection)
 
+### Phase 5b: Responsive Sizing
+**Goal:** Make notes scale appropriately with canvas size
+
+**Changes:**
+- Calculate note spacing based on canvas dimensions (not fixed gridSpacing)
+- Adjust note box height and letter size proportionally to canvas
+- Maintain consistent visual size across different screen sizes
+- Consider field of view when calculating scale
+- Refer to the picture at `/Users/austin/workspace/austin183.github.io/MidiSongBuilder/agent_docs/3d_plans/Image2.png` for how it looks currently
+
 ## Key Files to Create/Modify
 
 | Action | File |

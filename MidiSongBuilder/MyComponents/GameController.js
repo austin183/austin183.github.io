@@ -146,6 +146,18 @@ function getGameController() {
                 gameState.noteLetterCache
             );
 
+            // Update 3D notes positions and colors based on current time and score
+            if (app.threeJSRenderer && gameState.visibleField) {
+                app.threeJSRenderer.updateAllNotes(intervalNow);
+
+                // Update 3D note colors based on score
+                var keyScores = currentScore.keyScores;
+                for (var noteId in keyScores) {
+                    var noteScore = keyScores[noteId];
+                    app.threeJSRenderer.setNoteState(noteId, noteScore.tag);
+                }
+            }
+
             // Debug output if enabled
             if (window.location.search == "?debug") {
                 app.renderedNotesPlaying = gameState.songNoteRenderer.renderDebugNotesPlaying(
