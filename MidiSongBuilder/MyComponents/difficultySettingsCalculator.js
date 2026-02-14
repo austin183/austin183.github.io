@@ -94,7 +94,6 @@ return {
     
         //return arrayElement with greatest minNoteDistance
         if (allCombinationsWithin10NotesPerMinute.length > 0) {
-            debugger;
             return allCombinationsWithin10NotesPerMinute.reduce((maxMinNoteDistanceObject, currentObject) => {
                 if (currentObject.minNoteDistance > maxMinNoteDistanceObject.minNoteDistance) {
                     return currentObject;

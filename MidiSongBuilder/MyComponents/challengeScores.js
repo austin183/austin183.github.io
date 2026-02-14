@@ -91,7 +91,6 @@ function getChallengeScores(){
     return {
         getSelectedScore: function(midiFileName, difficulty) {
             var key = midiFileName + "_" + difficulty;
-            debugger;
             if(challengeScores[key]){
                 return challengeScores[key];
             }

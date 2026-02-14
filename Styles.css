@@ -206,9 +206,19 @@ input.fullRange {
 }
 
 
-/* Add this class to a container element that wraps all three canvas containers */
+/* Add this class to a container element that wraps all canvas containers */
 .canvas-container-wrapper {
-    gap: 10px; /* Optional */
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+    width: 100%;
+    max-width: 1800px;
+    margin: 0 auto;
+}
+
+/* Make each canvas container take up half width in grid */
+.canvas-container-wrapper > .bordered {
+    width: 100%;
 }
 
 /* 3D canvas container styles */

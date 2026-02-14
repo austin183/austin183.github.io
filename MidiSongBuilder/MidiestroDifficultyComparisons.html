@@ -25,6 +25,9 @@
     <script src="MyComponents/difficultySettings.js"></script>
     <script src="MyComponents/difficultySettingsCalculator.js"></script>
     <script src="MyComponents/KeyNoteMapService.js"></script>
+    <script src="MyComponents/DomUtils.js"></script>
+    <script src="MyComponents/MidiParser.js"></script>
+    <script src="MyComponents/FileDropHandler.js"></script>
 </head>
 
 <body>
@@ -48,7 +51,7 @@
                 <input type="file" accept="audio/midi" />
             </div>
         </div>
-        <button id="toggleInstructions" onclick="toggleElementById('Instructions')">Toggle Instructions And Advanced Song Selection</button>
+        <button id="toggleInstructions" onclick="domUtils.toggleElementById('Instructions')">Toggle Instructions And Advanced Song Selection</button>
     </div>
     <div id="app">
         <div id="midiSongConfig" class="bordered">
@@ -134,7 +137,7 @@
                 </div>
             </div>
         </div>        
-        <button id="toggleGameConfig" onclick="toggleElementById('gameConfig')">Toggle Game Configurations</button>
+        <button id="toggleGameConfig" onclick="domUtils.toggleElementById('gameConfig')">Toggle Game Configurations</button>
         <div id="songTimeConfig" class="side-by-side">
             <div class="bordered">
                 <div id="songTime">
@@ -144,17 +147,17 @@
             </div>
             <button id="renderSong" onclick="renderSongFromSettings()">Update Song Render</button>
         </div>        
-        <div class="canvas-container-wrapper"></div>
-            <div id="calculatedCanvasContainer" class="bordered">   
+        <div class="canvas-container-wrapper">
+            <div id="calculatedCanvasContainer" class="bordered">
                 <div>
                     Calculated Difficulty based on drop down--
                     minNoteDistance {{ calculatedDifficultySettings.minNoteDistance }} minNoteDuration {{ calculatedDifficultySettings.minNoteDuration }} notesPerMinute {{ calculatedNotesPerMinute }}
-                </div>         
+                </div>
                 <canvas id="calculatedNotesCanvas"></canvas>
             </div>
             <div id="songLevelCanvasContainer" class="bordered">
                 <div>
-                    Difficulty based on Song Options -- 
+                    Difficulty based on Song Options --
                     minNoteDistance {{ songLevelDifficultySettings.minNoteDistance }} minNoteDuration {{ songLevelDifficultySettings.minNoteDuration }} notesPerMinute {{ songLevelNotesPerMinute }}
                 </div>
                 <canvas id="songLevelNotesCanvas"></canvas>
@@ -166,20 +169,22 @@
         var midiSongs = getMidiSongList();
         const sortedMidiSongs = Object.fromEntries(Object.keys(midiSongs).sort().map(key => [key, midiSongs[key]]));
         midiSongs = sortedMidiSongs;
+        // Get all the keyNoteMaps first (needed by other components)
+        const keyNoteMapCollection = getKeyNoteMaps();  //Supplied from ./keyNoteMap.js
+        const keyNoteMapKeys = Object.keys(keyNoteMapCollection);
+        const defaultKeyNoteMap = keyNoteMapCollection[keyNoteMapKeys[0]];
+        // Create instances of the refactored components
+        const domUtils = getDomUtils();
         const keyNoteMapService = getKeyNoteMapService();
         const songNoteRenderer = getSongNoteRenderer(keyNoteMapService);
         const keyRenderInfo = getKeyRenderInfo();
         const difficultySettings = getDifficultySettings();
         const difficultySettingsCalculator = getDifficultySettingsCalculator();
+        const midiParser = getMidiParser();
+        const fileDropHandler = getFileDropHandler();
         var songDifficultySettings = null;
         var noteLetterCache = songNoteRenderer.buildSongNoteLetterCache(keyRenderInfo);
         var visibleFieldFilterer = getVisibleFieldFilterer();
-        //Get all the keyNoteMaps
-        const keyNoteMapCollection = getKeyNoteMaps();  //Supplied from ./keyNoteMap.js
-        //Get all the available keyNoteMapKeys keys
-        const keyNoteMapKeys = Object.keys(keyNoteMapCollection);
-        //Get a default value for the keyNoteMap
-        const defaultKeyNoteMap = keyNoteMapCollection[keyNoteMapKeys[0]];
         //The current keys
         var defaultNotesPlaying = "";
         var defaultSongNotes = "";
@@ -212,44 +217,14 @@
             renderSong(app.songTime);
         });
 
-        if (
-            !(
-                window.File &&
-                window.FileReader &&
-                window.FileList &&
-                window.Blob
-            )
-        ) {
+        if (fileDropHandler.isFileAPISupported()) {
+            fileDropHandler.setupFileDrop("FileDrop", function(file) {
+                document.querySelector("#FileDrop #Text").textContent = file.name;
+                parseFile(file);
+            });
+        } else {
             document.querySelector("#FileDrop #Text").textContent =
                 "Reading files not supported by this browser";
-        } else {
-            const fileDrop = document.querySelector("#FileDrop");
-
-            fileDrop.addEventListener("dragenter", () =>
-                fileDrop.classList.add("Hover")
-            );
-
-            fileDrop.addEventListener("dragleave", () =>
-                fileDrop.classList.remove("Hover")
-            );
-
-            fileDrop.addEventListener("drop", () =>
-                fileDrop.classList.remove("Hover")
-            );
-
-            document
-                .querySelector("#FileDrop input")
-                .addEventListener("change", (e) => {
-                    //get the files
-                    const files = e.target.files;
-                    if (files.length > 0) {
-                        const file = files[0];
-                        document.querySelector(
-                            "#FileDrop #Text"
-                        ).textContent = file.name;
-                        parseFile(file);
-                    }
-                });
         }
 
         let currentMidi = null;
@@ -259,59 +234,24 @@
         }
 
         function parseFile(file) {
-            //read the file
-            const reader = new FileReader();
-            reader.onload = setupSongFromArrayBuffer;
-            reader.readAsArrayBuffer(file);
-        }
-
-        function setupSongFromArrayBuffer(e){
-            app.availableTracks = [];
-                const midi = new Midi(e.target.result);
-                var trimmedMidi = {"tracks": []};
-                var counter = 0;
-                midi.tracks.forEach((track) => {
-                    counter++;
-                    if(track.notes.length > 0){
-                        var trackName = track.name;
-                        if(trackName == ""){
-                            trackName = "Track";
-                        }
-                        trackName += " " + counter;
-                        var trimmedTrack = {
-                            "name" : trackName,
-                            "notes" : track.notes
-                        }
-                        app.availableTracks.push(trimmedTrack);
-                        trimmedMidi.tracks.push(trimmedTrack);
-                    }
-                });
-
-                currentMidi = trimmedMidi;
-                var fullNotes = getCombinedTrackNotes(currentMidi.tracks);
-                var fullTrack = {
-                    "name" : "Full Track",
-                    "notes": fullNotes
-                }
-                // Add the fullTrack as the first array element in app.availableTracks
-                app.availableTracks.unshift(fullTrack);
-
-                app.selectedTrack = app.availableTracks[0];
-                var lastNote = fullTrack.notes[fullTrack.notes.length - 1];
-                app.songEnd = lastNote.time + lastNote.duration;
-                app.songTime = 0;
-                renderSong(app.songTime);
-        }
-
-        function getCombinedTrackNotes(tracks){
-            var combinedNotes = [];
-            tracks.forEach(track => {
-                combinedNotes.push(...track.notes);
+            midiParser.parseMidiFile(file, function(midiResult) {
+                setupSongFromMidiResult(midiResult);
             });
+        }
 
-            combinedNotes.sort((a, b) => a.time - b.time);
+        function setupSongFromMidiResult(midiResult) {
+            const parsed = midiParser.extractTracks(midiResult);
 
-            return combinedNotes;
+            app.availableTracks = parsed.tracks;
+            app.availableTracks.unshift(parsed.fullTrack);
+            app.selectedTrack = app.availableTracks[0];
+
+            app.songEnd = parsed.songEnd;
+            // Store the parsed tracks in currentMidi for renderSong to use
+            currentMidi = { tracks: parsed.tracks };
+
+            app.songTime = 0;
+            renderSong(app.songTime);
         }
 
         const synths = [];
@@ -320,6 +260,8 @@
         const delay = 3; //This is to give the player a chance to prepare before the first note plays
 
         function renderSong(specificTime) {
+            // Ensure specificTime is a number (HTML range inputs return strings)
+            specificTime = parseFloat(specificTime) || 0;
             var invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
             if (currentMidi) {
                 const songStats = difficultySettingsCalculator.getSongStats(app.selectedTrack.notes, invertedKeyNoteMap);
@@ -366,22 +308,9 @@
             }
         };
         
-        //This function shows or hides the FMSynthConfigs div
-        function toggleElementById(id) {
-            var configDiv = document.getElementById(id); // Get a reference to the synth configuration DIV element by its ID (you may need to replace 'id' with actual id of your HTML structure)
-            if (configDiv) {
-                const currentDisplayState = configDiv.style.display;
-
-                if (currentDisplayState === "none") { // If it is currently hidden, then show the div (change its display style to block or inline-block as appropriate for your layout)
-                    configDiv.style.display = "";
-
-                } else { // Otherwise assume that FMSynthConfigs are already visible and hide them by setting their display property back to none
-                    configDiv.style.display = "none";
-                }
-            }
-        }
-        toggleElementById('Instructions');
-        toggleElementById('gameConfig')
+        // Use domUtils for toggling elements
+        domUtils.toggleElementById('Instructions');
+        domUtils.toggleElementById('gameConfig');
 
         //Once everything is downloaded, and the page has loaded, start rendering the Vue.js app
         window.onload = function(){
@@ -412,7 +341,7 @@
                     weightedNotesPerMinute: 0,
                     songLevelNotesPerMinute: 0,
                     calculatedNotesPerMinute: 0,
-                    midiJson: "",                    
+                    midiJson: "",
                     midiSongs: midiSongs,
                     selectedMidiSong: null,
                     songEnd: null,
@@ -463,22 +392,22 @@
         function handleMidiSongSelection(){
             if(app.selectedMidiSong){
                 if(app.selectedMidiSong.difficultySettings){
-                    songDifficultySettings = app.selectedMidiSong.difficultySettings;                    
+                    songDifficultySettings = app.selectedMidiSong.difficultySettings;
                 }
                 else{
                     songDifficultySettings = null;
                 }
-                
+
                 app.availableTracks = [];
                 //Use fetch api to retrieve the file from "PublicDomainSongs/midi/" + app.selectedMidiSong.filename
                 const midiFilename = app.selectedMidiSong.filename;
                 fetch(`PublicDomainSongs/midi/${midiFilename}`)
                     .then(response => response.arrayBuffer())
-                    .then(arrayBuffer => setupSongFromArrayBuffer({ target: {
-                        result: arrayBuffer 
-                    }
-                }));
-            }            
+                    .then(arrayBuffer => {
+                        const midiResult = midiParser.parseMidiArrayBuffer(arrayBuffer);
+                        setupSongFromMidiResult(midiResult);
+                    });
+            }
         }
 
         function setDifficulty(){
