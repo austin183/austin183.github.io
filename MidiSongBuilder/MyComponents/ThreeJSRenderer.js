@@ -12,6 +12,10 @@ function getThreeJSRenderer() {
     var loadedFont = null;
     var loadingFont = false;
 
+    // Camera controls
+    var cameraControls = null;
+    var isCameraControlsEnabled = false;
+
     // 3D Grid configuration
     var gridWidth = 10;  // 10 keyboard columns
     var gridHeight = 4;  // 4 keyboard rows
@@ -32,7 +36,15 @@ function getThreeJSRenderer() {
     var NOTE_WIDTH_SCALE = 0.7;
     var NOTE_HEIGHT = 1.5;
 
+    var DEFAULT_CAMERA_STATE = {
+        position: { x: 0, y: 4.5, z: 18 },
+        lookAt: { x: 0, y: 4.5, z: 17 }
+    };
+
     var colorCache = {};  // Cache for THREE.Color objects
+
+    // Now line visualization (3D plane at player position)
+    var nowLine = null;
 
     var threeJSRenderer = {
         /**
@@ -63,15 +75,23 @@ function getThreeJSRenderer() {
             scene.background = new THREE.Color(0x1a1a2e);
 
             // Create camera with tilted view for 3D grid visibility
+            // Camera positioned to align 3D notes with 2D "now line" at bottom of canvas
             camera = new THREE.PerspectiveCamera(
                 60, // Field of view
                 window.innerWidth / window.innerHeight, // Aspect ratio
                 0.1, // Near clipping plane
                 1000 // Far clipping plane
             );
-            // Position camera for tilted/angled view
-            camera.position.set(0, 12, 28);
-            camera.lookAt(0, -2, 0);  // Look downward with less intensity
+            // Position camera lower and closer to align with 2D view
+            // The goal is to have notes intersect the now line at the same vertical position in both views
+            // Adjusted to look slightly from the side for better depth perception
+            // NOTE: Camera positioned for side view with tilted note plane
+            //       To switch to straight-on view (for Y-constrained notes):
+            //       camera.position.set(0, 0, 15); camera.lookAt(0, 0, 0);
+            // Camera positioned higher above the notes, looking down at an angle
+            // This aligns with the 2D view where notes fall from top to bottom
+            camera.position.set(DEFAULT_CAMERA_STATE.position.x, DEFAULT_CAMERA_STATE.position.y, DEFAULT_CAMERA_STATE.position.z);
+            camera.lookAt(DEFAULT_CAMERA_STATE.lookAt.x, DEFAULT_CAMERA_STATE.lookAt.y, DEFAULT_CAMERA_STATE.lookAt.z);
 
             // Add lights
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -81,14 +101,20 @@ function getThreeJSRenderer() {
             directionalLight.position.set(5, 10, 7);
             scene.add(directionalLight);
 
-            // Create group for notes (tilted toward player)
+            // Initialize camera controls
+            cameraControls = getCameraControls(DEFAULT_CAMERA_STATE);
+            cameraControls.init(camera, scene, renderer, renderer.domElement);
+            isCameraControlsEnabled = false;
+
+            // Create group for notes - tilted to face camera
+            // The tilt makes notes face the camera for better text readability
             noteGroup = new THREE.Group();
-            noteGroup.rotation.x = 0.15;  // Tilt notes downward by ~9 degrees (more subtle)
+            noteGroup.rotation.x = 0.5;  // Tilt notes to face the camera from the new higher angle
             scene.add(noteGroup);
 
-            // Add background grid for reference
+            // Add background grid for reference - positioned at note depth
             gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
-            gridHelper.position.y = -3;
+            gridHelper.position.y = -1;
             scene.add(gridHelper);
         },
 
@@ -105,9 +131,9 @@ function getThreeJSRenderer() {
             fontLoader.load(fontUrl, function(font) {
                 loadedFont = font;
                 console.log('Font loaded successfully for Three.js text rendering');
-                // Re-render with font if notes already exist
+                // Re-render with font if notes already exist (use default delay of 3)
                 if (noteCache && Object.keys(noteCache).length > 0) {
-                    threeJSRenderer.updateAllNotes();
+                    threeJSRenderer.updateAllNotes(0, 3);
                 }
             }, undefined, function(error) {
                 console.error('Error loading font:', error);
@@ -122,8 +148,9 @@ function getThreeJSRenderer() {
          * @param {number} row - Keyboard row (0-3)
          * @param {number} time - Time position in song (for Z depth)
          * @param {string} state - 'unplayed', 'good', 'ok', 'bad'
+         * @param {number} delay - Optional delay to add to note positioning (default: 3)
          */
-        createNote: function(letter, column, row, time, state) {
+        createNote: function(letter, column, row, time, state, delay) {
             if (!loadedFont) {
                 console.warn('Font not loaded yet, cannot create note');
                 return null;
@@ -131,14 +158,21 @@ function getThreeJSRenderer() {
 
             var THREE = window.THREE || window.__THREE__;
 
+            // Default delay of 4 seconds (matches ThreeJSGameController)
+            delay = delay !== undefined ? delay : 4;
+
             // Initialize userData.id for consistency
             var noteId = letter + "_" + time + "_" + column;
 
             // Calculate 3D position
-            // X = column position, Y = row position, Z = time (depth from camera)
+            // X = column position, Y = fixed (same plane as now line), Z = time (depth from camera)
+            // Notes start behind camera (negative Z) and move toward positive Z as they approach play time
+            // Z = (delay - time) * Z_SCALE
+            // - When time < delay, note is in the future (positive Z after animation starts)
+            // - When time > delay, note is in the past (negative Z, behind camera)
             var xPos = (column - (gridWidth / 2) + 0.5) * gridSpacing;
-            var yPos = (row - (gridHeight / 2) + 0.5) * gridSpacing;
-            var zPos = -time * Z_SCALE;  // Scale time to Z position
+            var yPos = 0;  // Fixed Y position - all notes on same plane as now line
+            var zPos = (delay - time) * Z_SCALE;  // Notes in future start behind camera
 
             // Use cached color
             var noteColor = threeJSRenderer.getColor(state);
@@ -172,7 +206,8 @@ function getThreeJSRenderer() {
                 state: state,
                 xPos: xPos,
                 yPos: yPos,
-                zPos: zPos
+                zPos: zPos,
+                delay: delay  // Store delay for position updates
             };
 
             noteMesh.position.set(xPos, yPos, zPos);
@@ -185,29 +220,36 @@ function getThreeJSRenderer() {
          * Update note position (for animation)
          * @param {THREE.Mesh} noteMesh - The note to update
          * @param {number} currentTime - Current time in song
+         * @param {number} delay - Optional delay (defaults to userData.delay or 3)
          */
-        updateNotePosition: function(noteMesh, currentTime) {
+        updateNotePosition: function(noteMesh, currentTime, delay) {
             if (!noteMesh || !noteMesh.userData) return;
 
             var noteTime = noteMesh.userData.time;
-            var zPos = -(noteTime - currentTime) * Z_SCALE;
+            // Default delay of 4 seconds
+            delay = delay !== undefined ? delay : (noteMesh.userData.delay !== undefined ? noteMesh.userData.delay : 4);
+            // Notes move toward camera (positive Z) as time progresses
+            // Z = (currentTime - noteTime + delay) * Z_SCALE
+            var zPos = (currentTime - noteTime + delay) * Z_SCALE;
 
-            // Update the stored zPos
+            // Update the stored zPos (keep Y position fixed)
             noteMesh.userData.zPos = zPos;
             noteMesh.position.z = zPos;
+            // Note: Y position remains fixed at 0 (set in createNote)
         },
 
         /**
          * Update all notes' positions based on current time
          * @param {number} currentTime - Current time in song
+         * @param {number} delay - Optional delay (defaults to 3)
          */
-        updateAllNotes: function(currentTime) {
+        updateAllNotes: function(currentTime, delay) {
             if (!noteGroup) return;
 
             currentTime = currentTime || 0;
 
             noteGroup.children.forEach(function(noteMesh) {
-                threeJSRenderer.updateNotePosition(noteMesh, currentTime);
+                threeJSRenderer.updateNotePosition(noteMesh, currentTime, delay);
             });
         },
 
@@ -303,6 +345,8 @@ function getThreeJSRenderer() {
             this.buildNoteCache(keyRenderInfo);
 
             // Create notes for visible field
+            // Use a default delay of 4 seconds to match ThreeJSGameController
+            var defaultDelay = 4;
             visibleField.forEach(function(note) {
                 var keyInfo = keyRenderInfo[note.letter];
                 if (keyInfo) {
@@ -311,7 +355,8 @@ function getThreeJSRenderer() {
                         keyInfo.column,
                         keyInfo.row,
                         note.time,
-                        note.state || 'unplayed'
+                        note.state || 'unplayed',
+                        defaultDelay
                     );
                     if (noteMesh) {
                         // Use the note.id from the visible field for consistency
@@ -452,7 +497,149 @@ function getThreeJSRenderer() {
         updateCamera: function(x, y, z) {
             if (camera) {
                 camera.position.set(x, y, z);
-                camera.lookAt(0, -0.5, 0);
+                camera.lookAt(0, -0.5, -3);
+            }
+        },
+
+        /**
+         * Get the camera position info for debugging
+         */
+        getCameraPosition: function() {
+            return camera ? {
+                position: {
+                    x: camera.position.x,
+                    y: camera.position.y,
+                    z: camera.position.z
+                },
+                lookAt: {
+                    x: camera.lookAt.x,
+                    y: camera.lookAt.y,
+                    z: camera.lookAt.z
+                }
+            } : null;
+        },
+
+        /**
+         * Get the Z_SCALE constant for external access
+         */
+        getZScale: function() {
+            return Z_SCALE;
+        },
+
+        /**
+         * Set the Z_SCALE constant for external access
+         */
+        setZScale: function(zScale) {
+            Z_SCALE = zScale;
+        },
+
+        /**
+         * Create or update the now line visualization
+         * The now line should align with the 2D canvas "play line" at the bottom
+         * @param {Number} zPos - Z position for the now line
+         * @param {String} state - Color state ('good', 'ok', 'bad', 'missed')
+         */
+        renderNowLine: function(zPos, state) {
+            if (!scene) return;
+
+            var THREE = window.THREE || window.__THREE__;
+
+            // Create or update now line - now using a wireframe box for better visibility
+            if (!nowLine) {
+                // Use a box geometry with edges for a more visible "plane"
+                // Width matches keyboard span (~12 units for 10 keys with 1.2 spacing)
+                var boxGeometry = new THREE.BoxGeometry(14, 1, 0.1);  // Wide, thin box
+                var edges = new THREE.EdgesGeometry(boxGeometry);
+                var lineMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });  // Bright green
+                nowLine = new THREE.LineSegments(edges, lineMaterial);
+
+                // Initial position - aligned with 2D "now line" at bottom of view
+                nowLine.position.y = -0.5;
+                nowLine.position.z = zPos;
+                scene.add(nowLine);
+            }
+
+            // Update color based on state
+            if (state && state !== '') {
+                var color = this.getColor(state);
+                nowLine.material.color.set(color);
+            } else {
+                // Default color when no state
+                nowLine.material.color.setHex(0x00ff00);  // Green for default
+            }
+        },
+
+        /**
+         * Clear the now line
+         */
+        clearNowLine: function() {
+            if (nowLine) {
+                scene.remove(nowLine);
+                if (nowLine.geometry) nowLine.geometry.dispose();
+                if (nowLine.material) nowLine.material.dispose();
+                nowLine = null;
+            }
+        },
+
+        /**
+         * Enable camera controls
+         */
+        enableCameraControls: function() {
+            isCameraControlsEnabled = true;
+            if (cameraControls) {
+                cameraControls.enable();
+            }
+        },
+
+        /**
+         * Disable camera controls
+         */
+        disableCameraControls: function() {
+            isCameraControlsEnabled = false;
+            if (cameraControls) {
+                cameraControls.disable();
+            }
+        },
+
+        /**
+         * Update camera from camera controls
+         */
+        updateCameraFromControls: function() {
+            if (cameraControls && isCameraControlsEnabled) {
+                var state = cameraControls.getCameraState();
+                camera.position.set(state.position.x, state.position.y, state.position.z);
+                camera.lookAt(state.lookAt.x, state.lookAt.y, state.lookAt.z);
+            }
+        },
+
+        /**
+         * Get camera position and lookAt for display
+         */
+        getCameraDisplayState: function() {
+            if (cameraControls && isCameraControlsEnabled) {
+                return cameraControls.getCameraState();
+            }
+            // Return default camera state when controls are disabled
+            return DEFAULT_CAMERA_STATE;
+        },
+
+        /**
+         * Set camera position from UI input
+         * @param {Object} position - New position {x, y, z}
+         * @param {Object} lookAt - New lookAt {x, y, z}
+         */
+        setCameraFromUI: function(position, lookAt) {
+            if (cameraControls) {
+                cameraControls.setCameraState(position, lookAt);
+            }
+        },
+
+        /**
+         * Reset camera to default position
+         */
+        resetCamera: function() {
+            if (cameraControls) {
+                cameraControls.reset();
             }
         }
     };

@@ -42,7 +42,9 @@
     <script src="MyComponents/FileDropHandler.js"></script>
     <script src="MyComponents/InputHandler.js"></script>
     <script src="MyComponents/MidiParser.js"></script>
+    <script src="MyComponents/CameraControls.js"></script>
     <script src="MyComponents/ThreeJSRenderer.js"></script>
+    <script src="MyComponents/ThreeJSGameController.js"></script>
 </head>
 
 <body>
@@ -168,6 +170,36 @@
         </div>
         <button id="toggleGameConfig" onclick="getDomUtils().toggleElementById('gameConfig')">Toggle Game Configurations</button>
 
+        <!-- Camera Control UI (visible only when game is stopped) -->
+        <div id="cameraControlPanel" class="bordered" style="display: none;">
+            <div class="side-by-side">
+                <div class="bordered">
+                    <h4>Camera Controls</h4>
+                    <p><strong>Mouse:</strong> Click and drag to rotate<br>
+                       <strong>WASD:</strong> Move camera (W=forward, S=backward, A=left, D=right)<br>
+                       <strong>Up/Down:</strong> Move camera vertically</p>
+                </div>
+                <div class="bordered">
+                    <h4>Camera Position</h4>
+                    <label>X: <input type="number" id="cameraPosX" step="0.1" value="0"></label><br>
+                    <label>Y: <input type="number" id="cameraPosY" step="0.1" value="10"></label><br>
+                    <label>Z: <input type="number" id="cameraPosZ" step="0.1" value="15"></label>
+                </div>
+                <div class="bordered">
+                    <h4>Look At</h4>
+                    <label>X: <input type="number" id="cameraLookAtX" step="0.1" value="0"></label><br>
+                    <label>Y: <input type="number" id="cameraLookAtY" step="0.1" value="0"></label><br>
+                    <label>Z: <input type="number" id="cameraLookAtZ" step="0.1" value="0"></label>
+                </div>
+            </div>
+            <div id="cameraInstructions" class="bordered" style="background-color: #e8f4fd; padding: 10px; margin-top: 10px;">
+                <strong>Camera Controls Active:</strong> Use mouse to look around, WASD to move the camera.
+                Press "Start Camera Control" to begin.
+            </div>
+            <button id="toggleCameraControls" onclick="toggleCameraControls()">Start Camera Control</button>
+            <button id="resetCamera" onclick="resetCamera()">Reset Camera</button>
+        </div>
+
         <div id="playProgress">
             <div id="SongTime">
                 Song EndTime: [{{ songEnd }}]
@@ -181,12 +213,14 @@
                 <button id="exportHighScores" onclick="exportHighScores()">Copy High Scores to Clipboard</button>
             </div>
         </div>
-        <div id="canvasContainer" class="bordered">
-            <canvas id="notesCanvas"></canvas>
-        </div>
-        <div id="threeJSContainer" class="bordered">
-            <h3>3D View</h3>
-            <canvas id="threeCanvas"></canvas>
+        <div class="canvas-container-wrapper">
+            <div id="canvasContainer" class="bordered">
+                <canvas id="notesCanvas"></canvas>
+            </div>
+            <div id="threeJSContainer" class="bordered">
+                <h3>3D View</h3>
+                <canvas id="threeCanvas"></canvas>
+            </div>
         </div>
         <div id="notesPlaying">
             <div class="bordered">{{renderedNotesPlaying}}</div>
@@ -320,18 +354,27 @@
             return midiParser.combineAllTrackNotes(tracks);
         }
 
-        // Create the GameController instance
+        // Create the game controller instances
         var gameController = getGameController();
+        var threeJSGameController = getThreeJSGameController();
 
         var playing = false;
+        var cameraControlsActive = false;
+
+        // Camera control variables
+        var cameraControlUpdateInterval = null;
 
         function togglePlay() {
             var playButton = document.getElementById('tonePlayToggle');
             playing = !playing;
             if (playing) {
                 playButton.textContent = 'Stop';
+                // Disable camera controls when game starts
+                disableCameraControls();
             } else {
                 playButton.textContent = 'Restart';
+                // Enable camera controls when game stops
+                enableCameraControls();
             }
 
             if (playing && currentMidi) {
@@ -358,13 +401,8 @@
                 // Build note letter cache for rendering
                 app.noteLetterCache = songNoteRenderer.buildSongNoteLetterCache(keyRenderInfo);
 
-                // Also render to 3D canvas
-                if (app.threeJSRenderer && app.keyRenderInfo) {
-                    app.threeJSRenderer.addNotesFromVisibleField(visibleField, app.keyRenderInfo);
-                }
-
-                // Start the game using the game controller
-                gameController.startGame(
+                // Start the 3D game controller which handles both 2D and 3D rendering
+                threeJSGameController.startGame(
                     app,
                     currentMidi,
                     songDifficultySettings,
@@ -374,18 +412,150 @@
                     songNoteRenderer,
                     keyNoteMapService,
                     highScoreTracker,
-                    challengeScores
+                    challengeScores,
+                    app.threeJSRenderer
                 );
 
             } else {
-                // Stop the game using the game controller
-                gameController.stopGame(app);
-                // Clear 3D notes when game stops
-                if (app.threeJSRenderer) {
-                    app.threeJSRenderer.clearNotes();
-                }
+                // Stop the 3D game controller
+                threeJSGameController.stopGame(app);
+                // Note: intentionally NOT clearing 3D notes to keep the last frame visible
+                // if (app.threeJSRenderer) {
+                //     app.threeJSRenderer.clearNotes();
+                //     app.threeJSRenderer.clearNowLine();
+                // }
             }
         }
+
+        /**
+         * Camera Control Functions
+         */
+        function enableCameraControls() {
+            cameraControlsActive = true;
+            if (app && app.threeJSRenderer) {
+                app.threeJSRenderer.enableCameraControls();
+            }
+            // Show camera control panel
+            document.getElementById('cameraControlPanel').style.display = 'block';
+            // Hide instructions since controls are active
+            document.getElementById('cameraInstructions').style.display = 'none';
+            // Start update loop for camera position display
+            startCameraUpdateLoop();
+        }
+
+        function disableCameraControls() {
+            cameraControlsActive = false;
+            if (app && app.threeJSRenderer) {
+                app.threeJSRenderer.disableCameraControls();
+            }
+            // Hide camera control panel
+            document.getElementById('cameraControlPanel').style.display = 'none';
+            // Stop update loop
+            stopCameraUpdateLoop();
+        }
+
+        function toggleCameraControls() {
+            if (cameraControlsActive) {
+                disableCameraControls();
+                document.getElementById('toggleCameraControls').textContent = 'Start Camera Control';
+            } else {
+                enableCameraControls();
+                document.getElementById('toggleCameraControls').textContent = 'Stop Camera Control';
+            }
+        }
+
+        function resetCamera() {
+            if (app && app.threeJSRenderer) {
+                app.threeJSRenderer.resetCamera();
+                var state = app.threeJSRenderer.getCameraDisplayState();
+
+                // Update position inputs
+                document.getElementById('cameraPosX').value = state.position.x.toFixed(2);
+                document.getElementById('cameraPosY').value = state.position.y.toFixed(2);
+                document.getElementById('cameraPosZ').value = state.position.z.toFixed(2);
+
+                // Update lookAt inputs
+                document.getElementById('cameraLookAtX').value = state.lookAt.x.toFixed(2);
+                document.getElementById('cameraLookAtY').value = state.lookAt.y.toFixed(2);
+                document.getElementById('cameraLookAtZ').value = state.lookAt.z.toFixed(2);
+            }
+        }
+
+        // Camera update loop variables
+        var cameraUpdateInterval = null;
+
+        function startCameraUpdateLoop() {
+            if (cameraUpdateInterval) return;
+            cameraUpdateInterval = setInterval(updateCameraDisplay, 50);
+        }
+
+        function stopCameraUpdateLoop() {
+            if (cameraUpdateInterval) {
+                clearInterval(cameraUpdateInterval);
+                cameraUpdateInterval = null;
+            }
+        }
+
+        function updateCameraDisplay() {
+            if (!app || !app.threeJSRenderer) return;
+
+            var state = app.threeJSRenderer.getCameraDisplayState();
+
+            // Update position inputs
+            document.getElementById('cameraPosX').value = state.position.x.toFixed(2);
+            document.getElementById('cameraPosY').value = state.position.y.toFixed(2);
+            document.getElementById('cameraPosZ').value = state.position.z.toFixed(2);
+
+            // Update lookAt inputs
+            document.getElementById('cameraLookAtX').value = state.lookAt.x.toFixed(2);
+            document.getElementById('cameraLookAtY').value = state.lookAt.y.toFixed(2);
+            document.getElementById('cameraLookAtZ').value = state.lookAt.z.toFixed(2);
+
+            // Update camera to reflect any changes from controls
+            app.threeJSRenderer.updateCameraFromControls();
+        }
+
+        // UI input handlers for manual camera position adjustment
+        function setupCameraInputHandlers() {
+            document.getElementById('cameraPosX').addEventListener('change', function(e) {
+                updateCameraFromUI();
+            });
+            document.getElementById('cameraPosY').addEventListener('change', function(e) {
+                updateCameraFromUI();
+            });
+            document.getElementById('cameraPosZ').addEventListener('change', function(e) {
+                updateCameraFromUI();
+            });
+            document.getElementById('cameraLookAtX').addEventListener('change', function(e) {
+                updateCameraFromUI();
+            });
+            document.getElementById('cameraLookAtY').addEventListener('change', function(e) {
+                updateCameraFromUI();
+            });
+            document.getElementById('cameraLookAtZ').addEventListener('change', function(e) {
+                updateCameraFromUI();
+            });
+        }
+
+        function updateCameraFromUI() {
+            if (!app || !app.threeJSRenderer || !cameraControlsActive) return;
+
+            var position = {
+                x: parseFloat(document.getElementById('cameraPosX').value),
+                y: parseFloat(document.getElementById('cameraPosY').value),
+                z: parseFloat(document.getElementById('cameraPosZ').value)
+            };
+            var lookAt = {
+                x: parseFloat(document.getElementById('cameraLookAtX').value),
+                y: parseFloat(document.getElementById('cameraLookAtY').value),
+                z: parseFloat(document.getElementById('cameraLookAtZ').value)
+            };
+
+            app.threeJSRenderer.setCameraFromUI(position, lookAt);
+        }
+
+        // Setup input handlers when page loads
+        window.addEventListener('load', setupCameraInputHandlers);
 
         // Handle window resize for 3D canvas
         window.addEventListener('resize', function() {
