@@ -25,6 +25,7 @@ function getThreeJSGameController() {
          */
         startGame: function(app, currentMidi, difficultySettings, songEnd, visibleField, scoreKeeper, songNoteRenderer, keyNoteMapService, highScoreTracker, challengeScores, threeJSRenderer) {
             // Store references for the game loop
+            var CONSTANTS = threeJSRenderer.getConstants ? threeJSRenderer.getConstants() : { DEFAULT_DELAY: 4 };
             app.threeGameState = {
                 startTime: Tone.now(),
                 earliestNoteIndex: 0,
@@ -37,9 +38,7 @@ function getThreeJSGameController() {
                 challengeScores: challengeScores,
                 invertedKeyNoteMap: keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap),
                 noteLetterCache: songNoteRenderer.buildSongNoteLetterCache(getKeyRenderInfo()),
-                delay: 3,  // Delay constant - increased to delay when notes cross now line
-                // For animation: notes are positioned at z = (noteTime - currentTime + delay) * speed
-                baseZOffset: 0  // Starting Z offset for notes
+                delay: CONSTANTS.DEFAULT_DELAY  // Default delay for note positioning
             };
 
             // Create synths and schedule audio
@@ -181,36 +180,18 @@ function getThreeJSGameController() {
 
         /**
          * Update positions of all 3D notes based on current time
+         * Delegates to ThreeJSRenderer which handles the positioning logic
          * @param {Object} threeJSRenderer - The ThreeJSRenderer instance
-         * @param {Array} visibleField - Array of visible notes
+         * @param {Array} visibleField - Array of visible notes (kept for compatibility)
          * @param {Number} currentTime - Current time in song
          * @param {Object} app - Vue app instance
          */
         update3DNotesPosition: function(threeJSRenderer, visibleField, currentTime, app) {
             if (!threeJSRenderer || !app.threeGameState) return;
 
-            // Get note group and update positions
-            const noteGroup = threeJSRenderer.getNoteGroup();
-            if (!noteGroup) return;
-
-            noteGroup.children.forEach(function(noteMesh) {
-                if (!noteMesh || !noteMesh.userData) return;
-
-                const noteTime = noteMesh.userData.time;
-                const noteId = noteMesh.userData.id;
-
-                // Check if this note is in the visible field
-                const visibleNote = visibleField.find(n => n.id === noteId);
-                if (visibleNote) {
-                    // Calculate new Z position: notes start far away and move closer to camera
-                    // As currentTime increases, notes should move toward positive Z (camera)
-                    // Z = (currentTime - noteTime + delay) * scale
-                    const zScale = threeJSRenderer.getZScale();
-                    const zPos = (currentTime - noteTime + app.threeGameState.delay) * zScale;
-                    noteMesh.position.z = zPos;
-                    noteMesh.userData.zPos = zPos;
-                }
-            });
+            // Use the renderer's updateAllNotes method for consistent positioning
+            const delay = app.threeGameState.delay || 4;
+            threeJSRenderer.updateAllNotes(currentTime, delay);
         },
 
         /**
@@ -243,26 +224,18 @@ function getThreeJSGameController() {
 
         /**
          * Render the "now line" in 3D space
-         * The now line should align with the 2D canvas "now line" at the bottom of the view
-         * Notes move toward the camera (positive Z) and pass through Z=0 (player position)
-         * as they reach the "play line"
+         * The now line represents the player's position where notes should be hit
+         * Notes move toward the camera and pass through this plane as they're played
          * @param {Object} threeJSRenderer - The ThreeJSRenderer instance
-         * @param {Number} currentTime - Current time in song
+         * @param {Number} currentTime - Current time in song (not used, kept for compatibility)
          * @param {Object} app - Vue app instance
          */
         render3DNowLine: function(threeJSRenderer, currentTime, app) {
             if (!threeJSRenderer) return;
 
-            // Now line stays stationary at Z=0 (player position)
-            // Notes move toward the camera and pass through this plane as they're played
-            const zScale = threeJSRenderer.getZScale();
-            const nowZPos = app.threeGameState.delay * zScale;
-
-            // Store the now line position for reference
-            app.threeGameState.nowLineZ = nowZPos;
-
-            // Render the now line in 3D at position 0
-            threeJSRenderer.renderNowLine(nowZPos);
+            // Now line is at Z=0 (player position in ThreeJSRenderer's coordinate system)
+            // Notes move toward the camera (increasing Z) and pass through this plane
+            threeJSRenderer.renderNowLine(0);
         },
 
         /**
@@ -311,15 +284,6 @@ function getThreeJSGameController() {
             if (threeJSRenderer) {
                 threeJSRenderer.resize();
             }
-        },
-
-        /**
-         * Get the current 3D game state
-         * @param {Object} app - Vue app instance
-         * @returns {Object} - The 3D game state
-         */
-        getGameState: function(app) {
-            return app ? app.threeGameState : null;
         }
     };
 }

@@ -16,12 +16,9 @@ function getThreeJSRenderer() {
     var cameraControls = null;
     var isCameraControlsEnabled = false;
 
-    // 3D Grid configuration
-    var gridWidth = 10;  // 10 keyboard columns
-    var gridHeight = 4;  // 4 keyboard rows
-    var gridSpacing = 1.2;  // Spacing between notes
-    var noteDepth = 1.5;  // Depth of notes (Z-axis)
-    var noteThickness = 0.2;  // Thickness of note borders
+    // Coordinate calculator for consistent position calculations
+    var coordinateCalculator = getCoordinateCalculator();
+    var CONSTANTS = coordinateCalculator.getConstants();
 
     // Colors matching 2D renderer
     var noteColors = {
@@ -30,11 +27,6 @@ function getThreeJSRenderer() {
         ok: [1.0, 0.843, 0.0],            // Yellow #FFD700
         bad: [1.0, 0.0, 0.0]              // Red #FF0000
     };
-
-    // Constants
-    var Z_SCALE = 2;  // Scale time to Z position
-    var NOTE_WIDTH_SCALE = 0.7;
-    var NOTE_HEIGHT = 1.5;
 
     var DEFAULT_CAMERA_STATE = {
         position: { x: 0, y: 4.5, z: 18 },
@@ -158,21 +150,17 @@ function getThreeJSRenderer() {
 
             var THREE = window.THREE || window.__THREE__;
 
-            // Default delay of 4 seconds (matches ThreeJSGameController)
-            delay = delay !== undefined ? delay : 4;
+            // Use CoordinateCalculator for position
+            delay = delay !== undefined ? delay : CONSTANTS.DEFAULT_DELAY;
 
             // Initialize userData.id for consistency
             var noteId = letter + "_" + time + "_" + column;
 
-            // Calculate 3D position
-            // X = column position, Y = fixed (same plane as now line), Z = time (depth from camera)
-            // Notes start behind camera (negative Z) and move toward positive Z as they approach play time
-            // Z = (delay - time) * Z_SCALE
-            // - When time < delay, note is in the future (positive Z after animation starts)
-            // - When time > delay, note is in the past (negative Z, behind camera)
-            var xPos = (column - (gridWidth / 2) + 0.5) * gridSpacing;
-            var yPos = 0;  // Fixed Y position - all notes on same plane as now line
-            var zPos = (delay - time) * Z_SCALE;  // Notes in future start behind camera
+            // Calculate 3D position using the coordinate calculator
+            var pos = coordinateCalculator.calculateNotePosition(column, time, delay);
+            var xPos = pos.x;
+            var yPos = pos.y;
+            var zPos = pos.z;
 
             // Use cached color
             var noteColor = threeJSRenderer.getColor(state);
@@ -180,20 +168,21 @@ function getThreeJSRenderer() {
             // Create note group
             var noteMesh = new THREE.Group();
 
-            // Create box for note border using constant
-            var boxWidth = gridSpacing * NOTE_WIDTH_SCALE;
-            var boxHeight = NOTE_HEIGHT;
-            var boxGeometry = new THREE.BoxGeometry(boxWidth, boxHeight, noteThickness);
+            // Create box for note border using CoordinateCalculator
+            var noteDims = coordinateCalculator.getNoteDimensions();
+            var boxWidth = noteDims.width;
+            var boxHeight = noteDims.height;
+            var boxGeometry = new THREE.BoxGeometry(boxWidth, boxHeight, CONSTANTS.NOTE_THICKNESS);
             var boxMaterial = new THREE.MeshPhongMaterial({ color: noteColor });
             var box = new THREE.Mesh(boxGeometry, boxMaterial);
-            box.position.set(0, 0, noteThickness / 2);
+            box.position.set(0, 0, CONSTANTS.NOTE_THICKNESS / 2);
             noteMesh.add(box);
 
             // Create text geometry using cached geometry if available
             var textGeometry = threeJSRenderer.createTextGeometry(letter);
             var textMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
             var text = new THREE.Mesh(textGeometry, textMaterial);
-            text.position.set(0, -0.2, noteThickness + 0.01);  // Slightly in front of box
+            text.position.set(0, -0.2, CONSTANTS.NOTE_THICKNESS + 0.01);  // Slightly in front of box
             noteMesh.add(text);
 
             // Store note metadata
@@ -226,11 +215,12 @@ function getThreeJSRenderer() {
             if (!noteMesh || !noteMesh.userData) return;
 
             var noteTime = noteMesh.userData.time;
-            // Default delay of 4 seconds
-            delay = delay !== undefined ? delay : (noteMesh.userData.delay !== undefined ? noteMesh.userData.delay : 4);
+            // Default delay from coordinate calculator
+            delay = delay !== undefined ? delay : (noteMesh.userData.delay !== undefined ? noteMesh.userData.delay : CONSTANTS.DEFAULT_DELAY);
             // Notes move toward camera (positive Z) as time progresses
-            // Z = (currentTime - noteTime + delay) * Z_SCALE
-            var zPos = (currentTime - noteTime + delay) * Z_SCALE;
+            // Use CoordinateCalculator for dynamic position
+            var pos = coordinateCalculator.calculateDynamicPosition(noteTime, currentTime, delay);
+            var zPos = pos.z;
 
             // Update the stored zPos (keep Y position fixed)
             noteMesh.userData.zPos = zPos;
@@ -279,7 +269,7 @@ function getThreeJSRenderer() {
             var textGeometry = new THREE.TextGeometry(letter, {
                 font: loadedFont,
                 size: 0.8,
-                height: noteThickness,
+                height: CONSTANTS.NOTE_THICKNESS,
                 curveSegments: 4,
                 bevelEnabled: false
             });
@@ -346,7 +336,6 @@ function getThreeJSRenderer() {
 
             // Create notes for visible field
             // Use a default delay of 4 seconds to match ThreeJSGameController
-            var defaultDelay = 4;
             visibleField.forEach(function(note) {
                 var keyInfo = keyRenderInfo[note.letter];
                 if (keyInfo) {
@@ -356,7 +345,7 @@ function getThreeJSRenderer() {
                         keyInfo.row,
                         note.time,
                         note.state || 'unplayed',
-                        defaultDelay
+                        CONSTANTS.DEFAULT_DELAY
                     );
                     if (noteMesh) {
                         // Use the note.id from the visible field for consistency
@@ -385,7 +374,7 @@ function getThreeJSRenderer() {
                 var textGeometry = new THREE.TextGeometry(letter, {
                     font: loadedFont,
                     size: 0.8,
-                    height: noteThickness,
+                    height: CONSTANTS.NOTE_THICKNESS,
                     curveSegments: 4,
                     bevelEnabled: false
                 });
@@ -492,45 +481,17 @@ function getThreeJSRenderer() {
         },
 
         /**
-         * Update camera position
-         */
-        updateCamera: function(x, y, z) {
-            if (camera) {
-                camera.position.set(x, y, z);
-                camera.lookAt(0, -0.5, -3);
-            }
-        },
-
-        /**
-         * Get the camera position info for debugging
-         */
-        getCameraPosition: function() {
-            return camera ? {
-                position: {
-                    x: camera.position.x,
-                    y: camera.position.y,
-                    z: camera.position.z
-                },
-                lookAt: {
-                    x: camera.lookAt.x,
-                    y: camera.lookAt.y,
-                    z: camera.lookAt.z
-                }
-            } : null;
-        },
-
-        /**
          * Get the Z_SCALE constant for external access
          */
         getZScale: function() {
-            return Z_SCALE;
+            return CONSTANTS.Z_SCALE;
         },
 
         /**
-         * Set the Z_SCALE constant for external access
+         * Get all constants from CoordinateCalculator for external access
          */
-        setZScale: function(zScale) {
-            Z_SCALE = zScale;
+        getConstants: function() {
+            return CONSTANTS;
         },
 
         /**
@@ -542,30 +503,32 @@ function getThreeJSRenderer() {
         renderNowLine: function(zPos, state) {
             if (!scene) return;
 
-            var THREE = window.THREE || window.__THREE__;
+            var THREE = window.THREE;
 
-            // Create or update now line - now using a wireframe box for better visibility
+            // Create or update now line - now using a translucent cuboid for better visibility
             if (!nowLine) {
-                // Use a box geometry with edges for a more visible "plane"
+                // Use a box geometry with a translucent green material
                 // Width matches keyboard span (~12 units for 10 keys with 1.2 spacing)
-                var boxGeometry = new THREE.BoxGeometry(14, 1, 0.1);  // Wide, thin box
-                var edges = new THREE.EdgesGeometry(boxGeometry);
-                var lineMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });  // Bright green
-                nowLine = new THREE.LineSegments(edges, lineMaterial);
+                // Height represents the note height, thickness is minimal
+                var boxGeometry = new THREE.BoxGeometry(14, 1, 0.2);
+
+                // Create a translucent green material
+                var material = new THREE.MeshPhongMaterial({
+                    color: 0x00ff00,
+                    transparent: true,
+                    opacity: 0.3,
+                    depthWrite: false
+                });
+
+                nowLine = new THREE.Mesh(boxGeometry, material);
 
                 // Initial position - aligned with 2D "now line" at bottom of view
-                nowLine.position.y = -0.5;
+                nowLine.position.y = 0;
                 nowLine.position.z = zPos;
                 scene.add(nowLine);
-            }
-
-            // Update color based on state
-            if (state && state !== '') {
-                var color = this.getColor(state);
-                nowLine.material.color.set(color);
             } else {
-                // Default color when no state
-                nowLine.material.color.setHex(0x00ff00);  // Green for default
+                // Update existing nowLine position
+                nowLine.position.z = zPos;
             }
         },
 
