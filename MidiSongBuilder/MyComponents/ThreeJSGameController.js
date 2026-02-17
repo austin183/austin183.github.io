@@ -162,7 +162,7 @@ function getThreeJSGameController() {
             );
 
             // Render 3D now line
-            this.render3DNowLine(gameState.threeJSRenderer, intervalNow, app);
+            this.render3DNowLine(gameState.threeJSRenderer, app);
 
             // Debug output if enabled
             if (window.location.search == "?debug") {
@@ -227,15 +227,15 @@ function getThreeJSGameController() {
          * The now line represents the player's position where notes should be hit
          * Notes move toward the camera and pass through this plane as they're played
          * @param {Object} threeJSRenderer - The ThreeJSRenderer instance
-         * @param {Number} currentTime - Current time in song (not used, kept for compatibility)
          * @param {Object} app - Vue app instance
          */
-        render3DNowLine: function(threeJSRenderer, currentTime, app) {
+        render3DNowLine: function(threeJSRenderer, app) {
             if (!threeJSRenderer) return;
+            
 
             // Now line is at Z=0 (player position in ThreeJSRenderer's coordinate system)
             // Notes move toward the camera (increasing Z) and pass through this plane
-            threeJSRenderer.renderNowLine(0);
+            threeJSRenderer.renderNowLine(-1 * app.threeGameState.delay);
         },
 
         /**

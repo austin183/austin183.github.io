@@ -106,7 +106,7 @@ function getThreeJSRenderer() {
 
             // Add background grid for reference - positioned at note depth
             gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
-            gridHelper.position.y = -1;
+            gridHelper.position.y = 0;
             scene.add(gridHelper);
         },
 
@@ -500,7 +500,7 @@ function getThreeJSRenderer() {
          * @param {Number} zPos - Z position for the now line
          * @param {String} state - Color state ('good', 'ok', 'bad', 'missed')
          */
-        renderNowLine: function(zPos, state) {
+        renderNowLine: function(zPos) {
             if (!scene) return;
 
             var THREE = window.THREE;
@@ -524,11 +524,8 @@ function getThreeJSRenderer() {
 
                 // Initial position - aligned with 2D "now line" at bottom of view
                 nowLine.position.y = 0;
-                nowLine.position.z = zPos;
+                nowLine.position.z = -1 * zPos * CONSTANTS.Z_SCALE;
                 scene.add(nowLine);
-            } else {
-                // Update existing nowLine position
-                nowLine.position.z = zPos;
             }
         },
 
