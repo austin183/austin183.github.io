@@ -16,6 +16,10 @@ function getThreeJSRenderer() {
     var cameraControls = null;
     var isCameraControlsEnabled = false;
 
+    // Hover info components
+    var hoverInfoService = null;
+    var hoverInfoDisplay = null;
+
     // Coordinate calculator for consistent position calculations
     var coordinateCalculator = getCoordinateCalculator();
     var CONSTANTS = coordinateCalculator.getConstants();
@@ -93,16 +97,21 @@ function getThreeJSRenderer() {
             directionalLight.position.set(5, 10, 7);
             scene.add(directionalLight);
 
-            // Initialize camera controls
-            cameraControls = getCameraControls(DEFAULT_CAMERA_STATE);
-            cameraControls.init(camera, scene, renderer, renderer.domElement);
-            isCameraControlsEnabled = false;
-
             // Create group for notes - tilted to face camera
             // The tilt makes notes face the camera for better text readability
             noteGroup = new THREE.Group();
-            noteGroup.rotation.x = 0.5;  // Tilt notes to face the camera from the new higher angle
             scene.add(noteGroup);
+
+            // Initialize hover info service and display
+            hoverInfoService = getHoverInfoService();
+            hoverInfoService.setConstants(CONSTANTS);
+            hoverInfoDisplay = getHoverInfoDisplay();
+
+            // Initialize camera controls
+            cameraControls = getCameraControls(DEFAULT_CAMERA_STATE);
+            cameraControls.init(camera, scene, renderer, renderer.domElement, noteGroup, null, hoverInfoService, hoverInfoDisplay);
+            isCameraControlsEnabled = false;
+            noteGroup.rotation.x = 0;  // Tilt notes to face the camera from the new higher angle
 
             // Add background grid for reference - positioned at note depth
             gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
@@ -326,6 +335,7 @@ function getThreeJSRenderer() {
          * @param {Object} keyRenderInfo - Keyboard layout from keyRenderInfo.js
          */
         addNotesFromVisibleField: function(visibleField, keyRenderInfo) {
+            console.log('addNotesFromVisibleField called, noteGroup:', noteGroup, 'children:', noteGroup ? noteGroup.children.length : 0);
             if (!noteGroup) return;
 
             // Clear existing notes
@@ -354,6 +364,20 @@ function getThreeJSRenderer() {
                     }
                 }
             });
+            console.log('After adding notes, noteGroup children:', noteGroup ? noteGroup.children.length : 0);
+            // Log detailed structure
+            if (noteGroup && noteGroup.children && noteGroup.children.length > 0) {
+                console.log('noteGroup children structure:');
+                noteGroup.children.forEach(function(child, i) {
+                    console.log('  Child', i, ':', child.type, 'userData:', child.userData, 'parent:', child.parent === noteGroup ? 'noteGroup' : 'NOT noteGroup (parent is ' + child.parent.type + ')');
+                    if (child.children && child.children.length > 0) {
+                        console.log('    Has', child.children.length, 'children:');
+                        child.children.forEach(function(grandchild) {
+                            console.log('      Grandchild:', grandchild.type, 'userData:', grandchild.userData, 'parent:', grandchild.parent === child ? 'child' : 'NOT child (parent is ' + grandchild.parent.type + ')');
+                        });
+                    }
+                });
+            }
         },
 
         /**
@@ -526,6 +550,11 @@ function getThreeJSRenderer() {
                 nowLine.position.y = 0;
                 nowLine.position.z = -1 * zPos * CONSTANTS.Z_SCALE;
                 scene.add(nowLine);
+
+                // Update camera controls with nowLine reference
+                if (cameraControls) {
+                    cameraControls.setNowLineReference(nowLine);
+                }
             }
         },
 
@@ -538,6 +567,10 @@ function getThreeJSRenderer() {
                 if (nowLine.geometry) nowLine.geometry.dispose();
                 if (nowLine.material) nowLine.material.dispose();
                 nowLine = null;
+                // Update camera controls to clear nowLine reference
+                if (cameraControls) {
+                    cameraControls.setNowLineReference(null);
+                }
             }
         },
 
@@ -600,6 +633,47 @@ function getThreeJSRenderer() {
         resetCamera: function() {
             if (cameraControls) {
                 cameraControls.reset();
+            }
+        },
+
+        /**
+         * Get the now line mesh for hover info raycasting
+         */
+        getNowLine: function() {
+            return nowLine;
+        },
+
+        /**
+         * Enable hover info display
+         */
+        enableHoverInfo: function() {
+            if (cameraControls) {
+                cameraControls.enableHoverInfo();
+            }
+        },
+
+        /**
+         * Disable hover info display
+         */
+        disableHoverInfo: function() {
+            if (cameraControls) {
+                cameraControls.disableHoverInfo();
+            }
+        },
+
+        /**
+         * Set the hover info DOM element
+         * @param {HTMLElement} element - The hover info container element
+         */
+        setHoverInfoElement: function(element) {
+            if (hoverInfoDisplay) {
+                hoverInfoDisplay.init('hoverInfo');
+            }
+            if (hoverInfoService) {
+                hoverInfoService.setConstants(CONSTANTS);
+            }
+            if (cameraControls) {
+                cameraControls.setHoverInfoConstants(CONSTANTS);
             }
         }
     };

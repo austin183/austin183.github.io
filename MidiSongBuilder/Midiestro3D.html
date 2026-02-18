@@ -44,6 +44,8 @@
     <script src="MyComponents/MidiParser.js"></script>
     <script src="MyComponents/CameraControls.js"></script>
     <script src="MyComponents/CoordinateCalculator.js"></script>
+    <script src="MyComponents/HoverInfoService.js"></script>
+    <script src="MyComponents/HoverInfoDisplay.js"></script>
     <script src="MyComponents/ThreeJSRenderer.js"></script>
     <script src="MyComponents/ThreeJSGameController.js"></script>
 </head>
@@ -196,6 +198,16 @@
             <div id="cameraInstructions" class="bordered" style="background-color: #e8f4fd; padding: 10px; margin-top: 10px;">
                 <strong>Camera Controls Active:</strong> Use mouse to look around, WASD to move the camera.
                 Press "Start Camera Control" to begin.
+            </div>
+            <!-- Hover Info Display (always visible, shows N/A when not hovering over objects) -->
+            <div id="hoverInfo" class="bordered" style="background-color: #e8f4fd; padding: 10px; margin-top: 10px;">
+                <h4>Hover Info</h4>
+                <div><strong>Object:</strong> <span id="hoverInfoObject">None</span></div>
+                <div><strong>World Position:</strong> <span id="hoverInfoWorldPos">-</span></div>
+                <div><strong>Screen Position:</strong> <span id="hoverInfoScreenPos">-</span></div>
+                <div><strong>Grid Column:</strong> <span id="hoverInfoColumn">-</span></div>
+                <div><strong>Grid Row:</strong> <span id="hoverInfoRow">-</span></div>
+                <div><strong>Time:</strong> <span id="hoverInfoTime">-</span></div>
             </div>
             <button id="toggleCameraControls" onclick="toggleCameraControls()">Start Camera Control</button>
             <button id="resetCamera" onclick="resetCamera()">Reset Camera</button>
@@ -435,6 +447,12 @@
             cameraControlsActive = true;
             if (app && app.threeJSRenderer) {
                 app.threeJSRenderer.enableCameraControls();
+                app.threeJSRenderer.enableHoverInfo();
+                // Get the hover info element and pass it to renderer
+                var hoverInfoElement = document.getElementById('hoverInfo');
+                if (hoverInfoElement) {
+                    app.threeJSRenderer.setHoverInfoElement(hoverInfoElement);
+                }
             }
             // Show camera control panel
             document.getElementById('cameraControlPanel').style.display = 'block';
@@ -448,6 +466,7 @@
             cameraControlsActive = false;
             if (app && app.threeJSRenderer) {
                 app.threeJSRenderer.disableCameraControls();
+                app.threeJSRenderer.disableHoverInfo();
             }
             // Hide camera control panel
             document.getElementById('cameraControlPanel').style.display = 'none';

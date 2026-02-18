@@ -33,6 +33,15 @@ function getCameraControls(default_camera_state) {
     // Element to bind events to
     var canvasElement = null;
 
+    // Hover info components
+    var hoverInfoEnabled = false;
+    var hoverInfoService = null;
+    var hoverInfoDisplay = null;
+
+    // Objects for raycasting (notes and now line)
+    var noteGroup = null;
+    var nowLine = null;
+
     var cameraControls = {
         /**
          * Initialize camera controls
@@ -40,12 +49,20 @@ function getCameraControls(default_camera_state) {
          * @param {THREE.Scene} sceneObj - The scene (for raycasting if needed)
          * @param {THREE.WebGLRenderer} rend - The renderer
          * @param {HTMLElement} canvas - The canvas element for event binding
+         * @param {THREE.Group} noteGroupObj - The group containing note meshes
+         * @param {THREE.Mesh} nowLineObj - The now line mesh
+         * @param {Object} hoverService - The HoverInfoService instance
+         * @param {Object} hoverDisplay - The HoverInfoDisplay instance
          */
-        init: function(cam, sceneObj, rend, canvas) {
+        init: function(cam, sceneObj, rend, canvas, noteGroupObj, nowLineObj, hoverService, hoverDisplay) {
             camera = cam;
             scene = sceneObj;
             renderer = rend;
             canvasElement = canvas;
+            noteGroup = noteGroupObj;
+            nowLine = nowLineObj;
+            hoverInfoService = hoverService;
+            hoverInfoDisplay = hoverDisplay;
 
             cameraControls.setupInputHandlers();
             cameraControls.applyCameraTransform();
@@ -66,7 +83,7 @@ function getCameraControls(default_camera_state) {
                 isDragging = false;
             });
 
-            // Mouse move - rotate camera
+            // Mouse move - rotate camera or update hover info
             canvasElement.addEventListener('mousemove', function(e) {
                 if (isDragging) {
                     var deltaMove = {
@@ -84,6 +101,8 @@ function getCameraControls(default_camera_state) {
                     previousMousePosition = { x: e.offsetX, y: e.offsetY };
 
                     cameraControls.applyCameraTransform();
+                } else if (hoverInfoEnabled && hoverInfoService && hoverInfoDisplay) {
+                    cameraControls.updateHoverInfo(e, canvasElement);
                 }
             }.bind(this));
 
@@ -249,6 +268,81 @@ function getCameraControls(default_camera_state) {
             cameraPosition.y = position.y || 10;
             cameraPosition.z = position.z || 15;
             cameraControls.applyCameraTransform();
+        },
+
+        /**
+         * Enable hover info display
+         */
+        enableHoverInfo: function() {
+            hoverInfoEnabled = true;
+            if (canvasElement) {
+                canvasElement.style.cursor = 'crosshair';
+            }
+        },
+
+        /**
+         * Disable hover info display
+         */
+        disableHoverInfo: function() {
+            hoverInfoEnabled = false;
+            if (canvasElement) {
+                canvasElement.style.cursor = isDragging ? 'grabbing' : 'grab';
+            }
+            // Hide hover info when disabled
+            if (hoverInfoDisplay) {
+                hoverInfoDisplay.hide();
+            }
+        },
+
+        /**
+         * Check if hover info is enabled
+         */
+        isHoverInfoEnabled: function() {
+            return hoverInfoEnabled;
+        },
+
+        /**
+         * Set the now line reference for raycasting
+         */
+        setNowLineReference: function(nowLineObj) {
+            nowLine = nowLineObj;
+        },
+
+        /**
+         * Set the hover info service and display for updates
+         * @param {Object} service - The HoverInfoService instance
+         * @param {Object} display - The HoverInfoDisplay instance
+         */
+        setHoverInfoComponents: function(service, display) {
+            hoverInfoService = service;
+            hoverInfoDisplay = display;
+        },
+
+        /**
+         * Set constants for the hover info service
+         * @param {Object} constants - The CONSTANTS from CoordinateCalculator
+         */
+        setHoverInfoConstants: function(constants) {
+            if (hoverInfoService) {
+                hoverInfoService.setConstants(constants);
+            }
+        },
+
+        /**
+         * Update hover info based on mouse position
+         * @param {MouseEvent} mouseEvent - The mouse move event
+         * @param {HTMLElement} canvas - The canvas element
+         */
+        updateHoverInfo: function(mouseEvent, canvas) {
+            if (!scene || !camera || !hoverInfoEnabled || !hoverInfoService) return;
+
+            // Use HoverInfoService to get hover info
+            var hoverData = hoverInfoService.getHoverInfo(mouseEvent, canvas, camera, noteGroup, nowLine);
+
+            // Update display with the hover data
+            if (hoverInfoDisplay) {
+                hoverInfoDisplay.update(hoverData);
+            }
         }
     };
 
