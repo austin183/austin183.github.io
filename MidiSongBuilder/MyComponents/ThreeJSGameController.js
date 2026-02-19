@@ -235,7 +235,8 @@ function getThreeJSGameController() {
 
             // Now line is at Z=0 (player position in ThreeJSRenderer's coordinate system)
             // Notes move toward the camera (increasing Z) and pass through this plane
-            threeJSRenderer.renderNowLine(-1 * app.threeGameState.delay);
+            // Use delay directly; ThreeJSRenderer will convert to Z position using calculateNowLinePosition
+            threeJSRenderer.renderNowLine(app.threeGameState.delay);
         },
 
         /**

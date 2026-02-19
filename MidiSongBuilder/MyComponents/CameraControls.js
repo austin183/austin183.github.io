@@ -16,6 +16,9 @@ function getCameraControls(default_camera_state) {
     var cameraPosition = { x: 0, y: 10, z: 15 };
     var lookAt = { x: 0, y: 0, z: 0 };
 
+    // Event listener storage for cleanup (Issue #2)
+    var eventListeners = [];
+
     if(default_camera_state.position){
         cameraPosition = default_camera_state.position;
     }
@@ -32,6 +35,20 @@ function getCameraControls(default_camera_state) {
 
     // Element to bind events to
     var canvasElement = null;
+
+    // Helper function to add event listeners (Issue #2 - cleanup tracking)
+    function addListener(element, event, handler) {
+        element.addEventListener(event, handler);
+        eventListeners.push({ element, event, handler });
+    }
+
+    // Helper function to remove all registered listeners (Issue #2 - cleanup)
+    function removeListeners() {
+        eventListeners.forEach(function(listener) {
+            listener.element.removeEventListener(listener.event, listener.handler);
+        });
+        eventListeners = [];
+    }
 
     // Hover info components
     var hoverInfoEnabled = false;
@@ -73,18 +90,18 @@ function getCameraControls(default_camera_state) {
          */
         setupInputHandlers: function() {
             // Mouse down - start dragging
-            canvasElement.addEventListener('mousedown', function(e) {
+            addListener(canvasElement, 'mousedown', function(e) {
                 isDragging = true;
                 previousMousePosition = { x: e.offsetX, y: e.offsetY };
             });
 
             // Mouse up - stop dragging
-            window.addEventListener('mouseup', function() {
+            addListener(window, 'mouseup', function() {
                 isDragging = false;
             });
 
             // Mouse move - rotate camera or update hover info
-            canvasElement.addEventListener('mousemove', function(e) {
+            addListener(canvasElement, 'mousemove', function(e) {
                 if (isDragging) {
                     var deltaMove = {
                         x: e.offsetX - previousMousePosition.x,
@@ -107,12 +124,12 @@ function getCameraControls(default_camera_state) {
             }.bind(this));
 
             // WASD key handlers
-            document.addEventListener('keydown', function(e) {
+            addListener(document, 'keydown', function(e) {
                 keys[e.code] = true;
                 cameraControls.updateCameraMovement();
             }.bind(this));
 
-            document.addEventListener('keyup', function(e) {
+            addListener(document, 'keyup', function(e) {
                 keys[e.code] = false;
                 cameraControls.updateCameraMovement();
             }.bind(this));
@@ -343,6 +360,25 @@ function getCameraControls(default_camera_state) {
             if (hoverInfoDisplay) {
                 hoverInfoDisplay.update(hoverData);
             }
+        },
+
+        /**
+         * Dispose of camera controls and clean up resources (Issue #2)
+         * Removes all event listeners and clears references
+         */
+        dispose: function() {
+            // Remove all registered event listeners
+            removeListeners();
+
+            // Clear other references
+            camera = null;
+            scene = null;
+            renderer = null;
+            canvasElement = null;
+            noteGroup = null;
+            nowLine = null;
+            hoverInfoService = null;
+            hoverInfoDisplay = null;
         }
     };
 

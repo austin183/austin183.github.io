@@ -32,9 +32,10 @@ function getThreeJSRenderer() {
         bad: [1.0, 0.0, 0.0]              // Red #FF0000
     };
 
+    // Use CameraControls default values for consistency (Issue #4 resolution)
     var DEFAULT_CAMERA_STATE = {
-        position: { x: 0, y: 4.5, z: 18 },
-        lookAt: { x: 0, y: 4.5, z: 17 }
+        position: { x: 0, y: 10, z: 15 },
+        lookAt: { x: 0, y: 0, z: 0 }
     };
 
     var colorCache = {};  // Cache for THREE.Color objects
@@ -131,7 +132,10 @@ function getThreeJSRenderer() {
 
             fontLoader.load(fontUrl, function(font) {
                 loadedFont = font;
-                console.log('Font loaded successfully for Three.js text rendering');
+                // Font loaded log - only visible when ?debug query parameter is present (Issue #8)
+                if (window.location.search === '?debug') {
+                    console.log('Font loaded successfully for Three.js text rendering');
+                }
                 // Re-render with font if notes already exist (use default delay of 3)
                 if (noteCache && Object.keys(noteCache).length > 0) {
                     threeJSRenderer.updateAllNotes(0, 3);
@@ -335,7 +339,10 @@ function getThreeJSRenderer() {
          * @param {Object} keyRenderInfo - Keyboard layout from keyRenderInfo.js
          */
         addNotesFromVisibleField: function(visibleField, keyRenderInfo) {
-            console.log('addNotesFromVisibleField called, noteGroup:', noteGroup, 'children:', noteGroup ? noteGroup.children.length : 0);
+            // Debug log - only visible when ?debug query parameter is present
+            if (window.location.search === '?debug') {
+                console.log('addNotesFromVisibleField called, noteGroup:', noteGroup, 'children:', noteGroup ? noteGroup.children.length : 0);
+            }
             if (!noteGroup) return;
 
             // Clear existing notes
@@ -364,19 +371,22 @@ function getThreeJSRenderer() {
                     }
                 }
             });
-            console.log('After adding notes, noteGroup children:', noteGroup ? noteGroup.children.length : 0);
-            // Log detailed structure
-            if (noteGroup && noteGroup.children && noteGroup.children.length > 0) {
-                console.log('noteGroup children structure:');
-                noteGroup.children.forEach(function(child, i) {
-                    console.log('  Child', i, ':', child.type, 'userData:', child.userData, 'parent:', child.parent === noteGroup ? 'noteGroup' : 'NOT noteGroup (parent is ' + child.parent.type + ')');
-                    if (child.children && child.children.length > 0) {
-                        console.log('    Has', child.children.length, 'children:');
-                        child.children.forEach(function(grandchild) {
-                            console.log('      Grandchild:', grandchild.type, 'userData:', grandchild.userData, 'parent:', grandchild.parent === child ? 'child' : 'NOT child (parent is ' + grandchild.parent.type + ')');
-                        });
-                    }
-                });
+            // Debug logs - only visible when ?debug query parameter is present (Issue #8)
+            if (window.location.search === '?debug') {
+                console.log('After adding notes, noteGroup children:', noteGroup ? noteGroup.children.length : 0);
+                // Log detailed structure
+                if (noteGroup && noteGroup.children && noteGroup.children.length > 0) {
+                    console.log('noteGroup children structure:');
+                    noteGroup.children.forEach(function(child, i) {
+                        console.log('  Child', i, ':', child.type, 'userData:', child.userData, 'parent:', child.parent === noteGroup ? 'noteGroup' : 'NOT noteGroup (parent is ' + child.parent.type + ')');
+                        if (child.children && child.children.length > 0) {
+                            console.log('    Has', child.children.length, 'children:');
+                            child.children.forEach(function(grandchild) {
+                                console.log('      Grandchild:', grandchild.type, 'userData:', grandchild.userData, 'parent:', grandchild.parent === child ? 'child' : 'NOT child (parent is ' + grandchild.parent.type + ')');
+                            });
+                        }
+                    });
+                }
             }
         },
 
@@ -475,6 +485,13 @@ function getThreeJSRenderer() {
          */
         dispose: function() {
             this.stopAnimation();
+
+            // Dispose camera controls (Issue #2 - cleanup event listeners)
+            if (cameraControls) {
+                cameraControls.dispose();
+                cameraControls = null;
+            }
+
             this.clearNotes();
 
             if (renderer) {
@@ -486,6 +503,14 @@ function getThreeJSRenderer() {
                 gridHelper.geometry.dispose();
                 gridHelper.material.dispose();
                 gridHelper = null;
+            }
+
+            // Dispose hover info components
+            if (hoverInfoService) {
+                hoverInfoService = null;
+            }
+            if (hoverInfoDisplay) {
+                hoverInfoDisplay = null;
             }
 
             noteGroup = null;
@@ -545,10 +570,12 @@ function getThreeJSRenderer() {
                 });
 
                 nowLine = new THREE.Mesh(boxGeometry, material);
+                nowLine.userData.type = 'nowLine';  // Add type identifier for raycasting (Issue #3)
 
                 // Initial position - aligned with 2D "now line" at bottom of view
                 nowLine.position.y = 0;
-                nowLine.position.z = -1 * zPos * CONSTANTS.Z_SCALE;
+                // Use calculateNowLinePosition for consistent now line positioning
+                nowLine.position.z = coordinateCalculator.calculateNowLinePosition(zPos);
                 scene.add(nowLine);
 
                 // Update camera controls with nowLine reference

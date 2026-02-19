@@ -66,8 +66,8 @@ function getHoverInfoService() {
             }
         }
 
-        // Check if the first hit is the nowLine
-        if (intersectedObjects.length > 0 && intersectedObjects[0].object === nowLine) {
+        // Check if the first hit is the nowLine (use type identifier instead of reference - Issue #3)
+        if (intersectedObjects.length > 0 && intersectedObjects[0].object.userData && intersectedObjects[0].object.userData.type === 'nowLine') {
             // Calculate world position from raycaster intersection point
             var worldPos = intersectedObjects[0].point.clone();
 
@@ -182,7 +182,7 @@ function getHoverInfoService() {
      * @returns {number} Grid column index
      */
     function calculateGridColumn(worldX, constants) {
-        if (!constants) return -1;
+        if (!constants) return null;
         var gridSpacing = constants.GRID_SPACING || 1.2;
         var gridWidth = constants.GRID_WIDTH || 10;
         var halfGridWidth = gridWidth * gridSpacing / 2;
@@ -196,7 +196,7 @@ function getHoverInfoService() {
      * @returns {number} Note time in seconds
      */
     function calculateNoteTime(worldZ, constants) {
-        if (!constants) return 0;
+        if (!constants) return null;
         var delay = constants.DEFAULT_DELAY || 4;
         var zScale = constants.Z_SCALE || 2;
         return delay - worldZ / zScale;
