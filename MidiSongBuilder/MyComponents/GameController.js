@@ -21,9 +21,10 @@ function getGameController() {
          * @param {Object} keyNoteMapService - The KeyNoteMapService instance for inversion
          * @param {Object} highScoreTracker - The high score tracker instance
          * @param {Object} challengeScores - The challenge scores instance
+         * @param {Object} pressedKeys - The pressedKeys object tracking keyboard state
          * @returns {number} - The interval ID for cleanup
          */
-        startGame: function(app, currentMidi, difficultySettings, songEnd, visibleField, scoreKeeper, songNoteRenderer, keyNoteMapService, highScoreTracker, challengeScores) {
+        startGame: function(app, currentMidi, difficultySettings, songEnd, visibleField, scoreKeeper, songNoteRenderer, keyNoteMapService, highScoreTracker, challengeScores, pressedKeys) {
             // Clear any existing synths
             this.stopGame(app);
 
@@ -64,6 +65,7 @@ function getGameController() {
                 songNoteRenderer: songNoteRenderer,
                 highScoreTracker: highScoreTracker,
                 challengeScores: challengeScores,
+                pressedKeys: pressedKeys || {},  // Use passed pressedKeys, default to empty object
                 invertedKeyNoteMap: keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap),
                 noteLetterCache: songNoteRenderer.buildSongNoteLetterCache(getKeyRenderInfo())
             };
@@ -118,7 +120,7 @@ function getGameController() {
             // Calculate score
             const currentScore = gameState.scoreKeeper.calculateNewScore(
                 gameState.visibleField,
-                pressedKeys,  // Use the global pressedKeys variable
+                gameState.pressedKeys,  // Use pressedKeys from game state
                 intervalNow,
                 gameState.earliestNoteIndex,
                 visibleFuture
@@ -185,6 +187,12 @@ function getGameController() {
             // Clean up game state from app
             if (app.gameState) {
                 delete app.gameState;
+            }
+
+            // Clean up ComponentRegistry
+            if (app.componentRegistry) {
+                app.componentRegistry.clearServices();
+                delete app.componentRegistry;
             }
         }
     };

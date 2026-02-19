@@ -41,6 +41,7 @@
     <script src="MyComponents/DomUtils.js"></script>
     <script src="MyComponents/FileDropHandler.js"></script>
     <script src="MyComponents/InputHandler.js"></script>
+    <script src="MyComponents/ComponentRegistry.js"></script>
     <script src="MyComponents/MidiParser.js"></script>
     <script src="MyComponents/CameraControls.js"></script>
     <script src="MyComponents/CoordinateCalculator.js"></script>
@@ -279,7 +280,11 @@
         var synthMap = {};
         var songEnd = null;
         const synthArray = [];  //Holds all the available synths
-        const pressedKeys = {}; //Holds which keys are pressed down on the keyboard
+
+        // Create ComponentRegistry for dependency injection
+        var componentRegistry = getComponentRegistry();
+        const pressedKeys = componentRegistry.getPressedKeys(); // Get pressedKeys from registry
+
         //Get all the keyNoteMaps
         const keyNoteMapCollection = getKeyNoteMaps();  //Supplied from ./keyNoteMap.js
         //Get all the available keyNoteMapKeys keys
@@ -426,7 +431,8 @@
                     keyNoteMapService,
                     highScoreTracker,
                     challengeScores,
-                    app.threeJSRenderer
+                    app.threeJSRenderer,
+                    componentRegistry.getPressedKeys()
                 );
 
             } else {

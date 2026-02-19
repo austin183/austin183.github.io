@@ -21,9 +21,10 @@ function getThreeJSGameController() {
          * @param {Object} highScoreTracker - The high score tracker instance
          * @param {Object} challengeScores - The challenge scores instance
          * @param {Object} threeJSRenderer - The ThreeJSRenderer instance
+         * @param {Object} pressedKeys - The pressedKeys object tracking keyboard state
          * @returns {number} - The interval ID for cleanup
          */
-        startGame: function(app, currentMidi, difficultySettings, songEnd, visibleField, scoreKeeper, songNoteRenderer, keyNoteMapService, highScoreTracker, challengeScores, threeJSRenderer) {
+        startGame: function(app, currentMidi, difficultySettings, songEnd, visibleField, scoreKeeper, songNoteRenderer, keyNoteMapService, highScoreTracker, challengeScores, threeJSRenderer, pressedKeys) {
             // Store references for the game loop
             var CONSTANTS = threeJSRenderer.getConstants ? threeJSRenderer.getConstants() : { DEFAULT_DELAY: 4 };
             app.threeGameState = {
@@ -36,6 +37,7 @@ function getThreeJSGameController() {
                 threeJSRenderer: threeJSRenderer,
                 highScoreTracker: highScoreTracker,
                 challengeScores: challengeScores,
+                pressedKeys: pressedKeys || {},  // Use passed pressedKeys, default to empty object
                 invertedKeyNoteMap: keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap),
                 noteLetterCache: songNoteRenderer.buildSongNoteLetterCache(getKeyRenderInfo()),
                 delay: CONSTANTS.DEFAULT_DELAY  // Default delay for note positioning
@@ -127,7 +129,7 @@ function getThreeJSGameController() {
             // Calculate score
             const currentScore = gameState.scoreKeeper.calculateNewScore(
                 gameState.visibleField,
-                pressedKeys,
+                gameState.pressedKeys,
                 intervalNow,
                 gameState.earliestNoteIndex,
                 visibleFuture
@@ -274,6 +276,12 @@ function getThreeJSGameController() {
             // Clean up game state
             if (app && app.threeGameState) {
                 delete app.threeGameState;
+            }
+
+            // Clean up ComponentRegistry
+            if (app.componentRegistry) {
+                app.componentRegistry.clearServices();
+                delete app.componentRegistry;
             }
         },
 
