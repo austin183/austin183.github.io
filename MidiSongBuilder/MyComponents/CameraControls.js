@@ -72,6 +72,20 @@ function getCameraControls(default_camera_state) {
          * @param {Object} hoverDisplay - The HoverInfoDisplay instance
          */
         init: function(cam, sceneObj, rend, canvas, noteGroupObj, nowLineObj, hoverService, hoverDisplay) {
+            // Validate required parameters
+            if (!cam) {
+                console.error('CameraControls.init: camera is required');
+                return;
+            }
+            if (!canvas) {
+                console.error('CameraControls.init: canvas element is required');
+                return;
+            }
+            if (!noteGroupObj) {
+                console.error('CameraControls.init: noteGroup is required for raycasting');
+                return;
+            }
+
             camera = cam;
             scene = sceneObj;
             renderer = rend;
@@ -244,7 +258,24 @@ function getCameraControls(default_camera_state) {
          * @param {Object} lookAtPos - New lookAt position {x, y, z}
          */
         setCameraState: function(position, lookAtPos) {
-            if (!camera) return;
+            if (!camera) {
+                console.error('CameraControls.setCameraState: camera not initialized');
+                return;
+            }
+
+            // Validate input
+            if (!position || typeof position.x !== 'number') {
+                console.error('CameraControls.setCameraState: position.x must be a number');
+                return;
+            }
+            if (!position || typeof position.y !== 'number') {
+                console.error('CameraControls.setCameraState: position.y must be a number');
+                return;
+            }
+            if (!position || typeof position.z !== 'number') {
+                console.error('CameraControls.setCameraState: position.z must be a number');
+                return;
+            }
 
             cameraPosition.x = position.x;
             cameraPosition.y = position.y;
@@ -271,8 +302,23 @@ function getCameraControls(default_camera_state) {
          * @param {Object} rotation - New rotation {pitch, yaw}
          */
         setCameraRotation: function(rotation) {
-            cameraRotation.pitch = rotation.pitch || 0;
-            cameraRotation.yaw = rotation.yaw || 0;
+            if (!camera) {
+                console.error('CameraControls.setCameraRotation: camera not initialized');
+                return;
+            }
+
+            // Validate input
+            if (rotation && rotation.pitch !== undefined && typeof rotation.pitch !== 'number') {
+                console.error('CameraControls.setCameraRotation: rotation.pitch must be a number');
+                return;
+            }
+            if (rotation && rotation.yaw !== undefined && typeof rotation.yaw !== 'number') {
+                console.error('CameraControls.setCameraRotation: rotation.yaw must be a number');
+                return;
+            }
+
+            cameraRotation.pitch = rotation ? (rotation.pitch || 0) : 0;
+            cameraRotation.yaw = rotation ? (rotation.yaw || 0) : 0;
             cameraControls.applyCameraTransform();
         },
 
@@ -281,9 +327,32 @@ function getCameraControls(default_camera_state) {
          * @param {Object} position - New position {x, y, z}
          */
         setCameraPosition: function(position) {
-            cameraPosition.x = position.x || 0;
-            cameraPosition.y = position.y || 10;
-            cameraPosition.z = position.z || 15;
+            if (!camera) {
+                console.error('CameraControls.setCameraPosition: camera not initialized');
+                return;
+            }
+
+            // Validate input
+            if (!position) {
+                console.error('CameraControls.setCameraPosition: position object required');
+                return;
+            }
+            if (typeof position.x !== 'number') {
+                console.error('CameraControls.setCameraPosition: position.x must be a number');
+                return;
+            }
+            if (typeof position.y !== 'number') {
+                console.error('CameraControls.setCameraPosition: position.y must be a number');
+                return;
+            }
+            if (typeof position.z !== 'number') {
+                console.error('CameraControls.setCameraPosition: position.z must be a number');
+                return;
+            }
+
+            cameraPosition.x = position.x;
+            cameraPosition.y = position.y;
+            cameraPosition.z = position.z;
             cameraControls.applyCameraTransform();
         },
 

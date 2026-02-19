@@ -25,8 +25,23 @@ function getThreeJSGameController() {
          * @returns {number} - The interval ID for cleanup
          */
         startGame: function(app, currentMidi, difficultySettings, songEnd, visibleField, scoreKeeper, songNoteRenderer, keyNoteMapService, highScoreTracker, challengeScores, threeJSRenderer, pressedKeys) {
-            // Store references for the game loop
-            var CONSTANTS = threeJSRenderer.getConstants ? threeJSRenderer.getConstants() : { DEFAULT_DELAY: 4 };
+            // Validate required dependencies
+            if (!threeJSRenderer) {
+                throw new Error('ThreeJSGameController requires threeJSRenderer for 3D rendering');
+            }
+            if (typeof threeJSRenderer.getConstants !== 'function') {
+                throw new Error('threeJSRenderer must provide getConstants() method');
+            }
+            var CONSTANTS = threeJSRenderer.getConstants();
+            if (!CONSTANTS || !CONSTANTS.DEFAULT_DELAY) {
+                throw new Error('threeJSRenderer CONSTANTS must include DEFAULT_DELAY property');
+            }
+            if (!app) {
+                throw new Error('ThreeJSGameController requires app instance');
+            }
+            if (!visibleField || !Array.isArray(visibleField)) {
+                throw new Error('visibleField must be an array of notes');
+            }
             app.threeGameState = {
                 startTime: Tone.now(),
                 earliestNoteIndex: 0,

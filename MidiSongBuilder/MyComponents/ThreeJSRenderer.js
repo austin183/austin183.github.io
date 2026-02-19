@@ -11,6 +11,10 @@ function getThreeJSRenderer() {
     var fontLoader = null;
     var loadedFont = null;
     var loadingFont = false;
+    var fontLoadError = null;
+
+    // Font loading promise for graceful async handling
+    var fontLoadPromise = null;
 
     // Camera controls
     var cameraControls = null;
@@ -122,28 +126,47 @@ function getThreeJSRenderer() {
 
         /**
          * Load the font for TextGeometry
+         * @returns {Promise} - Resolves when font is loaded, rejects on error
          */
         loadFont: function() {
-            if (loadingFont || loadedFont) return;
+            if (loadingFont || loadedFont) return fontLoadPromise;
+
             loadingFont = true;
+            fontLoadError = null;
 
-            // Use a standard font URL
-            const fontUrl = 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/fonts/helvetiker_regular.typeface.json';
+            // Create a promise that wraps the font loading
+            fontLoadPromise = new Promise(function(resolve, reject) {
+                // Use a standard font URL
+                const fontUrl = 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/fonts/helvetiker_regular.typeface.json';
 
-            fontLoader.load(fontUrl, function(font) {
-                loadedFont = font;
-                // Font loaded log - only visible when ?debug query parameter is present (Issue #8)
-                if (window.location.search === '?debug') {
-                    console.log('Font loaded successfully for Three.js text rendering');
-                }
-                // Re-render with font if notes already exist (use default delay of 3)
-                if (noteCache && Object.keys(noteCache).length > 0) {
-                    threeJSRenderer.updateAllNotes(0, 3);
-                }
-            }, undefined, function(error) {
-                console.error('Error loading font:', error);
-                loadingFont = false;
+                fontLoader.load(
+                    fontUrl,
+                    function(font) {
+                        loadedFont = font;
+                        fontLoadError = null;
+                        loadingFont = false;
+                        // Font loaded log - only visible when ?debug query parameter is present (Issue #8)
+                        if (window.location.search === '?debug') {
+                            console.log('Font loaded successfully for Three.js text rendering');
+                        }
+                        resolve(font);
+                        // Re-render with font if notes already exist (use default delay of 3)
+                        if (noteCache && Object.keys(noteCache).length > 0) {
+                            threeJSRenderer.updateAllNotes(0, 3);
+                        }
+                    }.bind(threeJSRenderer),
+                    undefined,
+                    function(error) {
+                        fontLoadError = error;
+                        loadingFont = false;
+                        var errorMessage = 'Failed to load font from ' + fontUrl + ': ' + (error ? error.message : 'Unknown error');
+                        console.error(errorMessage);
+                        reject(new Error(errorMessage));
+                    }
+                );
             });
+
+            return fontLoadPromise;
         },
 
         /**
@@ -154,10 +177,29 @@ function getThreeJSRenderer() {
          * @param {number} time - Time position in song (for Z depth)
          * @param {string} state - 'unplayed', 'good', 'ok', 'bad'
          * @param {number} delay - Optional delay to add to note positioning (default: 3)
+         * @returns {THREE.Mesh|null} - The note mesh or null if font not loaded
          */
         createNote: function(letter, column, row, time, state, delay) {
+            // Validate required parameters
+            if (typeof letter !== 'string' || !letter) {
+                console.error('createNote: letter must be a non-empty string');
+                return null;
+            }
+            if (typeof column !== 'number' || column < 0) {
+                console.error('createNote: column must be a non-negative number');
+                return null;
+            }
+            if (typeof state !== 'string') {
+                console.error('createNote: state must be a string');
+                return null;
+            }
+
             if (!loadedFont) {
-                console.warn('Font not loaded yet, cannot create note');
+                var errorMessage = 'Font not loaded. Call loadFont() first and wait for it to complete.';
+                if (fontLoadError) {
+                    errorMessage += ' Previous font load error: ' + fontLoadError.message;
+                }
+                console.error('ThreeJSRenderer.createNote: ' + errorMessage);
                 return null;
             }
 
