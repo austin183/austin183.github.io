@@ -43,7 +43,9 @@ function getInputHandler() {
         handleKeyDown: function(event) {
             // Process key press - extracted from main listener
             if (this.app && this.isKeyInMap(event.key, this.app.selectedKeyNoteMap.keyNoteMap)) {
-                writeLog("Pressed key for " + this.app.selectedKeyNoteMap.keyNoteMap[event.key]);
+                if (window.location.search === '?debug') {
+                    console.log("Pressed key for " + this.app.selectedKeyNoteMap.keyNoteMap[event.key]);
+                }
 
                 this.pressedKeys[event.key] = true;
                 this.onNotePlay();
@@ -55,7 +57,9 @@ function getInputHandler() {
             if (this.app &&
                 this.isKeyInMap(event.key, this.app.selectedKeyNoteMap.keyNoteMap) &&
                 event.key in this.synthMap) {
-                writeLog("Release key for " + this.app.selectedKeyNoteMap.keyNoteMap[event.key]);
+                if (window.location.search === '?debug') {
+                    console.log("Release key for " + this.app.selectedKeyNoteMap.keyNoteMap[event.key]);
+                }
                 this.pressedKeys[event.key] = false;
                 this.onNotePlay();
             }
