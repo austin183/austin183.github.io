@@ -496,10 +496,10 @@ function getThreeJSRenderer() {
         startAnimation: function() {
             if (animationId) return;
 
-            const animate = function() {
+            const animate = () => {
                 animationId = requestAnimationFrame(animate);
                 this.render();
-            }.bind(this);
+            };
 
             animate();
         },

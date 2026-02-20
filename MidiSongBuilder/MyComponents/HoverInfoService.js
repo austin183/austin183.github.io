@@ -161,21 +161,6 @@ function getHoverInfoService() {
     }
 
     /**
-     * Convert world position to screen coordinates
-     * @param {THREE.Vector3} worldPos - World position vector
-     * @param {THREE.Camera} camera - The camera
-     * @param {Object} rect - Canvas bounding rectangle
-     * @returns {Object} Screen coordinates {x, y}
-     */
-    function worldToScreen(worldPos, camera, rect) {
-        var screenPos = worldPos.clone();
-        screenPos.project(camera);
-        var screenX = (screenPos.x * 0.5 + 0.5) * rect.width;
-        var screenY = (screenPos.y * -0.5 + 0.5) * rect.height;
-        return { x: screenX, y: screenY };
-    }
-
-    /**
      * Calculate grid column from world X position
      * @param {number} worldX - World X coordinate
      * @param {Object} constants - CONSTANTS object with GRID_SPACING and GRID_WIDTH
@@ -237,7 +222,6 @@ function getHoverInfoService() {
         setConstants: setConstants,
         getConstants: getConstants,
         getHoverInfo: getHoverInfo,
-        worldToScreen: worldToScreen,
         calculateGridColumn: calculateGridColumn,
         calculateNoteTime: calculateNoteTime,
         extractNoteData: extractNoteData

@@ -13,7 +13,6 @@ function getCoordinateCalculator() {
         GRID_SPACING: 1.2,   // Spacing between notes in units
 
         // Note dimensions
-        NOTE_DEPTH: 1.5,     // Depth of notes (Z-axis thickness)
         NOTE_THICKNESS: 0.2, // Thickness of note borders
         NOTE_WIDTH_SCALE: 0.7,  // Scale factor for note width
         NOTE_HEIGHT: 1.5,    // Height of notes

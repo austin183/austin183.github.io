@@ -282,12 +282,6 @@ function getThreeJSGameController() {
                 app.threeGameState.synths = [];
             }
 
-            // Note: intentionally NOT clearing 3D notes to keep the last frame visible
-            // if (app && app.threeJSRenderer) {
-            //     app.threeJSRenderer.clearNotes();
-            //     app.threeJSRenderer.clearNowLine();
-            // }
-
             // Clean up game state
             if (app && app.threeGameState) {
                 delete app.threeGameState;
