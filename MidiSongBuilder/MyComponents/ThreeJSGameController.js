@@ -1,6 +1,21 @@
 /**
  * ThreeJSGameController - Extends GameController for 3D note animation
  * Handles the dynamic game loop updates for Three.js rendering
+ *
+ * Relationship with GameController:
+ * - GameController: Handles 2D canvas rendering and base game loop
+ * - ThreeJSGameController: Handles 3D rendering and animation updates
+ * - Both share the same game loop logic (scoring, song progress, input handling)
+ * - ThreeJSGameController delegates to threeJSRenderer for 3D display
+ *
+ * Architecture:
+ * - GameController: Base controller with 2D canvas rendering via SongNoteRenderer
+ * - ThreeJSGameController: Extension that adds 3D rendering via ThreeJSRenderer
+ * - Both use the same game loop pattern and scoring system
+ * - ThreeJSGameController calls threeJSRenderer methods for 3D scene updates
+ *
+ * Usage: Use ThreeJSGameController when 3D rendering is needed.
+ *        Use GameController for 2D-only rendering.
  */
 function getThreeJSGameController() {
     return {
