@@ -28,6 +28,10 @@ function getSynthKeyPlayer(){
                         //If no synth already mapped, get a free one from the array
                         var synthIndex = this.getFreeSynth(synthMap);
                     }
+                    //If synth is already playing, release it first to allow re-trigger
+                    if(synthMap[key] !== undefined){
+                        synthArray[synthIndex].triggerRelease();
+                    }
                     //Start playing the note for the key through the synth
                     //based on the pressed key's not in the selected keyNoteMap
                     synthArray[synthIndex].triggerAttack(app.selectedKeyNoteMap.keyNoteMap[key], ".01", velocity);

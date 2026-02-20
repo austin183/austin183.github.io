@@ -1,9 +1,10 @@
-function getScoreKeeper(){
-    var goodRange = .15; //within 150 milliseconds of the note.time is good
-    var okRange = .4; //within 400 milliseconds of the note.time is ok
-    var badRange = .7; //within 700 milleseconds is bad but still notable
-    var goodPoints = 100;
-    var okPoints = 50;
+function getScoreKeeper(scoringSettings) {
+    var settings = scoringSettings || getScoringSettings().default;
+    var goodRange = settings.goodRange; //within 150 milliseconds of the note.time is good
+    var okRange = settings.okRange; //within 400 milliseconds of the note.time is ok
+    var badRange = settings.badRange; //within 700 milleseconds is bad but still notable
+    var goodPoints = settings.goodPoints;
+    var okPoints = settings.okPoints;
     var score = {
         total: 0,
         keyScores: {}
