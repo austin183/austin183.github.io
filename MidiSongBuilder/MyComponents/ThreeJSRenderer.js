@@ -112,9 +112,9 @@ function getThreeJSRenderer() {
             hoverInfoService.setConstants(CONSTANTS);
             hoverInfoDisplay = getHoverInfoDisplay();
 
-            // Initialize camera controls
+            // Initialize camera controls with THREE dependency injection
             cameraControls = getCameraControls(DEFAULT_CAMERA_STATE);
-            cameraControls.init(camera, scene, renderer, renderer.domElement, noteGroup, null, hoverInfoService, hoverInfoDisplay);
+            cameraControls.init(camera, scene, renderer, renderer.domElement, noteGroup, null, hoverInfoService, hoverInfoDisplay, THREE);
             isCameraControlsEnabled = false;
             noteGroup.rotation.x = 0;  // Tilt notes to face the camera from the new higher angle
 

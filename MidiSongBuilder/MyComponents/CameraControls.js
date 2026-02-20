@@ -59,6 +59,9 @@ function getCameraControls(default_camera_state) {
     var noteGroup = null;
     var nowLine = null;
 
+    // THREE dependency - injected on init
+    var THREE = null;
+
     var cameraControls = {
         /**
          * Initialize camera controls
@@ -70,8 +73,11 @@ function getCameraControls(default_camera_state) {
          * @param {THREE.Mesh} nowLineObj - The now line mesh
          * @param {Object} hoverService - The HoverInfoService instance
          * @param {Object} hoverDisplay - The HoverInfoDisplay instance
+         * @param {Object} THREEParam - The THREE object (optional, defaults to window.THREE)
          */
-        init: function(cam, sceneObj, rend, canvas, noteGroupObj, nowLineObj, hoverService, hoverDisplay) {
+        init: function(cam, sceneObj, rend, canvas, noteGroupObj, nowLineObj, hoverService, hoverDisplay, THREEParam) {
+            // Inject THREE dependency (allow fallback to global for backwards compatibility)
+            THREE = THREEParam || window.THREE;
             // Validate required parameters
             if (!cam) {
                 console.error('CameraControls.init: camera is required');
@@ -448,6 +454,7 @@ function getCameraControls(default_camera_state) {
             nowLine = null;
             hoverInfoService = null;
             hoverInfoDisplay = null;
+            THREE = null;
         }
     };
 
