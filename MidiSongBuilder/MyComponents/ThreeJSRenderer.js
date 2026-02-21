@@ -24,6 +24,9 @@ function getThreeJSRenderer() {
     var hoverInfoService = null;
     var hoverInfoDisplay = null;
 
+    // Note cache builder utility
+    var noteCacheBuilder = getNoteCacheBuilder();
+
     // Coordinate calculator for consistent position calculations
     var coordinateCalculator = getCoordinateCalculator();
     var CONSTANTS = coordinateCalculator.getConstants();
@@ -390,7 +393,7 @@ function getThreeJSRenderer() {
             // Clear existing notes
             this.clearNotes();
 
-            // Create cache for letter geometries (similar to buildSongNoteLetterCache)
+            // Create cache for letter geometries using NoteCacheBuilder utility
             this.buildNoteCache(keyRenderInfo);
 
             // Create notes for visible field
@@ -433,7 +436,7 @@ function getThreeJSRenderer() {
         },
 
         /**
-         * Build note cache for letters (similar to SongNoteRenderer.buildSongNoteLetterCache)
+         * Build note cache for letters (uses NoteCacheBuilder utility)
          * Pre-renders text geometries for performance
          */
         buildNoteCache: function(keyRenderInfo) {
@@ -442,8 +445,8 @@ function getThreeJSRenderer() {
             // Clear existing cache
             noteCache = {};
 
-            for (const key in keyRenderInfo) {
-                const keyInfo = keyRenderInfo[key];
+            // Use NoteCacheBuilder utility with a custom builder for 3D text geometries
+            noteCache = noteCacheBuilder.buildNoteCache(keyRenderInfo, function(key, keyInfo) {
                 const letter = key.toUpperCase();
 
                 // Create text geometry for each letter
@@ -462,11 +465,11 @@ function getThreeJSRenderer() {
                 textGeometry.translate(xOffset, yOffset, 0);
 
                 // Store the geometry for reuse
-                noteCache[key] = {
+                return {
                     geometry: textGeometry,
                     letter: letter
                 };
-            }
+            });
         },
 
         /**
