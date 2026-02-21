@@ -18,11 +18,14 @@
  *        Use GameController for 2D-only rendering.
  */
 function getThreeJSGameController() {
-    return {
-        // Three.js specific animation variables
-        //animationSpeed: 1.0,  // Multiplier for animation speed
-        //noteSpeed: 15,  // Speed at which notes move toward camera (units per second)
+    // GameState instance for this controller
+    var gameState = null;
 
+    // Three.js specific animation variables
+    //animationSpeed: 1.0,  // Multiplier for animation speed
+    //noteSpeed: 15,  // Speed at which notes move toward camera (units per second)
+
+    return {
         /**
          * Start the 3D game loop with animation
          * @param {Object} app - The Vue.js app instance
@@ -57,7 +60,10 @@ function getThreeJSGameController() {
             if (!visibleField || !Array.isArray(visibleField)) {
                 throw new Error('visibleField must be an array of notes');
             }
-            app.threeGameState = {
+
+            // Create and initialize game state
+            gameState = getGameState();
+            gameState.initialize({
                 startTime: Tone.now(),
                 earliestNoteIndex: 0,
                 visibleField: visibleField,
@@ -70,8 +76,12 @@ function getThreeJSGameController() {
                 pressedKeys: pressedKeys || {},  // Use passed pressedKeys, default to empty object
                 invertedKeyNoteMap: keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap),
                 noteLetterCache: songNoteRenderer.buildSongNoteLetterCache(getKeyRenderInfo()),
-                delay: CONSTANTS.DEFAULT_DELAY  // Default delay for note positioning
-            };
+                delay: CONSTANTS.DEFAULT_DELAY,  // Default delay for note positioning
+                synths: []
+            });
+
+            // Store reference on app for easy access (temporary - for compatibility)
+            app.threeGameState = gameState.getState();
 
             // Create synths and schedule audio
             const startTime = app.threeGameState.startTime;
@@ -263,7 +273,6 @@ function getThreeJSGameController() {
          */
         render3DNowLine: function(threeJSRenderer, app) {
             if (!threeJSRenderer) return;
-            
 
             // Now line is at Z=0 (player position in ThreeJSRenderer's coordinate system)
             // Notes move toward the camera (increasing Z) and pass through this plane
