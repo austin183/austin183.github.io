@@ -39,12 +39,6 @@ function getThreeJSRenderer() {
         bad: [1.0, 0.0, 0.0]              // Red #FF0000
     };
 
-    // Use CameraControls default values for consistency (Issue #4 resolution)
-    var DEFAULT_CAMERA_STATE = {
-        position: { x: 0, y: 10, z: 15 },
-        lookAt: { x: 0, y: 0, z: 0 }
-    };
-
     var colorCache = {};  // Cache for THREE.Color objects
 
     // Now line visualization (3D plane at player position)
@@ -79,23 +73,26 @@ function getThreeJSRenderer() {
             scene.background = new THREE.Color(0x1a1a2e);
 
             // Create camera with tilted view for 3D grid visibility
-            // Camera positioned to align 3D notes with 2D "now line" at bottom of canvas
+            // Camera positioned for "road effect" - looking down at notes from ~27 degree angle
             camera = new THREE.PerspectiveCamera(
                 60, // Field of view
                 window.innerWidth / window.innerHeight, // Aspect ratio
                 0.1, // Near clipping plane
                 1000 // Far clipping plane
             );
-            // Position camera lower and closer to align with 2D view
-            // The goal is to have notes intersect the now line at the same vertical position in both views
-            // Adjusted to look slightly from the side for better depth perception
-            // NOTE: Camera positioned for side view with tilted note plane
-            //       To switch to straight-on view (for Y-constrained notes):
-            //       camera.position.set(0, 0, 15); camera.lookAt(0, 0, 0);
-            // Camera positioned higher above the notes, looking down at an angle
-            // This aligns with the 2D view where notes fall from top to bottom
-            camera.position.set(DEFAULT_CAMERA_STATE.position.x, DEFAULT_CAMERA_STATE.position.y, DEFAULT_CAMERA_STATE.position.z);
-            camera.lookAt(DEFAULT_CAMERA_STATE.lookAt.x, DEFAULT_CAMERA_STATE.lookAt.y, DEFAULT_CAMERA_STATE.lookAt.z);
+
+            // Initialize hover info service and display
+            hoverInfoService = getHoverInfoService();
+            hoverInfoService.setConstants(CONSTANTS);
+            hoverInfoDisplay = getHoverInfoDisplay();
+
+            // Initialize camera controls first to get defaults (CameraControls is source of truth)
+            cameraControls = getCameraControls();
+            var defaultCameraState = cameraControls.getDefaultCameraState();
+
+            // Position camera using CameraControls defaults
+            camera.position.set(defaultCameraState.position.x, defaultCameraState.position.y, defaultCameraState.position.z);
+            camera.lookAt(defaultCameraState.lookAt.x, defaultCameraState.lookAt.y, defaultCameraState.lookAt.z);
 
             // Add lights
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -110,13 +107,7 @@ function getThreeJSRenderer() {
             noteGroup = new THREE.Group();
             scene.add(noteGroup);
 
-            // Initialize hover info service and display
-            hoverInfoService = getHoverInfoService();
-            hoverInfoService.setConstants(CONSTANTS);
-            hoverInfoDisplay = getHoverInfoDisplay();
-
-            // Initialize camera controls with THREE dependency injection
-            cameraControls = getCameraControls(DEFAULT_CAMERA_STATE);
+            // Initialize camera controls (no longer passes defaults - CameraControls is source of truth)
             cameraControls.init(camera, scene, renderer, renderer.domElement, noteGroup, null, hoverInfoService, hoverInfoDisplay, THREE);
             isCameraControlsEnabled = false;
             noteGroup.rotation.x = 0;  // Tilt notes to face the camera from the new higher angle
@@ -490,6 +481,9 @@ function getThreeJSRenderer() {
         render: function() {
             if (!renderer || !scene || !camera) return;
 
+            // Update note rotation for billboarding effect when camera controls are active
+            this.updateNoteRotation();
+
             renderer.render(scene, camera);
         },
 
@@ -647,6 +641,25 @@ function getThreeJSRenderer() {
         },
 
         /**
+         * Update note rotation to face camera (billboarding)
+         * Only active when camera controls are enabled
+         * During gameplay, notes keep their last rotation but move straight along Z-axis
+         */
+        updateNoteRotation: function() {
+            if (!noteGroup || !camera || !isCameraControlsEnabled) return;
+
+            // Get camera position
+            var cameraPosition = camera.position;
+
+            // For each note, make it look at the camera's position
+            // This makes notes face the camera from any angle (full 3D billboarding)
+            noteGroup.children.forEach(function(noteMesh) {
+                if (!noteMesh) return;
+                noteMesh.lookAt(cameraPosition);
+            });
+        },
+
+        /**
          * Enable camera controls
          */
         enableCameraControls: function() {
@@ -684,8 +697,19 @@ function getThreeJSRenderer() {
             if (cameraControls && isCameraControlsEnabled) {
                 return cameraControls.getCameraState();
             }
-            // Return default camera state when controls are disabled
-            return DEFAULT_CAMERA_STATE;
+            // Return CameraControls' default state instead of local copy
+            return cameraControls.getDefaultCameraState();
+        },
+
+        /**
+         * Get the default camera state formatted for UI display (rounded values)
+         * @returns {Object} - Default camera state with rounded position and lookAt
+         */
+        getDefaultCameraStateForUI: function() {
+            if (cameraControls) {
+                return cameraControls.getDefaultCameraStateForUI();
+            }
+            return null;
         },
 
         /**
@@ -706,6 +730,40 @@ function getThreeJSRenderer() {
             if (cameraControls) {
                 cameraControls.reset();
             }
+        },
+
+        /**
+         * Apply a camera preset by name
+         * @param {string} presetKey - The preset key to apply
+         */
+        applyCameraPreset: function(presetKey) {
+            if (cameraControls) {
+                cameraControls.applyPreset(presetKey);
+            }
+        },
+
+        /**
+         * Get list of available camera presets
+         * @returns {Array} - Array of preset keys
+         */
+        getCameraPresetList: function() {
+            if (cameraControls) {
+                return cameraControls.getPresetList();
+            }
+            return [];
+        },
+
+        /**
+         * Get preset name for display
+         * @param {string} presetKey - The preset key
+         * @returns {string} - Human-readable preset name
+         */
+        getCameraPresetName: function(presetKey) {
+            if (cameraControls) {
+                var preset = cameraControls.getPreset(presetKey);
+                return preset ? preset.name : presetKey;
+            }
+            return presetKey;
         },
 
         /**

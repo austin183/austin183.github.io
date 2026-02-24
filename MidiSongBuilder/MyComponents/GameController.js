@@ -1,4 +1,11 @@
+/**
+ * GameController - Base game controller for 2D canvas rendering
+ * Handles game loop, audio scheduling, and scoring
+ */
 function getGameController() {
+    // CoordinateCalculator instance for delay constant
+    var coordinateCalculator = getCoordinateCalculator();
+
     return {
         // Synths array managed by the game controller
         synths: [],
@@ -6,8 +13,10 @@ function getGameController() {
         // Interval ID for the game loop
         playIntervalId: null,
 
-        // Delay constant for note timing
-        delay: 3,
+        // Delay constant for note timing (referencing CoordinateCalculator.DEFAULT_DELAY)
+        get delay() {
+            return coordinateCalculator.getConstants().DEFAULT_DELAY;
+        },
 
         /**
          * Start the game with audio and rendering

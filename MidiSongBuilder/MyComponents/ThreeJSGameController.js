@@ -232,7 +232,8 @@ function getThreeJSGameController() {
             if (!threeJSRenderer || !app.threeGameState) return;
 
             // Use the renderer's updateAllNotes method for consistent positioning
-            const delay = app.threeGameState.delay || 4;
+            var CONSTANTS = threeJSRenderer.getConstants();
+            var delay = app.threeGameState.delay || CONSTANTS.DEFAULT_DELAY;
             threeJSRenderer.updateAllNotes(currentTime, delay);
         },
 

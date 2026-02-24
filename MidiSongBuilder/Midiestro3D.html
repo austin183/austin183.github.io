@@ -45,6 +45,7 @@
     <script src="MyComponents/InputHandler.js"></script>
     <script src="MyComponents/ComponentRegistry.js"></script>
     <script src="MyComponents/MidiParser.js"></script>
+    <script src="MyComponents/CameraPresets.js"></script>
     <script src="MyComponents/CameraControls.js"></script>
     <script src="MyComponents/CoordinateCalculator.js"></script>
     <script src="MyComponents/NoteCacheBuilder.js"></script>
@@ -188,19 +189,20 @@
                 </div>
                 <div class="bordered">
                     <h4>Camera Position</h4>
-                    <label>X: <input type="number" id="cameraPosX" step="0.1" value="0"></label><br>
-                    <label>Y: <input type="number" id="cameraPosY" step="0.1" value="10"></label><br>
-                    <label>Z: <input type="number" id="cameraPosZ" step="0.1" value="15"></label>
+                    <label>X: <input type="number" id="cameraPosX" step="0.1"></label><br>
+                    <label>Y: <input type="number" id="cameraPosY" step="0.1"></label><br>
+                    <label>Z: <input type="number" id="cameraPosZ" step="0.1"></label>
                 </div>
                 <div class="bordered">
                     <h4>Look At</h4>
-                    <label>X: <input type="number" id="cameraLookAtX" step="0.1" value="0"></label><br>
-                    <label>Y: <input type="number" id="cameraLookAtY" step="0.1" value="0"></label><br>
-                    <label>Z: <input type="number" id="cameraLookAtZ" step="0.1" value="0"></label>
+                    <label>X: <input type="number" id="cameraLookAtX" step="0.1"></label><br>
+                    <label>Y: <input type="number" id="cameraLookAtY" step="0.1"></label><br>
+                    <label>Z: <input type="number" id="cameraLookAtZ" step="0.1"></label>
                 </div>
             </div>
             <div id="cameraInstructions" class="bordered" style="background-color: #e8f4fd; padding: 10px; margin-top: 10px;">
-                <strong>Camera Controls Active:</strong> Use mouse to look around, WASD to move the camera.
+                <strong>Camera Controls Active:</strong> Use mouse to look around, WASD to move the camera.<br>
+                Use the Camera Presets dropdown to quickly switch between views.<br>
                 Press "Start Camera Control" to begin.
             </div>
             <!-- Hover Info Display (always visible, shows N/A when not hovering over objects) -->
@@ -215,6 +217,13 @@
             </div>
             <button id="toggleCameraControls" onclick="toggleCameraControls()">Start Camera Control</button>
             <button id="resetCamera" onclick="resetCamera()">Reset Camera</button>
+            <!-- Camera Preset Selector -->
+            <div class="bordered" style="margin-top: 10px;">
+                <h4>Camera Presets</h4>
+                <select id="cameraPresetSelect" class="pure-input-rounded" style="width: 100%;">
+                    <option value="">-- Select a preset --</option>
+                </select>
+            </div>
         </div>
 
         <div id="playProgress">
@@ -386,6 +395,7 @@
         var cameraControlUpdateInterval = null;
 
         function togglePlay() {
+            debugger;
             var playButton = document.getElementById('tonePlayToggle');
             playing = !playing;
             if (playing) {
@@ -510,6 +520,35 @@
             }
         }
 
+        function applyCameraPreset() {
+            if (!app || !app.threeJSRenderer) return;
+
+            var select = document.getElementById('cameraPresetSelect');
+            var presetKey = select.value;
+
+            if (presetKey) {
+                app.threeJSRenderer.applyCameraPreset(presetKey);
+                select.value = "";  // Reset to placeholder
+            }
+        }
+
+        function setupCameraPresetDropdown(appInstance) {
+            var select = document.getElementById('cameraPresetSelect');
+            if (!select || !appInstance || !appInstance.threeJSRenderer) return;
+
+            // Get presets and populate dropdown
+            var presets = appInstance.threeJSRenderer.getCameraPresetList();
+            presets.forEach(function(presetKey) {
+                var option = document.createElement('option');
+                option.value = presetKey;
+                option.textContent = appInstance.threeJSRenderer.getCameraPresetName(presetKey);
+                select.appendChild(option);
+            });
+
+            // Add change handler
+            select.addEventListener('change', applyCameraPreset);
+        }
+
         // Camera update loop variables
         var cameraUpdateInterval = null;
 
@@ -586,6 +625,27 @@
         // Setup input handlers when page loads
         window.addEventListener('load', setupCameraInputHandlers);
 
+        /**
+         * Set camera input defaults from CameraControls defaults
+         * @param {Object} appInstance - The Vue app instance
+         */
+        function setupCameraInputDefaults(appInstance) {
+            if (!appInstance || !appInstance.threeJSRenderer) return;
+
+            var defaults = appInstance.threeJSRenderer.getDefaultCameraStateForUI();
+            if (!defaults) return;
+
+            // Set position inputs
+            document.getElementById('cameraPosX').value = defaults.position.x;
+            document.getElementById('cameraPosY').value = defaults.position.y;
+            document.getElementById('cameraPosZ').value = defaults.position.z;
+
+            // Set lookAt inputs
+            document.getElementById('cameraLookAtX').value = defaults.lookAt.x;
+            document.getElementById('cameraLookAtY').value = defaults.lookAt.y;
+            document.getElementById('cameraLookAtZ').value = defaults.lookAt.z;
+        }
+
         // Handle window resize for 3D canvas
         window.addEventListener('resize', function() {
             if (app && app.threeJSRenderer) {
@@ -649,6 +709,12 @@
                     threeJSRenderer.init("threeCanvas");
                     this.threeJSRenderer = threeJSRenderer;
                     threeJSRenderer.startAnimation();
+
+                    // Setup camera preset dropdown after renderer is initialized
+                    setupCameraPresetDropdown(this);
+
+                    // Set camera input defaults from CameraControls defaults
+                    setupCameraInputDefaults(this);
                 },
                 beforeDestroy() {
                     // Clean up Three.js renderer

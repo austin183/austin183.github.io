@@ -13,18 +13,11 @@ function getCameraControls(default_camera_state) {
     var isDragging = false;
     var previousMousePosition = { x: 0, y: 0 };
     var cameraRotation = { pitch: 0, yaw: 0 };
-    var cameraPosition = { x: 0, y: 10, z: 15 };
-    var lookAt = { x: 0, y: 0, z: 0 };
+    var cameraPosition = null;
+    var lookAt = null;
 
     // Event listener storage for cleanup (Issue #2)
     var eventListeners = [];
-
-    if(default_camera_state.position){
-        cameraPosition = default_camera_state.position;
-    }
-    if(default_camera_state.lookAt){
-        lookAt = default_camera_state.lookAt;
-    }
 
     // Movement speed
     var moveSpeed = 0.2;
@@ -102,7 +95,43 @@ function getCameraControls(default_camera_state) {
             hoverInfoDisplay = hoverDisplay;
 
             cameraControls.setupInputHandlers();
+            // Initialize camera from roadView preset (the single source of truth for defaults)
+            var roadViewPreset = getCameraPresets().roadView;
+            cameraPosition = { x: roadViewPreset.position.x, y: roadViewPreset.position.y, z: roadViewPreset.position.z };
+            lookAt = { x: roadViewPreset.lookAt.x, y: roadViewPreset.lookAt.y, z: roadViewPreset.lookAt.z };
             cameraControls.applyCameraTransform();
+        },
+
+        /**
+         * Get the roadView preset (single source of truth for default camera values)
+         * @returns {Object} - Default camera preset with position and lookAt
+         */
+        getDefaultCameraState: function() {
+            var roadView = getCameraPresets().roadView;
+            return {
+                position: { x: roadView.position.x, y: roadView.position.y, z: roadView.position.z },
+                lookAt: { x: roadView.lookAt.x, y: roadView.lookAt.y, z: roadView.lookAt.z }
+            };
+        },
+
+        /**
+         * Get the roadView preset formatted for UI display (rounded values)
+         * @returns {Object} - Default camera preset with rounded position and lookAt
+         */
+        getDefaultCameraStateForUI: function() {
+            var defaults = this.getDefaultCameraState();
+            return {
+                position: {
+                    x: defaults.position.x.toFixed(2),
+                    y: defaults.position.y.toFixed(2),
+                    z: defaults.position.z.toFixed(2)
+                },
+                lookAt: {
+                    x: defaults.lookAt.x.toFixed(2),
+                    y: defaults.lookAt.y.toFixed(2),
+                    z: defaults.lookAt.z.toFixed(2)
+                }
+            };
         },
 
         /**
@@ -230,13 +259,48 @@ function getCameraControls(default_camera_state) {
         },
 
         /**
-         * Reset camera to default position
+         * Reset camera to roadView preset
          */
         reset: function() {
-            cameraRotation = { pitch: 0, yaw: 0 };
-            cameraPosition = { x: 0, y: 10, z: 15 };
-            lookAt = { x: 0, y: 0, z: 0 };
-            cameraControls.applyCameraTransform();
+            this.applyPreset('roadView');
+        },
+
+        // Preset camera configurations (reference CameraPresets for values)
+        presets: {
+            topDown: getCameraPresets().topDown,
+            roadView: getCameraPresets().roadView,
+            isometric: getCameraPresets().isometric,
+            playerView: getCameraPresets().playerView
+        },
+
+        /**
+         * Get list of available preset names
+         * @returns {Array} - Array of preset keys
+         */
+        getPresetList: function() {
+            return Object.keys(this.presets);
+        },
+
+        /**
+         * Get preset details
+         * @param {string} presetKey - The preset key (e.g., 'topDown')
+         * @returns {Object|null} - Preset configuration or null if not found
+         */
+        getPreset: function(presetKey) {
+            return this.presets[presetKey] || null;
+        },
+
+        /**
+         * Apply a camera preset by name
+         * @param {string} presetKey - The preset key to apply
+         */
+        applyPreset: function(presetKey) {
+            var preset = this.getPreset(presetKey);
+            if (!preset) {
+                console.warn('CameraControls.applyPreset: Unknown preset "' + presetKey + '"');
+                return;
+            }
+            this.setCameraState(preset.position, preset.lookAt);
         },
 
         /**
@@ -299,6 +363,11 @@ function getCameraControls(default_camera_state) {
 
             // Calculate pitch (rotation around X axis)
             cameraRotation.pitch = Math.asin(direction.y);
+
+            // Update lookAt directly (will be recalculated by applyCameraTransform)
+            lookAt.x = lookAtPos.x;
+            lookAt.y = lookAtPos.y;
+            lookAt.z = lookAtPos.z;
 
             cameraControls.applyCameraTransform();
         },
