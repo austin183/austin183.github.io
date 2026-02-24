@@ -13,8 +13,8 @@ function getCameraControls(default_camera_state) {
     var isDragging = false;
     var previousMousePosition = { x: 0, y: 0 };
     var cameraRotation = { pitch: 0, yaw: 0 };
-    var cameraPosition = null;
-    var lookAt = null;
+    var cameraPosition = { x: 0, y: 0, z: 0 };
+    var lookAt = { x: 0, y: 0, z: 0 };
 
     // Event listener storage for cleanup (Issue #2)
     var eventListeners = [];
@@ -97,9 +97,7 @@ function getCameraControls(default_camera_state) {
             cameraControls.setupInputHandlers();
             // Initialize camera from roadView preset (the single source of truth for defaults)
             var roadViewPreset = getCameraPresets().roadView;
-            cameraPosition = { x: roadViewPreset.position.x, y: roadViewPreset.position.y, z: roadViewPreset.position.z };
-            lookAt = { x: roadViewPreset.lookAt.x, y: roadViewPreset.lookAt.y, z: roadViewPreset.lookAt.z };
-            cameraControls.applyCameraTransform();
+            cameraControls.applyDirectTransform(roadViewPreset.position, roadViewPreset.lookAt);
         },
 
         /**
@@ -166,7 +164,7 @@ function getCameraControls(default_camera_state) {
 
                     previousMousePosition = { x: e.offsetX, y: e.offsetY };
 
-                    cameraControls.applyCameraTransform();
+                    cameraControls.updateFromRotation();
                 } else if (hoverInfoEnabled && hoverInfoService && hoverInfoDisplay) {
                     cameraControls.updateHoverInfo(e, canvasElement);
                 }
@@ -216,13 +214,14 @@ function getCameraControls(default_camera_state) {
                 cameraPosition.y -= moveSpeed;
             }
 
-            cameraControls.applyCameraTransform();
+            cameraControls.updateFromRotation();
         },
 
         /**
-         * Apply camera rotation and position to the camera
+         * Apply camera rotation and position to the camera (calculates lookAt from rotation)
+         * Used for WASD/mouse drag camera rotation
          */
-        applyCameraTransform: function() {
+        updateFromRotation: function() {
             if (!camera) return;
 
             // Calculate lookAt point based on rotation
@@ -235,6 +234,27 @@ function getCameraControls(default_camera_state) {
             lookAt.z = cameraPosition.z + forward.z;
 
             // Update camera position and lookAt
+            camera.position.set(cameraPosition.x, cameraPosition.y, cameraPosition.z);
+            camera.lookAt(lookAt.x, lookAt.y, lookAt.z);
+        },
+
+        /**
+         * Apply camera transform directly from position/lookAt (no rotation calculation)
+         * Used for preset application - sets lookAt directly without recalculation
+         * @param {Object} position - New camera position {x, y, z}
+         * @param {Object} lookAtPos - New lookAt position {x, y, z}
+         */
+        applyDirectTransform: function(position, lookAtPos) {
+            if (!camera) return;
+
+            cameraPosition.x = position.x;
+            cameraPosition.y = position.y;
+            cameraPosition.z = position.z;
+
+            lookAt.x = lookAtPos.x;
+            lookAt.y = lookAtPos.y;
+            lookAt.z = lookAtPos.z;
+
             camera.position.set(cameraPosition.x, cameraPosition.y, cameraPosition.z);
             camera.lookAt(lookAt.x, lookAt.y, lookAt.z);
         },
@@ -253,6 +273,8 @@ function getCameraControls(default_camera_state) {
          */
         disable: function() {
             isDragging = false;
+            // Clear all pressed keys so WASD doesn't affect camera during gameplay
+            keys = {};
             if (canvasElement) {
                 canvasElement.style.cursor = 'default';
             }
@@ -347,29 +369,8 @@ function getCameraControls(default_camera_state) {
                 return;
             }
 
-            cameraPosition.x = position.x;
-            cameraPosition.y = position.y;
-            cameraPosition.z = position.z;
-
-            // Calculate rotation from lookAt
-            var direction = new THREE.Vector3(
-                lookAtPos.x - cameraPosition.x,
-                lookAtPos.y - cameraPosition.y,
-                lookAtPos.z - cameraPosition.z
-            ).normalize();
-
-            // Calculate yaw (rotation around Y axis)
-            cameraRotation.yaw = Math.atan2(direction.x, direction.z);
-
-            // Calculate pitch (rotation around X axis)
-            cameraRotation.pitch = Math.asin(direction.y);
-
-            // Update lookAt directly (will be recalculated by applyCameraTransform)
-            lookAt.x = lookAtPos.x;
-            lookAt.y = lookAtPos.y;
-            lookAt.z = lookAtPos.z;
-
-            cameraControls.applyCameraTransform();
+            // Apply transform directly using the provided lookAt (no rotation calculation)
+            this.applyDirectTransform(position, lookAtPos);
         },
 
         /**
@@ -394,7 +395,7 @@ function getCameraControls(default_camera_state) {
 
             cameraRotation.pitch = rotation ? (rotation.pitch || 0) : 0;
             cameraRotation.yaw = rotation ? (rotation.yaw || 0) : 0;
-            cameraControls.applyCameraTransform();
+            cameraControls.updateFromRotation();
         },
 
         /**
@@ -428,7 +429,7 @@ function getCameraControls(default_camera_state) {
             cameraPosition.x = position.x;
             cameraPosition.y = position.y;
             cameraPosition.z = position.z;
-            cameraControls.applyCameraTransform();
+            cameraControls.updateFromRotation();
         },
 
         /**

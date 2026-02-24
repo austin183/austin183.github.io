@@ -47,19 +47,15 @@ function getThreeJSGameController() {
             if (!threeJSRenderer) {
                 throw new Error('ThreeJSGameController requires threeJSRenderer for 3D rendering');
             }
-            if (typeof threeJSRenderer.getConstants !== 'function') {
-                throw new Error('threeJSRenderer must provide getConstants() method');
-            }
-            var CONSTANTS = threeJSRenderer.getConstants();
-            if (!CONSTANTS || !CONSTANTS.DEFAULT_DELAY) {
-                throw new Error('threeJSRenderer CONSTANTS must include DEFAULT_DELAY property');
-            }
             if (!app) {
                 throw new Error('ThreeJSGameController requires app instance');
             }
             if (!visibleField || !Array.isArray(visibleField)) {
                 throw new Error('visibleField must be an array of notes');
             }
+
+            // Get constants from threeJSRenderer
+            var CONSTANTS = threeJSRenderer.getConstants();
 
             // Create and initialize game state
             gameState = getGameState();

@@ -1,10 +1,7 @@
 <!DOCTYPE html>
 <!--
-    This is almost vanilla from https://tonejs.github.io/Midi/ right now,
-    but I want to work some of Keybiano.html into it.  A user can drag a midi file
-    onto the page, and it will have the ability to choose one of the tracks.
-    The tracks will appear as notes and mapped keys at first, but eventually, I want to
-    animate the mapped keys based on when they will play and how long they need to be played.
+    Midiestro3D - A 3D rhythm game where players type along with MIDI files.
+    Features: 3D note rendering, camera controls, hover info, and scoring.
 -->
 <html>
 
@@ -205,7 +202,7 @@
                 Use the Camera Presets dropdown to quickly switch between views.<br>
                 Press "Start Camera Control" to begin.
             </div>
-            <!-- Hover Info Display (always visible, shows N/A when not hovering over objects) -->
+            <!-- Hover Info Display (visible only when camera controls are active) -->
             <div id="hoverInfo" class="bordered" style="background-color: #e8f4fd; padding: 10px; margin-top: 10px;">
                 <h4>Hover Info</h4>
                 <div><strong>Object:</strong> <span id="hoverInfoObject">None</span></div>
@@ -311,7 +308,7 @@
 
         //Disposes of existing synths and creates synths based on FMSynth options
         //First call uses the default
-        toneHelper.buildSynths(defaultFMSynthParams, synthArray, 10); //Max of three keys for the whole game.
+        toneHelper.buildSynths(defaultFMSynthParams, synthArray, 10); //Support for polyphonic key play
         var app; //The Vue.js variable
 
         // Create the InputHandler instance (app will be set when Vue mounts)
@@ -395,7 +392,6 @@
         var cameraControlUpdateInterval = null;
 
         function togglePlay() {
-            debugger;
             var playButton = document.getElementById('tonePlayToggle');
             playing = !playing;
             if (playing) {

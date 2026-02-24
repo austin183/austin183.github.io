@@ -1,3 +1,10 @@
 .DS_Store
 MidiSongBuilder/MyComponents/difficultySettingsCalculator.js
 node_modules/
+MidiSongBuilder/.claude/agents/hl-*
+MidiSongBuilder/.claude/commands/hl_*
+MidiSongBuilder/.claude/skills/capturing-learnings/*
+MidiSongBuilder/.claude/skills/code-review/**/*
+MidiSongBuilder/.claude/skills/skill-extraction/**/*
+MidiSongBuilder/.claude/skills/skills-best-practice/*
+MidiSongBuilder/agent_docs/**/*

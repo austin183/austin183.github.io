@@ -76,12 +76,62 @@ Use this table to diagnose alignment issues:
 
 ## Analysis Process
 
-The script `testing-midiestro/scripts/takeMidiestro3DScreenshot.js` captures a new screenshot for analysis:
+### Single Screenshot (Quick Check)
+
+The script `testing-midiestro/scripts/takeMidiestro3DScreenshot.js` captures a single screenshot:
 
 1. Run `testing-midiestro/scripts/takeMidiestro3DScreenshot.js` to capture a new screenshot
 2. Review the saved screenshot against the checklist below
 3. Identify any misalignment issues
 4. Compare 2D and 3D view timing
-5. Reference key parameters if adjustments are needed
 
-The screenshot is saved to: `scripts/midiestro3d-screenshot.png` (same directory as the script).
+### Sequence of Screenshots (Note Movement Analysis)
+
+**Use this when testing the note rotation feature from the note rotation plan.**
+
+The script `testing-midiestro/scripts/takeMidiestro3DScreenshotSequence.js` captures multiple frames over time:
+
+1. Run `testing-midiestro/scripts/takeMidiestro3DScreenshotSequence.js`
+2. Review the sequence to verify:
+   - Notes rotate smoothly to face camera (billboarding effect)
+   - Notes move in straight lines along Z-axis when game starts
+   - Rotation and movement are decoupled (rotation stops, movement continues)
+
+Screenshots are saved with timestamps (e.g., `midiestro3d-sequence-1250ms.png`).
+
+---
+
+## Testing Note Rotation Feature
+
+When testing the billboarding rotation implementation from the note rotation plan:
+
+### What to Verify in Screenshot Sequences:
+
+1. **Camera Control Mode (Game Paused)**
+   - Notes dynamically rotate each frame to face camera
+   - Full 3D rotation works from any camera angle
+   - Notes remain readable when moving WASD or Arrow keys
+
+2. **Gameplay Mode (Game Running)**
+   - Notes freeze at their last rotation when game starts
+   - Notes move in straight lines along Z-axis (no curving)
+   - Rotation doesn't affect movement trajectory
+
+3. **State Transitions**
+   - Stop game → Notes resume facing camera from current angle
+   - Camera moves during rotation → Notes track camera smoothly
+
+### Configuration Options
+
+Environment variables to customize the sequence:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SCREENSHOT_DURATION` | 5000 | Total gameplay duration in ms |
+| `numScreenshots` | 10 | Number of screenshots to capture |
+| `interval` | 500 | ms between screenshots |
+
+Example:
+```bash
+SCREENSHOT_DURATION=3000 node takeMidiestro3DScreenshotSequence.js
+```
