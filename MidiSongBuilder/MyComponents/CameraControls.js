@@ -19,6 +19,9 @@ function getCameraControls(default_camera_state) {
     // Event listener storage for cleanup (Issue #2)
     var eventListeners = [];
 
+    // Camera controls enabled state
+    var isCameraControlsEnabled = false;
+
     // Movement speed
     var moveSpeed = 0.2;
     var lookSensitivity = 0.005;
@@ -172,13 +175,17 @@ function getCameraControls(default_camera_state) {
 
             // WASD key handlers
             addListener(document, 'keydown', function(e) {
-                keys[e.code] = true;
-                cameraControls.updateCameraMovement();
+                if (isCameraControlsEnabled) {
+                    keys[e.code] = true;
+                    cameraControls.updateCameraMovement();
+                }
             }.bind(this));
 
             addListener(document, 'keyup', function(e) {
-                keys[e.code] = false;
-                cameraControls.updateCameraMovement();
+                if (isCameraControlsEnabled) {
+                    keys[e.code] = false;
+                    cameraControls.updateCameraMovement();
+                }
             }.bind(this));
         },
 
@@ -263,6 +270,7 @@ function getCameraControls(default_camera_state) {
          * Enable camera controls
          */
         enable: function() {
+            isCameraControlsEnabled = true;
             if (canvasElement) {
                 canvasElement.style.cursor = 'grab';
             }
@@ -272,6 +280,7 @@ function getCameraControls(default_camera_state) {
          * Disable camera controls
          */
         disable: function() {
+            isCameraControlsEnabled = false;
             isDragging = false;
             // Clear all pressed keys so WASD doesn't affect camera during gameplay
             keys = {};
