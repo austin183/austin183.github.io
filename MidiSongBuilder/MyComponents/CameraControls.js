@@ -15,6 +15,7 @@ function getCameraControls(default_camera_state) {
     var cameraRotation = { pitch: 0, yaw: 0 };
     var cameraPosition = { x: 0, y: 0, z: 0 };
     var lookAt = { x: 0, y: 0, z: 0 };
+    var previousCameraPosition = { x: 0, y: 0, z: 0 };  // Track previous position for WASD movement
 
     // Event listener storage for cleanup (Issue #2)
     var eventListeners = [];
@@ -191,10 +192,13 @@ function getCameraControls(default_camera_state) {
 
         /**
          * Update camera position based on WASD keys
+         * Note: Camera position changes in XZ plane, lookAt follows to maintain relative direction
          */
         updateCameraMovement: function() {
             if (!camera) return;
 
+            // Get the current direction the camera is facing (horizontal component only)
+            // We use a unit vector in Z direction and rotate by yaw only (ignore pitch for movement)
             var forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraRotation.yaw);
             var right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraRotation.yaw);
 
@@ -221,7 +225,20 @@ function getCameraControls(default_camera_state) {
                 cameraPosition.y -= moveSpeed;
             }
 
-            cameraControls.updateFromRotation();
+            // Update lookAt to follow camera position while maintaining the same relative offset
+            // This ensures the camera direction doesn't change when moving
+            lookAt.x += cameraPosition.x - previousCameraPosition.x;
+            lookAt.y += cameraPosition.y - previousCameraPosition.y;
+            lookAt.z += cameraPosition.z - previousCameraPosition.z;
+
+            // Update camera
+            camera.position.set(cameraPosition.x, cameraPosition.y, cameraPosition.z);
+            camera.lookAt(lookAt.x, lookAt.y, lookAt.z);
+
+            // Store current position for next movement calculation
+            previousCameraPosition.x = cameraPosition.x;
+            previousCameraPosition.y = cameraPosition.y;
+            previousCameraPosition.z = cameraPosition.z;
         },
 
         /**
@@ -264,6 +281,26 @@ function getCameraControls(default_camera_state) {
 
             camera.position.set(cameraPosition.x, cameraPosition.y, cameraPosition.z);
             camera.lookAt(lookAt.x, lookAt.y, lookAt.z);
+
+            // Initialize previousCameraPosition to prevent large jumps on first WASD movement
+            previousCameraPosition.x = position.x;
+            previousCameraPosition.y = position.y;
+            previousCameraPosition.z = position.z;
+
+            // Reset rotation to match the direct transform
+            // Calculate the direction vector from camera to lookAt
+            var dx = lookAt.x - cameraPosition.x;
+            var dy = lookAt.y - cameraPosition.y;
+            var dz = lookAt.z - cameraPosition.z;
+
+            // Calculate yaw: angle around Y axis (rotation in XZ plane)
+            // Standard: 0 = -Z (forward), yaw increases clockwise when viewed from above
+            cameraRotation.yaw = Math.atan2(dx, dz);
+
+            // Calculate pitch: angle up/down from the horizontal plane
+            // Positive pitch = looking up, negative = looking down
+            var horizontalDist = Math.sqrt(dx * dx + dz * dz);
+            cameraRotation.pitch = Math.atan2(dy, horizontalDist);
         },
 
         /**
@@ -284,6 +321,10 @@ function getCameraControls(default_camera_state) {
             isDragging = false;
             // Clear all pressed keys so WASD doesn't affect camera during gameplay
             keys = {};
+            // Reset previousCameraPosition to prevent jumps when re-enabling
+            previousCameraPosition.x = cameraPosition.x;
+            previousCameraPosition.y = cameraPosition.y;
+            previousCameraPosition.z = cameraPosition.z;
             if (canvasElement) {
                 canvasElement.style.cursor = 'default';
             }
@@ -417,28 +458,28 @@ function getCameraControls(default_camera_state) {
                 return;
             }
 
-            // Validate input
-            if (!position) {
-                console.error('CameraControls.setCameraPosition: position object required');
-                return;
-            }
-            if (typeof position.x !== 'number') {
-                console.error('CameraControls.setCameraPosition: position.x must be a number');
-                return;
-            }
-            if (typeof position.y !== 'number') {
-                console.error('CameraControls.setCameraPosition: position.y must be a number');
-                return;
-            }
-            if (typeof position.z !== 'number') {
-                console.error('CameraControls.setCameraPosition: position.z must be a number');
-                return;
-            }
+            // Calculate the delta from previous position
+            var dx = position.x - previousCameraPosition.x;
+            var dy = position.y - previousCameraPosition.y;
+            var dz = position.z - previousCameraPosition.z;
 
             cameraPosition.x = position.x;
             cameraPosition.y = position.y;
             cameraPosition.z = position.z;
-            cameraControls.updateFromRotation();
+
+            // Update lookAt to follow camera position, maintaining relative offset
+            lookAt.x += dx;
+            lookAt.y += dy;
+            lookAt.z += dz;
+
+            // Update camera
+            camera.position.set(cameraPosition.x, cameraPosition.y, cameraPosition.z);
+            camera.lookAt(lookAt.x, lookAt.y, lookAt.z);
+
+            // Store current position for next movement calculation
+            previousCameraPosition.x = position.x;
+            previousCameraPosition.y = position.y;
+            previousCameraPosition.z = position.z;
         },
 
         /**
