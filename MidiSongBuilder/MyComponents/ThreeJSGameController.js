@@ -22,13 +22,6 @@
  * threeJSRenderer is the only parameter passed directly (required for initialization).
  */
 function getThreeJSGameController() {
-    // GameState instance for this controller
-    var gameState = null;
-
-    // Three.js specific animation variables
-    //animationSpeed: 1.0,  // Multiplier for animation speed
-    //noteSpeed: 15,  // Speed at which notes move toward camera (units per second)
-
     return {
         /**
          * Start the 3D game loop with animation
@@ -66,8 +59,8 @@ function getThreeJSGameController() {
             // Get constants from threeJSRenderer
             var CONSTANTS = threeJSRenderer.getConstants();
 
-            // Create and initialize game state
-            gameState = getGameState();
+            // Create and initialize GameState - single source of truth for game state
+            var gameState = getGameState();
             gameState.initialize({
                 startTime: Tone.now(),
                 earliestNoteIndex: 0,
@@ -78,18 +71,18 @@ function getThreeJSGameController() {
                 threeJSRenderer: threeJSRenderer,
                 highScoreTracker: highScoreTracker,
                 challengeScores: challengeScores,
-                pressedKeys: pressedKeys || {},  // Use passed pressedKeys, default to empty object
+                pressedKeys: pressedKeys || {},
                 invertedKeyNoteMap: keyNoteMapService ? keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap) : null,
                 noteLetterCache: songNoteRenderer ? songNoteRenderer.buildSongNoteLetterCache(getKeyRenderInfo()) : null,
-                delay: CONSTANTS.DEFAULT_DELAY,  // Default delay for note positioning
+                delay: CONSTANTS.DEFAULT_DELAY,
                 synths: []
             });
 
-            // Store reference on app for easy access (temporary - for compatibility)
-            app.threeGameState = gameState.getState();
+            // Store the GameState instance on app for access in the loop
+            app.threeGameState = gameState;
 
-            // Create synths and schedule audio
-            const startTime = app.threeGameState.startTime;
+            // Create synths and schedule audio using the GameState startTime
+            var startTime = gameState.get('startTime');
 
             if (currentMidi && currentMidi.tracks) {
                 currentMidi.tracks.forEach((track) => {
@@ -101,8 +94,10 @@ function getThreeJSGameController() {
                             release: 1,
                         },
                     }).toDestination();
-                    app.threeGameState.synths = app.threeGameState.synths || [];
-                    app.threeGameState.synths.push(synth);
+                    if (!gameState.get('synths')) {
+                        gameState.set('synths', []);
+                    }
+                    gameState.get('synths').push(synth);
 
                     // Schedule all of the events
                     track.notes.forEach((note) => {
@@ -110,7 +105,7 @@ function getThreeJSGameController() {
                             synth.triggerAttackRelease(
                                 note.name,
                                 note.duration,
-                                note.time + startTime + app.threeGameState.delay,
+                                note.time + startTime + gameState.get('delay'),
                                 note.velocity * app.trackVolume
                             );
                         }
@@ -134,90 +129,106 @@ function getThreeJSGameController() {
          * @param {Object} app - The Vue.js app instance
          */
         gameLoop: function(app) {
-            const gameState = app.threeGameState;
-            if (!gameState || !gameState.threeJSRenderer) {
+            var gameState = app.threeGameState;
+            if (!gameState || !gameState.get('threeJSRenderer')) {
                 this.stopGame(app);
                 return;
             }
 
             // Calculate current time relative to song start
-            const intervalNow = Tone.now() - gameState.startTime - app.threeGameState.delay;
-            const visiblePast = intervalNow - 1;
-            const visibleFuture = intervalNow + 9;
+            var intervalNow = Tone.now() - gameState.get('startTime') - gameState.get('delay');
+            var visiblePast = intervalNow - 1;
+            var visibleFuture = intervalNow + 9;
 
             // Check if song has ended
-            if (visiblePast > gameState.songEnd) {
+            if (visiblePast > gameState.get('songEnd')) {
                 app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
-                gameState.songNoteRenderer.renderFinalScore(app.notesCanvas, app.vueCanvas, app.score, app.goodCount, app.okCount, app.badCount, app.missedCount);
+                gameState.get('songNoteRenderer').renderFinalScore(app.notesCanvas, app.vueCanvas,
+                    gameState.get('score') || 0,
+                    gameState.get('goodCount') || 0,
+                    gameState.get('okCount') || 0,
+                    gameState.get('badCount') || 0,
+                    gameState.get('missedCount') || 0
+                );
 
                 // Update high scores if enabled
-                if (app.toggleTrackHighScores) {
-                    gameState.highScoreTracker.setHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey, app.score);
-                    app.highScore = gameState.highScoreTracker.getHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
-                    app.challengeScore = gameState.challengeScores.getSelectedScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
+                if (app.toggleTrackHighScores && gameState.get('highScoreTracker')) {
+                    gameState.get('highScoreTracker').setHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey, gameState.get('score') || 0);
+                    app.highScore = gameState.get('highScoreTracker').getHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
+                    if (gameState.get('challengeScores')) {
+                        app.challengeScore = gameState.get('challengeScores').getSelectedScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
+                    }
                 }
+
+                // Sync state to Vue for reactive binding
+                gameState.syncToVue(app);
 
                 this.stopGame(app);
                 return;
             }
 
             // Update earliestNoteIndex for notes that have passed
-            for (let i = gameState.earliestNoteIndex; i < gameState.visibleField.length; i++) {
-                const note = gameState.visibleField[i];
+            var earliestNoteIndex = gameState.get('earliestNoteIndex') || 0;
+            for (var i = earliestNoteIndex; i < gameState.get('visibleField').length; i++) {
+                var note = gameState.get('visibleField')[i];
                 if (note.time + note.duration < visiblePast) {
-                    gameState.earliestNoteIndex = i;
+                    earliestNoteIndex = i;
                 } else {
                     break;
                 }
             }
+            gameState.set('earliestNoteIndex', earliestNoteIndex);
 
             // Calculate score
-            const currentScore = gameState.scoreKeeper.calculateNewScore(
-                gameState.visibleField,
-                gameState.pressedKeys,
+            var currentScore = gameState.get('scoreKeeper').calculateNewScore(
+                gameState.get('visibleField'),
+                gameState.get('pressedKeys') || {},
                 intervalNow,
-                gameState.earliestNoteIndex,
+                earliestNoteIndex,
                 visibleFuture
             );
 
-            app.score = currentScore.total;
-            const counts = gameState.scoreKeeper.getCounts();
-            app.goodCount = counts.goodCount;
-            app.okCount = counts.okCount;
-            app.badCount = counts.badCount;
-            app.missedCount = counts.missedCount;
+            gameState.set('score', currentScore.total);
+            var counts = gameState.get('scoreKeeper').getCounts();
+            gameState.set('goodCount', counts.goodCount);
+            gameState.set('okCount', counts.okCount);
+            gameState.set('badCount', counts.badCount);
+            gameState.set('missedCount', counts.missedCount);
+
+            // Sync state to Vue for reactive binding
+            gameState.syncToVue(app);
 
             // Update 3D note positions based on animation
-            this.update3DNotesPosition(gameState.threeJSRenderer, gameState.visibleField, intervalNow, app);
+            this.update3DNotesPosition(gameState.get('threeJSRenderer'), gameState, intervalNow, app);
 
             // Update 3D note colors based on score (hit notes change color)
-            this.update3DNoteColors(gameState.threeJSRenderer, currentScore, app);
+            this.update3DNoteColors(gameState.get('threeJSRenderer'), currentScore, app);
 
             // Render the 2D canvas
             app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
-            gameState.songNoteRenderer.renderNowLine(app.notesCanvas, app.vueCanvas);
-            gameState.songNoteRenderer.renderNotesPlayingForCanvas(
+            gameState.get('songNoteRenderer').renderNowLine(app.notesCanvas, app.vueCanvas);
+            gameState.get('songNoteRenderer').renderNotesPlayingForCanvas(
                 app.notesCanvas,
                 app.vueCanvas,
-                gameState.visibleField,
+                gameState.get('visibleField'),
                 currentScore,
                 intervalNow,
                 visiblePast,
                 visibleFuture,
-                gameState.earliestNoteIndex,
-                gameState.noteLetterCache
+                earliestNoteIndex,
+                gameState.get('noteLetterCache') || {}
             );
 
             // Render 3D now line
-            this.render3DNowLine(gameState.threeJSRenderer, app);
+            this.render3DNowLine(gameState.get('threeJSRenderer'), app);
 
             // Debug output if enabled
             if (window.location.search == "?debug") {
-                app.renderedNotesPlaying = gameState.songNoteRenderer.renderDebugNotesPlaying(
+                app.renderedNotesPlaying = gameState.get('songNoteRenderer').renderDebugNotesPlaying(
                     app.notesCanvas,
                     app.selectedTrack.notes,
                     currentScore,
-                    gameState.invertedKeyNoteMap,
+                    gameState.get('invertedKeyNoteMap') || {},
                     getKeyRenderInfo(),
                     intervalNow,
                     visiblePast
@@ -229,16 +240,16 @@ function getThreeJSGameController() {
          * Update positions of all 3D notes based on current time
          * Delegates to ThreeJSRenderer which handles the positioning logic
          * @param {Object} threeJSRenderer - The ThreeJSRenderer instance
-         * @param {Array} visibleField - Array of visible notes (kept for compatibility)
+         * @param {Object} gameState - The GameState instance containing game state
          * @param {Number} currentTime - Current time in song
          * @param {Object} app - Vue app instance
          */
-        update3DNotesPosition: function(threeJSRenderer, visibleField, currentTime, app) {
-            if (!threeJSRenderer || !app.threeGameState) return;
+        update3DNotesPosition: function(threeJSRenderer, gameState, currentTime, app) {
+            if (!threeJSRenderer || !gameState) return;
 
             // Use the renderer's updateAllNotes method for consistent positioning
             var CONSTANTS = threeJSRenderer.getConstants();
-            var delay = app.threeGameState.delay || CONSTANTS.DEFAULT_DELAY;
+            var delay = gameState.get('delay') || CONSTANTS.DEFAULT_DELAY;
             threeJSRenderer.updateAllNotes(currentTime, delay);
         },
 
@@ -251,18 +262,18 @@ function getThreeJSGameController() {
         update3DNoteColors: function(threeJSRenderer, currentScore, app) {
             if (!threeJSRenderer) return;
 
-            const noteGroup = threeJSRenderer.getNoteGroup();
+            var noteGroup = threeJSRenderer.getNoteGroup();
             if (!noteGroup) return;
 
-            const keyScores = currentScore.keyScores;
+            var keyScores = currentScore.keyScores;
 
             // Update colors for notes that have been hit
             noteGroup.children.forEach(function(noteMesh) {
                 if (!noteMesh || !noteMesh.userData) return;
 
-                const noteId = noteMesh.userData.id;
+                var noteId = noteMesh.userData.id;
                 if (keyScores && keyScores[noteId]) {
-                    const scoreTag = keyScores[noteId].tag;
+                    var scoreTag = keyScores[noteId].tag;
                     if (scoreTag) {
                         threeJSRenderer.setNoteState(noteId, scoreTag);
                     }
@@ -278,12 +289,12 @@ function getThreeJSGameController() {
          * @param {Object} app - Vue app instance
          */
         render3DNowLine: function(threeJSRenderer, app) {
-            if (!threeJSRenderer) return;
+            if (!threeJSRenderer || !app.threeGameState) return;
 
             // Now line is at Z=0 (player position in ThreeJSRenderer's coordinate system)
             // Notes move toward the camera (increasing Z) and pass through this plane
             // Use delay directly; ThreeJSRenderer will convert to Z position using calculateNowLinePosition
-            threeJSRenderer.renderNowLine(app.threeGameState.delay);
+            threeJSRenderer.renderNowLine(app.threeGameState.get('delay'));
         },
 
         /**
@@ -302,17 +313,18 @@ function getThreeJSGameController() {
             Tone.Transport.cancel();
 
             // Dispose all synths
-            if (app && app.threeGameState && app.threeGameState.synths) {
-                app.threeGameState.synths.forEach(function(synth) {
+            if (app && app.threeGameState) {
+                var synths = app.threeGameState.get('synths') || [];
+                synths.forEach(function(synth) {
                     if (synth) {
                         synth.disconnect();
                         synth.dispose();
                     }
                 });
-                app.threeGameState.synths = [];
+                app.threeGameState.set('synths', []);
             }
 
-            // Clean up game state
+            // Clean up game state from app
             if (app && app.threeGameState) {
                 delete app.threeGameState;
             }

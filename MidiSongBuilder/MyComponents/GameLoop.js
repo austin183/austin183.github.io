@@ -75,23 +75,9 @@ function getGameLoop() {
                 });
             }
 
-            // Update game state with startTime
+            // Store the GameState instance on app for access in the loop
+            app.gameState = gameState;
             gameState.set('startTime', startTime);
-
-            // Store game state on app for access in the loop
-            app.gameState = {
-                startTime: startTime,
-                earliestNoteIndex: 0,
-                visibleField: gameState.get('visibleField'),
-                songEnd: gameState.get('songEnd'),
-                scoreKeeper: gameState.get('scoreKeeper'),
-                songNoteRenderer: gameState.get('songNoteRenderer'),
-                highScoreTracker: gameState.get('highScoreTracker'),
-                challengeScores: gameState.get('challengeScores'),
-                pressedKeys: gameState.get('pressedKeys') || {},
-                invertedKeyNoteMap: gameState.get('invertedKeyNoteMap'),
-                noteLetterCache: gameState.get('noteLetterCache')
-            };
 
             // Start the game loop
             playIntervalId = setInterval(() => this.gameLoop(app), 10);
@@ -110,38 +96,40 @@ function getGameLoop() {
                 return;
             }
 
-            const intervalNow = Tone.now() - gameState.startTime - this.delay;
+            const intervalNow = Tone.now() - gameState.get('startTime') - this.delay;
             const visiblePast = intervalNow - 1;
             const visibleFuture = intervalNow + 9;
 
             // Check if song has ended
-            if (visiblePast > gameState.songEnd) {
+            if (visiblePast > gameState.get('songEnd')) {
                 app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
-                gameState.songNoteRenderer.renderFinalScore(
+                gameState.get('songNoteRenderer').renderFinalScore(
                     app.notesCanvas,
                     app.vueCanvas,
-                    app.score,
-                    app.goodCount,
-                    app.okCount,
-                    app.badCount,
-                    app.missedCount
+                    gameState.get('score') || 0,
+                    gameState.get('goodCount') || 0,
+                    gameState.get('okCount') || 0,
+                    gameState.get('badCount') || 0,
+                    gameState.get('missedCount') || 0
                 );
 
                 // Update high scores if enabled
-                if (app.toggleTrackHighScores) {
-                    gameState.highScoreTracker.setHighScore(
+                if (app.toggleTrackHighScores && gameState.get('highScoreTracker')) {
+                    gameState.get('highScoreTracker').setHighScore(
                         app.selectedMidiSong.filename,
                         app.selectedDifficulty.difficultyKey,
-                        app.score
+                        gameState.get('score') || 0
                     );
-                    app.highScore = gameState.highScoreTracker.getHighScore(
+                    app.highScore = gameState.get('highScoreTracker').getHighScore(
                         app.selectedMidiSong.filename,
                         app.selectedDifficulty.difficultyKey
                     );
-                    app.challengeScore = gameState.challengeScores.getSelectedScore(
-                        app.selectedMidiSong.filename,
-                        app.selectedDifficulty.difficultyKey
-                    );
+                    if (gameState.get('challengeScores')) {
+                        app.challengeScore = gameState.get('challengeScores').getSelectedScore(
+                            app.selectedMidiSong.filename,
+                            app.selectedDifficulty.difficultyKey
+                        );
+                    }
                 }
 
                 this.stopGame(app);
@@ -149,30 +137,32 @@ function getGameLoop() {
             }
 
             // Update earliestNoteIndex for notes that have passed
-            for (let i = gameState.earliestNoteIndex; i < gameState.visibleField.length; i++) {
-                const note = gameState.visibleField[i];
+            var earliestNoteIndex = gameState.get('earliestNoteIndex') || 0;
+            for (var i = earliestNoteIndex; i < gameState.get('visibleField').length; i++) {
+                var note = gameState.get('visibleField')[i];
                 if (note.time + note.duration < visiblePast) {
-                    gameState.earliestNoteIndex = i;
+                    earliestNoteIndex = i;
                 } else {
                     break;
                 }
             }
+            gameState.set('earliestNoteIndex', earliestNoteIndex);
 
             // Calculate score
-            const currentScore = gameState.scoreKeeper.calculateNewScore(
-                gameState.visibleField,
-                gameState.pressedKeys,
+            var currentScore = gameState.get('scoreKeeper').calculateNewScore(
+                gameState.get('visibleField'),
+                gameState.get('pressedKeys') || {},
                 intervalNow,
-                gameState.earliestNoteIndex,
+                earliestNoteIndex,
                 visibleFuture
             );
 
-            app.score = currentScore.total;
-            const counts = gameState.scoreKeeper.getCounts();
-            app.goodCount = counts.goodCount;
-            app.okCount = counts.okCount;
-            app.badCount = counts.badCount;
-            app.missedCount = counts.missedCount;
+            gameState.set('score', currentScore.total);
+            var counts = gameState.get('scoreKeeper').getCounts();
+            gameState.set('goodCount', counts.goodCount);
+            gameState.set('okCount', counts.okCount);
+            gameState.set('badCount', counts.badCount);
+            gameState.set('missedCount', counts.missedCount);
 
             return {
                 intervalNow: intervalNow,
@@ -186,12 +176,35 @@ function getGameLoop() {
          * Stop the game and clean up resources
          * @param {Object} app - The Vue.js app instance
          */
-        stopGame: function(app) {
+stopGame: function(app) {
             // Stop the interval
             if (playIntervalId) {
                 clearInterval(playIntervalId);
                 playIntervalId = null;
             }
+
+            // Stop Tone.js transport
+            Tone.Transport.stop();
+            Tone.Transport.position = 0;
+            Tone.Transport.cancel();
+
+            // Dispose all synths
+            while (synths.length) {
+                const synth = synths.shift();
+                synth.disconnect();
+                synth.dispose();
+            }
+
+            // Clean up game state from app
+            if (app && app.gameState) {
+                delete app.gameState;
+            }
+
+            // Reset current game state reference
+            currentGameState = null;
+        }
+    };
+}
 
             // Stop Tone.js transport
             Tone.Transport.stop();
@@ -226,19 +239,7 @@ function getGameLoop() {
          * @param {Object} gameState - The GameState instance
          */
         updateAppState: function(app, gameState) {
-            app.gameState = {
-                startTime: gameState.get('startTime'),
-                earliestNoteIndex: gameState.get('earliestNoteIndex') || 0,
-                visibleField: gameState.get('visibleField') || [],
-                songEnd: gameState.get('songEnd') || 0,
-                scoreKeeper: gameState.get('scoreKeeper'),
-                songNoteRenderer: gameState.get('songNoteRenderer'),
-                highScoreTracker: gameState.get('highScoreTracker'),
-                challengeScores: gameState.get('challengeScores'),
-                pressedKeys: gameState.get('pressedKeys') || {},
-                invertedKeyNoteMap: gameState.get('invertedKeyNoteMap') || {},
-                noteLetterCache: gameState.get('noteLetterCache') || {}
-            };
+            app.gameState = gameState;
         }
     };
 }

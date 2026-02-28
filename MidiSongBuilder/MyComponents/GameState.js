@@ -19,18 +19,23 @@ function getGameState() {
         invertedKeyNoteMap: {},
         noteLetterCache: {},
         delay: 4,
-        synths: []
+        synths: [],
+        score: 0,
+        goodCount: 0,
+        okCount: 0,
+        badCount: 0,
+        missedCount: 0
     };
 
     return {
         /**
          * Initialize state with config values
          * @param {Object} config - State values to set
-         * @returns {Object} - The state object for chaining
+         * @returns {Object} - The state instance for chaining
          */
         initialize: function(config) {
             Object.assign(state, config);
-            return this;  // Return instance for chaining instead of direct state reference
+            return this;
         },
 
         /**
@@ -51,6 +56,11 @@ function getGameState() {
             state.noteLetterCache = {};
             state.delay = 4;
             state.synths = [];
+            state.score = 0;
+            state.goodCount = 0;
+            state.okCount = 0;
+            state.badCount = 0;
+            state.missedCount = 0;
         },
 
         /**
@@ -79,6 +89,36 @@ function getGameState() {
          */
         set: function(key, value) {
             state[key] = value;
+        },
+
+        /**
+         * Sync state values to Vue app for reactive binding
+         * This allows Vue to track changes without storing state directly on app
+         * @param {Object} app - The Vue app instance to sync to
+         */
+        syncToVue: function(app) {
+            if (!app) return;
+            
+            app.score = state.score;
+            app.goodCount = state.goodCount;
+            app.okCount = state.okCount;
+            app.badCount = state.badCount;
+            app.missedCount = state.missedCount;
+        },
+
+        /**
+         * Get all score-related counts as an object
+         * Useful for rendering or syncing to Vue
+         * @returns {Object} - Object with all score counts
+         */
+        getScoreCounts: function() {
+            return {
+                score: state.score,
+                goodCount: state.goodCount,
+                okCount: state.okCount,
+                badCount: state.badCount,
+                missedCount: state.missedCount
+            };
         }
     };
 }
