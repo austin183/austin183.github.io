@@ -5,6 +5,10 @@
 
 function getInputHandler() {
     return {
+        // noteInputEnabled - when true, keys are processed for note input (gameplay)
+        // When false, keys are available for camera controls
+        noteInputEnabled: true,
+
         setupKeyListeners: function(app, pressedKeys, synthMap, synthArray, onNotePlay) {
             // Attach keydown and keyup listeners
             this.app = app;
@@ -33,6 +37,25 @@ function getInputHandler() {
             this.synthMap = null;
             this.synthArray = null;
             this.onNotePlay = null;
+            this.noteInputEnabled = true;
+        },
+
+        /**
+         * Set whether note input is enabled
+         * When noteInputEnabled is true, key presses are processed for notes (gameplay)
+         * When false, key presses are ignored for notes (camera controls take precedence)
+         * @param {boolean} enabled - True to enable note input, false for camera controls
+         */
+        setNoteInputEnabled: function(enabled) {
+            this.noteInputEnabled = enabled;
+        },
+
+        /**
+         * Check if camera controls are active (inverse of noteInputEnabled)
+         * @returns {boolean} - True if camera controls are active (note input disabled)
+         */
+        areCameraControlsActive: function() {
+            return !this.noteInputEnabled;
         },
 
         isKeyInMap: function(key, keyNoteMap) {
@@ -41,7 +64,11 @@ function getInputHandler() {
         },
 
         handleKeyDown: function(event) {
-            // Process key press - extracted from main listener
+            // Process key press - only if note input is enabled
+            if (!this.noteInputEnabled) {
+                return;
+            }
+
             if (this.app && this.isKeyInMap(event.key, this.app.selectedKeyNoteMap.keyNoteMap)) {
                 if (window.location.search === '?debug') {
                     console.log("Pressed key for " + this.app.selectedKeyNoteMap.keyNoteMap[event.key]);
@@ -53,7 +80,11 @@ function getInputHandler() {
         },
 
         handleKeyUp: function(event) {
-            // Process key release - extracted from main listener
+            // Process key release - only if note input is enabled
+            if (!this.noteInputEnabled) {
+                return;
+            }
+
             if (this.app &&
                 this.isKeyInMap(event.key, this.app.selectedKeyNoteMap.keyNoteMap) &&
                 event.key in this.synthMap) {

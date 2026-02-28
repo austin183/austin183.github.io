@@ -16,6 +16,10 @@
  *
  * Usage: Use ThreeJSGameController when 3D rendering is needed.
  *        Use GameController for 2D-only rendering.
+ *
+ * Uses ComponentRegistry for dependency injection of services.
+ * Services are retrieved from the registry during startGame.
+ * threeJSRenderer is the only parameter passed directly (required for initialization).
  */
 function getThreeJSGameController() {
     // GameState instance for this controller
@@ -28,21 +32,19 @@ function getThreeJSGameController() {
     return {
         /**
          * Start the 3D game loop with animation
+         * Dependencies (scoreKeeper, songNoteRenderer, keyNoteMapService, highScoreTracker, challengeScores)
+         * are retrieved from ComponentRegistry. Only pressedKeys and threeJSRenderer are passed directly.
+         *
          * @param {Object} app - The Vue.js app instance
          * @param {Object} currentMidi - The parsed MIDI data with tracks
          * @param {Object} difficultySettings - The selected difficulty settings
          * @param {Number} songEnd - The end time of the song in seconds
          * @param {Array} visibleField - The filtered notes ready for rendering
-         * @param {Object} scoreKeeper - The ScoreKeeper instance for scoring
-         * @param {Object} songNoteRenderer - The SongNoteRenderer instance
-         * @param {Object} keyNoteMapService - The KeyNoteMapService instance for inversion
-         * @param {Object} highScoreTracker - The high score tracker instance
-         * @param {Object} challengeScores - The challenge scores instance
          * @param {Object} threeJSRenderer - The ThreeJSRenderer instance
          * @param {Object} pressedKeys - The pressedKeys object tracking keyboard state
          * @returns {number} - The interval ID for cleanup
          */
-        startGame: function(app, currentMidi, difficultySettings, songEnd, visibleField, scoreKeeper, songNoteRenderer, keyNoteMapService, highScoreTracker, challengeScores, threeJSRenderer, pressedKeys) {
+        startGame: function(app, currentMidi, difficultySettings, songEnd, visibleField, threeJSRenderer, pressedKeys) {
             // Validate required dependencies
             if (!threeJSRenderer) {
                 throw new Error('ThreeJSGameController requires threeJSRenderer for 3D rendering');
@@ -53,6 +55,13 @@ function getThreeJSGameController() {
             if (!visibleField || !Array.isArray(visibleField)) {
                 throw new Error('visibleField must be an array of notes');
             }
+
+            // Retrieve dependencies from ComponentRegistry
+            var scoreKeeper = app.componentRegistry ? app.componentRegistry.getService('scoreKeeper') : null;
+            var songNoteRenderer = app.componentRegistry ? app.componentRegistry.getService('songNoteRenderer') : null;
+            var keyNoteMapService = app.componentRegistry ? app.componentRegistry.getService('keyNoteMapService') : null;
+            var highScoreTracker = app.componentRegistry ? app.componentRegistry.getService('highScoreTracker') : null;
+            var challengeScores = app.componentRegistry ? app.componentRegistry.getService('challengeScores') : null;
 
             // Get constants from threeJSRenderer
             var CONSTANTS = threeJSRenderer.getConstants();
@@ -70,8 +79,8 @@ function getThreeJSGameController() {
                 highScoreTracker: highScoreTracker,
                 challengeScores: challengeScores,
                 pressedKeys: pressedKeys || {},  // Use passed pressedKeys, default to empty object
-                invertedKeyNoteMap: keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap),
-                noteLetterCache: songNoteRenderer.buildSongNoteLetterCache(getKeyRenderInfo()),
+                invertedKeyNoteMap: keyNoteMapService ? keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap) : null,
+                noteLetterCache: songNoteRenderer ? songNoteRenderer.buildSongNoteLetterCache(getKeyRenderInfo()) : null,
                 delay: CONSTANTS.DEFAULT_DELAY,  // Default delay for note positioning
                 synths: []
             });
@@ -306,12 +315,6 @@ function getThreeJSGameController() {
             // Clean up game state
             if (app && app.threeGameState) {
                 delete app.threeGameState;
-            }
-
-            // Clean up ComponentRegistry
-            if (app.componentRegistry) {
-                app.componentRegistry.clearServices();
-                delete app.componentRegistry;
             }
         },
 

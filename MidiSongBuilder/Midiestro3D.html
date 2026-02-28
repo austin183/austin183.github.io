@@ -410,10 +410,11 @@
                     document.activeElement.blur();
                 }
 
-                const invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
-                const scoreKeeper = getScoreKeeper();
                 const containerElement = document.getElementById("canvasContainer");
                 containerElement.scrollIntoView({ behavior: "smooth" });
+
+                // Create inverted key note map for rendering
+                var invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
 
                 // Calculate the visible field for rendering
                 var visibleField = [];
@@ -429,17 +430,14 @@
                 app.noteLetterCache = songNoteRenderer.buildSongNoteLetterCache(keyRenderInfo);
 
                 // Start the 3D game controller which handles both 2D and 3D rendering
+                // Note: dependencies (scoreKeeper, songNoteRenderer, keyNoteMapService, etc.)
+                // are retrieved from ComponentRegistry inside the controller
                 threeJSGameController.startGame(
                     app,
                     currentMidi,
                     songDifficultySettings,
                     songEnd,
                     visibleField,
-                    scoreKeeper,
-                    songNoteRenderer,
-                    keyNoteMapService,
-                    highScoreTracker,
-                    challengeScores,
                     app.threeJSRenderer,
                     componentRegistry.getPressedKeys()
                 );
@@ -455,9 +453,20 @@
             }
         }
 
-        /**
-         * Camera Control Functions
-         */
+        function disableCameraControls() {
+            cameraControlsActive = false;
+            if (app && app.threeJSRenderer) {
+                app.threeJSRenderer.disableCameraControls();
+                app.threeJSRenderer.disableHoverInfo();
+            }
+            // Disable camera controls when game starts (enable note input for gameplay)
+            inputHandler.setNoteInputEnabled(true);
+            // Hide camera control panel
+            document.getElementById('cameraControlPanel').style.display = 'none';
+            // Stop update loop
+            stopCameraUpdateLoop();
+        }
+
         function enableCameraControls() {
             cameraControlsActive = true;
             if (app && app.threeJSRenderer) {
@@ -469,24 +478,14 @@
                     app.threeJSRenderer.setHoverInfoElement(hoverInfoElement);
                 }
             }
+            // Enable camera controls when game stops (disable note input to prevent keys during camera control)
+            inputHandler.setNoteInputEnabled(false);
             // Show camera control panel
             document.getElementById('cameraControlPanel').style.display = 'block';
             // Hide instructions since controls are active
             document.getElementById('cameraInstructions').style.display = 'none';
             // Start update loop for camera position display
             startCameraUpdateLoop();
-        }
-
-        function disableCameraControls() {
-            cameraControlsActive = false;
-            if (app && app.threeJSRenderer) {
-                app.threeJSRenderer.disableCameraControls();
-                app.threeJSRenderer.disableHoverInfo();
-            }
-            // Hide camera control panel
-            document.getElementById('cameraControlPanel').style.display = 'none';
-            // Stop update loop
-            stopCameraUpdateLoop();
         }
 
         function toggleCameraControls() {
@@ -711,6 +710,17 @@
 
                     // Set camera input defaults from CameraControls defaults
                     setupCameraInputDefaults(this);
+
+                    // Register services in ComponentRegistry for dependency injection
+                    componentRegistry.registerService('scoreKeeper', getScoreKeeper());
+                    componentRegistry.registerService('songNoteRenderer', songNoteRenderer);
+                    componentRegistry.registerService('keyNoteMapService', keyNoteMapService);
+                    componentRegistry.registerService('highScoreTracker', highScoreTracker);
+                    componentRegistry.registerService('challengeScores', challengeScores);
+                    componentRegistry.registerService('threeJSRenderer', threeJSRenderer);
+
+                    // Store componentRegistry on Vue instance for use by ThreeJSGameController
+                    this.componentRegistry = componentRegistry;
                 },
                 beforeDestroy() {
                     // Clean up Three.js renderer

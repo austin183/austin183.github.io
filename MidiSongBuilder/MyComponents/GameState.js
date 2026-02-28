@@ -30,7 +30,7 @@ function getGameState() {
          */
         initialize: function(config) {
             Object.assign(state, config);
-            return state;
+            return this;  // Return instance for chaining instead of direct state reference
         },
 
         /**
@@ -55,7 +55,9 @@ function getGameState() {
 
         /**
          * Get the state object
-         * @returns {Object} - The internal state
+         * NOTE: This returns a reference to the internal state for performance in the game loop.
+         * Use get() and set() methods for individual properties to maintain encapsulation.
+         * @returns {Object} - The internal state (use read-only operations when possible)
          */
         getState: function() {
             return state;

@@ -42,6 +42,7 @@
     <script src="MyComponents/MidiParser.js"></script>
     <script src="MyComponents/ComponentRegistry.js"></script>
     <script src="MyComponents/scoringSettings.js"></script>
+    <script src="MyComponents/CoordinateCalculator.js"></script>
 </head>
 
 <body>
@@ -327,8 +328,11 @@
             playing = !playing;
             if (playing) {
                 playButton.textContent = 'Stop';
+                // Enable note input when game starts
+                inputHandler.setNoteInputEnabled(true);
             } else {
                 playButton.textContent = 'Restart';
+                // Note input can remain enabled when game stops (allows re-playing without restart)
             }
 
             if (playing && currentMidi) {
@@ -338,7 +342,6 @@
                 }
 
                 const invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
-                const scoreKeeper = getScoreKeeper();
                 const containerElement = document.getElementById("canvasContainer");
                 containerElement.scrollIntoView({ behavior: "smooth" });
 
@@ -362,11 +365,6 @@
                     songDifficultySettings,
                     songEnd,
                     visibleField,
-                    scoreKeeper,
-                    songNoteRenderer,
-                    keyNoteMapService,
-                    highScoreTracker,
-                    challengeScores,
                     pressedKeys
                 );
 
@@ -424,6 +422,16 @@
                     // Update inputHandler with the Vue app reference and set up key listeners
                     inputHandler.app = this;
                     inputHandler.setupKeyListeners(this, pressedKeys, synthMap, synthArray, playNotes);
+
+                    // Register services in ComponentRegistry for dependency injection
+                    componentRegistry.registerService('scoreKeeper', getScoreKeeper());
+                    componentRegistry.registerService('songNoteRenderer', songNoteRenderer);
+                    componentRegistry.registerService('keyNoteMapService', keyNoteMapService);
+                    componentRegistry.registerService('highScoreTracker', highScoreTracker);
+                    componentRegistry.registerService('challengeScores', challengeScores);
+
+                    // Store componentRegistry on Vue instance for use by game controllers
+                    this.componentRegistry = componentRegistry;
                 },
                 beforeDestroy() {
                     // Clean up event listeners when the app is destroyed
@@ -431,6 +439,8 @@
                 }
             });
 
+            // Store app reference in the outer scope for use by game controllers
+            app.componentRegistry = componentRegistry;
         };
 
         function renderSongNotes(){
