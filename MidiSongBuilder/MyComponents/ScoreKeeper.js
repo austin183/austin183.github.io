@@ -11,6 +11,15 @@ function getScoreKeeper(scoringSettings) {
     };
     var previousPressedKeys = {};
     return {
+        /**
+         * Reset the score keeper state for a new game
+         */
+        reset: function() {
+            score.total = 0;
+            score.keyScores = {};
+            previousPressedKeys = {};
+        },
+
         calculateNewScore: function(visibleField, pressedKeys, now, earliestNoteIndex, visibleFuture){
 
 

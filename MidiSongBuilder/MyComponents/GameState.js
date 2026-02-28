@@ -42,6 +42,11 @@ function getGameState() {
          * Reset state to initial values
          */
         reset: function() {
+            // Reset score keeper if available
+            if (state.scoreKeeper) {
+                state.scoreKeeper.reset();
+            }
+
             state.startTime = null;
             state.earliestNoteIndex = 0;
             state.visibleField = [];

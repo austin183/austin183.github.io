@@ -56,8 +56,32 @@ function getThreeJSGameController() {
             var highScoreTracker = app.componentRegistry ? app.componentRegistry.getService('highScoreTracker') : null;
             var challengeScores = app.componentRegistry ? app.componentRegistry.getService('challengeScores') : null;
 
+            // Reset the score keeper's internal state
+            if (scoreKeeper) {
+                scoreKeeper.reset();
+            }
+
+            // Reset note states in visibleField to 'unplayed'
+            if (visibleField && Array.isArray(visibleField)) {
+                for (var i = 0; i < visibleField.length; i++) {
+                    visibleField[i].state = 'unplayed';
+                }
+            }
+
+            // Reset Vue app's score values
+            if (app) {
+                app.score = 0;
+                app.goodCount = 0;
+                app.okCount = 0;
+                app.badCount = 0;
+                app.missedCount = 0;
+            }
+
             // Get constants from threeJSRenderer
             var CONSTANTS = threeJSRenderer.getConstants();
+
+            // Clear 3D notes from previous game
+            threeJSRenderer.clearNotes();
 
             // Create and initialize GameState - single source of truth for game state
             var gameState = getGameState();
