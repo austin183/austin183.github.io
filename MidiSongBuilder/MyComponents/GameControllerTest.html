@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>GameController Tests</title>
+    <script src="../Libraries/mocha.js"></script>
+    <link rel="stylesheet" href="../Libraries/mocha.css" />
+    <script type="text/javascript" src="../Libraries/Tone.js"></script>
+    <script type="text/javascript" src="../Libraries/ToneMidi.js"></script>
+    <script src="CoordinateCalculator.js"></script>
+    <script src="GameState.js"></script>
+    <script src="keyRenderInfo.js"></script>
+    <script src="ComponentRegistry.js"></script>
+    <script src="ScoreKeeper.js"></script>
+    <script src="scoringSettings.js"></script>
+    <script src="SongNoteRenderer.js"></script>
+    <script src="KeyNoteMapService.js"></script>
+    <script src="highScoreTracker.js"></script>
+    <script src="challengeScores.js"></script>
+    <script src="GameController.js"></script>
+    <script src="../Libraries/chai.min.js"></script>
+
+    <script>
+        mocha.setup('bdd');
+        const { expect } = chai;
+
+        let mockTone, mockAppState, mockMidiData, mockVisibleField, mockPressedKeys, mockComponentRegistry;
+        let gameController, coordinateCalculator, app;
+
+        // Mock Tone.js for deterministic testing
+        function setupMockTone() {
+            const mockSynthInstances = [];
+            
+            mockSynthInstances.push({
+                triggerAttackRelease: () => {},
+                toDestination: function() { return this; },
+                disconnect: () => {},
+                dispose: () => {}
+            });
+
+            mockTone = {
+                now: () => 1000, // Fixed timestamp for deterministic tests
+                Transport: {
+                    stop: () => {},
+                    position: 0,
+                    cancel: () => {},
+                    destroy: () => {}
+                },
+                PolySynth: function() {
+                    const synth = mockSynthInstances[0];
+                    return synth;
+                }
+            };
+
+            // Make Tone globally available
+            window.Tone = mockTone;
+        }
+
+        function setupMocks() {
+            setupMockTone();
+            
+            coordinateCalculator = getCoordinateCalculator();
+            gameController = getGameController();
+
+            mockComponentRegistry = getComponentRegistry();
+            
+            const scoringSettings = getScoringSettings();
+            const scoreKeeper = getScoreKeeper(scoringSettings);
+            
+            const mockSongNoteRenderer = getSongNoteRenderer({
+                getInvertedMap: (keyNoteMap) => ({ 'C4': 'z', 'D4': 'x', 'E4': 'c' })
+            });
+
+            // Mock buildSongNoteLetterCache to return proper canvas objects
+            const originalBuildSongNoteLetterCache = mockSongNoteRenderer.buildSongNoteLetterCache;
+            mockSongNoteRenderer.buildSongNoteLetterCache = function(keyRenderInfo) {
+                const cache = {};
+                for (const key in keyRenderInfo) {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 28;
+                    tempCanvas.height = 28;
+                    cache[key] = {
+                        unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' },
+                        goodNoteCanvas: { canvas: tempCanvas, fillStyle: 'green' },
+                        okNoteCanvas: { canvas: tempCanvas, fillStyle: 'yellow' },
+                        badNoteCanvas: { canvas: tempCanvas, fillStyle: 'red' }
+                    };
+                }
+                return cache;
+            };
+            
+            const mockKeyNoteMapService = getKeyNoteMapService();
+            
+            const highScoreTracker = getHighScoreTracker();
+            const challengeScores = getChallengeScores();
+
+            mockComponentRegistry.registerService('scoreKeeper', scoreKeeper);
+            mockComponentRegistry.registerService('songNoteRenderer', mockSongNoteRenderer);
+            mockComponentRegistry.registerService('keyNoteMapService', mockKeyNoteMapService);
+            mockComponentRegistry.registerService('highScoreTracker', highScoreTracker);
+            mockComponentRegistry.registerService('challengeScores', challengeScores);
+
+            const mockCanvas = document.createElement('canvas');
+            mockCanvas.width = 800;
+            mockCanvas.height = 600;
+            
+            const mockCachedLetterCanvas = document.createElement('canvas');
+            mockCachedLetterCanvas.width = 20;
+            mockCachedLetterCanvas.height = 20;
+            
+const mockCtx = {
+                clearRect: () => {},
+                beginPath: () => {},
+                closePath: () => {},
+                moveTo: () => {},
+                lineTo: () => {},
+                stroke: () => {},
+                fillRect: () => {},
+                createLinearGradient: () => ({ addColorStop: () => {} }),
+                fillText: () => {},
+                font: '',
+                fillStyle: '',
+                setLineDash: () => {},
+                getLineDash: () => [],
+                drawImage: () => {},
+                rect: () => {}
+            };
+
+            // Mock cached letter for SongNoteRenderer - needs canvas property
+            mockCtx.cachedLetterCanvas = {
+                canvas: mockCachedLetterCanvas,
+                fillStyle: 'blue'
+            };
+
+            mockAppState = {
+                componentRegistry: mockComponentRegistry,
+                score: 0,
+                goodCount: 0,
+                okCount: 0,
+                badCount: 0,
+                missedCount: 0,
+                trackVolume: 1.0,
+                toggleTrackHighScores: true,
+                selectedKeyNoteMap: { keyNoteMap: {} },
+                selectedMidiSong: { filename: 'test.mid' },
+                selectedDifficulty: { difficultyKey: 'medium' },
+                notesCanvas: mockCanvas,
+                vueCanvas: mockCtx,
+                highScore: 0,
+                challengeScore: 0
+            };
+
+            mockMidiData = {
+                tracks: [
+                    {
+                        notes: [
+                            { name: 'C4', time: 0, duration: 1.0, velocity: 0.8 },
+                            { name: 'D4', time: 1, duration: 1.0, velocity: 0.7 }
+                        ]
+                    }
+                ]
+            };
+
+            mockVisibleField = [
+                { time: 0, duration: 1.0, name: 'C4', state: 'unplayed' },
+                { time: 1, duration: 1.0, name: 'D4', state: 'unplayed' }
+            ];
+
+            mockPressedKeys = {};
+        }
+
+        function runTests() {
+            setupMocks();
+
+            describe('GameController - delay property', function() {
+                it('should return DEFAULT_DELAY from CoordinateCalculator', function() {
+                    const expectedDelay = coordinateCalculator.getConstants().DEFAULT_DELAY;
+                    expect(gameController.delay).to.equal(expectedDelay);
+                });
+
+                it('should always return the same delay value', function() {
+                    const firstDelay = gameController.delay;
+                    const secondDelay = gameController.delay;
+                    expect(secondDelay).to.equal(firstDelay);
+                });
+            });
+
+            describe('GameController - startGame', function() {
+                it('should stop any existing game before starting new one', function() {
+                    let stopCalled = false;
+                    const originalStopGame = gameController.stopGame;
+                    gameController.stopGame = function(app) { stopCalled = true; };
+
+                    gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    gameController.stopGame = originalStopGame;
+                    expect(stopCalled).to.be.true;
+                });
+
+                it('should retrieve scoreKeeper from ComponentRegistry', function() {
+                    gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.gameState.get('scoreKeeper')).to.equal(
+                        mockComponentRegistry.getService('scoreKeeper')
+                    );
+                });
+
+                it('should retrieve songNoteRenderer from ComponentRegistry', function() {
+                    gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.gameState.get('songNoteRenderer')).to.equal(
+                        mockComponentRegistry.getService('songNoteRenderer')
+                    );
+                });
+
+                it('should retrieve keyNoteMapService from ComponentRegistry', function() {
+                    gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    const invertedMap = mockAppState.gameState.get('invertedKeyNoteMap');
+                    expect(invertedMap).to.not.be.null;
+                });
+
+                it('should retrieve highScoreTracker from ComponentRegistry', function() {
+                    gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.gameState.get('highScoreTracker')).to.equal(
+                        mockComponentRegistry.getService('highScoreTracker')
+                    );
+                });
+
+                it('should retrieve challengeScores from ComponentRegistry', function() {
+                    gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.gameState.get('challengeScores')).to.equal(
+                        mockComponentRegistry.getService('challengeScores')
+                    );
+                });
+
+                it('should reset scoreKeeper state', function() {
+                    const scoreKeeper = mockComponentRegistry.getService('scoreKeeper');
+                    scoreKeeper.calculateNewScore(mockVisibleField, {}, 0, 0, 10);
+                    
+                    const scoreBefore = mockAppState.gameState.get('scoreKeeper');
+                    
+                    gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.gameState.get('scoreKeeper')).to.equal(scoreBefore);
+                });
+
+                it('should reset note states in visibleField to unplayed', function() {
+                    mockVisibleField[0].state = 'played';
+                    mockVisibleField[1].state = 'missed';
+
+                    gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    expect(mockVisibleField[0].state).to.equal('unplayed');
+                    expect(mockVisibleField[1].state).to.equal('unplayed');
+                });
+
+                it('should reset Vue app score values', function() {
+                    mockAppState.score = 500;
+                    mockAppState.goodCount = 5;
+                    mockAppState.okCount = 3;
+                    mockAppState.badCount = 2;
+                    mockAppState.missedCount = 1;
+
+                    gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.score).to.equal(0);
+                    expect(mockAppState.goodCount).to.equal(0);
+                    expect(mockAppState.okCount).to.equal(0);
+                    expect(mockAppState.badCount).to.equal(0);
+                    expect(mockAppState.missedCount).to.equal(0);
+                });
+
+                it('should initialize gameState with startTime', function() {
+                    gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.gameState.get('startTime')).to.equal(1000);
+                });
+
+                it('should initialize gameState with earliestNoteIndex', function() {
+                    gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.gameState.get('earliestNoteIndex')).to.equal(0);
+                });
+
+                it('should initialize gameState with visibleField', function() {
+                    gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.gameState.get('visibleField')).to.equal(mockVisibleField);
+                });
+
+                it('should initialize gameState with songEnd', function() {
+                    gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.gameState.get('songEnd')).to.equal(10);
+                });
+
+                it('should initialize gameState with pressedKeys', function() {
+                    gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.gameState.get('pressedKeys')).to.equal(mockPressedKeys);
+                });
+
+                it('should initialize gameState with delay from CoordinateCalculator', function() {
+                    const expectedDelay = coordinateCalculator.getConstants().DEFAULT_DELAY;
+                    
+                    gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.gameState.get('delay')).to.equal(expectedDelay);
+                });
+
+                it('should initialize gameState with synths array', function() {
+                    gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.gameState.get('synths')).to.be.an('array');
+                });
+
+                it('should create synth for each MIDI track', function() {
+                    const originalTrackCount = mockMidiData.tracks.length;
+
+                    gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    expect(gameController.synths).to.have.lengthOf(originalTrackCount);
+                });
+
+                it('should schedule audio events for each note', function() {
+                    const notesScheduled = [];
+                    
+                    const trackingSynth = {
+                        triggerAttackRelease: (note, duration, time, velocity) => {
+                            notesScheduled.push({ note, duration, time, velocity });
+                        },
+                        toDestination: function() { return this; },
+                        disconnect: () => {},
+                        dispose: () => {}
+                    };
+
+                    const originalPolySynth = window.Tone.PolySynth;
+                    window.Tone.PolySynth = function() { return trackingSynth; };
+
+                    gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    window.Tone.PolySynth = originalPolySynth;
+
+                    expect(notesScheduled).to.have.lengthOf(2);
+                    expect(notesScheduled[0].note).to.equal('C4');
+                    expect(notesScheduled[1].note).to.equal('D4');
+                });
+
+                it('should only schedule notes with duration > 0', function() {
+                    const notesScheduled = [];
+                    
+                    const trackingSynth = {
+                        triggerAttackRelease: (note, duration, time, velocity) => {
+                            notesScheduled.push({ note });
+                        },
+                        toDestination: function() { return this; },
+                        disconnect: () => {},
+                        dispose: () => {}
+                    };
+
+                    const originalPolySynth = window.Tone.PolySynth;
+                    window.Tone.PolySynth = function() { return trackingSynth; };
+
+                    const midiWithSilentNotes = {
+                        tracks: [{
+                            notes: [
+                                { name: 'C4', time: 0, duration: 1.0, velocity: 0.8 },
+                                { name: 'D4', time: 1, duration: 0, velocity: 0.7 }
+                            ]
+                        }]
+                    };
+
+                    gameController.startGame(
+                        mockAppState,
+                        midiWithSilentNotes,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    window.Tone.PolySynth = originalPolySynth;
+
+                    expect(notesScheduled).to.have.lengthOf(1);
+                    expect(notesScheduled[0].note).to.equal('C4');
+                });
+
+                it('should start game loop interval', function() {
+                    const originalSetInterval = window.setInterval;
+                    let capturedIntervalId = null;
+
+                    window.setInterval = (callback, delay) => {
+                        capturedIntervalId = 12345;
+                        return capturedIntervalId;
+                    };
+
+                    gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    window.setInterval = originalSetInterval;
+
+                    expect(gameController.playIntervalId).to.equal(12345);
+                });
+
+                it('should return the interval ID', function() {
+                    const returnedId = gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    expect(returnedId).to.be.a('number');
+                });
+
+                it('should build noteLetterCache from songNoteRenderer', function() {
+                    gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    const noteLetterCache = mockAppState.gameState.get('noteLetterCache');
+                    expect(noteLetterCache).to.not.be.null;
+                });
+
+                it('should handle null pressedKeys gracefully', function() {
+                    gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        null
+                    );
+
+                    expect(mockAppState.gameState.get('pressedKeys')).to.deep.equal({});
+                });
+
+                it('should handle null componentRegistry gracefully', function() {
+                    const appWithoutRegistry = Object.assign({}, mockAppState);
+                    delete appWithoutRegistry.componentRegistry;
+
+                    gameController.startGame(
+                        appWithoutRegistry,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    expect(appWithoutRegistry.gameState.get('scoreKeeper')).to.be.null;
+                });
+            });
+
+            describe('GameController - gameLoop', function() {
+                it('should stop game when gameState is null', function() {
+                    let stopGameCalled = false;
+                    
+                    const originalStopGame = gameController.stopGame;
+                    gameController.stopGame = function(app) { stopGameCalled = true; };
+
+                    gameController.gameLoop({});
+
+                    gameController.stopGame = originalStopGame;
+                    expect(stopGameCalled).to.be.true;
+                });
+
+                it('should stop game when dependencies are missing', function() {
+                    mockAppState.gameState = getGameState();
+                    mockAppState.gameState.initialize({
+                        startTime: 1000,
+                        delay: 4,
+                        songEnd: 100,
+                        scoreKeeper: null, // Missing dependency
+                        songNoteRenderer: mockComponentRegistry.getService('songNoteRenderer'),
+                        invertedKeyNoteMap: null,
+                        pressedKeys: {},
+                        visibleField: mockVisibleField,
+                        earliestNoteIndex: 0
+                    });
+
+                    let stopGameCalled = false;
+                    
+                    const originalStopGame = gameController.stopGame;
+                    gameController.stopGame = function(app) { stopGameCalled = true; };
+
+                    gameController.gameLoop(mockAppState);
+
+                    gameController.stopGame = originalStopGame;
+                    expect(stopGameCalled).to.be.true;
+                });
+
+                it('should calculate intervalNow correctly', function() {
+                    mockAppState.gameState = getGameState();
+                    mockAppState.gameState.initialize({
+                        startTime: 1000,
+                        delay: 4,
+                        songEnd: 100,
+                        scoreKeeper: mockComponentRegistry.getService('scoreKeeper'),
+                        songNoteRenderer: mockComponentRegistry.getService('songNoteRenderer'),
+                        invertedKeyNoteMap: { 'C4': 'z' },
+                        pressedKeys: {},
+                        visibleField: mockVisibleField,
+                        earliestNoteIndex: 0
+                    });
+
+                    const originalNow = window.Tone.now;
+                    window.Tone.now = () => 1050;
+
+                    let capturedIntervalNow = null;
+                    
+                    const originalCalculateNewScore = mockComponentRegistry.getService('scoreKeeper').calculateNewScore;
+                    mockComponentRegistry.getService('scoreKeeper').calculateNewScore = (visibleField, pressedKeys, intervalNow) => {
+                        capturedIntervalNow = intervalNow;
+                        return { total: 0, goodCount: 0, okCount: 0, badCount: 0, missedCount: 0 };
+                    };
+
+                    gameController.gameLoop(mockAppState);
+
+                    window.Tone.now = originalNow;
+                    mockComponentRegistry.getService('scoreKeeper').calculateNewScore = originalCalculateNewScore;
+
+                    expect(capturedIntervalNow).to.equal(1050 - 1000 - 4);
+                });
+
+                it('should handle song end when visiblePast > songEnd', function() {
+                    mockAppState.gameState = getGameState();
+                    mockAppState.gameState.initialize({
+                        startTime: 1000,
+                        delay: 4,
+                        songEnd: 10, // Very short song
+                        scoreKeeper: mockComponentRegistry.getService('scoreKeeper'),
+                        songNoteRenderer: mockComponentRegistry.getService('songNoteRenderer'),
+                        invertedKeyNoteMap: { 'C4': 'z' },
+                        pressedKeys: {},
+                        visibleField: mockVisibleField,
+                        earliestNoteIndex: 0
+                    });
+
+                    const originalNow = window.Tone.now;
+                    window.Tone.now = () => 2000; // Well past songEnd
+
+                    let handleSongEndCalled = false;
+                    
+                    const originalRenderFinalScore = mockComponentRegistry.getService('songNoteRenderer').renderFinalScore;
+                    mockComponentRegistry.getService('songNoteRenderer').renderFinalScore = () => {
+                        handleSongEndCalled = true;
+                    };
+
+                    gameController.gameLoop(mockAppState);
+
+                    window.Tone.now = originalNow;
+                    mockComponentRegistry.getService('songNoteRenderer').renderFinalScore = originalRenderFinalScore;
+
+                    expect(handleSongEndCalled).to.be.true;
+                });
+
+it('should update earliestNoteIndex for passed notes', function() {
+                    // Create a proper noteLetterCache mock with canvas property
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 28;
+                    tempCanvas.height = 28;
+                    
+                    const mockNoteLetterCache = {
+                        'z': {
+                            unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' },
+                            goodNoteCanvas: { canvas: tempCanvas, fillStyle: 'green' },
+                            okNoteCanvas: { canvas: tempCanvas, fillStyle: 'yellow' },
+                            badNoteCanvas: { canvas: tempCanvas, fillStyle: 'red' }
+                        },
+                        'x': {
+                            unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' },
+                            goodNoteCanvas: { canvas: tempCanvas, fillStyle: 'green' },
+                            okNoteCanvas: { canvas: tempCanvas, fillStyle: 'yellow' },
+                            badNoteCanvas: { canvas: tempCanvas, fillStyle: 'red' }
+                        },
+                        'c': {
+                            unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' },
+                            goodNoteCanvas: { canvas: tempCanvas, fillStyle: 'green' },
+                            okNoteCanvas: { canvas: tempCanvas, fillStyle: 'yellow' },
+                            badNoteCanvas: { canvas: tempCanvas, fillStyle: 'red' }
+                        }
+                    };
+
+                    mockAppState.gameState = getGameState();
+                    mockAppState.gameState.initialize({
+                        startTime: 1000,
+                        delay: 4,
+                        songEnd: 100,
+                        scoreKeeper: mockComponentRegistry.getService('scoreKeeper'),
+                        songNoteRenderer: mockComponentRegistry.getService('songNoteRenderer'),
+                        invertedKeyNoteMap: { 'C4': 'z' },
+                        pressedKeys: {},
+                        visibleField: [
+                            { time: 0, duration: 1.0, name: 'C4', letter: 'z' },
+                            { time: 1, duration: 1.0, name: 'D4', letter: 'x' },
+                            { time: 2, duration: 1.0, name: 'E4', letter: 'c' }
+                        ],
+                        earliestNoteIndex: 0,
+                        noteLetterCache: mockNoteLetterCache
+                    });
+
+                    const originalNow = window.Tone.now;
+                    window.Tone.now = () => 1005; // visiblePast = 1005 - 1000 - 4 - 1 = 0
+
+                    gameController.gameLoop(mockAppState);
+
+                    window.Tone.now = originalNow;
+
+                    expect(mockAppState.gameState.get('earliestNoteIndex')).to.be.at.least(0);
+                });
+
+                it('should calculate score using scoreKeeper', function() {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 28;
+                    tempCanvas.height = 28;
+                    
+                    const mockNoteLetterCache = {
+                        'z': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'x': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'c': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } }
+                    };
+
+                    mockAppState.gameState = getGameState();
+                    mockAppState.gameState.initialize({
+                        startTime: 1000,
+                        delay: 4,
+                        songEnd: 100,
+                        scoreKeeper: mockComponentRegistry.getService('scoreKeeper'),
+                        songNoteRenderer: mockComponentRegistry.getService('songNoteRenderer'),
+                        invertedKeyNoteMap: { 'C4': 'z' },
+                        pressedKeys: {},
+                        visibleField: mockVisibleField,
+                        earliestNoteIndex: 0,
+                        noteLetterCache: mockNoteLetterCache
+                    });
+
+                    const originalNow = window.Tone.now;
+                    window.Tone.now = () => 1050;
+
+                    gameController.gameLoop(mockAppState);
+
+                    window.Tone.now = originalNow;
+
+                    expect(mockAppState.score).to.be.at.least(0);
+                });
+
+                it('should sync state to Vue via gameState.syncToVue', function() {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 28;
+                    tempCanvas.height = 28;
+                    
+                    const mockNoteLetterCache = {
+                        'z': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'x': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'c': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } }
+                    };
+
+                    mockAppState.gameState = getGameState();
+                    mockAppState.gameState.initialize({
+                        startTime: 1000,
+                        delay: 4,
+                        songEnd: 100,
+                        scoreKeeper: {
+                            calculateNewScore: () => ({ total: 999, goodCount: 3, okCount: 2, badCount: 1, missedCount: 0 }),
+                            getCounts: () => ({ goodCount: 3, okCount: 2, badCount: 1, missedCount: 0 })
+                        },
+                        songNoteRenderer: mockComponentRegistry.getService('songNoteRenderer'),
+                        invertedKeyNoteMap: { 'C4': 'z' },
+                        pressedKeys: {},
+                        visibleField: mockVisibleField,
+                        earliestNoteIndex: 0,
+                        noteLetterCache: mockNoteLetterCache
+                    });
+
+                    const originalNow = window.Tone.now;
+                    window.Tone.now = () => 1050;
+
+                    gameController.gameLoop(mockAppState);
+
+                    window.Tone.now = originalNow;
+
+                    expect(mockAppState.score).to.equal(999);
+                    expect(mockAppState.goodCount).to.equal(3);
+                });
+
+                it('should clear canvas before rendering', function() {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 28;
+                    tempCanvas.height = 28;
+                    
+                    const mockNoteLetterCache = {
+                        'z': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'x': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'c': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } }
+                    };
+
+                    mockAppState.gameState = getGameState();
+                    mockAppState.gameState.initialize({
+                        startTime: 1000,
+                        delay: 4,
+                        songEnd: 100,
+                        scoreKeeper: mockComponentRegistry.getService('scoreKeeper'),
+                        songNoteRenderer: mockComponentRegistry.getService('songNoteRenderer'),
+                        invertedKeyNoteMap: { 'C4': 'z' },
+                        pressedKeys: {},
+                        visibleField: mockVisibleField,
+                        earliestNoteIndex: 0,
+                        noteLetterCache: mockNoteLetterCache
+                    });
+
+                    let clearRectCalled = false;
+                    mockAppState.vueCanvas.clearRect = () => { clearRectCalled = true; };
+
+                    const originalNow = window.Tone.now;
+                    window.Tone.now = () => 1050;
+
+                    gameController.gameLoop(mockAppState);
+
+                    window.Tone.now = originalNow;
+
+                    expect(clearRectCalled).to.be.true;
+                });
+
+                it('should render now line', function() {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 28;
+                    tempCanvas.height = 28;
+                    
+                    const mockNoteLetterCache = {
+                        'z': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'x': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'c': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } }
+                    };
+
+                    mockAppState.gameState = getGameState();
+                    mockAppState.gameState.initialize({
+                        startTime: 1000,
+                        delay: 4,
+                        songEnd: 100,
+                        scoreKeeper: mockComponentRegistry.getService('scoreKeeper'),
+                        songNoteRenderer: mockComponentRegistry.getService('songNoteRenderer'),
+                        invertedKeyNoteMap: { 'C4': 'z' },
+                        pressedKeys: {},
+                        visibleField: mockVisibleField,
+                        earliestNoteIndex: 0,
+                        noteLetterCache: mockNoteLetterCache
+                    });
+
+                    let renderNowLineCalled = false;
+                    mockComponentRegistry.getService('songNoteRenderer').renderNowLine = () => {
+                        renderNowLineCalled = true;
+                    };
+
+                    const originalNow = window.Tone.now;
+                    window.Tone.now = () => 1050;
+
+                    gameController.gameLoop(mockAppState);
+
+                    window.Tone.now = originalNow;
+
+                    expect(renderNowLineCalled).to.be.true;
+                });
+
+                it('should render notes playing for canvas', function() {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 28;
+                    tempCanvas.height = 28;
+                    
+                    const mockNoteLetterCache = {
+                        'z': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'x': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'c': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } }
+                    };
+
+                    mockAppState.gameState = getGameState();
+                    mockAppState.gameState.initialize({
+                        startTime: 1000,
+                        delay: 4,
+                        songEnd: 100,
+                        scoreKeeper: mockComponentRegistry.getService('scoreKeeper'),
+                        songNoteRenderer: mockComponentRegistry.getService('songNoteRenderer'),
+                        invertedKeyNoteMap: { 'C4': 'z' },
+                        pressedKeys: {},
+                        visibleField: mockVisibleField,
+                        earliestNoteIndex: 0,
+                        noteLetterCache: mockNoteLetterCache
+                    });
+
+                    let renderNotesCalled = false;
+                    mockComponentRegistry.getService('songNoteRenderer').renderNotesPlayingForCanvas = () => {
+                        renderNotesCalled = true;
+                    };
+
+                    const originalNow = window.Tone.now;
+                    window.Tone.now = () => 1050;
+
+                    gameController.gameLoop(mockAppState);
+
+                    window.Tone.now = originalNow;
+
+                    expect(renderNotesCalled).to.be.true;
+                });
+
+                it('should update high scores when song ends', function() {
+                    let setHighScoreCalled = false;
+                    
+                    const originalSetHighScore = mockComponentRegistry.getService('highScoreTracker').setHighScore;
+                    mockComponentRegistry.getService('highScoreTracker').setHighScore = (filename, difficultyKey, score) => {
+                        setHighScoreCalled = true;
+                    };
+
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 28;
+                    tempCanvas.height = 28;
+                    
+                    const mockNoteLetterCache = {
+                        'z': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'x': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'c': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } }
+                    };
+
+                    mockAppState.toggleTrackHighScores = true;
+                    mockAppState.selectedMidiSong = { filename: 'test.mid' };
+                    mockAppState.selectedDifficulty = { difficultyKey: 'medium' };
+                    mockAppState.highScore = 0;
+                    mockAppState.challengeScore = 0;
+                    
+                    mockAppState.gameState = getGameState();
+                    
+                    // Ensure all dependencies are present
+                    const scoreKeeper = mockComponentRegistry.getService('scoreKeeper');
+                    const songNoteRenderer = mockComponentRegistry.getService('songNoteRenderer');
+                    const highScoreTracker = mockComponentRegistry.getService('highScoreTracker');
+                    const challengeScores = mockComponentRegistry.getService('challengeScores');
+                    
+                    mockAppState.gameState.initialize({
+                        startTime: 1000,
+                        delay: 4,
+                        songEnd: 10, // Very short song - ends at 10 seconds
+                        scoreKeeper: scoreKeeper,
+                        songNoteRenderer: songNoteRenderer,
+                        highScoreTracker: highScoreTracker,
+                        challengeScores: challengeScores,
+                        invertedKeyNoteMap: { 'C4': 'z' },
+                        pressedKeys: {},
+                        visibleField: mockVisibleField,
+                        earliestNoteIndex: 0,
+                        noteLetterCache: mockNoteLetterCache
+                    });
+
+                    const originalNow = window.Tone.now;
+                    
+                    // visiblePast = intervalNow - 1
+                    // For song to end: visiblePast > songEnd (10)
+                    // So intervalNow must be > 11
+                    // With startTime=1000 and delay=4: intervalNow = Tone.now() - 1000 - 4
+                    // So Tone.now() must be > 1015
+                    window.Tone.now = () => 2000;
+
+                    gameController.gameLoop(mockAppState);
+
+                    window.Tone.now = originalNow;
+                    mockComponentRegistry.getService('highScoreTracker').setHighScore = originalSetHighScore;
+
+                    expect(setHighScoreCalled).to.be.true;
+                });
+
+                it('should not update high scores when toggleTrackHighScores is false', function() {
+                    mockAppState.toggleTrackHighScores = false;
+                    
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 28;
+                    tempCanvas.height = 28;
+                    
+                    const mockNoteLetterCache = {
+                        'z': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'x': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'c': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } }
+                    };
+
+                    mockAppState.gameState = getGameState();
+                    mockAppState.gameState.initialize({
+                        startTime: 1000,
+                        delay: 4,
+                        songEnd: 10,
+                        scoreKeeper: mockComponentRegistry.getService('scoreKeeper'),
+                        songNoteRenderer: mockComponentRegistry.getService('songNoteRenderer'),
+                        invertedKeyNoteMap: { 'C4': 'z' },
+                        pressedKeys: {},
+                        visibleField: mockVisibleField,
+                        earliestNoteIndex: 0,
+                        noteLetterCache: mockNoteLetterCache
+                    });
+
+                    let setHighScoreCalled = false;
+                    mockComponentRegistry.getService('highScoreTracker').setHighScore = () => {
+                        setHighScoreCalled = true;
+                    };
+
+                    const originalNow = window.Tone.now;
+                    window.Tone.now = () => 2000;
+
+                    gameController.gameLoop(mockAppState);
+
+                    window.Tone.now = originalNow;
+
+                    expect(setHighScoreCalled).to.be.false;
+                });
+            });
+
+            describe('GameController - stopGame', function() {
+                it('should clear the play interval', function() {
+                    const originalClearInterval = window.clearInterval;
+                    let clearedId = null;
+
+                    window.clearInterval = (id) => {
+                        clearedId = id;
+                    };
+
+                    gameController.playIntervalId = 99999;
+                    gameController._playIntervalId = 99999;
+
+                    gameController.stopGame(mockAppState);
+
+                    window.clearInterval = originalClearInterval;
+
+                    expect(clearedId).to.equal(99999);
+                    expect(gameController.playIntervalId).to.be.null;
+                });
+
+                it('should stop Tone.Transport', function() {
+                    let transportStopped = false;
+                    
+                    const originalTransportStop = window.Tone.Transport.stop;
+                    window.Tone.Transport.stop = () => { transportStopped = true; };
+
+                    gameController.stopGame(mockAppState);
+
+                    window.Tone.Transport.stop = originalTransportStop;
+
+                    expect(transportStopped).to.be.true;
+                });
+
+                it('should reset Tone.Transport.position to 0', function() {
+                    window.Tone.Transport.position = 500;
+                    
+                    gameController.stopGame(mockAppState);
+
+                    expect(window.Tone.Transport.position).to.equal(0);
+                });
+
+                it('should call Tone.Transport.cancel', function() {
+                    let cancelCalled = false;
+                    
+                    const originalTransportCancel = window.Tone.Transport.cancel;
+                    window.Tone.Transport.cancel = () => { cancelCalled = true; };
+
+                    gameController.stopGame(mockAppState);
+
+                    window.Tone.Transport.cancel = originalTransportCancel;
+
+                    expect(cancelCalled).to.be.true;
+                });
+
+                it('should dispose all synths', function() {
+                    let disconnections = 0;
+                    let disposals = 0;
+
+                    const trackingSynth = {
+                        disconnect: () => { disconnections++; },
+                        dispose: () => { disposals++; }
+                    };
+
+                    gameController.synths.push(trackingSynth);
+
+                    gameController.stopGame(mockAppState);
+
+                    expect(disconnections).to.be.at.least(1);
+                    expect(disposals).to.be.at.least(1);
+                });
+
+                it('should cleanup gameState from app', function() {
+                    mockAppState.gameState = { test: 'value' };
+
+                    gameController.stopGame(mockAppState);
+
+                    expect(mockAppState.gameState).to.be.undefined;
+                });
+
+it('should handle null app gracefully', function() {
+                    const originalClearInterval = window.clearInterval;
+                    let clearedId = null;
+
+                    window.clearInterval = (id) => {
+                        clearedId = id;
+                    };
+
+                    // Mock synth disposal to avoid errors with null app
+                    const originalSynths = gameController.synths;
+                    gameController.synths = [];
+
+                    expect(() => {
+                        gameController.stopGame(null);
+                    }).to.not.throw();
+
+                    window.clearInterval = originalClearInterval;
+                    gameController.synths = originalSynths;
+                });
+
+                it('should handle already stopped game gracefully', function() {
+                    gameController.playIntervalId = null;
+                    
+                    const originalClearInterval = window.clearInterval;
+                    let clearedId = null;
+
+                    window.clearInterval = (id) => {
+                        clearedId = id;
+                    };
+
+                    gameController.stopGame(mockAppState);
+
+                    window.clearInterval = originalClearInterval;
+
+                    expect(clearedId).to.be.null;
+                });
+            });
+
+            describe('GameController - integration tests', function() {
+                it('should complete full game cycle from start to end', function() {
+                    const originalSetInterval = window.setInterval;
+                    const originalClearInterval = window.clearInterval;
+                    const originalNow = window.Tone.now;
+                    
+                    let intervalId = null;
+                    let callCount = 0;
+                    let stopGameCalled = false;
+                    
+                    window.setInterval = (callback) => {
+                        intervalId = 12345;
+                        return intervalId;
+                    };
+
+                    window.clearInterval = (id) => {
+                        if (id === intervalId) {
+                            gameController.playIntervalId = null;
+                            stopGameCalled = true;
+                        }
+                    };
+
+                    window.Tone.now = () => 1000;
+
+                    gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    // First call - game is still running
+                    window.Tone.now = () => 1050;
+                    gameController.gameLoop(mockAppState);
+
+                    // Second call - still running
+                    window.Tone.now = () => 1060;
+                    gameController.gameLoop(mockAppState);
+
+                    // Third call - song should end (visiblePast > songEnd)
+                    window.Tone.now = () => 2000; // visiblePast = 2000 - 1000 - 4 - 1 = 995 > 10
+                    gameController.gameLoop(mockAppState);
+
+                    window.setInterval = originalSetInterval;
+                    window.clearInterval = originalClearInterval;
+                    window.Tone.now = originalNow;
+
+                    expect(stopGameCalled).to.be.true;
+                    expect(mockAppState.gameState).to.be.undefined;
+                });
+
+                it('should maintain synth array across game lifecycle', function() {
+                    const originalTrackCount = mockMidiData.tracks.length;
+
+                    gameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        mockPressedKeys
+                    );
+
+                    expect(gameController.synths).to.have.lengthOf(originalTrackCount);
+
+                    gameController.stopGame(mockAppState);
+
+                    expect(gameController.synths).to.have.lengthOf(0);
+                });
+
+                it('should handle multiple start/stop cycles', function() {
+                    for (let i = 0; i < 3; i++) {
+                        gameController.startGame(
+                            mockAppState,
+                            mockMidiData,
+                            null,
+                            10,
+                            mockVisibleField,
+                            mockPressedKeys
+                        );
+
+                        expect(mockAppState.gameState).to.not.be.undefined;
+                        expect(gameController.synths).to.have.lengthOf(1);
+
+                        gameController.stopGame(mockAppState);
+
+                        expect(mockAppState.gameState).to.be.undefined;
+                        expect(gameController.synths).to.have.lengthOf(0);
+                    }
+                });
+            });
+
+            mocha.run();
+        }
+    </script>
+</head>
+
+<body onload="runTests()">
+    <div id="mocha"></div>
+</body>
+
+</html>

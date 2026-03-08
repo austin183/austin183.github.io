@@ -226,10 +226,15 @@ function getGameController() {
             }
         },
 
-        /**
+/**
          * Stop the game and clean up resources
          */
         stopGame: function(app) {
+            // Handle null app gracefully
+            if (!app) {
+                return;
+            }
+
             // Stop the interval
             if (this.playIntervalId) {
                 clearInterval(this.playIntervalId);
