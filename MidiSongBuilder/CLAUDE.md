@@ -5,6 +5,8 @@ DO NOT read any files in the `Libraries` directory. This folder contains large J
 
 All interactions with code in MidiSongBuilder/Libraries should be limited to directory operations (listing, globbing) and should never include reading file contents.
 
+DO NOT start the http server.  If it is not running, ask for it to be started.  DO NOT try to start it yourself.
+
 ## Code Structure Imperatives
 DO NOT duplicate:
 - methods
