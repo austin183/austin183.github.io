@@ -81,6 +81,18 @@ async function runTests(testPath, baseUrl = 'http://localhost:' + SERVER_PORT) {
     const context = await browser.newContext();
     const page = await context.newPage();
 
+    // Capture ALL console messages to file
+    let allLogs = [];
+    page.on('console', msg => {
+        const entry = `[${msg.type().toUpperCase()}] ${msg.text()}`;
+        allLogs.push(entry);
+    });
+    
+    page.on('pageerror', error => {
+        const entry = `[PAGE ERROR] ${error.message}`;
+        allLogs.push(entry);
+    });
+
     try {
         console.log(baseUrl + '/' + testPath);
         // Navigate to test page
@@ -167,6 +179,12 @@ async function runTests(testPath, baseUrl = 'http://localhost:' + SERVER_PORT) {
                 failureDetails
             };
         });
+
+        // Output any console errors
+        if (allLogs.length > 0) {
+            console.log('\n=== CONSOLE LOGS ===');
+            allLogs.forEach(log => console.log(log));
+        }
 
         await browser.close();
         return results;

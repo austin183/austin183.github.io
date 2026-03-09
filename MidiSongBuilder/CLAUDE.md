@@ -16,5 +16,8 @@ DO THINK about:
 - How would you need to structure the code to keep from needing to duplicate things?
 - Is what we are adding a new concern, a concern for another existing component, or the concern of the component we are in?
 
+## Read Files Before Writing
+Harnesses expect files to be read before getting written to.  Please be sure to read before writing.
+
 ## Committing to Github
 Sign Commits with `Co-Authored-By: LittleLight <noreply@traveler.dstny>`
