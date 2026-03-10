@@ -417,7 +417,7 @@ const mockCtx = {
                     expect(mockAppState.gameState.get('delay')).to.equal(expectedDelay);
                 });
 
-                it('should initialize gameState with synths array', function() {
+                it('should initialize synths array', function() {
                     gameController.startGame(
                         mockAppState,
                         mockMidiData,
@@ -427,7 +427,7 @@ const mockCtx = {
                         mockPressedKeys
                     );
 
-                    expect(mockAppState.gameState.get('synths')).to.be.an('array');
+                    expect(gameController.synths).to.be.an('array');
                 });
 
                 it('should create synth for each MIDI track', function() {

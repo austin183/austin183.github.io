@@ -513,7 +513,7 @@
                         mockPressedKeys
                     );
 
-                    expect(mockAppState.threeGameState.get('synths')).to.be.an('array');
+                    expect(threeJSGameController.synths).to.be.an('array');
                 });
 
                 it('should create synth for each MIDI track', function() {
@@ -529,7 +529,7 @@
                         mockPressedKeys
                     );
 
-                    expect(mockAppState.threeGameState.get('synths')).to.have.lengthOf(originalTrackCount);
+                    expect(threeJSGameController.synths).to.have.lengthOf(originalTrackCount);
                 });
 
                 it('should schedule audio events for each note', function() {
@@ -791,8 +791,6 @@
                 });
 
                 it('should handle null currentMidi gracefully', function() {
-                    const originalSynths = mockAppState.threeGameState ? mockAppState.threeGameState.get('synths') : null;
-
                     threeJSGameController.startGame(
                         mockAppState,
                         null,
@@ -803,7 +801,7 @@
                         mockPressedKeys
                     );
 
-                    expect(mockAppState.threeGameState.get('synths')).to.be.an('array');
+                    expect(threeJSGameController.synths).to.be.an('array');
                 });
 
                 it('should handle empty MIDI tracks gracefully', function() {
@@ -819,7 +817,7 @@
                         mockPressedKeys
                     );
 
-                    expect(mockAppState.threeGameState.get('synths')).to.be.an('array');
+                    expect(threeJSGameController.synths).to.be.an('array');
                 });
             });
 
@@ -1781,7 +1779,9 @@
                     };
 
                     mockAppState.threeGameState = getGameState();
-                    mockAppState.threeGameState.set('synths', [trackingSynth]);
+                    
+                    // Add synth to controller's private storage via addSynth method
+                    threeJSGameController.addSynth(trackingSynth);
 
                     threeJSGameController.stopGame(mockAppState);
 
@@ -2048,13 +2048,13 @@
                         mockPressedKeys
                     );
 
-                    const synthsBefore = mockAppState.threeGameState.get('synths');
+                    const synthsBefore = threeJSGameController.synths;
                     expect(synthsBefore).to.have.lengthOf(1);
 
                     threeJSGameController.stopGame(mockAppState);
 
-                    const synthsAfter = mockAppState.threeGameState ? mockAppState.threeGameState.get('synths') : null;
-                    expect(synthsAfter).to.be.null;
+                    const synthsAfter = threeJSGameController.synths;
+                    expect(synthsAfter.length).to.equal(0);
 
                     window.Tone.now = originalNow;
                 });

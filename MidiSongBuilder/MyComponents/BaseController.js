@@ -93,8 +93,7 @@ function getBaseController() {
                     keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap) : null,
                 noteLetterCache: songNoteRenderer ? 
                     songNoteRenderer.buildSongNoteLetterCache(getKeyRenderInfo()) : null,
-                delay: delay,
-                synths: []
+                delay: delay
             });
             
             return gameState;
@@ -136,12 +135,16 @@ function getBaseController() {
     var audioMixin = {
         /**
          * Create synths and schedule audio events for all tracks
+         * @param {Object} currentMidi - The parsed MIDI data with tracks
+         * @param {Object} gameState - The GameState instance
+         * @param {Number} [trackVolume=1.0] - Optional volume multiplier for all notes
          */
-        scheduleAudioEvents: function(currentMidi, gameState) {
+        scheduleAudioEvents: function(currentMidi, gameState, trackVolume) {
             if (!currentMidi || !currentMidi.tracks) return;
             
             var startTime = gameState.get('startTime');
             var delay = gameState.get('delay');
+            var volume = trackVolume !== undefined ? trackVolume : 1.0;
             
             currentMidi.tracks.forEach(function(track) {
                 var synth = new Tone.PolySynth(Tone.Synth, {
@@ -161,7 +164,7 @@ function getBaseController() {
                             note.name,
                             note.duration,
                             note.time + startTime + delay,
-                            note.velocity * 1.0 // Default trackVolume
+                            note.velocity * volume
                         );
                     }
                 });

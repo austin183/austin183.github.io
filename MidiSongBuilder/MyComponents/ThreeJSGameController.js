@@ -27,52 +27,6 @@ function getThreeJSGameController() {
 
     return Object.assign({}, base, {
         /**
-         * Schedule audio events with 3D-specific handling
-         * - Stores synths in gameState for access during game
-         * - Applies app.trackVolume to note velocities
-         * @param {Object} currentMidi - The parsed MIDI data with tracks
-         * @param {Object} gameState - The GameState instance
-         * @param {Object} app - Vue app instance (for trackVolume)
-         */
-        scheduleAudioEventsFor3D: function(currentMidi, gameState, app) {
-            if (!currentMidi || !currentMidi.tracks) return;
-            
-            var startTime = gameState.get('startTime');
-            var delay = gameState.get('delay');
-            var trackVolume = app && app.trackVolume ? app.trackVolume : 1.0;
-            
-            // Initialize synths array in gameState
-            if (!gameState.get('synths')) {
-                gameState.set('synths', []);
-            }
-            
-            currentMidi.tracks.forEach(function(track) {
-                var synth = new Tone.PolySynth(Tone.Synth, {
-                    envelope: {
-                        attack: 0.02,
-                        decay: 0.1,
-                        sustain: 0.3,
-                        release: 1,
-                    },
-                }).toDestination();
-                
-                // Store synth in gameState for 3D mode
-                gameState.get('synths').push(synth);
-                
-                track.notes.forEach(function(note) {
-                    if (note.duration > 0) {
-                        synth.triggerAttackRelease(
-                            note.name,
-                            note.duration,
-                            note.time + startTime + delay,
-                            note.velocity * trackVolume
-                        );
-                    }
-                });
-            }, this);
-        },
-
-        /**
          * Start the 3D game loop with animation
          * Uses BaseController's stateMixin, audioMixin, and gameLoopMixin.
          * Dependencies (scoreKeeper, songNoteRenderer, keyNoteMapService, highScoreTracker, challengeScores)
@@ -137,8 +91,9 @@ function getThreeJSGameController() {
             // Add threeJSRenderer to gameState for access in the loop
             gameState.set('threeJSRenderer', threeJSRenderer);
 
-            // Schedule audio events with 3D-specific handling (trackVolume support, synths in gameState)
-            this.scheduleAudioEventsFor3D(currentMidi, gameState, app);
+            // Schedule audio events using BaseController's audioMixin with trackVolume
+            var trackVolume = app && app.trackVolume ? app.trackVolume : 1.0;
+            this.audioMixin.scheduleAudioEvents(currentMidi, gameState, trackVolume);
 
             // Initialize 3D notes at their starting positions
             if (threeJSRenderer) {
@@ -279,22 +234,9 @@ function getThreeJSGameController() {
         /**
          * Stop the 3D game and clean up resources - delegates to BaseController's cleanupMixin
          * Uses 'threeGameState' key instead of 'gameState' for 3D mode
-         * Also disposes synths stored in threeGameState.get('synths') for 3D-specific cleanup
          */
         stopGame: function(app) {
-            // Dispose synths stored in threeGameState before cleanup (3D-specific handling)
-            if (app && app.threeGameState) {
-                var synths = app.threeGameState.get('synths') || [];
-                while (synths.length) {
-                    var synth = synths.shift();
-                    if (synth) {
-                        synth.disconnect();
-                        synth.dispose();
-                    }
-                }
-            }
-            
-            // Call BaseController's cleanup with threeGameState key
+            // Call BaseController's cleanup with threeGameState key (handles synth disposal via private storage)
             base.cleanupMixin.stopGame(this, app, 'threeGameState');
         },
 
