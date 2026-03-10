@@ -14,14 +14,15 @@ function getVisibleFieldFilterer(){
                 var currentNote = song[i];
                 if (currentNote.duration >= minDuration && currentNote.duration <= maxDuration && invertedKeyNoteMap[currentNote.name] !== undefined) {
                     var previousNote = visibleField[visibleField.length - 1] || defaultPreviousNote;
-                    if (currentNote.time - minNoteDistance >= previousNote.time + previousNote.duration) {
-                        var prerenderedDrawInstructions = null;
-                        var keyNote = invertedKeyNoteMap[currentNote.name];
+if (currentNote.time - minNoteDistance >= previousNote.time + previousNote.duration) {
+                         var prerenderedDrawInstructions = null;
+                         var keyNote = invertedKeyNoteMap[currentNote.name];
+                         
                         if(songNoteRenderer && canvas && keyRenderInfo){
                             prerenderedDrawInstructions = songNoteRenderer.getPrerenderedDrawInstructions(canvas, keyRenderInfo, currentNote, keyNote);
                         }
+                        
                         if(prerenderedDrawInstructions){
-                            // Create a new visible field element
                             var visibleFieldElement = {
                                 time: currentNote.time,
                                 duration: currentNote.duration,
@@ -30,7 +31,6 @@ function getVisibleFieldFilterer(){
                                 id: currentNote.name + "_" + currentNote.time,
                                 keyInfo: keyRenderInfo[keyNote]
                             };
-
                             visibleField.push(visibleFieldElement);
                         }                        
                     }

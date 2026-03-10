@@ -21,14 +21,6 @@ function getCoordinateCalculator() {
     return new CoordinateCalculator();
 }
 
-function getKeyRenderInfo() {
-    return {
-        keys: ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'],
-        startOctave: 4,
-        endOctave: 5
-    };
-}
-
 function getBaseController() {
     var coordinateCalculator = getCoordinateCalculator();
     
@@ -183,52 +175,53 @@ function getBaseController() {
          * Base game loop - shared logic for both 2D and 3D controllers
          * Override doRenderAfterLoop for controller-specific rendering
          */
-        baseGameLoop: function(app, gameStateKey) {
-            var gameState = app[gameStateKey];
+baseGameLoop: function(app, gameStateKey) {
+              var gameState = app[gameStateKey];
+              
+              if (!gameState || !this) {
+                  _stopGameFn(this || baseController._self, app, gameStateKey);
+                  return;
+              }
+              
+              // Check if dependencies are available
+              if (!gameState.get('scoreKeeper') || 
+                  !gameState.get('songNoteRenderer') || 
+                  !gameState.get('invertedKeyNoteMap')) {
+                  _stopGameFn(this || baseController._self, app, gameStateKey);
+                  return;
+              }
             
-            if (!gameState) {
-                stopGame(app, gameStateKey);
-                return;
-            }
+var intervalNow = Tone.now() - gameState.get('startTime') - gameState.get('delay');
+             var visiblePast = intervalNow - 1;
+             var visibleFuture = intervalNow + 9;
+             
+// Check if song has ended
+              if (visiblePast > gameState.get('songEnd')) {
+                  handleSongEnd(app, gameState);
+                  _stopGameFn(this || baseController._self, app, gameStateKey);
+                  return;
+              }
             
-            // Check if dependencies are available
-            if (!gameState.get('scoreKeeper') || 
-                !gameState.get('songNoteRenderer') || 
-                !gameState.get('invertedKeyNoteMap')) {
-                stopGame(app, gameStateKey);
-                return;
-            }
-            
-            var intervalNow = Tone.now() - gameState.get('startTime') - gameState.get('delay');
-            var visiblePast = intervalNow - 1;
-            var visibleFuture = intervalNow + 9;
-            
-            // Check if song has ended
-            if (visiblePast > gameState.get('songEnd')) {
-                handleSongEnd(app, gameState);
-                return;
-            }
-            
-            // Update earliestNoteIndex for notes that have passed
-            var earliestNoteIndex = gameState.get('earliestNoteIndex') || 0;
-            for (var i = earliestNoteIndex; i < gameState.get('visibleField').length; i++) {
-                var note = gameState.get('visibleField')[i];
-                if (note.time + note.duration < visiblePast) {
-                    earliestNoteIndex = i;
-                } else {
-                    break;
-                }
-            }
-            gameState.set('earliestNoteIndex', earliestNoteIndex);
-            
-            // Calculate score
-            var currentScore = gameState.get('scoreKeeper').calculateNewScore(
-                gameState.get('visibleField'),
-                gameState.get('pressedKeys') || {},
-                intervalNow,
-                earliestNoteIndex,
-                visibleFuture
-            );
+// Update earliestNoteIndex for notes that have passed
+             var earliestNoteIndex = gameState.get('earliestNoteIndex') || 0;
+             for (var i = earliestNoteIndex; i < gameState.get('visibleField').length; i++) {
+                 var note = gameState.get('visibleField')[i];
+                 if (note.time + note.duration < visiblePast) {
+                     earliestNoteIndex = i;
+                 } else {
+                     break;
+                 }
+             }
+             gameState.set('earliestNoteIndex', earliestNoteIndex);
+             
+             // Calculate score
+             var currentScore = gameState.get('scoreKeeper').calculateNewScore(
+                 gameState.get('visibleField'),
+                 gameState.get('pressedKeys') || {},
+                 intervalNow,
+                 earliestNoteIndex,
+                 visibleFuture
+             );
             
             gameState.set('score', currentScore.total);
             var counts = gameState.get('scoreKeeper').getCounts();
@@ -237,11 +230,13 @@ function getBaseController() {
             gameState.set('badCount', counts.badCount);
             gameState.set('missedCount', counts.missedCount);
             
-            // Sync state to Vue for reactive binding
-            gameState.syncToVue(app);
-            
-            // Hook for controller-specific rendering after loop (must be implemented by subclasses)
-            this.doRenderAfterLoop(app, gameState, currentScore, intervalNow, visiblePast, visibleFuture);
+// Sync state to Vue for reactive binding
+             gameState.syncToVue(app);
+             
+             // Hook for controller-specific rendering after loop (must be implemented by subclasses)
+             if (typeof this.doRenderAfterLoop === 'function') {
+                 this.doRenderAfterLoop(app, gameState, currentScore, intervalNow, visiblePast, visibleFuture);
+             }
         },
         
         /**
@@ -296,12 +291,47 @@ function getBaseController() {
     var cleanupMixin = {
         /**
          * Stop the game loop and clean up all resources
+         * Can be called as: stopGame(app, gameStateKey) or stopGame(controller, app, gameStateKey)
+         * @param {Object} controllerOrApp - Either controller instance or app object
+         * @param {Object} app - The Vue.js app instance (if controller was first arg)  
+         * @param {String} gameStateKey - 'gameState' or 'threeGameState'
          */
-        stopGame: function(app, gameStateKey) {
+        stopGame: function(controllerOrApp, app, gameStateKey) {
+            // Determine calling style based on argument count and types
+            var targetController = this;
+            var targetApp = null;
+            var keyToUse = 'gameState';
+            
+            // If called with 3 args, format is: stopGame(controller, app, gameStateKey)
+            if (arguments.length === 3) {
+                targetController = controllerOrApp;
+                targetApp = app;
+                keyToUse = gameStateKey || 'gameState';
+            }
+            // If called with 2 args, format is: stopGame(app, gameStateKey)
+            else if (arguments.length === 2 && typeof controllerOrApp !== 'string') {
+                targetController = this;
+                targetApp = controllerOrApp;
+                keyToUse = app || 'gameState';
+            }
+            // If called with 2 args and first is string, it's stopGame(app, gameStateKey) but app comes in as controllerOrApp
+            else if (arguments.length === 2 && typeof controllerOrApp === 'string') {
+                targetController = this;
+                keyToUse = controllerOrApp;
+                // app is missing in this case
+            }
+            // If called with 1 arg, format is: stopGame(app) or from .call(controller, app, key)
+            else if (arguments.length === 1 && !controllerOrApp.playIntervalId) {
+                targetController = this;
+                targetApp = controllerOrApp;
+            } else if (arguments.length === 1 && controllerOrApp.playIntervalId) {
+                targetController = controllerOrApp;
+            }
+            
             // Stop the interval
-            if (this.playIntervalId) {
-                clearInterval(this.playIntervalId);
-                this.playIntervalId = null;
+            if (targetController && targetController.playIntervalId) {
+                clearInterval(targetController.playIntervalId);
+                targetController.playIntervalId = null;
             }
             
             // Stop Tone.js transport
@@ -313,14 +343,16 @@ function getBaseController() {
             _disposeAllSynths();
             
             // Cleanup game state from app
-            cleanupAppState(app, gameStateKey || 'gameState');
+            if (targetApp) {
+                cleanupAppState(targetApp, keyToUse);
+            }
         }
     };
+
+    // Store reference to cleanup function for use within mixins  
+    var _stopGameFn = null;
     
-    // Helper function for stopGame that doesn't rely on 'this'
-    function stopGame(app, gameStateKey) {
-        cleanupMixin.stopGame.call(baseController._self, app, gameStateKey);
-    }
+    // Helper function for handleSongEnd that doesn't rely on 'this'
     
 // Helper function for handleSongEnd that doesn't rely on 'this'
     function handleSongEnd(app, gameState) {
@@ -328,12 +360,19 @@ function getBaseController() {
     }
 
     
-    // Return the composed controller with all mixins and methods
+    // Return the composed controller with all mixins and methods  
     var baseController = Object.assign(
+        stateMixin,
+        audioMixin,
+        gameLoopMixin,
+        cleanupMixin,
         {
-
+            
+            // Key render info for debug rendering (exposed for GameController)
+            keyRenderInfo: getKeyRenderInfo(),
             
             // Interval ID for the game loop
+            
             get playIntervalId() {
                 return this._playIntervalId || null;
             },
@@ -344,6 +383,11 @@ function getBaseController() {
             // Delay constant from CoordinateCalculator
             get delay() {
                 return coordinateCalculator.getConstants().DEFAULT_DELAY;
+            },
+            
+            // Public synths array for backward compatibility (returns private storage)
+            get synths() {
+                return synths;
             },
             
             // Add synth to BaseController's private storage
@@ -412,7 +456,7 @@ function getBaseController() {
                 
                 // Create and start the game loop
                 this.playIntervalId = setInterval(
-                    () => this.gameLoopMixin.baseGameLoop(app, 'gameState'), 
+                    () => this.gameLoopMixin.baseGameLoop.call(this, app, 'gameState'), 
                     10
                 );
                 
@@ -422,19 +466,24 @@ function getBaseController() {
             /**
              * Stop the game and clean up resources
              */
-            stopGame: function(app) {
-                // Call cleanupMixin.stopGame with baseController as 'this' context
-                cleanupMixin.stopGame.call(baseController, app, 'gameState');
+            stopGame: function(app, gameStateKey) {
+                // Call cleanupMixin.stopGame with baseController as context
+                cleanupMixin.stopGame(baseController, app, gameStateKey || 'gameState');
             }
-        },
-        stateMixin,
-        audioMixin,
-        gameLoopMixin,
-        cleanupMixin
-    );
+        });
     
+        
     // Store reference for stopGame helper function
     baseController._self = baseController;
+    
+    // Set the cleanup function reference for use in mixins
+    _stopGameFn = function(controller, app, gameStateKey) {
+        if (controller && controller.stopGame) {
+            controller.stopGame.call(controller, app, gameStateKey);
+        } else {
+            cleanupMixin.stopGame(controller || baseController._self, app, gameStateKey);
+        }
+    };
     
     return baseController;
 }

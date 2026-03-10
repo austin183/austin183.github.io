@@ -17,6 +17,7 @@
     <script src="KeyNoteMapService.js"></script>
     <script src="highScoreTracker.js"></script>
     <script src="challengeScores.js"></script>
+    <script src="BaseController.js"></script>
     <script src="GameController.js"></script>
     <script src="../Libraries/chai.min.js"></script>
 
@@ -1184,9 +1185,13 @@ it('should handle null app gracefully', function() {
                     };
 
                     window.clearInterval = (id) => {
+                        console.log('clearInterval called with id:', id, 'intervalId:', intervalId);
                         if (id === intervalId) {
                             gameController.playIntervalId = null;
                             stopGameCalled = true;
+                            console.log('stopGameCalled set to true!');
+                        } else {
+                            console.log('clearInterval called but id mismatch - not setting stopGameCalled');
                         }
                     };
 

@@ -424,15 +424,15 @@
 
                     let capturedIntervalNow = null;
                     
-                    const originalDoRenderAfterLoop = baseController.gameLoopMixin.doRenderAfterLoop;
-                    baseController.gameLoopMixin.doRenderAfterLoop = function(app, gameState, currentScore, intervalNow) {
+                    const originalDoRenderAfterLoop = baseController.doRenderAfterLoop;
+                    baseController.doRenderAfterLoop = function(app, gameState, currentScore, intervalNow) {
                         capturedIntervalNow = intervalNow;
                     };
 
-                    baseController.gameLoopMixin.baseGameLoop(app, 'testGameState');
+                    baseController.gameLoopMixin.baseGameLoop.call(baseController, app, 'testGameState');
 
                     window.Tone.now = originalNow;
-                    baseController.gameLoopMixin.doRenderAfterLoop = originalDoRenderAfterLoop;
+                    baseController.doRenderAfterLoop = originalDoRenderAfterLoop;
 
                     expect(capturedIntervalNow).to.equal(1050 - 1000 - 4); // intervalNow = Tone.now() - startTime - delay
                 });
@@ -472,7 +472,7 @@
                         handleSongEndCalled = true;
                     };
 
-                    baseController.gameLoopMixin.baseGameLoop(app, 'testGameState');
+                    baseController.gameLoopMixin.baseGameLoop.call(baseController, app, 'testGameState');
 
                     window.Tone.now = originalNow;
                     baseController.gameLoopMixin.handleSongEnd = originalHandleSongEnd;
@@ -509,7 +509,7 @@
                     const originalNow = window.Tone.now;
                     window.Tone.now = () => 1005; // visiblePast = 1005 - 1000 - 4 - 1 = 0
 
-                    baseController.gameLoopMixin.baseGameLoop(app, 'testGameState');
+                    baseController.gameLoopMixin.baseGameLoop.call(baseController, app, 'testGameState');
 
                     window.Tone.now = originalNow;
 
@@ -541,11 +541,11 @@
                     window.Tone.now = () => 1050;
 
                     let hookCalled = false;
-                    baseController.gameLoopMixin.doRenderAfterLoop = function(app, gameState, currentScore, intervalNow, visiblePast, visibleFuture) {
+                    baseController.doRenderAfterLoop = function(app, gameState, currentScore, intervalNow, visiblePast, visibleFuture) {
                         hookCalled = true;
                     };
 
-                    baseController.gameLoopMixin.baseGameLoop(app, 'testGameState');
+                    baseController.gameLoopMixin.baseGameLoop.call(baseController, app, 'testGameState');
 
                     window.Tone.now = originalNow;
 
@@ -576,7 +576,7 @@
                     const originalNow = window.Tone.now;
                     window.Tone.now = () => 1050;
 
-                    baseController.gameLoopMixin.baseGameLoop(app, 'testGameState');
+                    baseController.gameLoopMixin.baseGameLoop.call(baseController, app, 'testGameState');
 
                     window.Tone.now = originalNow;
 
@@ -588,7 +588,7 @@
 
                     let stopGameCalled = false;
                     
-                    baseController.gameLoopMixin.baseGameLoop(mockAppState, 'nonexistentGameState');
+                    baseController.gameLoopMixin.baseGameLoop.call(baseController, mockAppState, 'nonexistentGameState');
 
                     // If we get here without crashing, the test passes
                     expect(true).to.be.true;
@@ -626,7 +626,7 @@
                     const originalNow = window.Tone.now;
                     window.Tone.now = () => 1050;
 
-                    baseController.gameLoopMixin.baseGameLoop(app, 'testGameState');
+                    baseController.gameLoopMixin.baseGameLoop.call(baseController, app, 'testGameState');
 
                     window.Tone.now = originalNow;
 
