@@ -1,18 +1,18 @@
 /**
- * ThreeJSGameController - Extends GameController for 3D note animation
+ * ThreeJSGameController - Extends BaseController for 3D note animation
  * Handles the dynamic game loop updates for Three.js rendering
  *
- * Relationship with GameController:
- * - GameController: Handles 2D canvas rendering and base game loop
- * - ThreeJSGameController: Handles 3D rendering and animation updates
- * - Both share the same game loop logic (scoring, song progress, input handling)
- * - ThreeJSGameController delegates to threeJSRenderer for 3D display
+ * Relationship with BaseController:
+ * - BaseController: Shared game loop logic (scoring, song progress, input handling)
+ * - ThreeJSGameController: Adds 3D rendering via ThreeJSRenderer
+ * - Both share the same game loop pattern using BaseController's mixins
+ * - ThreeJSGameController implements doRenderAfterLoop hook for 3D-specific rendering
  *
  * Architecture:
- * - GameController: Base controller with 2D canvas rendering via SongNoteRenderer
- * - ThreeJSGameController: Extension that adds 3D rendering via ThreeJSRenderer
- * - Both use the same game loop pattern and scoring system
- * - ThreeJSGameController calls threeJSRenderer methods for 3D scene updates
+ * - BaseController: Base with stateMixin, audioMixin, gameLoopMixin, cleanupMixin
+ * - ThreeJSGameController: Extends BaseController and adds 3D rendering hooks
+ * - Uses threeGameState key (vs gameState for GameController)
+ * - Calls threeJSRenderer methods for 3D scene updates
  *
  * Usage: Use ThreeJSGameController when 3D rendering is needed.
  *        Use GameController for 2D-only rendering.
@@ -22,9 +22,59 @@
  * threeJSRenderer is the only parameter passed directly (required for initialization).
  */
 function getThreeJSGameController() {
-    return {
+    // Use BaseController as base and add 3D-specific extensions
+    var base = getBaseController();
+
+    return Object.assign({}, base, {
+        /**
+         * Schedule audio events with 3D-specific handling
+         * - Stores synths in gameState for access during game
+         * - Applies app.trackVolume to note velocities
+         * @param {Object} currentMidi - The parsed MIDI data with tracks
+         * @param {Object} gameState - The GameState instance
+         * @param {Object} app - Vue app instance (for trackVolume)
+         */
+        scheduleAudioEventsFor3D: function(currentMidi, gameState, app) {
+            if (!currentMidi || !currentMidi.tracks) return;
+            
+            var startTime = gameState.get('startTime');
+            var delay = gameState.get('delay');
+            var trackVolume = app && app.trackVolume ? app.trackVolume : 1.0;
+            
+            // Initialize synths array in gameState
+            if (!gameState.get('synths')) {
+                gameState.set('synths', []);
+            }
+            
+            currentMidi.tracks.forEach(function(track) {
+                var synth = new Tone.PolySynth(Tone.Synth, {
+                    envelope: {
+                        attack: 0.02,
+                        decay: 0.1,
+                        sustain: 0.3,
+                        release: 1,
+                    },
+                }).toDestination();
+                
+                // Store synth in gameState for 3D mode
+                gameState.get('synths').push(synth);
+                
+                track.notes.forEach(function(note) {
+                    if (note.duration > 0) {
+                        synth.triggerAttackRelease(
+                            note.name,
+                            note.duration,
+                            note.time + startTime + delay,
+                            note.velocity * trackVolume
+                        );
+                    }
+                });
+            }, this);
+        },
+
         /**
          * Start the 3D game loop with animation
+         * Uses BaseController's stateMixin, audioMixin, and gameLoopMixin.
          * Dependencies (scoreKeeper, songNoteRenderer, keyNoteMapService, highScoreTracker, challengeScores)
          * are retrieved from ComponentRegistry. Only pressedKeys and threeJSRenderer are passed directly.
          *
@@ -49,184 +99,89 @@ function getThreeJSGameController() {
                 throw new Error('visibleField must be an array of notes');
             }
 
-            // Retrieve dependencies from ComponentRegistry
-            var scoreKeeper = app.componentRegistry ? app.componentRegistry.getService('scoreKeeper') : null;
-            var songNoteRenderer = app.componentRegistry ? app.componentRegistry.getService('songNoteRenderer') : null;
-            var keyNoteMapService = app.componentRegistry ? app.componentRegistry.getService('keyNoteMapService') : null;
-            var highScoreTracker = app.componentRegistry ? app.componentRegistry.getService('highScoreTracker') : null;
-            var challengeScores = app.componentRegistry ? app.componentRegistry.getService('challengeScores') : null;
-
-            // Reset the score keeper's internal state
-            if (scoreKeeper) {
-                scoreKeeper.reset();
-            }
-
-            // Reset note states in visibleField to 'unplayed'
-            if (visibleField && Array.isArray(visibleField)) {
-                for (var i = 0; i < visibleField.length; i++) {
-                    visibleField[i].state = 'unplayed';
-                }
-            }
-
-            // Reset Vue app's score values
-            if (app) {
-                app.score = 0;
-                app.goodCount = 0;
-                app.okCount = 0;
-                app.badCount = 0;
-                app.missedCount = 0;
-            }
-
-            // Get constants from threeJSRenderer
-            var CONSTANTS = threeJSRenderer.getConstants();
-
             // Clear 3D notes from previous game
             threeJSRenderer.clearNotes();
 
-            // Create and initialize GameState - single source of truth for game state
-            var gameState = getGameState();
-            gameState.initialize({
-                startTime: Tone.now(),
-                earliestNoteIndex: 0,
-                visibleField: visibleField,
-                songEnd: songEnd,
-                scoreKeeper: scoreKeeper,
-                songNoteRenderer: songNoteRenderer,
-                threeJSRenderer: threeJSRenderer,
-                highScoreTracker: highScoreTracker,
-                challengeScores: challengeScores,
-                pressedKeys: pressedKeys || {},
-                invertedKeyNoteMap: keyNoteMapService ? keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap) : null,
-                noteLetterCache: songNoteRenderer ? songNoteRenderer.buildSongNoteLetterCache(getKeyRenderInfo()) : null,
-                delay: CONSTANTS.DEFAULT_DELAY,
-                synths: []
-            });
+            // Retrieve dependencies from ComponentRegistry
+            var scoreKeeper = app.componentRegistry ? 
+                app.componentRegistry.getService('scoreKeeper') : null;
+            var songNoteRenderer = app.componentRegistry ? 
+                app.componentRegistry.getService('songNoteRenderer') : null;
+            var keyNoteMapService = app.componentRegistry ? 
+                app.componentRegistry.getService('keyNoteMapService') : null;
+            var highScoreTracker = app.componentRegistry ? 
+                app.componentRegistry.getService('highScoreTracker') : null;
+            var challengeScores = app.componentRegistry ? 
+                app.componentRegistry.getService('challengeScores') : null;
 
-            // Store the GameState instance on app for access in the loop
+            // Initialize game state using BaseController's stateMixin
+            // Note: We use threeGameState key instead of gameState
+            var gameState = this.stateMixin.initializeGameState(
+                app,
+                scoreKeeper,
+                songNoteRenderer,
+                keyNoteMapService,
+                highScoreTracker,
+                challengeScores,
+                visibleField,
+                songEnd,
+                this.delay
+            );
+
+            // Store the GameState instance on app with threeGameState key
             app.threeGameState = gameState;
 
-            // Create synths and schedule audio using the GameState startTime
-            var startTime = gameState.get('startTime');
+            // Set pressedKeys in gameState (stateMixin initializes it as null)
+            gameState.set('pressedKeys', pressedKeys || {});
 
-            if (currentMidi && currentMidi.tracks) {
-                currentMidi.tracks.forEach((track) => {
-                    const synth = new Tone.PolySynth(Tone.Synth, {
-                        envelope: {
-                            attack: 0.02,
-                            decay: 0.1,
-                            sustain: 0.3,
-                            release: 1,
-                        },
-                    }).toDestination();
-                    if (!gameState.get('synths')) {
-                        gameState.set('synths', []);
-                    }
-                    gameState.get('synths').push(synth);
+            // Add threeJSRenderer to gameState for access in the loop
+            gameState.set('threeJSRenderer', threeJSRenderer);
 
-                    // Schedule all of the events
-                    track.notes.forEach((note) => {
-                        if (note.duration > 0) {
-                            synth.triggerAttackRelease(
-                                note.name,
-                                note.duration,
-                                note.time + startTime + gameState.get('delay'),
-                                note.velocity * app.trackVolume
-                            );
-                        }
-                    });
-                });
-            }
+            // Schedule audio events with 3D-specific handling (trackVolume support, synths in gameState)
+            this.scheduleAudioEventsFor3D(currentMidi, gameState, app);
 
             // Initialize 3D notes at their starting positions
             if (threeJSRenderer) {
                 threeJSRenderer.addNotesFromVisibleField(visibleField, app.keyRenderInfo);
             }
 
-            // Start the game loop (same interval as base controller)
-            this.playIntervalId = setInterval(() => this.gameLoop(app), 10);
+            // Create and start the game loop using BaseController's baseGameLoop
+            // Use threeGameState key for 3D mode
+            this.playIntervalId = setInterval(
+                () => this.gameLoopMixin.baseGameLoop.call(this, app, 'threeGameState'), 
+                10
+            );
 
             return this.playIntervalId;
         },
 
         /**
-         * The main 3D game loop callback with animation
+         * The main 3D game loop callback - delegates to BaseController's baseGameLoop
          * @param {Object} app - The Vue.js app instance
          */
         gameLoop: function(app) {
-            var gameState = app.threeGameState;
-            if (!gameState || !gameState.get('threeJSRenderer')) {
-                this.stopGame(app);
-                return;
-            }
+            this.gameLoopMixin.baseGameLoop.call(this, app, 'threeGameState');
+        },
 
-            // Calculate current time relative to song start
-            var intervalNow = Tone.now() - gameState.get('startTime') - gameState.get('delay');
-            var visiblePast = intervalNow - 1;
-            var visibleFuture = intervalNow + 9;
-
-            // Check if song has ended
-            if (visiblePast > gameState.get('songEnd')) {
-                app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
-                gameState.get('songNoteRenderer').renderFinalScore(app.notesCanvas, app.vueCanvas,
-                    gameState.get('score') || 0,
-                    gameState.get('goodCount') || 0,
-                    gameState.get('okCount') || 0,
-                    gameState.get('badCount') || 0,
-                    gameState.get('missedCount') || 0
-                );
-
-                // Update high scores if enabled
-                if (app.toggleTrackHighScores && gameState.get('highScoreTracker')) {
-                    gameState.get('highScoreTracker').setHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey, gameState.get('score') || 0);
-                    app.highScore = gameState.get('highScoreTracker').getHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
-                    if (gameState.get('challengeScores')) {
-                        app.challengeScore = gameState.get('challengeScores').getSelectedScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
-                    }
-                }
-
-                // Sync state to Vue for reactive binding
-                gameState.syncToVue(app);
-
-                this.stopGame(app);
-                return;
-            }
-
-            // Update earliestNoteIndex for notes that have passed
+        /**
+         * 3D-specific rendering hook called by BaseController's baseGameLoop
+         * This is the abstract hook that ThreeJSGameController implements
+         * @param {Object} app - The Vue.js app instance
+         * @param {Object} gameState - The GameState instance (threeGameState)
+         * @param {Object} currentScore - Current score object with keyScores
+         * @param {Number} intervalNow - Current time relative to song start
+         * @param {Number} visiblePast - Past boundary for note visibility
+         * @param {Number} visibleFuture - Future boundary for note visibility
+         */
+        doRenderAfterLoop: function(app, gameState, currentScore, intervalNow, visiblePast, visibleFuture) {
+            var threeJSRenderer = gameState.get('threeJSRenderer');
             var earliestNoteIndex = gameState.get('earliestNoteIndex') || 0;
-            for (var i = earliestNoteIndex; i < gameState.get('visibleField').length; i++) {
-                var note = gameState.get('visibleField')[i];
-                if (note.time + note.duration < visiblePast) {
-                    earliestNoteIndex = i;
-                } else {
-                    break;
-                }
-            }
-            gameState.set('earliestNoteIndex', earliestNoteIndex);
-
-            // Calculate score
-            var currentScore = gameState.get('scoreKeeper').calculateNewScore(
-                gameState.get('visibleField'),
-                gameState.get('pressedKeys') || {},
-                intervalNow,
-                earliestNoteIndex,
-                visibleFuture
-            );
-
-            gameState.set('score', currentScore.total);
-            var counts = gameState.get('scoreKeeper').getCounts();
-            gameState.set('goodCount', counts.goodCount);
-            gameState.set('okCount', counts.okCount);
-            gameState.set('badCount', counts.badCount);
-            gameState.set('missedCount', counts.missedCount);
-
-            // Sync state to Vue for reactive binding
-            gameState.syncToVue(app);
 
             // Update 3D note positions based on animation
-            this.update3DNotesPosition(gameState.get('threeJSRenderer'), gameState, intervalNow, app);
+            this.update3DNotesPosition(threeJSRenderer, gameState, intervalNow, app);
 
             // Update 3D note colors based on score (hit notes change color)
-            this.update3DNoteColors(gameState.get('threeJSRenderer'), currentScore, app);
+            this.update3DNoteColors(threeJSRenderer, currentScore, app);
 
             // Render the 2D canvas
             app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
@@ -244,7 +199,7 @@ function getThreeJSGameController() {
             );
 
             // Render 3D now line
-            this.render3DNowLine(gameState.get('threeJSRenderer'), app);
+            this.render3DNowLine(threeJSRenderer, app);
 
             // Debug output if enabled
             if (window.location.search == "?debug") {
@@ -322,36 +277,25 @@ function getThreeJSGameController() {
         },
 
         /**
-         * Stop the 3D game loop and clean up
+         * Stop the 3D game and clean up resources - delegates to BaseController's cleanupMixin
+         * Uses 'threeGameState' key instead of 'gameState' for 3D mode
+         * Also disposes synths stored in threeGameState.get('synths') for 3D-specific cleanup
          */
         stopGame: function(app) {
-            // Stop the interval
-            if (this.playIntervalId) {
-                clearInterval(this.playIntervalId);
-                this.playIntervalId = null;
-            }
-
-            // Stop Tone.js transport
-            Tone.Transport.stop();
-            Tone.Transport.position = 0;
-            Tone.Transport.cancel();
-
-            // Dispose all synths
+            // Dispose synths stored in threeGameState before cleanup (3D-specific handling)
             if (app && app.threeGameState) {
                 var synths = app.threeGameState.get('synths') || [];
-                synths.forEach(function(synth) {
+                while (synths.length) {
+                    var synth = synths.shift();
                     if (synth) {
                         synth.disconnect();
                         synth.dispose();
                     }
-                });
-                app.threeGameState.set('synths', []);
+                }
             }
-
-            // Clean up game state from app
-            if (app && app.threeGameState) {
-                delete app.threeGameState;
-            }
+            
+            // Call BaseController's cleanup with threeGameState key
+            base.cleanupMixin.stopGame(this, app, 'threeGameState');
         },
 
         /**
@@ -363,5 +307,5 @@ function getThreeJSGameController() {
                 threeJSRenderer.resize();
             }
         }
-    };
+    });
 }
