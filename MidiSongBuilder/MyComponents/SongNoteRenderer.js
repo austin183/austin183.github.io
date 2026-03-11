@@ -248,6 +248,12 @@ function getSongNoteRenderer(keyNoteMapService) {
         getPrerenderedDrawInstructions: function(canvas, keyRenderInfo, note, letter){
             return renderer.getPrerenderedDrawInstructions(canvas, keyRenderInfo, note, letter);
         },
+        getNoteDrawInstructions: function(canvas, canvasNote, currentScore, now, visiblePast, noteLetterCache){
+            return renderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, visiblePast, noteLetterCache);
+        },
+        drawNote: function(canvas, ctx, noteDrawInstructions){
+            renderer.drawNote(canvas, ctx, noteDrawInstructions);
+        },
         buildSongNoteLetterCache: function(keyRenderInfo){
             var cache = {};
             for(var key in keyRenderInfo){
@@ -293,8 +299,10 @@ function getSongNoteRenderer(keyNoteMapService) {
             ctx.fillStyle = "red";
             ctx.fillText("Bad: " + badCount, initialXPosition, initialYPosition + (rowHeight * 3) + 30);
 
-            ctx.fillStyle = "blue";
+ctx.fillStyle = "blue";
             ctx.fillText("Missed: " + missedCount, initialXPosition, initialYPosition + (rowHeight * 4) + 40);
         }
     };
+
+    return renderer;
 }

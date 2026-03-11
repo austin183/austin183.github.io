@@ -200,29 +200,6 @@ stopGame: function(app) {
                 delete app.gameState;
             }
 
-            // Reset current game state reference
-            currentGameState = null;
-        }
-    };
-}
-
-            // Stop Tone.js transport
-            Tone.Transport.stop();
-            Tone.Transport.position = 0;
-            Tone.Transport.cancel();
-
-            // Dispose all synths
-            while (synths.length) {
-                const synth = synths.shift();
-                synth.disconnect();
-                synth.dispose();
-            }
-
-            // Clean up game state from app
-            if (app && app.gameState) {
-                delete app.gameState;
-            }
-
             // Clean up ComponentRegistry
             if (app && app.componentRegistry) {
                 app.componentRegistry.clearServices();

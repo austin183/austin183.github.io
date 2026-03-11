@@ -172,74 +172,74 @@ function getBaseController() {
         }
     };
     
-    // Game loop mixin - Core game loop logic with abstract rendering hooks
+// Game loop mixin - Core game loop logic with abstract rendering hooks
     var gameLoopMixin = {
         /**
          * Base game loop - shared logic for both 2D and 3D controllers
          * Override doRenderAfterLoop for controller-specific rendering
          */
-baseGameLoop: function(app, gameStateKey) {
-              var gameState = app[gameStateKey];
-              
-              if (!gameState || !this) {
-                  _stopGameFn(this || baseController._self, app, gameStateKey);
-                  return;
-              }
-              
-              // Check if dependencies are available
-              if (!gameState.get('scoreKeeper') || 
-                  !gameState.get('songNoteRenderer') || 
-                  !gameState.get('invertedKeyNoteMap')) {
-                  _stopGameFn(this || baseController._self, app, gameStateKey);
-                  return;
-              }
-            
-var intervalNow = Tone.now() - gameState.get('startTime') - gameState.get('delay');
-             var visiblePast = intervalNow - 1;
-             var visibleFuture = intervalNow + 9;
-             
-// Check if song has ended
-              if (visiblePast > gameState.get('songEnd')) {
-                  handleSongEnd(app, gameState);
-                  _stopGameFn(this || baseController._self, app, gameStateKey);
-                  return;
-              }
-            
-// Update earliestNoteIndex for notes that have passed
-             var earliestNoteIndex = gameState.get('earliestNoteIndex') || 0;
-             for (var i = earliestNoteIndex; i < gameState.get('visibleField').length; i++) {
-                 var note = gameState.get('visibleField')[i];
-                 if (note.time + note.duration < visiblePast) {
-                     earliestNoteIndex = i;
-                 } else {
-                     break;
-                 }
-             }
-             gameState.set('earliestNoteIndex', earliestNoteIndex);
-             
-             // Calculate score
-             var currentScore = gameState.get('scoreKeeper').calculateNewScore(
-                 gameState.get('visibleField'),
-                 gameState.get('pressedKeys') || {},
-                 intervalNow,
-                 earliestNoteIndex,
-                 visibleFuture
-             );
-            
+        baseGameLoop: function(app, gameStateKey) {
+            var gameState = app[gameStateKey];
+
+            if (!gameState || !this) {
+                _stopGameFn(this || baseController._self, app, gameStateKey);
+                return;
+            }
+
+            // Check if dependencies are available
+            if (!gameState.get('scoreKeeper') ||
+                !gameState.get('songNoteRenderer') ||
+                !gameState.get('invertedKeyNoteMap')) {
+                _stopGameFn(this || baseController._self, app, gameStateKey);
+                return;
+            }
+
+            var intervalNow = Tone.now() - gameState.get('startTime') - gameState.get('delay');
+            var visiblePast = intervalNow - 1;
+            var visibleFuture = intervalNow + 9;
+
+            // Check if song has ended
+            if (visiblePast > gameState.get('songEnd')) {
+                handleSongEnd(app, gameState);
+                _stopGameFn(this || baseController._self, app, gameStateKey);
+                return;
+            }
+
+            // Update earliestNoteIndex for notes that have passed
+            var earliestNoteIndex = gameState.get('earliestNoteIndex') || 0;
+            for (var i = earliestNoteIndex; i < gameState.get('visibleField').length; i++) {
+                var note = gameState.get('visibleField')[i];
+                if (note.time + note.duration < visiblePast) {
+                    earliestNoteIndex = i;
+                } else {
+                    break;
+                }
+            }
+            gameState.set('earliestNoteIndex', earliestNoteIndex);
+
+            // Calculate score
+            var currentScore = gameState.get('scoreKeeper').calculateNewScore(
+                gameState.get('visibleField'),
+                gameState.get('pressedKeys') || {},
+                intervalNow,
+                earliestNoteIndex,
+                visibleFuture
+            );
+
             gameState.set('score', currentScore.total);
             var counts = gameState.get('scoreKeeper').getCounts();
             gameState.set('goodCount', counts.goodCount);
             gameState.set('okCount', counts.okCount);
             gameState.set('badCount', counts.badCount);
             gameState.set('missedCount', counts.missedCount);
-            
-// Sync state to Vue for reactive binding
-             gameState.syncToVue(app);
-             
-             // Hook for controller-specific rendering after loop (must be implemented by subclasses)
-             if (typeof this.doRenderAfterLoop === 'function') {
-                 this.doRenderAfterLoop(app, gameState, currentScore, intervalNow, visiblePast, visibleFuture);
-             }
+
+            // Sync state to Vue for reactive binding
+            gameState.syncToVue(app);
+
+            // Hook for controller-specific rendering after loop (must be implemented by subclasses)
+            if (typeof this.doRenderAfterLoop === 'function') {
+                this.doRenderAfterLoop(app, gameState, currentScore, intervalNow, visiblePast, visibleFuture);
+            }
         },
         
         /**
