@@ -142,6 +142,7 @@ function getCameraControls(default_camera_state) {
         setupInputHandlers: function() {
             // Mouse down - start dragging
             addListener(canvasElement, 'mousedown', function(e) {
+                console.log('CameraControls mousedown: offsetX=' + e.offsetX + ', offsetY=' + e.offsetY);
                 isDragging = true;
                 previousMousePosition = { x: e.offsetX, y: e.offsetY };
             });
@@ -158,6 +159,8 @@ function getCameraControls(default_camera_state) {
                         x: e.offsetX - previousMousePosition.x,
                         y: e.offsetY - previousMousePosition.y
                     };
+
+                    console.log('CameraControls mousemove: deltaMove=('+deltaMove.x+','+deltaMove.y+'), rotation=(yaw:'+cameraRotation.yaw.toFixed(4)+', pitch:'+cameraRotation.pitch.toFixed(4)+')');
 
                     // Update rotation based on mouse movement
                     cameraRotation.yaw -= deltaMove.x * lookSensitivity;
@@ -248,14 +251,17 @@ function getCameraControls(default_camera_state) {
         updateFromRotation: function() {
             if (!camera) return;
 
+            // Note: Don't recalculate lookAt from rotation here!
+            // The lookAt value is set directly in applyDirectTransform and preserved.
+            // Recalculating from rotation causes errors (especially when yaw=π).
             // Calculate lookAt point based on rotation
-            var forward = new THREE.Vector3(0, 0, -1);
+            var forward = new THREE.Vector3(0, 0, 1);
             forward.applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraRotation.yaw);
             forward.applyAxisAngle(new THREE.Vector3(1, 0, 0), cameraRotation.pitch);
-
             lookAt.x = cameraPosition.x + forward.x;
             lookAt.y = cameraPosition.y + forward.y;
             lookAt.z = cameraPosition.z + forward.z;
+            console.log('CameraControls.updateFromRotation: new lookAt=('+lookAt.x+','+lookAt.y+','+lookAt.z+') from forward=(' + forward.x.toFixed(4) + ',' + forward.y.toFixed(4) + ',' + forward.z.toFixed(4) + ')');
 
             // Update camera position and lookAt
             camera.position.set(cameraPosition.x, cameraPosition.y, cameraPosition.z);
