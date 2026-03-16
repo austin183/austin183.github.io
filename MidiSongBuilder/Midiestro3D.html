@@ -1,56 +1,15 @@
 <!DOCTYPE html>
 <!--
-    Midiestro3D - A 3D rhythm game where players type along with MIDI files.
-    Features: 3D note rendering, camera controls, hover info, and scoring.
+    Midiestro3DES - ES Module version of Midiestro3D.html
+    Uses modern ES module imports from MyESModules directory
 -->
 <html>
 
 <head>    
-    <title>Midiestro</title>
-    <!--
-    <script src="https://unpkg.com/vue@2.6.12/dist/vue.min.js"></script>
-    <script type="text/javascript" src="https://unpkg.com/tone@latest/build/Tone.js"></script>
-    <script type="text/javascript" src="https://unpkg.com/@tonejs/midi"></script>
-    -->
+    <title>Midiestro 3D - ES Modules</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css" integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous">
-    <script src="Libraries/vue.min.js"></script>
-    <script type="text/javascript" src="Libraries/Tone.js"></script>
-    <script type="text/javascript" src="Libraries/ToneMidi.js"></script>
-    <script src="Libraries/three.min.js"></script>
-    <script src="Libraries/threejsExamples/FontLoader.js"></script>
-    <script src="Libraries/threejsExamples/TextGeometry.js"></script>
     <link href="../Styles.css" rel="stylesheet" />
     <link rel="shortcut icon" href="./favicon.ico" />
-    <script src="MyComponents/ToneHelper.js"></script>
-    <script src="MyComponents/SynthKeyPlayer.js"></script>
-    <script src="MyComponents/keyNoteMaps.js"></script>
-    <script src="MyComponents/KeyNoteMapService.js"></script>
-    <script src="MyComponents/SongNoteRenderer.js"></script>
-    <script src="MyComponents/keyRenderInfo.js"></script>
-    <script src="MyComponents/VisibleFieldFilterer.js"></script>
-    <script src="MyComponents/scoringSettings.js"></script>
-    <script src="MyComponents/ScoreKeeper.js"></script>
-    <script src="MyComponents/BaseController.js"></script>
-    <script src="MyComponents/GameController.js"></script>
-    <script src="MyComponents/GameState.js"></script>
-    <script src="MyComponents/midiSongList.js"></script>
-    <script src="MyComponents/difficultySettings.js"></script>
-    <script src="MyComponents/highScoreTracker.js"></script>
-    <script src="MyComponents/challengeScores.js"></script>
-    <script src="MyComponents/difficultySettingsCalculator.js"></script>
-    <script src="MyComponents/DomUtils.js"></script>
-    <script src="MyComponents/FileDropHandler.js"></script>
-    <script src="MyComponents/InputHandler.js"></script>
-    <script src="MyComponents/ComponentRegistry.js"></script>
-    <script src="MyComponents/MidiParser.js"></script>
-    <script src="MyComponents/CameraPresets.js"></script>
-    <script src="MyComponents/CameraControls.js"></script>
-    <script src="MyComponents/CoordinateCalculator.js"></script>
-    <script src="MyComponents/NoteCacheBuilder.js"></script>
-    <script src="MyComponents/HoverInfoService.js"></script>
-    <script src="MyComponents/HoverInfoDisplay.js"></script>
-    <script src="MyComponents/ThreeJSRenderer.js"></script>
-    <script src="MyComponents/ThreeJSGameController.js"></script>
 </head>
 
 <body>
@@ -72,20 +31,12 @@
                 As a simple song to start with, here is a place to download <a href="https://onlinesequencer.net/4101480#">Mary Had a Little Lamb</a> .  On the website, choose "Download MIDI"
             </p>
             <p>
-                You can find more midi files to download and try out at the links below.  Also searching the internet with a phrase like "Nightmare Before Christmas MIDI" or "Portal Still Alive MIDI" will find songs to download as well.
+                You can find more midi files to download and try out at the links below.
                 <ul>
-                    <li>
-                        <a href="https://bbloomf.github.io/lilypond-songs">https://bbloomf.github.io/lilypond-songs</a>
-                    </li>
-                    <li>
-                        <a href="https://onlinesequencer.net/sequences">https://onlinesequencer.net/sequences</a>
-                    </li>
-                    <li>
-                        <a href="http://www.soundswell.co.uk/pages/swmids.htm">http://www.soundswell.co.uk/pages/swmids.htm</a>
-                    </li>
-                    <li>
-                        <a href="http://midi.music.arizona.edu/purpose.php">http://midi.music.arizona.edu/search.php</a>
-                    </li>
+                    <li><a href="https://bbloomf.github.io/lilypond-songs">https://bbloomf.github.io/lilypond-songs</a></li>
+                    <li><a href="https://onlinesequencer.net/sequences">https://onlinesequencer.net/sequences</a></li>
+                    <li><a href="http://www.soundswell.co.uk/pages/swmids.htm">http://www.soundswell.co.uk/pages/swmids.htm</a></li>
+                    <li><a href="http://midi.music.arizona.edu/purpose.php">http://midi.music.arizona.edu/search.php</a></li>
                 </ul>
             </p>
             <div id="FileDrop">
@@ -95,9 +46,9 @@
                 <input type="file" accept="audio/midi" />
             </div>
         </div>
-        <button id="toggleInstructions" onclick="getDomUtils().toggleElementById('Instructions')">Toggle Instructions And Advanced Song Selection</button>
-
+        <button id="toggleInstructions" onclick="window.domUtils.toggleElementById('Instructions')">Toggle Instructions And Advanced Song Selection</button>
     </div>
+
     <div id="app">
         <div id="midiSongConfig" class="bordered">
             <div class="bordered">
@@ -107,11 +58,12 @@
                 </select>
             </div>
         </div>
-        <div id="gameConfig" class="bordered" >
+
+        <div id="gameConfig" class="bordered">
             <div class="bordered">
                 Please note: most of these options require the song to be restarted in order to take affect.
             </div>
-            <!-- trackOptionConfig -->
+
             <div id="trackOptionConfig" class="side-by-side">
                 <div class="bordered">
                     <label for="trackSelect">Select Track to play</label>
@@ -123,7 +75,7 @@
                     If you want to play the parts of a particular track, you can select an individual one to display here.  Otherwise notes from all tracks will be used to display.
                 </div>
             </div>
-            <!-- keyNoteMapConfig -->
+
             <div id="keyNoteMapConfig" class="side-by-side">
                 <div class="bordered">
                     <label for="keyNoteMapSelect">Select a Keyboard Layout</label>
@@ -135,7 +87,7 @@
                     {{selectedKeyNoteMap.description}}
                 </div>
             </div>
-            <!-- difficultyConfig -->
+
             <div id="difficultyConfig" class="side-by-side">
                 <div class="bordered">
                     <div id="difficulty">
@@ -146,10 +98,10 @@
                     </div>
                 </div>
                 <div class="bordered">
-                    This sets how close together notes will be during play.  More notes will appear on harder difficulties, and they will be a bit harder to read due to how they letters stack up.  Not all songs are affected by difficulty changes similarly.  Some songs will barely change, and some will change drastically.  Good luck!
+                    This sets how close together notes will be during play.  More notes will appear on harder difficulties, and they will be a bit harder to read due to how they letters stack up.  Not all songs are affected by difficulty changes similarly.
                 </div>
             </div>
-            <!-- trackVolumeConfig -->
+
             <div id="trackVolumeConfig" class="side-by-side">
                 <div class="bordered">
                     <div id="trackVolume">
@@ -158,10 +110,10 @@
                     </div>
                 </div>
                 <div class="bordered">
-                    This sets the volume of each track.  The smaller the value, the quieter the background music will be.  Please note that this config will only get applied once when the song starts playing.
+                    This sets the volume of each track.  The smaller the value, the quieter the background music will be.
                 </div>
             </div>
-            <!-- playerVolumeConfig -->
+
             <div id="playerVolumeConfig" class="side-by-side">
                 <div class="bordered">
                     <div id="playerVolume">
@@ -174,7 +126,7 @@
                 </div>
             </div>
         </div>
-        <button id="toggleGameConfig" onclick="getDomUtils().toggleElementById('gameConfig')">Toggle Game Configurations</button>
+        <button id="toggleGameConfig" onclick="window.domUtils.toggleElementById('gameConfig')">Toggle Game Configurations</button>
 
         <!-- Camera Control UI (visible only when game is stopped) -->
         <div id="cameraControlPanel" class="bordered" style="display: none;">
@@ -203,6 +155,7 @@
                 Use the Camera Presets dropdown to quickly switch between views.<br>
                 Press "Start Camera Control" to begin.
             </div>
+
             <!-- Hover Info Display (visible only when camera controls are active) -->
             <div id="hoverInfo" class="bordered" style="background-color: #e8f4fd; padding: 10px; margin-top: 10px;">
                 <h4>Hover Info</h4>
@@ -213,8 +166,10 @@
                 <div><strong>Grid Row:</strong> <span id="hoverInfoRow">-</span></div>
                 <div><strong>Time:</strong> <span id="hoverInfoTime">-</span></div>
             </div>
+
             <button id="toggleCameraControls" onclick="toggleCameraControls()">Start Camera Control</button>
             <button id="resetCamera" onclick="resetCamera()">Reset Camera</button>
+
             <!-- Camera Preset Selector -->
             <div class="bordered" style="margin-top: 10px;">
                 <h4>Camera Presets</h4>
@@ -233,10 +188,11 @@
             <span>Score: [{{ score }}]  Good [{{ goodCount }}] Ok [{{ okCount }}] Bad [{{badCount}}] Missed [{{missedCount}}]</span>
             <div id="SongHighScore">
                 High Score: [{{ highScore }}] Challenge Score: [{{ challengeScore }}]
-                <button id="clearHighScores" onclick="clearHighScores()">Clear High Scores</button>
-                <button id="exportHighScores" onclick="exportHighScores()">Copy High Scores to Clipboard</button>
+                <button id="clearHighScores" onclick="window.highScoreTracker.exportHighScoresToClipBoardAsJsonString(); localStorage.clear(); app.toggleTrackHighScores = false; window.domUtils.toggleElementById('SongHighScore');">Clear High Scores</button>
+                <button id="exportHighScores" onclick="window.highScoreTracker.exportHighScoresToClipBoardAsJsonString()">Copy High Scores to Clipboard</button>
             </div>
         </div>
+
         <div class="canvas-container-wrapper">
             <div id="canvasContainer" class="bordered">
                 <canvas id="notesCanvas"></canvas>
@@ -246,91 +202,129 @@
                 <canvas id="threeCanvas"></canvas>
             </div>
         </div>
+
         <div id="notesPlaying">
             <div class="bordered">{{renderedNotesPlaying}}</div>
         </div>
+
         <div class="side-by-side" id="songNoteKeys">
             <div class="bordered">Mapped Keys<br />{{ songNotesOnKeyMap }}</div>
             <div class="bordered">Song Notes<br />{{ songNotes }}</div>
         </div>
     </div>
 
-    <script type="text/javascript">
-        //If the user enters something after the url, like http://url.com?debug
-        //The window.location.search field holds everything after the main url
+<script src="https://cdn.jsdelivr.net/npm/tone@14.9.17/build/Tone.js"></script>
+<script src="https://unpkg.com/@tonejs/midi"></script>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://unpkg.com/three@0.183.0/build/three.module.js",
+        "three/examples/jsm/loaders/FontLoader.js": "https://unpkg.com/three@0.183.0/examples/jsm/loaders/FontLoader.js",
+        "three/examples/jsm/geometries/TextGeometry.js": "https://unpkg.com/three@0.183.0/examples/jsm/geometries/TextGeometry.js"
+    }
+}
+</script>
+
+<script type="module">
+        import { createApp, markRaw } from 'https://unpkg.com/vue@3.5.30/dist/vue.esm-browser.js';
+        import * as THREE from 'three';
+        import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
+        import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
+
+        const Tone = window.Tone;
+
+        console.log('Tone version:', Tone.Version);
+        console.log('THREE version:', THREE.REVISION);
+
+        import { getToneHelper } from './MyESModules/ToneHelper.js';
+        import { getSynthKeyPlayer } from './MyESModules/SynthKeyPlayer.js';
+        import getKeyNoteMaps from './MyESModules/keyNoteMaps.js';
+        import { getKeyNoteMapService } from './MyESModules/KeyNoteMapService.js';
+        import { getSongNoteRenderer } from './MyESModules/SongNoteRenderer.js';
+        import getKeyRenderInfo from './MyESModules/keyRenderInfo.js';
+        import { getVisibleFieldFilterer } from './MyESModules/VisibleFieldFilterer.js';
+        import getScoreKeeper from './MyESModules/ScoreKeeper.js';
+        import getScoringSettings from './MyESModules/scoringSettings.js';
+        import getGameController from './MyESModules/GameController.js';
+        import getThreeJSGameController from './MyESModules/ThreeJSGameController.js';
+        import getGameState from './MyESModules/GameState.js';
+        import getMidiSongList from './MyESModules/midiSongList.js';
+        import getDifficultySettings from './MyESModules/difficultySettings.js';
+        import getHighScoreTracker from './MyESModules/highScoreTracker.js';
+        import getChallengeScores from './MyESModules/challengeScores.js';
+        import { getDifficultySettingsCalculator } from './MyESModules/difficultySettingsCalculator.js';
+        import getDomUtils from './MyESModules/DomUtils.js';
+        import getFileDropHandler from './MyESModules/FileDropHandler.js';
+        import getInputHandler from './MyESModules/InputHandler.js';
+        import getComponentRegistry from './MyESModules/ComponentRegistry.js';
+        import { getMidiParser } from './MyESModules/MidiParser.js';
+        import getThreeJSRenderer from './MyESModules/ThreeJSRenderer.js';
+
         const queryString = window.location.search;
         const debugPage = queryString == "?debug";
-        const domUtils = getDomUtils();
-        domUtils.toggleElementById('Instructions');
-        domUtils.toggleElementById('gameConfig');
-        
+
+        // Make domUtils globally accessible for onclick handlers
+        window.domUtils = getDomUtils();
+        window.domUtils.toggleElementById('Instructions');
+        window.domUtils.toggleElementById('gameConfig');
+
         if(!debugPage){
-            domUtils.toggleElementById('songNoteKeys');
-            domUtils.toggleElementById('notesPlaying');
-            domUtils.toggleElementById('exportHighScores');
+            window.domUtils.toggleElementById('songNoteKeys');
+            window.domUtils.toggleElementById('notesPlaying');
+            window.domUtils.toggleElementById('exportHighScores');
         }
 
         var midiSongs = getMidiSongList();
         const sortedMidiSongs = Object.fromEntries(Object.keys(midiSongs).sort().map(key => [key, midiSongs[key]]));
         midiSongs = sortedMidiSongs;
-        const highScoreTracker = getHighScoreTracker();
-        const challengeScores = getChallengeScores();
+
+        const localStorageService = {
+            getItem: localStorage.getItem.bind(localStorage),
+            setItem: localStorage.setItem.bind(localStorage),
+            key: localStorage.key.bind(localStorage),
+            get length() { return localStorage.length; }
+        };
+
+        const highScoreTracker = getHighScoreTracker(localStorageService);
+        window.highScoreTracker = highScoreTracker;
+        const challengeScoresObj = getChallengeScores();
 
         var synthKeyPlayer = getSynthKeyPlayer();
-        // Create the KeyNoteMapService instance
         var keyNoteMapService = getKeyNoteMapService();
         var songNoteRenderer = getSongNoteRenderer(keyNoteMapService);
         const keyRenderInfo = getKeyRenderInfo();
-        const difficultySettings = getDifficultySettings();
+        const difficultySettingsObj = getDifficultySettings();
         const difficultySettingsCalculator = getDifficultySettingsCalculator();
         var songDifficultySettings = null;
         var noteLetterCache = songNoteRenderer.buildSongNoteLetterCache(keyRenderInfo);
-        var toneHelper = getToneHelper();
+        var toneHelper = getToneHelper(Tone);
         var visibleFieldFilterer = getVisibleFieldFilterer();
         var synthMap = {};
         var songEnd = null;
-        const synthArray = [];  //Holds all the available synths
+        const synthArray = [];
 
         // Create ComponentRegistry for dependency injection
         var componentRegistry = getComponentRegistry();
-        const pressedKeys = componentRegistry.getPressedKeys(); // Get pressedKeys from registry
+        const pressedKeys = componentRegistry.getPressedKeys();
 
-        //Get all the keyNoteMaps
-        const keyNoteMapCollection = getKeyNoteMaps();  //Supplied from ./keyNoteMap.js
-        //Get all the available keyNoteMapKeys keys
+        const keyNoteMapCollection = getKeyNoteMaps();
         const keyNoteMapKeys = Object.keys(keyNoteMapCollection);
-        //Get a default value for the keyNoteMap
         const defaultKeyNoteMap = keyNoteMapCollection[keyNoteMapKeys[0]];
-        //The current keys
+
         var defaultNotesPlaying = "";
         var defaultSongNotes = "";
         var defaultSongNotesOnKeyMap = "";
         var defaultFMSynthParams = toneHelper.getDefaultFMSynthParams();
 
-        //Disposes of existing synths and creates synths based on FMSynth options
-        //First call uses the default
-        toneHelper.buildSynths(defaultFMSynthParams, synthArray, 10); //Support for polyphonic key play
-        var app; //The Vue.js variable
+        toneHelper.buildSynths(defaultFMSynthParams, synthArray, 10);
 
-        // Create the InputHandler instance (app will be set when Vue mounts)
-        var inputHandler = getInputHandler();
+        var app;
 
-        /*
-            Resets the Notes Playing field on the page
-            Evaluates which keys are pressed
-                If any keys are pressed
-                    Gets the notes mapped to the pressed keys
-                    Assigns free synths
-                    Starts playing the synths
-                If any synths are playing for a key that is not pressed
-                    Stops playing the synth
-
-        */
         function playNotes(){
             synthKeyPlayer.playNotes(app, pressedKeys, synthMap, synthArray);
         }
 
-        //Hiding console debug logs behind the "?debug" string in the url, like https://austin183.github.io/MidiSongBuilder/Keybiano.html?debug
         function writeLog(logEntry){
             if(debugPage == true){
                 console.log(logEntry);
@@ -345,17 +339,16 @@
                 parseFile(file);
             });
         } else {
-            document.querySelector("#FileDrop #Text").textContent =
-                "Reading files not supported by this browser";
+            document.querySelector("#FileDrop #Text").textContent = "Reading files not supported by this browser";
         }
 
+        var inputHandler;
+        
         let currentMidi = null;
-        var midiParser = getMidiParser();
-
-        function parseFile(file) {
-            midiParser.parseMidiFile(file, function(midiResult) {
-                setupSongFromMidiResult(midiResult);
-            });
+        var midiParser = getMidiParser(markRaw);
+        
+        async function parseFile(file) {
+            await midiParser.parseMidiFile(file, setupSongFromMidiResult);
         }
 
         function setupSongFromMidiResult(midiResult) {
@@ -366,10 +359,8 @@
             app.selectedTrack = app.availableTracks[0];
 
             songEnd = parsed.songEnd;
-            // Store the parsed tracks in currentMidi for togglePlay to use
             currentMidi = { tracks: parsed.tracks };
 
-            // Enable the play button
             var playButton = document.getElementById('tonePlayToggle');
             playButton.removeAttribute('disabled');
             playButton.textContent = 'Play';
@@ -377,47 +368,33 @@
             renderSongNotes();
         }
 
-        // Keep getCombinedTrackNotes for backwards compatibility if needed elsewhere
-        function getCombinedTrackNotes(tracks) {
-            return midiParser.combineAllTrackNotes(tracks);
-        }
-
         // Create the game controller instances
-        var gameController = getGameController();
-        var threeJSGameController = getThreeJSGameController();
+        var gameController = getGameController(Tone);
+        var threeJSGameController = getThreeJSGameController(Tone);
 
         var playing = false;
         var cameraControlsActive = false;
-
-        // Camera control variables
-        var cameraControlUpdateInterval = null;
 
         function togglePlay() {
             var playButton = document.getElementById('tonePlayToggle');
             playing = !playing;
             if (playing) {
                 playButton.textContent = 'Stop';
-                // Disable camera controls when game starts
                 disableCameraControls();
             } else {
                 playButton.textContent = 'Restart';
-                // Enable camera controls when game stops
                 enableCameraControls();
             }
 
             if (playing && currentMidi) {
-                // Remove focus from any focused element
                 if (document.activeElement) {
                     document.activeElement.blur();
                 }
 
+                const invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
                 const containerElement = document.getElementById("canvasContainer");
                 containerElement.scrollIntoView({ behavior: "smooth" });
 
-                // Create inverted key note map for rendering
-                var invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
-
-                // Calculate the visible field for rendering
                 var visibleField = [];
                 if (songDifficultySettings) {
                     const songDifficulty = songDifficultySettings[app.selectedDifficulty.difficultyKey];
@@ -427,12 +404,8 @@
                     visibleField = difficultySettingsCalculator.getTargetVisibleField(targetNotesPerMinute, app.selectedTrack.notes, invertedKeyNoteMap, visibleFieldFilterer, keyRenderInfo, app.notesCanvas, songNoteRenderer, songEnd).visibleField;
                 }
 
-                // Build note letter cache for rendering
                 app.noteLetterCache = songNoteRenderer.buildSongNoteLetterCache(keyRenderInfo);
 
-                // Start the 3D game controller which handles both 2D and 3D rendering
-                // Note: dependencies (scoreKeeper, songNoteRenderer, keyNoteMapService, etc.)
-                // are retrieved from ComponentRegistry inside the controller
                 threeJSGameController.startGame(
                     app,
                     currentMidi,
@@ -444,13 +417,7 @@
                 );
 
             } else {
-                // Stop the 3D game controller
                 threeJSGameController.stopGame(app);
-                // Note: intentionally NOT clearing 3D notes to keep the last frame visible
-                // if (app.threeJSRenderer) {
-                //     app.threeJSRenderer.clearNotes();
-                //     app.threeJSRenderer.clearNowLine();
-                // }
             }
         }
 
@@ -460,11 +427,8 @@
                 app.threeJSRenderer.disableCameraControls();
                 app.threeJSRenderer.disableHoverInfo();
             }
-            // Disable camera controls when game starts (enable note input for gameplay)
             inputHandler.setNoteInputEnabled(true);
-            // Hide camera control panel
             document.getElementById('cameraControlPanel').style.display = 'none';
-            // Stop update loop
             stopCameraUpdateLoop();
         }
 
@@ -473,19 +437,14 @@
             if (app && app.threeJSRenderer) {
                 app.threeJSRenderer.enableCameraControls();
                 app.threeJSRenderer.enableHoverInfo();
-                // Get the hover info element and pass it to renderer
                 var hoverInfoElement = document.getElementById('hoverInfo');
                 if (hoverInfoElement) {
                     app.threeJSRenderer.setHoverInfoElement(hoverInfoElement);
                 }
             }
-            // Enable camera controls when game stops (disable note input to prevent keys during camera control)
             inputHandler.setNoteInputEnabled(false);
-            // Show camera control panel
             document.getElementById('cameraControlPanel').style.display = 'block';
-            // Hide instructions since controls are active
             document.getElementById('cameraInstructions').style.display = 'none';
-            // Start update loop for camera position display
             startCameraUpdateLoop();
         }
 
@@ -504,12 +463,10 @@
                 app.threeJSRenderer.resetCamera();
                 var state = app.threeJSRenderer.getCameraDisplayState();
 
-                // Update position inputs
                 document.getElementById('cameraPosX').value = state.position.x.toFixed(2);
                 document.getElementById('cameraPosY').value = state.position.y.toFixed(2);
                 document.getElementById('cameraPosZ').value = state.position.z.toFixed(2);
 
-                // Update lookAt inputs
                 document.getElementById('cameraLookAtX').value = state.lookAt.x.toFixed(2);
                 document.getElementById('cameraLookAtY').value = state.lookAt.y.toFixed(2);
                 document.getElementById('cameraLookAtZ').value = state.lookAt.z.toFixed(2);
@@ -524,7 +481,7 @@
 
             if (presetKey) {
                 app.threeJSRenderer.applyCameraPreset(presetKey);
-                select.value = "";  // Reset to placeholder
+                select.value = "";
             }
         }
 
@@ -532,7 +489,6 @@
             var select = document.getElementById('cameraPresetSelect');
             if (!select || !appInstance || !appInstance.threeJSRenderer) return;
 
-            // Get presets and populate dropdown
             var presets = appInstance.threeJSRenderer.getCameraPresetList();
             presets.forEach(function(presetKey) {
                 var option = document.createElement('option');
@@ -541,7 +497,6 @@
                 select.appendChild(option);
             });
 
-            // Add change handler
             select.addEventListener('change', applyCameraPreset);
         }
 
@@ -565,40 +520,24 @@
 
             var state = app.threeJSRenderer.getCameraDisplayState();
 
-            // Update position inputs
             document.getElementById('cameraPosX').value = state.position.x.toFixed(2);
             document.getElementById('cameraPosY').value = state.position.y.toFixed(2);
             document.getElementById('cameraPosZ').value = state.position.z.toFixed(2);
 
-            // Update lookAt inputs
             document.getElementById('cameraLookAtX').value = state.lookAt.x.toFixed(2);
             document.getElementById('cameraLookAtY').value = state.lookAt.y.toFixed(2);
             document.getElementById('cameraLookAtZ').value = state.lookAt.z.toFixed(2);
 
-            // Update camera to reflect any changes from controls
             app.threeJSRenderer.updateCameraFromControls();
         }
 
-        // UI input handlers for manual camera position adjustment
         function setupCameraInputHandlers() {
-            document.getElementById('cameraPosX').addEventListener('change', function(e) {
-                updateCameraFromUI();
-            });
-            document.getElementById('cameraPosY').addEventListener('change', function(e) {
-                updateCameraFromUI();
-            });
-            document.getElementById('cameraPosZ').addEventListener('change', function(e) {
-                updateCameraFromUI();
-            });
-            document.getElementById('cameraLookAtX').addEventListener('change', function(e) {
-                updateCameraFromUI();
-            });
-            document.getElementById('cameraLookAtY').addEventListener('change', function(e) {
-                updateCameraFromUI();
-            });
-            document.getElementById('cameraLookAtZ').addEventListener('change', function(e) {
-                updateCameraFromUI();
-            });
+            document.getElementById('cameraPosX').addEventListener('change', updateCameraFromUI);
+            document.getElementById('cameraPosY').addEventListener('change', updateCameraFromUI);
+            document.getElementById('cameraPosZ').addEventListener('change', updateCameraFromUI);
+            document.getElementById('cameraLookAtX').addEventListener('change', updateCameraFromUI);
+            document.getElementById('cameraLookAtY').addEventListener('change', updateCameraFromUI);
+            document.getElementById('cameraLookAtZ').addEventListener('change', updateCameraFromUI);
         }
 
         function updateCameraFromUI() {
@@ -618,45 +557,38 @@
             app.threeJSRenderer.setCameraFromUI(position, lookAt);
         }
 
-        // Setup input handlers when page loads
-        window.addEventListener('load', setupCameraInputHandlers);
-
-        /**
-         * Set camera input defaults from CameraControls defaults
-         * @param {Object} appInstance - The Vue app instance
-         */
-        function setupCameraInputDefaults(appInstance) {
-            if (!appInstance || !appInstance.threeJSRenderer) return;
-
-            var defaults = appInstance.threeJSRenderer.getDefaultCameraStateForUI();
-            if (!defaults) return;
-
-            // Set position inputs
-            document.getElementById('cameraPosX').value = defaults.position.x;
-            document.getElementById('cameraPosY').value = defaults.position.y;
-            document.getElementById('cameraPosZ').value = defaults.position.z;
-
-            // Set lookAt inputs
-            document.getElementById('cameraLookAtX').value = defaults.lookAt.x;
-            document.getElementById('cameraLookAtY').value = defaults.lookAt.y;
-            document.getElementById('cameraLookAtZ').value = defaults.lookAt.z;
-        }
-
-        // Handle window resize for 3D canvas
         window.addEventListener('resize', function() {
             if (app && app.threeJSRenderer) {
                 app.threeJSRenderer.resize();
             }
         });
 
-        //Once everything is downloaded, and the page has loaded, start rendering the Vue.js app
+        function setupCameraInputDefaults(appInstance) {
+            if (!appInstance || !appInstance.threeJSRenderer) return;
+
+            var defaults = appInstance.threeJSRenderer.getDefaultCameraStateForUI();
+            if (!defaults) return;
+
+            document.getElementById('cameraPosX').value = defaults.position.x;
+            document.getElementById('cameraPosY').value = defaults.position.y;
+            document.getElementById('cameraPosZ').value = defaults.position.z;
+
+            document.getElementById('cameraLookAtX').value = defaults.lookAt.x;
+            document.getElementById('cameraLookAtY').value = defaults.lookAt.y;
+            document.getElementById('cameraLookAtZ').value = defaults.lookAt.z;
+        }
+
+        // Expose functions to window for onclick handlers in ES module scope
+        window.togglePlay = togglePlay;
+        window.toggleCameraControls = toggleCameraControls;
+        window.resetCamera = resetCamera;
+
         window.onload = function(){
-            app = new Vue({
-                el: '#app', //The div id to put the Vue.js app in.  I can end sentences with prepositions if I want.  It's what my repo is really about!
-                data: {
-                    selectedKeyNoteMap: defaultKeyNoteMap, //Which keyboard map the user has selected in the drop down.
-                    availableKeyNoteMaps: keyNoteMapCollection, //All the keyboard maps available in the drop down
-                    renderedNotesPlaying: defaultNotesPlaying, //The field to show which notes are playing based on the keys pressed at the time
+            app = createApp({
+                data: () => ({
+                    selectedKeyNoteMap: defaultKeyNoteMap,
+                    availableKeyNoteMaps: keyNoteMapCollection,
+                    renderedNotesPlaying: defaultNotesPlaying,
                     songNotes: defaultSongNotes,
                     songNotesOnKeyMap: defaultSongNotesOnKeyMap,
                     selectedTrack: "",
@@ -664,89 +596,87 @@
                     vueCanvas: null,
                     notesCanvas: null,
                     threeJSRenderer: null,
-                    keyRenderInfo: keyRenderInfo,  // Keyboard layout info for 3D positioning
+                    keyRenderInfo: keyRenderInfo,
                     score: 0,
                     goodCount: 0,
                     okCount: 0,
                     badCount: 0,
                     missedCount: 0,
-                    minDuration: difficultySettings["Normal"].minNoteDuration,
-                    minNoteDistance: difficultySettings["Normal"].minNoteDistance,
+                    minDuration: difficultySettingsObj["Normal"].minNoteDuration,
+                    minNoteDistance: difficultySettingsObj["Normal"].minNoteDistance,
                     playerVolume: .7,
                     trackVolume: 1,
                     midiJson: "",
                     midiSongs: midiSongs,
                     selectedMidiSong: null,
                     songEnd: null,
-                    difficultySettings: difficultySettings,
-                    selectedDifficulty: difficultySettings["Normal"],
+                    difficultySettings: difficultySettingsObj,
+                    selectedDifficulty: difficultySettingsObj["Normal"],
                     toggleTrackHighScores: false,
                     highScore: 0,
                     challengeScore: 0
-                },
-                mounted(){
+                }),
+                mounted() {
                     this.notesCanvas = document.getElementById("notesCanvas")
                     var ctx = notesCanvas.getContext('2d');
                     this.vueCanvas = ctx;
                     this.vueCanvas.clearRect(0, 0, this.notesCanvas.width, this.notesCanvas.height);
                     this.vueCanvas.font = "18px Georgia";
                     this.vueCanvas.fillStyle = "black";
-                    this.vueCanvas.fillText("Watch for falling note keys!", 0, 50); // Assuming the height of the letter is about 20 pixels
+                    this.vueCanvas.fillText("Watch for falling note keys!", 0, 50);
                     this.toggleTrackHighScores = localStorage.getItem("TrackScores") == "true";
                     if(!this.toggleTrackHighScores){
-                        domUtils.toggleElementById("SongHighScore");
-                    }
-                    // Update inputHandler with the Vue app reference and set up key listeners
-                    inputHandler.app = this;
+window.domUtils.toggleElementById("SongHighScore");
+                     }
+
+                    const debugLogger = window.location.search === '?debug' 
+                        ? { enabled: true, log: console.log.bind(console) }
+                        : null;
+
+                    const scoreKeeper = getScoreKeeper(getScoringSettings().default, debugLogger);
+
+                    inputHandler = getInputHandler(debugLogger);
                     inputHandler.setupKeyListeners(this, pressedKeys, synthMap, synthArray, playNotes);
 
                     // Initialize Three.js renderer
-                    var threeJSRenderer = getThreeJSRenderer();
+                    var threeJSRenderer = getThreeJSRenderer(THREE, FontLoader, TextGeometry);
                     threeJSRenderer.init("threeCanvas");
                     this.threeJSRenderer = threeJSRenderer;
                     threeJSRenderer.startAnimation();
 
-                    // Setup camera preset dropdown after renderer is initialized
                     setupCameraPresetDropdown(this);
-
-                    // Set camera input defaults from CameraControls defaults
                     setupCameraInputDefaults(this);
 
-                    // Register services in ComponentRegistry for dependency injection
-                    componentRegistry.registerService('scoreKeeper', getScoreKeeper());
+                    componentRegistry.registerService('scoreKeeper', scoreKeeper);
                     componentRegistry.registerService('songNoteRenderer', songNoteRenderer);
                     componentRegistry.registerService('keyNoteMapService', keyNoteMapService);
                     componentRegistry.registerService('highScoreTracker', highScoreTracker);
-                    componentRegistry.registerService('challengeScores', challengeScores);
+                    componentRegistry.registerService('challengeScores', challengeScoresObj);
                     componentRegistry.registerService('threeJSRenderer', threeJSRenderer);
 
-                    // Store componentRegistry on Vue instance for use by ThreeJSGameController
                     this.componentRegistry = componentRegistry;
                 },
-                beforeDestroy() {
-                    // Clean up Three.js renderer
+                beforeUnmount() {
                     if (this.threeJSRenderer) {
                         this.threeJSRenderer.dispose();
                     }
-                    // Clean up event listeners when the app is destroyed
                     inputHandler.removeKeyListeners();
                 },
                 methods: {
                     handleMidiSongSelection,
-                    renderSongNotes,
                     setDifficulty,
                     handleToggleTrackHighScores
                 }
-            });
+            }).mount('#app');
 
         };
 
         function renderSongNotes(){
-            app.songEnd = (songEnd / 60).toFixed(2) + " minutes";
-            if(currentMidi  && app.selectedTrack !== "" && debugPage){
+            if(songEnd) {
+                app.songEnd = (songEnd / 60).toFixed(2) + " minutes";
+            }
+            if(currentMidi && app.selectedTrack !== "" && debugPage){
                 var invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
-                var renderedSongNotes = "";
-                var renderedSongNotesOnKeyMap = "";
                 var song = app.selectedTrack.notes;
                 writeLog(JSON.stringify(song));
                 var renderedNotes = songNoteRenderer.renderSongNotes(song, app.selectedKeyNoteMap.keyNoteMap);
@@ -755,9 +685,7 @@
                 app.songNotesOnKeyMap = renderedNotes.renderedSongNotesOnKeyMap;
                 app.renderedNotesPlaying = songNoteRenderer.renderDebugNotesPlaying(app.notesCanvas, song, {keyScores: {}}, invertedKeyNoteMap, 0, 0);
 
-                // Also render to 3D canvas
                 if (app.threeJSRenderer && app.keyRenderInfo) {
-                    // Create a simple visible field for 3D rendering
                     var visibleField = song.map(function(note) {
                         var keyNote = invertedKeyNoteMap[note.name];
                         if (keyNote) {
@@ -775,13 +703,7 @@
                     app.threeJSRenderer.addNotesFromVisibleField(visibleField, app.keyRenderInfo);
                 }
 
-                //Move focus back to the document so when the user starts trying to play notes, they
-                //won't accidentally be on one of the option fields
-                //Found at https://stackoverflow.com/questions/6976486/is-there-any-way-in-javascript-to-focus-the-document-content-area
-                // Give the document focus
                 window.focus();
-
-                // Remove focus from any focused element
                 if (document.activeElement) {
                     document.activeElement.blur();
                 }
@@ -792,13 +714,12 @@
             if(app.selectedMidiSong){
                 if(app.selectedMidiSong.difficultySettings){
                     songDifficultySettings = app.selectedMidiSong.difficultySettings;                    
-                }
-                else{
+                } else {
                     songDifficultySettings = null;
                 }
                 if(app.toggleTrackHighScores){
                     app.highScore = highScoreTracker.getHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
-                    app.challengeScore = challengeScores.getSelectedScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
+                    app.challengeScore = challengeScoresObj.getSelectedScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
                 }
                 app.availableTracks = [];
                 app.score = 0;
@@ -806,14 +727,13 @@
                 app.okCount = 0;
                 app.badCount = 0;
                 app.missedCount = 0;
-                //Use fetch api to retrieve the file from "PublicDomainSongs/midi/" + app.selectedMidiSong.filename
+
                 const midiFilename = app.selectedMidiSong.filename;
                 fetch(`PublicDomainSongs/midi/${midiFilename}`)
                     .then(response => response.arrayBuffer())
                     .then(arrayBuffer => {
-                    const midiResult = midiParser.parseMidiArrayBuffer(arrayBuffer);
-                    setupSongFromMidiResult(midiResult);
-                });
+                        return midiParser.parseMidiArrayBuffer(arrayBuffer, setupSongFromMidiResult);
+                    });
             }            
         }
 
@@ -827,29 +747,19 @@
                 app.badCount = 0;
                 app.missedCount = 0;
                 app.highScore = highScoreTracker.getHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
-                app.challengeScore = challengeScores.getSelectedScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
+                app.challengeScore = challengeScoresObj.getSelectedScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
             }
         }
 
         function handleToggleTrackHighScores(){
-            domUtils.toggleElementById("SongHighScore");
+            window.domUtils.toggleElementById("SongHighScore");
             if(app.toggleTrackHighScores){
                 localStorage.setItem("TrackScores", "true");
-            }
-            else{
+            } else {
                 localStorage.removeItem("TrackScores");
             }
         }
 
-        function clearHighScores(){
-            localStorage.clear();
-            app.toggleTrackHighScores = false;
-            domUtils.toggleElementById("SongHighScore");
-        }
-
-        function exportHighScores(){
-            highScoreTracker.exportHighScoresToClipBoardAsJsonString();
-        }
     </script>
 </body>
 
