@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import sinon from 'sinon';
 import getScoreKeeper from './ScoreKeeper.js';
 import getScoringSettings from './scoringSettings.js';
 
@@ -324,6 +325,36 @@ describe('ScoreKeeper', function() {
             
             const counts = scoreKeeper.getCounts();
             expect(counts.goodCount).to.equal(3);
+        });
+    });
+
+    describe('constructor', function() {
+        it('accepts null as debugLogger parameter', function() {
+            expect(() => {
+                const sk = getScoreKeeper(null, null);
+            }).to.not.throw();
+        });
+
+        it('accepts undefined as debugLogger parameter', function() {
+            expect(() => {
+                const sk = getScoreKeeper(undefined, undefined);
+            }).to.not.throw();
+        });
+
+        it('works without debugLogger (backwards compatible)', function() {
+            const sk = getScoreKeeper();
+            expect(sk.calculateNewScore).to.be.a('function');
+        });
+
+        it('uses debugLogger when provided', function() {
+            sinon.stub(console, 'log');
+            const mockLogger = { enabled: true, log: console.log };
+            const sk = getScoreKeeper(null, mockLogger);
+            
+            sk.calculateNewScore([], {}, 0, 0, 10);
+            
+            expect(console.log.called).to.be.true;
+            console.log.restore();
         });
     });
 });

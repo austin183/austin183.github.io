@@ -1,6 +1,6 @@
 import getScoringSettings from './scoringSettings.js';
 
-function getScoreKeeper(scoringSettings) {
+function getScoreKeeper(scoringSettings, debugLogger = null) {
     var settings = scoringSettings || getScoringSettings().default;
     var goodRange = settings.goodRange; //within 150 milliseconds of the note.time is good
     var okRange = settings.okRange; //within 400 milliseconds of the note.time is ok
@@ -23,9 +23,9 @@ function getScoreKeeper(scoringSettings) {
         },
 
         calculateNewScore: function(visibleField, pressedKeys, now, earliestNoteIndex, visibleFuture){
-            if (window.location.search === '?debug') {
+            if (debugLogger?.enabled) {
                 const activeKeys = Object.keys(pressedKeys || {}).filter(k => pressedKeys[k] === true);
-                console.log('ScoreKeeper.calculateNewScore called:', {
+                debugLogger.log('ScoreKeeper.calculateNewScore called:', {
                     now: now,
                     visibleFieldLength: visibleField?.length,
                     activeKeys: activeKeys,
@@ -66,8 +66,8 @@ function getScoreKeeper(scoringSettings) {
                             }
                         }
                     }
-if (window.location.search === '?debug' && closestNoteId) {
-                         console.log('Found matching note:', { 
+if (debugLogger?.enabled && closestNoteId) {
+                          debugLogger.log('Found matching note:', { 
                              key, 
                              closestNoteId, 
                              closestNoteTime,
@@ -81,8 +81,8 @@ if (window.location.search === '?debug' && closestNoteId) {
                          });
                      }
 if(!score.keyScores[closestNoteId]){
-                         if(closestNoteTime <= goodRange){
-                             if (window.location.search === '?debug') { console.log('SCORING GOOD!', closestNoteTime, '<=', goodRange); }
+                          if(closestNoteTime <= goodRange){
+                              if (debugLogger?.enabled) { debugLogger.log('SCORING GOOD!', closestNoteTime, '<=', goodRange); }
                              score.total += goodPoints;
                             score.keyScores[closestNoteId] = {
                                 points: goodPoints,

@@ -279,7 +279,14 @@
         const sortedMidiSongs = Object.fromEntries(Object.keys(midiSongs).sort().map(key => [key, midiSongs[key]]));
         midiSongs = sortedMidiSongs;
 
-        const highScoreTracker = getHighScoreTracker();
+        const localStorageService = {
+            getItem: localStorage.getItem.bind(localStorage),
+            setItem: localStorage.setItem.bind(localStorage),
+            key: localStorage.key.bind(localStorage),
+            get length() { return localStorage.length; }
+        };
+
+        const highScoreTracker = getHighScoreTracker(localStorageService);
         window.highScoreTracker = highScoreTracker;
         const challengeScoresObj = getChallengeScores();
 
@@ -633,7 +640,11 @@
                     setupCameraPresetDropdown(this);
                     setupCameraInputDefaults(this);
 
-                    const scoreKeeper = getScoreKeeper(getScoringSettings().default);
+                    const debugLogger = window.location.search === '?debug' 
+                        ? { enabled: true, log: console.log.bind(console) }
+                        : null;
+
+                    const scoreKeeper = getScoreKeeper(getScoringSettings().default, debugLogger);
                     
                     componentRegistry.registerService('scoreKeeper', scoreKeeper);
                     componentRegistry.registerService('songNoteRenderer', songNoteRenderer);

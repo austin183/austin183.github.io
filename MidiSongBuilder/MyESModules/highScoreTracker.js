@@ -1,8 +1,12 @@
-export default function getHighScoreTracker(){
+export default function getHighScoreTracker(storageService) {
+    if (storageService == null) {
+        throw new Error('HighScoreTracker requires a storage service');
+    }
+    
     return {
         getHighScore: function(midiFileName, difficulty) {
             var key = midiFileName + "_" + difficulty;
-            var value = localStorage.getItem(key);
+            var value = storageService.getItem(key);
             if(value == null){
               return "";
             }
@@ -10,17 +14,17 @@ export default function getHighScoreTracker(){
         },
         setHighScore: function(midiFileName, difficulty, highScore) {
           var key = midiFileName + "_" + difficulty;
-          const currentHighScore = localStorage.getItem(key);
+          const currentHighScore = storageService.getItem(key);
           if(currentHighScore == null || parseInt(currentHighScore) < highScore){
-            localStorage.setItem(key, highScore.toString());
+            storageService.setItem(key, highScore.toString());
           }
         },
         exportHighScoresToClipBoardAsJsonString: function(){
           const highScores = {};
-          for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
+          for (let i = 0; i < storageService.length; i++) {
+            const key = storageService.key(i);
             if (key.includes("_")) { // assuming the key format is "midiFileName_difficulty"
-              highScores[key] = localStorage.getItem(key);
+              highScores[key] = storageService.getItem(key);
             }
           }
           const jsonStr = JSON.stringify(highScores, null, 2); // pretty-print with indentation

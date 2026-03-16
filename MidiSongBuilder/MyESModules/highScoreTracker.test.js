@@ -1,11 +1,34 @@
 import { expect } from 'chai';
 import getHighScoreTracker from './highScoreTracker.js';
 
+describe('constructor validation', function() {
+    it('throws error when storageService is not provided', function() {
+        expect(() => {
+            getHighScoreTracker(null);
+        }).to.throw('HighScoreTracker requires a storage service');
+    });
+
+    it('throws error when storageService is undefined', function() {
+        expect(() => {
+            getHighScoreTracker();
+        }).to.throw('HighScoreTracker requires a storage service');
+    });
+});
+
 describe('getHighScoreTracker', function() {
     let tracker;
+    let mockStorage;
 
     beforeEach(() => {
-        tracker = getHighScoreTracker();
+        mockStorage = {
+            store: new Map(),
+            getItem(key) { return this.store.get(key) || null; },
+            setItem(key, value) { this.store.set(key, value); },
+            key(i) { return Array.from(this.store.keys())[i] || null; },
+            get length() { return this.store.size; }
+        };
+
+        tracker = getHighScoreTracker(mockStorage);
     });
 
     it('should return an object with high score methods', function() {
