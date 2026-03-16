@@ -227,7 +227,7 @@
 </script>
 
 <script type="module">
-        import { createApp } from 'https://unpkg.com/vue@3.5.30/dist/vue.esm-browser.js';
+        import { createApp, markRaw } from 'https://unpkg.com/vue@3.5.30/dist/vue.esm-browser.js';
         import * as THREE from 'three';
         import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
         import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
@@ -337,7 +337,7 @@
         }
 
         let currentMidi = null;
-        var midiParser = getMidiParser();
+        var midiParser = getMidiParser(markRaw);
         
         async function parseFile(file) {
             await midiParser.parseMidiFile(file, setupSongFromMidiResult);

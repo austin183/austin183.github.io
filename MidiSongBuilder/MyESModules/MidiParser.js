@@ -1,6 +1,4 @@
-import { markRaw } from 'https://unpkg.com/vue@3.5.30/dist/vue.esm-browser.js';
-
-export function getMidiParser() {
+export function getMidiParser(markRawImpl) {
     return {
         parseMidiFile: async function(file, callback) {
             try {
@@ -19,7 +17,7 @@ export function getMidiParser() {
                     return;
                 }
                 
-                const midi = markRaw(new Midi(arrayBuffer));
+                const midi = markRawImpl(new Midi(arrayBuffer));
                 if (midi && midi.tracks) {
                     callback(midi);
                 } else {
@@ -36,7 +34,7 @@ extractTracks: function(midi) {
 
             if (!midi.tracks) {
                 console.error('No tracks found in midi object');
-                return { tracks: [], fullTrack: markRaw({ name: 'Full Track', notes: [] }), songEnd: 0 };
+                return { tracks: [], fullTrack: markRawImpl({ name: 'Full Track', notes: [] }), songEnd: 0 };
             }
 
             midi.tracks.forEach((track) => {
@@ -48,7 +46,7 @@ extractTracks: function(midi) {
                     }
                     trackName += " " + counter;
 
-                    const trimmedTrack = markRaw({
+                    const trimmedTrack = markRawImpl({
                         name: trackName,
                         notes: track.notes
                     });
@@ -57,7 +55,7 @@ extractTracks: function(midi) {
             });
 
             const fullNotes = this.combineAllTrackNotes(tracks);
-            const fullTrack = markRaw({
+            const fullTrack = markRawImpl({
                 name: "Full Track",
                 notes: fullNotes
             });
@@ -69,7 +67,7 @@ extractTracks: function(midi) {
             }
 
             return {
-                tracks: markRaw(tracks),
+                tracks: markRawImpl(tracks),
                 fullTrack: fullTrack,
                 songEnd: songEnd
             };

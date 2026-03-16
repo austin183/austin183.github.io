@@ -162,7 +162,7 @@
 		></script>
     <script src="./MyESModules/Libraries/midi.js"></script>
 <script type="module">
-        import { createApp } from 'https://unpkg.com/vue@3.5.30/dist/vue.esm-browser.js';
+        import { createApp, markRaw } from 'https://unpkg.com/vue@3.5.30/dist/vue.esm-browser.js';
 
         const Tone = window.Tone;
 
@@ -263,7 +263,7 @@
         }
 
         let currentMidi = null;
-        var midiParser = getMidiParser();
+        var midiParser = getMidiParser(markRaw);
 
 
         async function parseFile(file) {

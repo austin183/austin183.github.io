@@ -1,12 +1,12 @@
 import { expect } from 'chai';
 import { getMidiParser } from './MidiParser.js';
-import * as Tone from './mocks/Tone.js';
 
 describe('MidiParser', () => {
     let midiParser;
 
     beforeEach(() => {
-        midiParser = getMidiParser(Tone);
+        const noopMarkRaw = (obj) => obj;
+        midiParser = getMidiParser(noopMarkRaw);
     });
 
     describe('parseMidiFile', () => {
