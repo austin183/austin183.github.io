@@ -246,7 +246,6 @@
         toneHelper.buildSynths(defaultFMSynthParams, synthArray, 10);
 
         var app;
-        var inputHandler = getInputHandler();
 
         function playNotes(){
             synthKeyPlayer.playNotes(app, pressedKeys, synthMap, synthArray);
@@ -269,6 +268,8 @@
             document.querySelector("#FileDrop #Text").textContent = "Reading files not supported by this browser";
         }
 
+        var inputHandler;
+        
         let currentMidi = null;
         var midiParser = getMidiParser(markRaw);
 
@@ -384,17 +385,17 @@
                     this.vueCanvas.fillText("Watch for falling note keys!", 0, 50);
                     this.toggleTrackHighScores = localStorage.getItem("TrackScores") == "true";
                     if(!this.toggleTrackHighScores){
-                        window.domUtils.toggleElementById("SongHighScore");
-                    }
-
-                    inputHandler.app = this;
-                    inputHandler.setupKeyListeners(this, pressedKeys, synthMap, synthArray, playNotes);
+window.domUtils.toggleElementById("SongHighScore");
+                     }
 
                     const debugLogger = window.location.search === '?debug' 
                         ? { enabled: true, log: console.log.bind(console) }
                         : null;
 
                     const scoreKeeper = getScoreKeeper(getScoringSettings().default, debugLogger);
+
+                    inputHandler = getInputHandler(debugLogger);
+                    inputHandler.setupKeyListeners(this, pressedKeys, synthMap, synthArray, playNotes);
                     
                     componentRegistry.registerService('scoreKeeper', scoreKeeper);
                     componentRegistry.registerService('songNoteRenderer', songNoteRenderer);

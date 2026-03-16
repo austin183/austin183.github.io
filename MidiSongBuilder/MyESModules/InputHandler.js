@@ -3,7 +3,7 @@
  * Extracts keyboard event listeners from the main script
  */
 
-export default function getInputHandler() {
+export default function getInputHandler(debugLogger = null) {
     return {
         // noteInputEnabled - when true, keys are processed for note input (gameplay)
         // When false, keys are available for camera controls
@@ -16,6 +16,7 @@ export default function getInputHandler() {
             this.synthMap = synthMap;
             this.synthArray = synthArray;
             this.onNotePlay = onNotePlay;
+            this.debugLogger = debugLogger;
 
             // Create bound methods to ensure proper 'this' context when removing listeners
             this.boundKeydownHandler = this.handleKeyDown.bind(this);
@@ -37,6 +38,7 @@ export default function getInputHandler() {
             this.synthMap = null;
             this.synthArray = null;
             this.onNotePlay = null;
+            this.debugLogger = null;
             this.noteInputEnabled = true;
         },
 
@@ -65,8 +67,8 @@ export default function getInputHandler() {
 
         handleKeyDown: function(event) {
             // Process key press - only if note input is enabled
-            if (window.location.search === '?debug') {
-                console.log("handleKeyDown called with key:", event.key, "noteInputEnabled:", this.noteInputEnabled, "app exists:", !!this.app);
+            if (this.debugLogger?.enabled) {
+                this.debugLogger.log("handleKeyDown called with key:", event.key, "noteInputEnabled:", this.noteInputEnabled, "app exists:", !!this.app);
             }
             
             if (!this.noteInputEnabled) {
@@ -74,8 +76,8 @@ export default function getInputHandler() {
             }
 
             if (this.app && this.isKeyInMap(event.key, this.app.selectedKeyNoteMap.keyNoteMap)) {
-                if (window.location.search === '?debug') {
-                    console.log("Pressed key for " + this.app.selectedKeyNoteMap.keyNoteMap[event.key]);
+                if (this.debugLogger?.enabled) {
+                    this.debugLogger.log("Pressed key for " + this.app.selectedKeyNoteMap.keyNoteMap[event.key]);
                 }
 
                 this.pressedKeys[event.key] = true;
@@ -85,8 +87,8 @@ export default function getInputHandler() {
 
         handleKeyUp: function(event) {
             // Process key release - only if note input is enabled
-            if (window.location.search === '?debug') {
-                console.log("handleKeyUp called with key:", event.key, "noteInputEnabled:", this.noteInputEnabled);
+            if (this.debugLogger?.enabled) {
+                this.debugLogger.log("handleKeyUp called with key:", event.key, "noteInputEnabled:", this.noteInputEnabled);
             }
             
             if (!this.noteInputEnabled) {
@@ -96,8 +98,8 @@ export default function getInputHandler() {
             if (this.app &&
                 this.isKeyInMap(event.key, this.app.selectedKeyNoteMap.keyNoteMap) &&
                 event.key in this.synthMap) {
-                if (window.location.search === '?debug') {
-                    console.log("Release key for " + this.app.selectedKeyNoteMap.keyNoteMap[event.key]);
+                if (this.debugLogger?.enabled) {
+                    this.debugLogger.log("Release key for " + this.app.selectedKeyNoteMap.keyNoteMap[event.key]);
                 }
                 this.pressedKeys[event.key] = false;
                 this.onNotePlay();
