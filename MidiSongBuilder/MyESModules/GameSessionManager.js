@@ -1,0 +1,139 @@
+/**
+ * GameSessionManager - Handles game session lifecycle and orchestration
+ * 
+ * Extracts common logic from togglePlay() in both 2D and 3D versions:
+ * - UI button text updates
+ * - Input handler enable/disable
+ * - Focus/blur management
+ * - DOM scrolling operations
+ * - Visible field calculation orchestration
+ * - Cache building
+ * - Game controller lifecycle management
+ */
+
+import getComponentRegistry from './ComponentRegistry.js';
+
+export function getGameSessionManager() {
+    const registry = getComponentRegistry();
+    
+    return {
+        /**
+         * Update play button text based on playing state
+         * @param {Boolean} isPlaying - Current playing state
+         */
+        updatePlayButtonText: function(isPlaying) {
+            var playButton = document.getElementById('tonePlayToggle');
+            if (playButton) {
+                playButton.textContent = isPlaying ? 'Stop' : 'Restart';
+            }
+        },
+        
+        /**
+         * Prepare input handlers for gameplay
+         */
+        prepareForInput: function() {
+            if (window.inputHandler) {
+                window.inputHandler.setNoteInputEnabled(true);
+            }
+        },
+        
+        /**
+         * Prepare app state for playback
+         * - Blur active element to prevent keyboard interference
+         * - Scroll to canvas container
+         * @param {Object} app - Vue.js app instance
+         */
+        prepareForPlayback: function(app) {
+            if (document.activeElement) {
+                document.activeElement.blur();
+            }
+
+            const containerElement = document.getElementById("canvasContainer");
+            if (containerElement) {
+                containerElement.scrollIntoView({ behavior: "smooth" });
+            }
+        },
+        
+        /**
+         * Calculate visible field based on difficulty settings
+         * @param {Object} app - Vue.js app instance
+         * @param {Object} songDifficultySettings - Song-specific difficulty overrides
+         * @param {Array} notes - Array of notes from selected track
+         * @param {Number} songEnd - Song end time in seconds
+         * @param {Object} visibleFieldFilterer - Service for filtering notes
+         * @param {Object} keyRenderInfo - Key render information
+         * @param {Canvas} notesCanvas - Notes canvas element
+         * @param {Object} songNoteRenderer - Song note renderer service
+         * @param {Function} getInvertedMapFn - Function to get inverted key note map
+         * @param {Object} difficultySettingsCalculator - Service for calculating target-based filtering (optional)
+         * @returns {Object} Result with visibleField array and cache
+         */
+        calculateVisibleField: function(app, songDifficultySettings, notes, songEnd, 
+                                        visibleFieldFilterer, keyRenderInfo, notesCanvas, 
+                                        songNoteRenderer, getInvertedMapFn, difficultySettingsCalculator) {
+            const invertedKeyNoteMap = getInvertedMapFn(app.selectedKeyNoteMap.keyNoteMap);
+            
+            var visibleField = [];
+            
+            if (songDifficultySettings) {
+                const songDifficulty = songDifficultySettings[app.selectedDifficulty.difficultyKey];
+                visibleField = visibleFieldFilterer.filterToFullVisibleField(
+                    notes, 
+                    songDifficulty.minNoteDistance, 
+                    songDifficulty.minDuration, 
+                    invertedKeyNoteMap, 
+                    keyRenderInfo, 
+                    notesCanvas, 
+                    songNoteRenderer
+                );
+            } else {
+                const targetNotesPerMinute = app.selectedDifficulty.targetNotesPerMinute;
+                const result = visibleFieldFilterer.filterToTargetVisibleField(
+                    targetNotesPerMinute, 
+                    notes, 
+                    invertedKeyNoteMap, 
+                    difficultySettingsCalculator || visibleFieldFilterer, 
+                    keyRenderInfo, 
+                    notesCanvas, 
+                    songNoteRenderer, 
+                    songEnd
+                );
+                visibleField = result.visibleField;
+            }
+            
+            return {
+                visibleField: visibleField,
+                invertedKeyNoteMap: invertedKeyNoteMap
+            };
+        },
+        
+        /**
+         * Build and set note letter cache on app
+         * @param {Object} app - Vue.js app instance
+         * @param {Object} songNoteRenderer - Song note renderer service
+         * @param {Object} keyRenderInfo - Key render information
+         */
+        buildAndSetNoteCache: function(app, songNoteRenderer, keyRenderInfo) {
+            app.noteLetterCache = songNoteRenderer.buildSongNoteLetterCache(keyRenderInfo);
+        },
+        
+        /**
+         * Start the game loop with prepared parameters
+         * @param {Object} gameController - GameController or ThreeJSGameController instance
+         * @param {Array} args - Arguments to pass to gameController.startGame()
+         * @returns {*} Result from startGame call
+         */
+        startGameLoop: function(gameController, ...args) {
+            return gameController.startGame.apply(gameController, args);
+        },
+        
+        /**
+         * Stop the game loop and cleanup
+         * @param {Object} gameController - GameController or ThreeJSGameController instance  
+         * @param {Object} app - Vue.js app instance
+         */
+        stopGameLoop: function(gameController, app) {
+            gameController.stopGame(app);
+        }
+    };
+}

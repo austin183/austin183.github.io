@@ -260,6 +260,8 @@
         import getComponentRegistry from './MyESModules/ComponentRegistry.js';
         import { getMidiParser } from './MyESModules/MidiParser.js';
         import getThreeJSRenderer from './MyESModules/ThreeJSRenderer.js';
+        import { getGameSessionManager } from './MyESModules/GameSessionManager.js';
+        import { createMidiestroApp } from './MyESModules/createMidiestroApp.js';
 
         const queryString = window.location.search;
         const debugPage = queryString == "?debug";
@@ -350,27 +352,11 @@
         async function parseFile(file) {
             await midiParser.parseMidiFile(file, setupSongFromMidiResult);
         }
-
-        function setupSongFromMidiResult(midiResult) {
-            const parsed = midiParser.extractTracks(midiResult);
-
-            app.availableTracks = parsed.tracks;
-            app.availableTracks.unshift(parsed.fullTrack);
-            app.selectedTrack = app.availableTracks[0];
-
-            songEnd = parsed.songEnd;
-            currentMidi = { tracks: parsed.tracks };
-
-            var playButton = document.getElementById('tonePlayToggle');
-            playButton.removeAttribute('disabled');
-            playButton.textContent = 'Play';
-
-            renderSongNotes();
-        }
-
+        
         // Create the game controller instances
         var gameController = getGameController(Tone);
         var threeJSGameController = getThreeJSGameController(Tone);
+        var gameSessionManager = getGameSessionManager();
 
         var playing = false;
         var cameraControlsActive = false;
@@ -378,6 +364,7 @@
         function togglePlay() {
             var playButton = document.getElementById('tonePlayToggle');
             playing = !playing;
+            
             if (playing) {
                 playButton.textContent = 'Stop';
                 disableCameraControls();
@@ -387,37 +374,38 @@
             }
 
             if (playing && currentMidi) {
-                if (document.activeElement) {
-                    document.activeElement.blur();
-                }
-
-                const invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
                 const containerElement = document.getElementById("canvasContainer");
-                containerElement.scrollIntoView({ behavior: "smooth" });
-
-                var visibleField = [];
-                if (songDifficultySettings) {
-                    const songDifficulty = songDifficultySettings[app.selectedDifficulty.difficultyKey];
-                    visibleField = visibleFieldFilterer.filterToFullVisibleField(app.selectedTrack.notes, songDifficulty.minNoteDistance, songDifficulty.minNoteDuration, invertedKeyNoteMap, keyRenderInfo, app.notesCanvas, songNoteRenderer);
-                } else {
-                    const targetNotesPerMinute = app.selectedDifficulty.targetNotesPerMinute;
-                    visibleField = difficultySettingsCalculator.getTargetVisibleField(targetNotesPerMinute, app.selectedTrack.notes, invertedKeyNoteMap, visibleFieldFilterer, keyRenderInfo, app.notesCanvas, songNoteRenderer, songEnd).visibleField;
+                if (containerElement) {
+                    containerElement.scrollIntoView({ behavior: "smooth" });
                 }
 
-                app.noteLetterCache = songNoteRenderer.buildSongNoteLetterCache(keyRenderInfo);
+                const result = gameSessionManager.calculateVisibleField(
+                    app, 
+                    songDifficultySettings, 
+                    app.selectedTrack.notes, 
+                    songEnd,
+                    visibleFieldFilterer, 
+                    keyRenderInfo, 
+                    app.notesCanvas, 
+                    songNoteRenderer,
+                    keyNoteMapService.getInvertedMap.bind(keyNoteMapService),
+                    difficultySettingsCalculator
+                );
 
-                threeJSGameController.startGame(
+                gameSessionManager.buildAndSetNoteCache(app, songNoteRenderer, keyRenderInfo);
+
+                return gameSessionManager.startGameLoop(
+                    threeJSGameController,
                     app,
                     currentMidi,
                     songDifficultySettings,
                     songEnd,
-                    visibleField,
+                    result.visibleField,
                     app.threeJSRenderer,
                     componentRegistry.getPressedKeys()
                 );
-
             } else {
-                threeJSGameController.stopGame(app);
+                return gameSessionManager.stopGameLoop(threeJSGameController, app);
             }
         }
 
@@ -427,7 +415,9 @@
                 app.threeJSRenderer.disableCameraControls();
                 app.threeJSRenderer.disableHoverInfo();
             }
-            inputHandler.setNoteInputEnabled(true);
+            if (app && app.inputHandler) {
+                app.inputHandler.setNoteInputEnabled(true);
+            }
             document.getElementById('cameraControlPanel').style.display = 'none';
             stopCameraUpdateLoop();
         }
@@ -442,7 +432,9 @@
                     app.threeJSRenderer.setHoverInfoElement(hoverInfoElement);
                 }
             }
-            inputHandler.setNoteInputEnabled(false);
+            if (app && app.inputHandler) {
+                app.inputHandler.setNoteInputEnabled(false);
+            }
             document.getElementById('cameraControlPanel').style.display = 'block';
             document.getElementById('cameraInstructions').style.display = 'none';
             startCameraUpdateLoop();
@@ -584,182 +576,116 @@
         window.resetCamera = resetCamera;
 
         window.onload = function(){
-            app = createApp({
-                data: () => ({
-                    selectedKeyNoteMap: defaultKeyNoteMap,
-                    availableKeyNoteMaps: keyNoteMapCollection,
-                    renderedNotesPlaying: defaultNotesPlaying,
-                    songNotes: defaultSongNotes,
-                    songNotesOnKeyMap: defaultSongNotesOnKeyMap,
-                    selectedTrack: "",
-                    availableTracks: [],
-                    vueCanvas: null,
-                    notesCanvas: null,
-                    threeJSRenderer: null,
-                    keyRenderInfo: keyRenderInfo,
-                    score: 0,
-                    goodCount: 0,
-                    okCount: 0,
-                    badCount: 0,
-                    missedCount: 0,
-                    minDuration: difficultySettingsObj["Normal"].minNoteDuration,
-                    minNoteDistance: difficultySettingsObj["Normal"].minNoteDistance,
-                    playerVolume: .7,
-                    trackVolume: 1,
-                    midiJson: "",
-                    midiSongs: midiSongs,
-                    selectedMidiSong: null,
-                    songEnd: null,
-                    difficultySettings: difficultySettingsObj,
-                    selectedDifficulty: difficultySettingsObj["Normal"],
-                    toggleTrackHighScores: false,
-                    highScore: 0,
-                    challengeScore: 0
-                }),
-                mounted() {
-                    this.notesCanvas = document.getElementById("notesCanvas")
-                    var ctx = notesCanvas.getContext('2d');
-                    this.vueCanvas = ctx;
-                    this.vueCanvas.clearRect(0, 0, this.notesCanvas.width, this.notesCanvas.height);
-                    this.vueCanvas.font = "18px Georgia";
-                    this.vueCanvas.fillStyle = "black";
-                    this.vueCanvas.fillText("Watch for falling note keys!", 0, 50);
-                    this.toggleTrackHighScores = localStorage.getItem("TrackScores") == "true";
-                    if(!this.toggleTrackHighScores){
-window.domUtils.toggleElementById("SongHighScore");
-                     }
+            const createAppRef = createApp; // Reference at top of function
+            
+            // Define renderSongNotes before it's referenced in config
+            function renderSongNotes(){
+                if(songEnd) {
+                    app.songEnd = (songEnd / 60).toFixed(2) + " minutes";
+                }
+                if(currentMidi && app.selectedTrack !== "" && debugPage){
+                    var invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
+                    var song = app.selectedTrack.notes;
+                    writeLog(JSON.stringify(song));
+                    var renderedNotes = songNoteRenderer.renderSongNotes(song, app.selectedKeyNoteMap.keyNoteMap);
 
-                    const debugLogger = window.location.search === '?debug' 
-                        ? { enabled: true, log: console.log.bind(console) }
-                        : null;
+                    app.songNotes = renderedNotes.renderedSongNotes;
+                    app.songNotesOnKeyMap = renderedNotes.renderedSongNotesOnKeyMap;
+                    app.renderedNotesPlaying = songNoteRenderer.renderDebugNotesPlaying(app.notesCanvas, song, {keyScores: {}}, invertedKeyNoteMap, 0, 0);
 
-                    const scoreKeeper = getScoreKeeper(getScoringSettings().default, debugLogger);
+                    if (app.threeJSRenderer && app.keyRenderInfo) {
+                        var visibleField = song.map(function(note) {
+                            var keyNote = invertedKeyNoteMap[note.name];
+                            if (keyNote) {
+                                return {
+                                    id: note.name + "_" + note.time,
+                                    letter: keyNote,
+                                    time: note.time,
+                                    duration: note.duration,
+                                    state: 'unplayed'
+                                };
+                            }
+                            return null;
+                        }).filter(function(n) { return n !== null; });
 
-                    inputHandler = getInputHandler(debugLogger);
-                    inputHandler.setupKeyListeners(this, pressedKeys, synthMap, synthArray, playNotes);
+                        app.threeJSRenderer.addNotesFromVisibleField(visibleField, app.keyRenderInfo);
+                    }
 
+                    window.focus();
+                    if (document.activeElement) {
+                        document.activeElement.blur();
+                    }
+                }
+            }
+
+            // Define setupSongFromMidiResult before it's referenced in config
+            function setupSongFromMidiResult(midiResult) {
+                const parsed = midiParser.extractTracks(midiResult);
+
+                app.availableTracks = parsed.tracks;
+                app.availableTracks.unshift(parsed.fullTrack);
+                app.selectedTrack = app.availableTracks[0];
+
+                songEnd = parsed.songEnd;
+                currentMidi = { tracks: parsed.tracks };
+
+                var playButton = document.getElementById('tonePlayToggle');
+                playButton.removeAttribute('disabled');
+                playButton.textContent = 'Play';
+
+                renderSongNotes();
+            }
+
+            app = createMidiestroApp({
+                mode: '3d',
+                createApp: createAppRef,
+                midiSongs: midiSongs,
+                defaultKeyNoteMap: defaultKeyNoteMap,
+                keyNoteMapCollection: keyNoteMapCollection,
+                difficultySettingsObj: difficultySettingsObj,
+                highScoreTracker: highScoreTracker,
+                challengeScoresObj: challengeScoresObj,
+                midiParser: midiParser,
+                songNoteRenderer: songNoteRenderer,
+                keyNoteMapService: keyNoteMapService,
+                componentRegistry: componentRegistry,
+                pressedKeys: pressedKeys,
+                synthMap: synthMap,
+                synthArray: synthArray,
+                playNotesFn: playNotes,
+                defaultNotesPlaying: defaultNotesPlaying,
+                defaultSongNotes: defaultSongNotes,
+                defaultSongNotesOnKeyMap: defaultSongNotesOnKeyMap,
+                keyRenderInfo: keyRenderInfo,
+                getScoreKeeper: getScoreKeeper,
+                getScoringSettings: getScoringSettings,
+                getInputHandler: getInputHandler,
+                gameController: gameController,
+                renderSongNotesFn: renderSongNotes,
+                setupSongFromMidiResultFn: setupSongFromMidiResult,
+                onMount3D: function(appInstance, registry) {
                     // Initialize Three.js renderer
                     var threeJSRenderer = getThreeJSRenderer(THREE, FontLoader, TextGeometry);
                     threeJSRenderer.init("threeCanvas");
-                    this.threeJSRenderer = threeJSRenderer;
+                    appInstance.threeJSRenderer = threeJSRenderer;
                     threeJSRenderer.startAnimation();
 
-                    setupCameraPresetDropdown(this);
-                    setupCameraInputDefaults(this);
+                    setupCameraPresetDropdown(appInstance);
+                    setupCameraInputDefaults(appInstance);
 
-                    componentRegistry.registerService('scoreKeeper', scoreKeeper);
-                    componentRegistry.registerService('songNoteRenderer', songNoteRenderer);
-                    componentRegistry.registerService('keyNoteMapService', keyNoteMapService);
-                    componentRegistry.registerService('highScoreTracker', highScoreTracker);
-                    componentRegistry.registerService('challengeScores', challengeScoresObj);
-                    componentRegistry.registerService('threeJSRenderer', threeJSRenderer);
-
-                    this.componentRegistry = componentRegistry;
+                    registry.registerService('threeJSRenderer', threeJSRenderer);
                 },
-                beforeUnmount() {
-                    if (this.threeJSRenderer) {
-                        this.threeJSRenderer.dispose();
+                beforeUnmount3D: function(appInstance) {
+                    if (appInstance.threeJSRenderer) {
+                        appInstance.threeJSRenderer.dispose();
                     }
-                    inputHandler.removeKeyListeners();
-                },
-                methods: {
-                    handleMidiSongSelection,
-                    setDifficulty,
-                    handleToggleTrackHighScores
+                    if (appInstance.inputHandler) {
+                        appInstance.inputHandler.removeKeyListeners();
+                    }
                 }
             }).mount('#app');
 
-        };
-
-        function renderSongNotes(){
-            if(songEnd) {
-                app.songEnd = (songEnd / 60).toFixed(2) + " minutes";
-            }
-            if(currentMidi && app.selectedTrack !== "" && debugPage){
-                var invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
-                var song = app.selectedTrack.notes;
-                writeLog(JSON.stringify(song));
-                var renderedNotes = songNoteRenderer.renderSongNotes(song, app.selectedKeyNoteMap.keyNoteMap);
-
-                app.songNotes = renderedNotes.renderedSongNotes;
-                app.songNotesOnKeyMap = renderedNotes.renderedSongNotesOnKeyMap;
-                app.renderedNotesPlaying = songNoteRenderer.renderDebugNotesPlaying(app.notesCanvas, song, {keyScores: {}}, invertedKeyNoteMap, 0, 0);
-
-                if (app.threeJSRenderer && app.keyRenderInfo) {
-                    var visibleField = song.map(function(note) {
-                        var keyNote = invertedKeyNoteMap[note.name];
-                        if (keyNote) {
-                            return {
-                                id: note.name + "_" + note.time,
-                                letter: keyNote,
-                                time: note.time,
-                                duration: note.duration,
-                                state: 'unplayed'
-                            };
-                        }
-                        return null;
-                    }).filter(function(n) { return n !== null; });
-
-                    app.threeJSRenderer.addNotesFromVisibleField(visibleField, app.keyRenderInfo);
-                }
-
-                window.focus();
-                if (document.activeElement) {
-                    document.activeElement.blur();
-                }
-            }
-        }
-
-        function handleMidiSongSelection(){
-            if(app.selectedMidiSong){
-                if(app.selectedMidiSong.difficultySettings){
-                    songDifficultySettings = app.selectedMidiSong.difficultySettings;                    
-                } else {
-                    songDifficultySettings = null;
-                }
-                if(app.toggleTrackHighScores){
-                    app.highScore = highScoreTracker.getHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
-                    app.challengeScore = challengeScoresObj.getSelectedScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
-                }
-                app.availableTracks = [];
-                app.score = 0;
-                app.goodCount = 0;
-                app.okCount = 0;
-                app.badCount = 0;
-                app.missedCount = 0;
-
-                const midiFilename = app.selectedMidiSong.filename;
-                fetch(`PublicDomainSongs/midi/${midiFilename}`)
-                    .then(response => response.arrayBuffer())
-                    .then(arrayBuffer => {
-                        return midiParser.parseMidiArrayBuffer(arrayBuffer, setupSongFromMidiResult);
-                    });
-            }            
-        }
-
-        function setDifficulty(){
-            app.minNoteDistance = app.selectedDifficulty.minNoteDistance;
-            app.minDuration = app.selectedDifficulty.minNoteDuration;
-            if(app.toggleTrackHighScores && app.selectedMidiSong){
-                app.score = 0;
-                app.goodCount = 0;
-                app.okCount = 0;
-                app.badCount = 0;
-                app.missedCount = 0;
-                app.highScore = highScoreTracker.getHighScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
-                app.challengeScore = challengeScoresObj.getSelectedScore(app.selectedMidiSong.filename, app.selectedDifficulty.difficultyKey);
-            }
-        }
-
-        function handleToggleTrackHighScores(){
-            window.domUtils.toggleElementById("SongHighScore");
-            if(app.toggleTrackHighScores){
-                localStorage.setItem("TrackScores", "true");
-            } else {
-                localStorage.removeItem("TrackScores");
-            }
-        }
-
+};
     </script>
 </body>
 

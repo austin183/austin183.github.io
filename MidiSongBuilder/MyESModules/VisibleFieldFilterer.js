@@ -1,5 +1,19 @@
 export function getVisibleFieldFilterer(){
     return {
+        filterToTargetVisibleField(targetNotesPerMinute, notes, invertedKeyNoteMap, difficultySettingsCalculator, keyRenderInfo, canvas, songNoteRenderer, songEnd){
+            // Delegate to difficultySettingsCalculator for proper target-based filtering
+            return difficultySettingsCalculator.getTargetVisibleField(
+                targetNotesPerMinute, 
+                notes, 
+                invertedKeyNoteMap, 
+                this, 
+                keyRenderInfo, 
+                canvas, 
+                songNoteRenderer, 
+                songEnd
+            );
+        },
+        
         filterToFullVisibleField(song, minNoteDistance, minDuration, invertedKeyNoteMap, keyRenderInfo, canvas, songNoteRenderer){
             if (minNoteDistance < 0 || minDuration < 0) {
                 throw new Error('minNoteDistance and minDuration must be non-negative numbers');

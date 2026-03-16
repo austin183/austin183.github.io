@@ -1,4 +1,8 @@
+import { getBrowserUtils } from './BrowserUtils.js';
+
 export default function getDomUtils() {
+    const browserUtils = getBrowserUtils();
+    
     return {
         toggleElementById: function(id) {
             var configDiv = document.getElementById(id);
@@ -11,13 +15,6 @@ export default function getDomUtils() {
                 }
             }
         },
-        isFileAPISupported: function() {
-            return (
-                window.File &&
-                window.FileReader &&
-                window.FileList &&
-                window.Blob
-            );
-        }
+        isFileAPISupported: browserUtils.isFileAPISupported
     };
 }

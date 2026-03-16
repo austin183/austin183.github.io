@@ -1,17 +1,14 @@
+import { getBrowserUtils } from './BrowserUtils.js';
+
 export default function getFileDropHandler() {
+    const browserUtils = getBrowserUtils();
+    
     return {
         /**
          * Check if the File API is supported by the browser
          * @returns {boolean} True if File API is supported
          */
-        isFileAPISupported: function() {
-            return (
-                window.File &&
-                window.FileReader &&
-                window.FileList &&
-                window.Blob
-            );
-        },
+        isFileAPISupported: browserUtils.isFileAPISupported,
 
         /**
          * Set up drag and drop functionality for a file drop zone
