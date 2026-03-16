@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>SongNoteRenderer Tests</title>
+    <script src="../Libraries/mocha.js"></script>
+    <link rel="stylesheet" href="../Libraries/mocha.css" />
+    <script src="../Libraries/chai.min.js"></script>
+    <script src="KeyNoteMapService.js"></script>
+    <script src="keyRenderInfo.js"></script>
+    <script src="SongNoteRenderer.js"></script>
+
+    <script>
+        mocha.setup('bdd');
+        const { expect } = chai;
+
+        let songNoteRenderer, canvas, ctx, keyRenderInfo, noteLetterCache;
+
+        function setup() {
+            const mockKeyNoteMapService = getKeyNoteMapService();
+            songNoteRenderer = getSongNoteRenderer(mockKeyNoteMapService);
+            
+            canvas = document.createElement('canvas');
+            canvas.width = 800;
+            canvas.height = 600;
+            ctx = canvas.getContext('2d');
+            
+            keyRenderInfo = getKeyRenderInfo();
+            noteLetterCache = songNoteRenderer.buildSongNoteLetterCache(keyRenderInfo);
+        }
+
+        function runTests() {
+            describe('SongNoteRenderer', () => {
+                describe('getPrerenderedDrawInstructions()', () => {
+                    it('should calculate correct x position for note at column 0, row 0', () => {
+                        setup();
+                        
+                        const instructions = songNoteRenderer.getPrerenderedDrawInstructions(canvas, keyRenderInfo, null, 'z');
+                        
+                        expect(instructions).to.have.property('x');
+                        expect(typeof instructions.x).to.equal('number');
+                    });
+
+                    it('should calculate different x positions for different columns', () => {
+                        setup();
+                        
+                        const instr1 = songNoteRenderer.getPrerenderedDrawInstructions(canvas, keyRenderInfo, null, 'z');
+                        const instr2 = songNoteRenderer.getPrerenderedDrawInstructions(canvas, keyRenderInfo, null, 'x');
+                        
+                        expect(instr1.x).to.not.equal(instr2.x);
+                    });
+
+                    it('should handle large canvases (1920x1080) without position overflow', () => {
+                        setup();
+                        
+                        const largeCanvas = document.createElement('canvas');
+                        largeCanvas.width = 1920;
+                        largeCanvas.height = 1080;
+                        
+                        const instructions = songNoteRenderer.getPrerenderedDrawInstructions(largeCanvas, keyRenderInfo, null, 'z');
+                        
+                        expect(instructions.x).to.be.greaterThan(0);
+                        expect(instructions.x).to.be.lessThan(largeCanvas.width);
+                    });
+
+                    it('should handle small canvases (200x200) without position overflow', () => {
+                        setup();
+                        
+                        const smallCanvas = document.createElement('canvas');
+                        smallCanvas.width = 200;
+                        smallCanvas.height = 200;
+                        
+                        const instructions = songNoteRenderer.getPrerenderedDrawInstructions(smallCanvas, keyRenderInfo, null, 'z');
+                        
+                        expect(instructions.x).to.be.greaterThan(-10);
+                        expect(instructions.x).to.be.lessThan(smallCanvas.width + 10);
+                    });
+
+                    it('should generate different positions for all keyboard rows', () => {
+                        setup();
+                        
+                        const row0 = songNoteRenderer.getPrerenderedDrawInstructions(canvas, keyRenderInfo, null, 'z');
+                        const row1 = songNoteRenderer.getPrerenderedDrawInstructions(canvas, keyRenderInfo, null, 'a');
+                        const row2 = songNoteRenderer.getPrerenderedDrawInstructions(canvas, keyRenderInfo, null, 'q');
+                        const row3 = songNoteRenderer.getPrerenderedDrawInstructions(canvas, keyRenderInfo, null, '1');
+                        
+                        expect(row0.x).to.not.equal(row1.x);
+                        expect(row1.x).to.not.equal(row2.x);
+                    });
+                });
+
+                describe('getNoteDrawInstructions() - Position Calculations', () => {
+                    it('should calculate correct Y position for note ahead of play line', () => {
+                        setup();
+                        
+                        const canvasNote = {
+                            id: 'note1',
+                            time: 5.0,
+                            duration: 0.5,
+                            letter: 'z',
+                            x: 100
+                        };
+                        
+                        const currentScore = { keyScores: {} };
+                        const now = 4.0;
+                        const visiblePast = 3.0;
+                        
+                        const instructions = songNoteRenderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, visiblePast, noteLetterCache);
+                        
+                        expect(instructions).to.have.property('y');
+                        expect(typeof instructions.y).to.equal('number');
+                    });
+
+                    it('should place note at bottom of canvas when time equals visiblePast', () => {
+                        setup();
+                        
+                        const canvasNote = {
+                            id: 'note1',
+                            time: 3.0,
+                            duration: 0.5,
+                            letter: 'z',
+                            x: 100
+                        };
+                        
+                        const currentScore = { keyScores: {} };
+                        const now = 4.0;
+                        const visiblePast = 3.0;
+                        
+                        const instructions = songNoteRenderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, visiblePast, noteLetterCache);
+                        
+                        expect(instructions.y).to.equal(canvas.height);
+                    });
+
+                    it('should calculate shrinking border when note time is past visiblePast but duration extends beyond', () => {
+                        setup();
+                        
+                        const canvasNote = {
+                            id: 'note1',
+                            time: 2.0,
+                            duration: 1.5,
+                            letter: 'z',
+                            x: 100
+                        };
+                        
+                        const currentScore = { keyScores: {} };
+                        const now = 4.0;
+                        const visiblePast = 3.0;
+                        
+                        const instructions = songNoteRenderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, visiblePast, noteLetterCache);
+                        
+                        expect(instructions.border).to.be.lessThan(canvasNote.duration * (canvas.height / 10));
+                    });
+
+                    it('should calculate negative border when note is fully past', () => {
+                        setup();
+                        
+                        const canvasNote = {
+                            id: 'note1',
+                            time: 0.0,
+                            duration: 0.5,
+                            letter: 'z',
+                            x: 100
+                        };
+                        
+                        const currentScore = { keyScores: {} };
+                        const now = 4.0;
+                        const visiblePast = 3.0;
+                        
+                        const instructions = songNoteRenderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, visiblePast, noteLetterCache);
+                        
+                        expect(instructions.border).to.be.lessThan(0);
+                    });
+
+                    it('should calculate full border for note ahead of play line', () => {
+                        setup();
+                        
+                        const canvasNote = {
+                            id: 'note1',
+                            time: 5.0,
+                            duration: 0.5,
+                            letter: 'z',
+                            x: 100
+                        };
+                        
+                        const currentScore = { keyScores: {} };
+                        const now = 4.0;
+                        const visiblePast = 3.0;
+                        
+                        const instructions = songNoteRenderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, visiblePast, noteLetterCache);
+                        
+                        expect(instructions.border).to.be.closeTo(0.5 * (canvas.height / 10), 1);
+                    });
+                });
+
+                describe('getNoteDrawInstructions() - Color Assignment', () => {
+                    it('should return green for notes with tag "good"', () => {
+                        setup();
+                        
+                        const canvasNote = {
+                            id: 'note1',
+                            time: 5.0,
+                            duration: 0.5,
+                            letter: 'z',
+                            x: 100
+                        };
+                        
+                        const currentScore = { keyScores: { note1: { tag: 'good' } } };
+                        const now = 4.0;
+                        const visiblePast = 3.0;
+                        
+                        const instructions = songNoteRenderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, visiblePast, noteLetterCache);
+                        
+                        expect(instructions.color).to.equal('green');
+                    });
+
+                    it('should return yellow for notes with tag "ok"', () => {
+                        setup();
+                        
+                        const canvasNote = {
+                            id: 'note1',
+                            time: 5.0,
+                            duration: 0.5,
+                            letter: 'z',
+                            x: 100
+                        };
+                        
+                        const currentScore = { keyScores: { note1: { tag: 'ok' } } };
+                        const now = 4.0;
+                        const visiblePast = 3.0;
+                        
+                        const instructions = songNoteRenderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, visiblePast, noteLetterCache);
+                        
+                        expect(instructions.color).to.equal('yellow');
+                    });
+
+                    it('should return red for notes with tag "bad"', () => {
+                        setup();
+                        
+                        const canvasNote = {
+                            id: 'note1',
+                            time: 5.0,
+                            duration: 0.5,
+                            letter: 'z',
+                            x: 100
+                        };
+                        
+                        const currentScore = { keyScores: { note1: { tag: 'bad' } } };
+                        const now = 4.0;
+                        const visiblePast = 3.0;
+                        
+                        const instructions = songNoteRenderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, visiblePast, noteLetterCache);
+                        
+                        expect(instructions.color).to.equal('red');
+                    });
+
+                    it('should return row-specific blue for notes with no score tag', () => {
+                        setup();
+                        
+                        const canvasNote = {
+                            id: 'note1',
+                            time: 5.0,
+                            duration: 0.5,
+                            letter: 'z',
+                            x: 100
+                        };
+                        
+                        const currentScore = { keyScores: {} };
+                        const now = 4.0;
+                        const visiblePast = 3.0;
+                        
+                        const instructions = songNoteRenderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, visiblePast, noteLetterCache);
+                        
+                        expect(instructions.color).to.equal('#031f57');
+                    });
+
+                    it('should use cached canvas for scored notes', () => {
+                        setup();
+                        
+                        const canvasNote = {
+                            id: 'note1',
+                            time: 5.0,
+                            duration: 0.5,
+                            letter: 'z',
+                            x: 100
+                        };
+                        
+                        const currentScore = { keyScores: { note1: { tag: 'good' } } };
+                        const now = 4.0;
+                        const visiblePast = 3.0;
+                        
+                        const instructions = songNoteRenderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, visiblePast, noteLetterCache);
+                        
+                        expect(instructions.cachedLetterCanvas).to.not.be.null;
+                    });
+                });
+
+                describe('Error Handling', () => {
+                    it('should not crash when rendering with empty visibleField array', () => {
+                        setup();
+                        
+                        const currentScore = { keyScores: {} };
+                        const now = 4.0;
+                        const visiblePast = 3.0;
+                        const visibleFuture = 12.0;
+                        
+                        expect(() => {
+                            songNoteRenderer.renderNotesPlayingForCanvas(canvas, ctx, [], currentScore, now, visiblePast, visibleFuture, 0, noteLetterCache);
+                        }).to.not.throw();
+                    });
+
+                    it('should handle null noteLetterCache gracefully', () => {
+                        setup();
+                        
+                        const canvasNote = {
+                            id: 'note1',
+                            time: 5.0,
+                            duration: 0.5,
+                            letter: 'z',
+                            x: 100
+                        };
+                        
+                        const currentScore = { keyScores: {} };
+                        const now = 4.0;
+                        const visiblePast = 3.0;
+                        
+                        expect(() => {
+                            songNoteRenderer.getNoteDrawInstructions(canvas, canvasNote, currentScore, now, visiblePast, null);
+                        }).to.not.throw();
+                    });
+
+                    it('should handle zero canvas width without crashing', () => {
+                        setup();
+                        
+                        const zeroCanvas = document.createElement('canvas');
+                        zeroCanvas.width = 0;
+                        zeroCanvas.height = 600;
+                        
+                        const canvasNote = {
+                            id: 'note1',
+                            time: 5.0,
+                            duration: 0.5,
+                            letter: 'z',
+                            x: 100
+                        };
+                        
+                        const currentScore = { keyScores: {} };
+                        const now = 4.0;
+                        const visiblePast = 3.0;
+                        
+                        expect(() => {
+                            songNoteRenderer.getNoteDrawInstructions(zeroCanvas, canvasNote, currentScore, now, visiblePast, null);
+                        }).to.not.throw();
+                    });
+
+                    it('should handle zero canvas height without crashing', () => {
+                        setup();
+                        
+                        const zeroCanvas = document.createElement('canvas');
+                        zeroCanvas.width = 800;
+                        zeroCanvas.height = 0;
+                        
+                        const canvasNote = {
+                            id: 'note1',
+                            time: 5.0,
+                            duration: 0.5,
+                            letter: 'z',
+                            x: 100
+                        };
+                        
+                        const currentScore = { keyScores: {} };
+                        const now = 4.0;
+                        const visiblePast = 3.0;
+                        
+                        expect(() => {
+                            songNoteRenderer.getNoteDrawInstructions(zeroCanvas, canvasNote, currentScore, now, visiblePast, null);
+                        }).to.not.throw();
+                    });
+
+                    it('should throw error when keyNoteMapService is not provided', () => {
+                        expect(() => {
+                            getSongNoteRenderer(null);
+                        }).to.throw('requires a KeyNoteMapService instance');
+                    });
+
+                    it('should throw error when keyNoteMapService is undefined', () => {
+                        expect(() => {
+                            getSongNoteRenderer();
+                        }).to.throw('requires a KeyNoteMapService instance');
+                    });
+                });
+
+                describe('buildSongNoteLetterCache()', () => {
+                    it('should generate cache for all keyboard rows', () => {
+                        setup();
+                        
+                        const keyRenderInfo = getKeyRenderInfo();
+                        const cache = songNoteRenderer.buildSongNoteLetterCache(keyRenderInfo);
+                        
+                        expect(cache.z).to.not.be.undefined;
+                        expect(cache.a).to.not.be.undefined;
+                        expect(cache.q).to.not.be.undefined;
+                        expect(cache['1']).to.not.be.undefined;
+                    });
+
+                    it('should create all color variants for each key', () => {
+                        setup();
+                        
+                        const cache = songNoteRenderer.buildSongNoteLetterCache(keyRenderInfo);
+                        
+                        expect(cache.z.unplayedNoteCanvas).to.not.be.null;
+                        expect(cache.z.goodNoteCanvas).to.not.be.null;
+                        expect(cache.z.okNoteCanvas).to.not.be.null;
+                        expect(cache.z.badNoteCanvas).to.not.be.null;
+                    });
+
+                    it('should use correct colors for different score tags', () => {
+                        setup();
+                        
+                        const cache = songNoteRenderer.buildSongNoteLetterCache(keyRenderInfo);
+                        
+                        expect(cache.z.goodNoteCanvas.fillStyle).to.equal('green');
+                        expect(cache.z.okNoteCanvas.fillStyle).to.equal('yellow');
+                        expect(cache.z.badNoteCanvas.fillStyle).to.equal('red');
+                    });
+
+                    it('should handle empty keyRenderInfo object', () => {
+                        setup();
+                        
+                        const cache = songNoteRenderer.buildSongNoteLetterCache({});
+                        
+                        expect(cache).to.deep.equal({});
+                    });
+
+                    it('should use different blue shades for different rows', () => {
+                        setup();
+                        
+                        const cache = songNoteRenderer.buildSongNoteLetterCache(keyRenderInfo);
+                        
+                        expect(cache.z.unplayedNoteCanvas.fillStyle).to.equal('#031f57');
+                        expect(cache.a.unplayedNoteCanvas.fillStyle).to.equal('#025b97');
+                        expect(cache.q.unplayedNoteCanvas.fillStyle).to.equal('#0077c7');
+                        expect(cache['1'].unplayedNoteCanvas.fillStyle).to.equal('#51bbe6');
+                    });
+
+                });
+
+                describe('renderFinalScore()', () => {
+                    it('should render final score without errors', () => {
+                        setup();
+                        
+                        expect(() => {
+                            songNoteRenderer.renderFinalScore(canvas, ctx, 1000, 50, 30, 10, 5);
+                        }).to.not.throw();
+                    });
+
+                    it('should handle zero scores', () => {
+                        setup();
+                        
+                        expect(() => {
+                            songNoteRenderer.renderFinalScore(canvas, ctx, 0, 0, 0, 0, 0);
+                        }).to.not.throw();
+                    });
+
+                    it('should handle large scores', () => {
+                        setup();
+                        
+                        expect(() => {
+                            songNoteRenderer.renderFinalScore(canvas, ctx, 100000, 500, 300, 100, 50);
+                        }).to.not.throw();
+                    });
+                });
+
+                describe('renderNotesPlayingForCanvas()', () => {
+                    it('should render notes within visible field', () => {
+                        setup();
+                        
+                        const visibleField = [
+                            { id: 'note1', time: 4.0, duration: 0.5, letter: 'z', x: 100 },
+                            { id: 'note2', time: 6.0, duration: 0.5, letter: 'x', x: 200 }
+                        ];
+                        
+                        const currentScore = { keyScores: {} };
+                        const now = 4.0;
+                        const visiblePast = 3.0;
+                        const visibleFuture = 12.0;
+                        
+                        expect(() => {
+                            songNoteRenderer.renderNotesPlayingForCanvas(canvas, ctx, visibleField, currentScore, now, visiblePast, visibleFuture, 0, noteLetterCache);
+                        }).to.not.throw();
+                    });
+
+                    it('should skip notes before earliestNoteIndex', () => {
+                        setup();
+                        
+                        const visibleField = [
+                            { id: 'note1', time: 2.0, duration: 0.5, letter: 'z', x: 100 },
+                            { id: 'note2', time: 6.0, duration: 0.5, letter: 'x', x: 200 }
+                        ];
+                        
+                        const currentScore = { keyScores: {} };
+                        const now = 4.0;
+                        const visiblePast = 3.0;
+                        const visibleFuture = 12.0;
+                        
+                        expect(() => {
+                            songNoteRenderer.renderNotesPlayingForCanvas(canvas, ctx, visibleField, currentScore, now, visiblePast, visibleFuture, 1, noteLetterCache);
+                        }).to.not.throw();
+                    });
+
+                    it('should stop rendering when note exceeds visibleFuture', () => {
+                        setup();
+                        
+                        const visibleField = [
+                            { id: 'note1', time: 4.0, duration: 0.5, letter: 'z', x: 100 },
+                            { id: 'note2', time: 15.0, duration: 0.5, letter: 'x', x: 200 }
+                        ];
+                        
+                        const currentScore = { keyScores: {} };
+                        const now = 4.0;
+                        const visiblePast = 3.0;
+                        const visibleFuture = 12.0;
+                        
+                        expect(() => {
+                            songNoteRenderer.renderNotesPlayingForCanvas(canvas, ctx, visibleField, currentScore, now, visiblePast, visibleFuture, 0, noteLetterCache);
+                        }).to.not.throw();
+                    });
+                });
+            });
+
+            mocha.run();
+        }
+    </script>
+</head>
+
+<body onload="runTests()">
+    <div id="mocha"></div>
+</body>
+
+</html>

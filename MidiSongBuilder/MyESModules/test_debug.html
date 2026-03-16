@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Test</title>
+    <script src="KeyNoteMapService.js"></script>
+    <script src="keyRenderInfo.js"></script>
+    <script src="SongNoteRenderer.js"></script>
+</head>
+<body>
+    <div id="output"></div>
+    <script>
+        const output = document.getElementById('output');
+        
+        try {
+            const mockKeyNoteMapService = getKeyNoteMapService();
+            console.log('getKeyNoteMapService() returned:', typeof mockKeyNoteMapService);
+            
+            const songNoteRenderer = getSongNoteRenderer(mockKeyNoteMapService);
+            console.log('getSongNoteRenderer() returned:', typeof songNoteRenderer);
+            
+            if (songNoteRenderer) {
+                console.log('Methods on songNoteRenderer:');
+                Object.keys(songNoteRenderer).forEach(key => {
+                    console.log('  -', key, ':', typeof songNoteRenderer[key]);
+                });
+                
+                output.innerHTML = '<pre>' + 
+                    'getKeyNoteMapService(): ' + typeof mockKeyNoteMapService + '<br>' +
+                    'getSongNoteRenderer(): ' + typeof songNoteRenderer + '<br><br>' +
+                    'Methods:<br>' + 
+                    Object.keys(songNoteRenderer).map(key => '  - ' + key + ': ' + typeof songNoteRenderer[key]).join('<br>') +
+                    '</pre>';
+            } else {
+                output.innerHTML = 'ERROR: getSongNoteRenderer returned null/undefined';
+            }
+        } catch (e) {
+            output.innerHTML = 'ERROR: ' + e.message + '<br>' + e.stack;
+        }
+    </script>
+</body>
+</html>

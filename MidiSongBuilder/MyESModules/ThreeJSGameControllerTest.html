@@ -1,0 +1,2093 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>ThreeJSGameController Tests</title>
+    <script src="../Libraries/mocha.js"></script>
+    <link rel="stylesheet" href="../Libraries/mocha.css" />
+    <script type="text/javascript" src="../Libraries/Tone.js"></script>
+    <script type="text/javascript" src="../Libraries/ToneMidi.js"></script>
+    <script src="CoordinateCalculator.js"></script>
+    <script src="GameState.js"></script>
+    <script src="BaseController.js"></script>
+    <script src="keyRenderInfo.js"></script>
+    <script src="ComponentRegistry.js"></script>
+    <script src="ScoreKeeper.js"></script>
+    <script src="scoringSettings.js"></script>
+    <script src="SongNoteRenderer.js"></script>
+    <script src="KeyNoteMapService.js"></script>
+    <script src="highScoreTracker.js"></script>
+    <script src="challengeScores.js"></script>
+    <script src="NoteCacheBuilder.js"></script>
+    <script src="ThreeJSRenderer.js"></script>
+    <script src="ThreeJSGameController.js"></script>
+    <script src="../Libraries/chai.min.js"></script>
+
+    <script>
+        mocha.setup('bdd');
+        const { expect } = chai;
+
+        let mockTone, mockAppState, mockMidiData, mockVisibleField, mockPressedKeys, mockComponentRegistry;
+        let threeJSGameController, threeJSRenderer, coordinateCalculator, app;
+
+        // Mock Tone.js for deterministic testing
+        function setupMockTone() {
+            const mockSynthInstances = [];
+            
+            mockSynthInstances.push({
+                triggerAttackRelease: () => {},
+                toDestination: function() { return this; },
+                disconnect: () => {},
+                dispose: () => {}
+            });
+
+            mockTone = {
+                now: () => 1000, // Fixed timestamp for deterministic tests
+                Transport: {
+                    stop: () => {},
+                    position: 0,
+                    cancel: () => {},
+                    destroy: () => {}
+                },
+                PolySynth: function() {
+                    const synth = mockSynthInstances[0];
+                    return synth;
+                }
+            };
+
+            // Make Tone globally available
+            window.Tone = mockTone;
+        }
+
+        function setupMocks() {
+            setupMockTone();
+            
+            coordinateCalculator = getCoordinateCalculator();
+            threeJSGameController = getThreeJSGameController();
+
+            mockComponentRegistry = getComponentRegistry();
+            
+            const scoringSettings = getScoringSettings();
+            const scoreKeeper = getScoreKeeper(scoringSettings);
+            
+            const mockSongNoteRenderer = getSongNoteRenderer({
+                getInvertedMap: (keyNoteMap) => ({ 'C4': 'z', 'D4': 'x', 'E4': 'c' })
+            });
+
+            // Mock buildSongNoteLetterCache to return proper canvas objects
+            const originalBuildSongNoteLetterCache = mockSongNoteRenderer.buildSongNoteLetterCache;
+            mockSongNoteRenderer.buildSongNoteLetterCache = function(keyRenderInfo) {
+                const cache = {};
+                for (const key in keyRenderInfo) {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 28;
+                    tempCanvas.height = 28;
+                    cache[key] = {
+                        unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' },
+                        goodNoteCanvas: { canvas: tempCanvas, fillStyle: 'green' },
+                        okNoteCanvas: { canvas: tempCanvas, fillStyle: 'yellow' },
+                        badNoteCanvas: { canvas: tempCanvas, fillStyle: 'red' }
+                    };
+                }
+                return cache;
+            };
+            
+            const mockKeyNoteMapService = getKeyNoteMapService();
+            
+            const highScoreTracker = getHighScoreTracker();
+            const challengeScores = getChallengeScores();
+
+            mockComponentRegistry.registerService('scoreKeeper', scoreKeeper);
+            mockComponentRegistry.registerService('songNoteRenderer', mockSongNoteRenderer);
+            mockComponentRegistry.registerService('keyNoteMapService', mockKeyNoteMapService);
+            mockComponentRegistry.registerService('highScoreTracker', highScoreTracker);
+            mockComponentRegistry.registerService('challengeScores', challengeScores);
+
+            const mockCanvas = document.createElement('canvas');
+            mockCanvas.width = 800;
+            mockCanvas.height = 600;
+            
+            const mockCachedLetterCanvas = document.createElement('canvas');
+            mockCachedLetterCanvas.width = 20;
+            mockCachedLetterCanvas.height = 20;
+            
+            const mockCtx = {
+                clearRect: () => {},
+                beginPath: () => {},
+                closePath: () => {},
+                moveTo: () => {},
+                lineTo: () => {},
+                stroke: () => {},
+                fillRect: () => {},
+                createLinearGradient: () => ({ addColorStop: () => {} }),
+                fillText: () => {},
+                font: '',
+                fillStyle: '',
+                setLineDash: () => {},
+                getLineDash: () => [],
+                drawImage: () => {},
+                rect: () => {}
+            };
+
+            mockCtx.cachedLetterCanvas = {
+                canvas: mockCachedLetterCanvas,
+                fillStyle: 'blue'
+            };
+
+            mockAppState = {
+                componentRegistry: mockComponentRegistry,
+                score: 0,
+                goodCount: 0,
+                okCount: 0,
+                badCount: 0,
+                missedCount: 0,
+                trackVolume: 1.0,
+                toggleTrackHighScores: true,
+                selectedKeyNoteMap: { keyNoteMap: {} },
+                selectedMidiSong: { filename: 'test.mid' },
+                selectedDifficulty: { difficultyKey: 'medium' },
+                notesCanvas: mockCanvas,
+                vueCanvas: mockCtx,
+                highScore: 0,
+                challengeScore: 0,
+                keyRenderInfo: getKeyRenderInfo()
+            };
+
+            mockMidiData = {
+                tracks: [
+                    {
+                        notes: [
+                            { name: 'C4', time: 0, duration: 1.0, velocity: 0.8 },
+                            { name: 'D4', time: 1, duration: 1.0, velocity: 0.7 }
+                        ]
+                    }
+                ]
+            };
+
+            mockVisibleField = [
+                { time: 0, duration: 1.0, name: 'C4', state: 'unplayed' },
+                { time: 1, duration: 1.0, name: 'D4', state: 'unplayed' }
+            ];
+
+            mockPressedKeys = {};
+
+            // Setup ThreeJSRenderer mock
+            threeJSRenderer = getThreeJSRenderer();
+            threeJSRenderer.init('threeCanvas');
+
+            const mockConstants = {
+                DEFAULT_DELAY: 4,
+                NOTE_SPEED: 10,
+                NOW_LINE_Z: 0
+            };
+
+            threeJSRenderer.getConstants = () => mockConstants;
+            threeJSRenderer.clearNotes = () => {};
+            threeJSRenderer.addNotesFromVisibleField = () => {};
+            threeJSRenderer.updateAllNotes = () => {};
+            threeJSRenderer.renderNowLine = () => {};
+            threeJSRenderer.resize = () => {};
+            threeJSRenderer.getNoteGroup = () => ({ children: [] });
+            threeJSRenderer.setNoteState = () => {};
+
+            mockAppState.threeJSRenderer = threeJSRenderer;
+            mockAppState.threeGameState = getGameState();
+        }
+
+        function runTests() {
+            setupMocks();
+
+            beforeEach(function() {
+                this.originalSetInterval = window.setInterval;
+                const capturedIntervals = [];
+                window.setInterval = (callback, delay) => {
+                    const id = capturedIntervals.length;
+                    capturedIntervals.push({ callback, delay });
+                    return id;
+                };
+                this.capturedIntervals = capturedIntervals;
+            });
+
+            afterEach(function() {
+                if (this.capturedIntervals) {
+                    this.capturedIntervals.forEach(({ callback }) => {
+                        try {
+                            callback();
+                        } catch (e) {}
+                    });
+                }
+                threeJSGameController.stopGame(mockAppState);
+                window.setInterval = this.originalSetInterval;
+            });
+
+            describe('ThreeJSGameController - startGame validation', function() {
+                it('should throw error when threeJSRenderer is missing', function() {
+                    expect(() => {
+                        threeJSGameController.startGame(
+                            mockAppState,
+                            mockMidiData,
+                            null,
+                            10,
+                            mockVisibleField,
+                            null,
+                            mockPressedKeys
+                        );
+                    }).to.throw('ThreeJSGameController requires threeJSRenderer for 3D rendering');
+                });
+
+                it('should throw error when app is missing', function() {
+                    expect(() => {
+                        threeJSGameController.startGame(
+                            null,
+                            mockMidiData,
+                            null,
+                            10,
+                            mockVisibleField,
+                            threeJSRenderer,
+                            mockPressedKeys
+                        );
+                    }).to.throw('ThreeJSGameController requires app instance');
+                });
+
+                it('should throw error when visibleField is not an array', function() {
+                    expect(() => {
+                        threeJSGameController.startGame(
+                            mockAppState,
+                            mockMidiData,
+                            null,
+                            10,
+                            null,
+                            threeJSRenderer,
+                            mockPressedKeys
+                        );
+                    }).to.throw('visibleField must be an array of notes');
+                });
+
+                it('should throw error when visibleField is undefined', function() {
+                    expect(() => {
+                        threeJSGameController.startGame(
+                            mockAppState,
+                            mockMidiData,
+                            null,
+                            10,
+                            undefined,
+                            threeJSRenderer,
+                            mockPressedKeys
+                        );
+                    }).to.throw('visibleField must be an array of notes');
+                });
+            });
+
+            describe('ThreeJSGameController - startGame', function() {
+                it('should retrieve scoreKeeper from ComponentRegistry', function() {
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.threeGameState.get('scoreKeeper')).to.equal(
+                        mockComponentRegistry.getService('scoreKeeper')
+                    );
+                });
+
+                it('should retrieve songNoteRenderer from ComponentRegistry', function() {
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.threeGameState.get('songNoteRenderer')).to.equal(
+                        mockComponentRegistry.getService('songNoteRenderer')
+                    );
+                });
+
+                it('should retrieve keyNoteMapService from ComponentRegistry', function() {
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    const invertedMap = mockAppState.threeGameState.get('invertedKeyNoteMap');
+                    expect(invertedMap).to.not.be.null;
+                });
+
+                it('should retrieve highScoreTracker from ComponentRegistry', function() {
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.threeGameState.get('highScoreTracker')).to.equal(
+                        mockComponentRegistry.getService('highScoreTracker')
+                    );
+                });
+
+                it('should retrieve challengeScores from ComponentRegistry', function() {
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.threeGameState.get('challengeScores')).to.equal(
+                        mockComponentRegistry.getService('challengeScores')
+                    );
+                });
+
+                it('should reset scoreKeeper state', function() {
+                    const scoreKeeper = mockComponentRegistry.getService('scoreKeeper');
+                    
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.threeGameState.get('scoreKeeper')).to.equal(scoreKeeper);
+                });
+
+                it('should reset note states in visibleField to unplayed', function() {
+                    mockVisibleField[0].state = 'played';
+                    mockVisibleField[1].state = 'missed';
+
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    expect(mockVisibleField[0].state).to.equal('unplayed');
+                    expect(mockVisibleField[1].state).to.equal('unplayed');
+                });
+
+                it('should reset Vue app score values', function() {
+                    mockAppState.score = 500;
+                    mockAppState.goodCount = 5;
+                    mockAppState.okCount = 3;
+                    mockAppState.badCount = 2;
+                    mockAppState.missedCount = 1;
+
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.score).to.equal(0);
+                    expect(mockAppState.goodCount).to.equal(0);
+                    expect(mockAppState.okCount).to.equal(0);
+                    expect(mockAppState.badCount).to.equal(0);
+                    expect(mockAppState.missedCount).to.equal(0);
+                });
+
+                it('should initialize threeGameState with startTime', function() {
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.threeGameState.get('startTime')).to.equal(1000);
+                });
+
+                it('should initialize threeGameState with earliestNoteIndex', function() {
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.threeGameState.get('earliestNoteIndex')).to.equal(0);
+                });
+
+                it('should initialize threeGameState with visibleField', function() {
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.threeGameState.get('visibleField')).to.equal(mockVisibleField);
+                });
+
+                it('should initialize threeGameState with songEnd', function() {
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.threeGameState.get('songEnd')).to.equal(10);
+                });
+
+                it('should initialize threeGameState with pressedKeys', function() {
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.threeGameState.get('pressedKeys')).to.equal(mockPressedKeys);
+                });
+
+                it('should initialize threeGameState with delay from constants', function() {
+                    const expectedDelay = threeJSRenderer.getConstants().DEFAULT_DELAY;
+                    
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.threeGameState.get('delay')).to.equal(expectedDelay);
+                });
+
+                it('should initialize threeGameState with synths array', function() {
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    expect(threeJSGameController.synths).to.be.an('array');
+                });
+
+                it('should create synth for each MIDI track', function() {
+                    const originalTrackCount = mockMidiData.tracks.length;
+
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    expect(threeJSGameController.synths).to.have.lengthOf(originalTrackCount);
+                });
+
+                it('should schedule audio events for each note', function() {
+                    const notesScheduled = [];
+                    
+                    const trackingSynth = {
+                        triggerAttackRelease: (note, duration, time, velocity) => {
+                            notesScheduled.push({ note, duration, time, velocity });
+                        },
+                        toDestination: function() { return this; },
+                        disconnect: () => {},
+                        dispose: () => {}
+                    };
+
+                    const originalPolySynth = window.Tone.PolySynth;
+                    window.Tone.PolySynth = function() { return trackingSynth; };
+
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    window.Tone.PolySynth = originalPolySynth;
+
+                    expect(notesScheduled).to.have.lengthOf(2);
+                    expect(notesScheduled[0].note).to.equal('C4');
+                    expect(notesScheduled[1].note).to.equal('D4');
+                });
+
+                it('should only schedule notes with duration > 0', function() {
+                    const notesScheduled = [];
+                    
+                    const trackingSynth = {
+                        triggerAttackRelease: (note, duration, time, velocity) => {
+                            notesScheduled.push({ note });
+                        },
+                        toDestination: function() { return this; },
+                        disconnect: () => {},
+                        dispose: () => {}
+                    };
+
+                    const originalPolySynth = window.Tone.PolySynth;
+                    window.Tone.PolySynth = function() { return trackingSynth; };
+
+                    const midiWithSilentNotes = {
+                        tracks: [{
+                            notes: [
+                                { name: 'C4', time: 0, duration: 1.0, velocity: 0.8 },
+                                { name: 'D4', time: 1, duration: 0, velocity: 0.7 }
+                            ]
+                        }]
+                    };
+
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        midiWithSilentNotes,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    window.Tone.PolySynth = originalPolySynth;
+
+                    expect(notesScheduled).to.have.lengthOf(1);
+                    expect(notesScheduled[0].note).to.equal('C4');
+                });
+
+                it('should start game loop interval', function() {
+                    const originalSetInterval = window.setInterval;
+                    let capturedIntervalId = null;
+
+                    window.setInterval = (callback, delay) => {
+                        capturedIntervalId = 12345;
+                        return capturedIntervalId;
+                    };
+
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    window.setInterval = originalSetInterval;
+
+                    expect(threeJSGameController.playIntervalId).to.equal(12345);
+                });
+
+                it('should return the interval ID', function() {
+                    const returnedId = threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    expect(returnedId).to.be.a('number');
+                });
+
+                it('should build noteLetterCache from songNoteRenderer', function() {
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    const noteLetterCache = mockAppState.threeGameState.get('noteLetterCache');
+                    expect(noteLetterCache).to.not.be.null;
+                });
+
+                it('should handle null pressedKeys gracefully', function() {
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        null
+                    );
+
+                    expect(mockAppState.threeGameState.get('pressedKeys')).to.deep.equal({});
+                });
+
+                it('should handle null componentRegistry gracefully', function() {
+                    const appWithoutRegistry = Object.assign({}, mockAppState);
+                    delete appWithoutRegistry.componentRegistry;
+
+                    threeJSGameController.startGame(
+                        appWithoutRegistry,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    expect(appWithoutRegistry.threeGameState.get('scoreKeeper')).to.be.null;
+                });
+
+                it('should call threeJSRenderer.clearNotes', function() {
+                    let clearNotesCalled = false;
+                    threeJSRenderer.clearNotes = () => { clearNotesCalled = true; };
+
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    expect(clearNotesCalled).to.be.true;
+                });
+
+                it('should call threeJSRenderer.addNotesFromVisibleField', function() {
+                    let addNotesCalled = false;
+                    threeJSRenderer.addNotesFromVisibleField = () => { addNotesCalled = true; };
+
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    expect(addNotesCalled).to.be.true;
+                });
+
+                it('should schedule notes with correct timing including delay', function() {
+                    const notesScheduled = [];
+                    
+                    const trackingSynth = {
+                        triggerAttackRelease: (note, duration, time, velocity) => {
+                            notesScheduled.push({ note, time });
+                        },
+                        toDestination: function() { return this; },
+                        disconnect: () => {},
+                        dispose: () => {}
+                    };
+
+                    const originalPolySynth = window.Tone.PolySynth;
+                    window.Tone.PolySynth = function() { return trackingSynth; };
+
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    window.Tone.PolySynth = originalPolySynth;
+
+                    expect(notesScheduled).to.have.lengthOf(2);
+                    // Time should include startTime (1000) + note.time + delay (4)
+                    expect(notesScheduled[0].time).to.equal(1000 + 0 + 4);
+                    expect(notesScheduled[1].time).to.equal(1000 + 1 + 4);
+                });
+
+                it('should apply trackVolume to note velocity', function() {
+                    const velocities = [];
+                    
+                    const trackingSynth = {
+                        triggerAttackRelease: (note, duration, time, velocity) => {
+                            velocities.push(velocity);
+                        },
+                        toDestination: function() { return this; },
+                        disconnect: () => {},
+                        dispose: () => {}
+                    };
+
+                    const originalPolySynth = window.Tone.PolySynth;
+                    window.Tone.PolySynth = function() { return trackingSynth; };
+
+                    mockAppState.trackVolume = 0.5;
+
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    window.Tone.PolySynth = originalPolySynth;
+
+                    expect(velocities).to.have.lengthOf(2);
+                    // Velocity should be original * trackVolume (0.8 * 0.5 = 0.4)
+                    expect(velocities[0]).to.equal(0.8 * 0.5);
+                    expect(velocities[1]).to.equal(0.7 * 0.5);
+                });
+
+                it('should handle null currentMidi gracefully', function() {
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        null,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    expect(threeJSGameController.synths).to.be.an('array');
+                });
+
+                it('should handle empty MIDI tracks gracefully', function() {
+                    const emptyMidi = { tracks: [] };
+
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        emptyMidi,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    expect(threeJSGameController.synths).to.be.an('array');
+                });
+            });
+
+            describe('ThreeJSGameController - gameLoop', function() {
+                it('should stop game when threeGameState is missing', function() {
+                    let stopGameCalled = false;
+                    
+                    const originalStopGame = threeJSGameController.stopGame;
+                    threeJSGameController.stopGame = function(app) { stopGameCalled = true; };
+
+                    threeJSGameController.gameLoop({});
+
+                    threeJSGameController.stopGame = originalStopGame;
+                    expect(stopGameCalled).to.be.true;
+                });
+
+                it('should stop game when threeJSRenderer is missing', function() {
+                    mockAppState.threeGameState = getGameState();
+                    mockAppState.threeGameState.initialize({
+                        threeJSRenderer: null // Missing dependency
+                    });
+
+                    let stopGameCalled = false;
+                    
+                    const originalStopGame = threeJSGameController.stopGame;
+                    threeJSGameController.stopGame = function(app) { stopGameCalled = true; };
+
+                    threeJSGameController.gameLoop(mockAppState);
+
+                    threeJSGameController.stopGame = originalStopGame;
+                    expect(stopGameCalled).to.be.true;
+                });
+
+                it('should calculate intervalNow correctly', function() {
+                    mockAppState.threeGameState = getGameState();
+                    mockAppState.threeGameState.initialize({
+                        startTime: 1000,
+                        delay: 4,
+                        songEnd: 100,
+                        threeJSRenderer: threeJSRenderer,
+                        scoreKeeper: mockComponentRegistry.getService('scoreKeeper'),
+                        songNoteRenderer: mockComponentRegistry.getService('songNoteRenderer'),
+                        visibleField: mockVisibleField,
+                        earliestNoteIndex: 0,
+                        pressedKeys: {},
+                        noteLetterCache: {}
+                    });
+
+                    const originalNow = window.Tone.now;
+                    window.Tone.now = () => 1050;
+
+                    let capturedIntervalNow = null;
+                    
+                    const originalCalculateNewScore = mockComponentRegistry.getService('scoreKeeper').calculateNewScore;
+                    mockComponentRegistry.getService('scoreKeeper').calculateNewScore = (visibleField, pressedKeys, intervalNow) => {
+                        capturedIntervalNow = intervalNow;
+                        return { total: 0, goodCount: 0, okCount: 0, badCount: 0, missedCount: 0 };
+                    };
+
+                    threeJSGameController.gameLoop(mockAppState);
+
+                    window.Tone.now = originalNow;
+                    mockComponentRegistry.getService('scoreKeeper').calculateNewScore = originalCalculateNewScore;
+
+                    expect(capturedIntervalNow).to.equal(1050 - 1000 - 4);
+                });
+
+                it('should handle song end when visiblePast > songEnd', function() {
+                    mockAppState.threeGameState = getGameState();
+                    mockAppState.threeGameState.initialize({
+                        startTime: 1000,
+                        delay: 4,
+                        songEnd: 10, // Very short song
+                        threeJSRenderer: threeJSRenderer,
+                        scoreKeeper: mockComponentRegistry.getService('scoreKeeper'),
+                        songNoteRenderer: mockComponentRegistry.getService('songNoteRenderer'),
+                        highScoreTracker: mockComponentRegistry.getService('highScoreTracker'),
+                        challengeScores: mockComponentRegistry.getService('challengeScores'),
+                        invertedKeyNoteMap: { 'C4': 'z' },
+                        pressedKeys: {},
+                        visibleField: mockVisibleField,
+                        earliestNoteIndex: 0,
+                        noteLetterCache: {}
+                    });
+
+                    const originalNow = window.Tone.now;
+                    window.Tone.now = () => 2000; // Well past songEnd
+
+                    let renderFinalScoreCalled = false;
+                    
+                    const originalRenderFinalScore = mockComponentRegistry.getService('songNoteRenderer').renderFinalScore;
+                    mockComponentRegistry.getService('songNoteRenderer').renderFinalScore = () => {
+                        renderFinalScoreCalled = true;
+                    };
+
+                    threeJSGameController.gameLoop(mockAppState);
+
+                    window.Tone.now = originalNow;
+                    mockComponentRegistry.getService('songNoteRenderer').renderFinalScore = originalRenderFinalScore;
+
+                    expect(renderFinalScoreCalled).to.be.true;
+                });
+
+                it('should update earliestNoteIndex for passed notes', function() {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 28;
+                    tempCanvas.height = 28;
+                    
+                    const mockNoteLetterCache = {
+                        'z': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'x': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'c': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } }
+                    };
+
+                    mockAppState.threeGameState = getGameState();
+                    const testVisibleField = [
+                        { time: 0, duration: 1.0, name: 'C4', letter: 'z' },
+                        { time: 1, duration: 1.0, name: 'D4', letter: 'x' },
+                        { time: 2, duration: 1.0, name: 'E4', letter: 'c' }
+                    ];
+                    mockAppState.threeGameState.initialize({
+                        startTime: 1000,
+                        delay: 4,
+                        songEnd: 100,
+                        threeJSRenderer: threeJSRenderer,
+                        scoreKeeper: mockComponentRegistry.getService('scoreKeeper'),
+                        songNoteRenderer: mockComponentRegistry.getService('songNoteRenderer'),
+                        invertedKeyNoteMap: { 'C4': 'z' },
+                        pressedKeys: {},
+                        visibleField: testVisibleField,
+                        earliestNoteIndex: 0,
+                        noteLetterCache: mockNoteLetterCache
+                    });
+
+                    const originalNow = window.Tone.now;
+                    window.Tone.now = () => 1010;
+
+                    threeJSGameController.gameLoop(mockAppState);
+
+                    window.Tone.now = originalNow;
+
+                    expect(mockAppState.threeGameState.get('earliestNoteIndex')).to.be.greaterThan(0);
+                });
+
+                it('should calculate score using scoreKeeper', function() {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 28;
+                    tempCanvas.height = 28;
+                    
+                    const mockNoteLetterCache = {
+                        'z': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'x': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'c': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } }
+                    };
+
+                    mockAppState.threeGameState = getGameState();
+                    mockAppState.threeGameState.initialize({
+                        startTime: 1000,
+                        delay: 4,
+                        songEnd: 100,
+                        threeJSRenderer: threeJSRenderer,
+                        scoreKeeper: mockComponentRegistry.getService('scoreKeeper'),
+                        songNoteRenderer: mockComponentRegistry.getService('songNoteRenderer'),
+                        invertedKeyNoteMap: { 'C4': 'z' },
+                        pressedKeys: {},
+                        visibleField: mockVisibleField,
+                        earliestNoteIndex: 0,
+                        noteLetterCache: mockNoteLetterCache
+                    });
+
+                    const originalNow = window.Tone.now;
+                    window.Tone.now = () => 1050;
+
+                    threeJSGameController.gameLoop(mockAppState);
+
+                    window.Tone.now = originalNow;
+
+                    expect(mockAppState.score).to.be.at.least(0);
+                });
+
+                it('should sync state to Vue via threeGameState.syncToVue', function() {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 28;
+                    tempCanvas.height = 28;
+                    
+                    const mockNoteLetterCache = {
+                        'z': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'x': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'c': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } }
+                    };
+
+                    mockAppState.threeGameState = getGameState();
+                    mockAppState.threeGameState.initialize({
+                        startTime: 1000,
+                        delay: 4,
+                        songEnd: 100,
+                        threeJSRenderer: threeJSRenderer,
+                        scoreKeeper: {
+                            calculateNewScore: () => ({ total: 999, goodCount: 3, okCount: 2, badCount: 1, missedCount: 0 }),
+                            getCounts: () => ({ goodCount: 3, okCount: 2, badCount: 1, missedCount: 0 })
+                        },
+                        songNoteRenderer: mockComponentRegistry.getService('songNoteRenderer'),
+                        invertedKeyNoteMap: { 'C4': 'z' },
+                        pressedKeys: {},
+                        visibleField: mockVisibleField,
+                        earliestNoteIndex: 0,
+                        noteLetterCache: mockNoteLetterCache
+                    });
+
+                    const originalNow = window.Tone.now;
+                    window.Tone.now = () => 1050;
+
+                    threeJSGameController.gameLoop(mockAppState);
+
+                    window.Tone.now = originalNow;
+
+                    expect(mockAppState.score).to.equal(999);
+                    expect(mockAppState.goodCount).to.equal(3);
+                });
+
+                it('should clear canvas before rendering', function() {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 28;
+                    tempCanvas.height = 28;
+                    
+                    const mockNoteLetterCache = {
+                        'z': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'x': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'c': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } }
+                    };
+
+                    mockAppState.threeGameState = getGameState();
+                    mockAppState.threeGameState.initialize({
+                        startTime: 1000,
+                        delay: 4,
+                        songEnd: 100,
+                        threeJSRenderer: threeJSRenderer,
+                        scoreKeeper: mockComponentRegistry.getService('scoreKeeper'),
+                        songNoteRenderer: mockComponentRegistry.getService('songNoteRenderer'),
+                        invertedKeyNoteMap: { 'C4': 'z' },
+                        pressedKeys: {},
+                        visibleField: mockVisibleField,
+                        earliestNoteIndex: 0,
+                        noteLetterCache: mockNoteLetterCache
+                    });
+
+                    let clearRectCalled = false;
+                    mockAppState.vueCanvas.clearRect = () => { clearRectCalled = true; };
+
+                    const originalNow = window.Tone.now;
+                    window.Tone.now = () => 1050;
+
+                    threeJSGameController.gameLoop(mockAppState);
+
+                    window.Tone.now = originalNow;
+
+                    expect(clearRectCalled).to.be.true;
+                });
+
+                it('should render now line', function() {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 28;
+                    tempCanvas.height = 28;
+                    
+                    const mockNoteLetterCache = {
+                        'z': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'x': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'c': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } }
+                    };
+
+                    mockAppState.threeGameState = getGameState();
+                    mockAppState.threeGameState.initialize({
+                        startTime: 1000,
+                        delay: 4,
+                        songEnd: 100,
+                        threeJSRenderer: threeJSRenderer,
+                        scoreKeeper: mockComponentRegistry.getService('scoreKeeper'),
+                        songNoteRenderer: mockComponentRegistry.getService('songNoteRenderer'),
+                        invertedKeyNoteMap: { 'C4': 'z' },
+                        pressedKeys: {},
+                        visibleField: mockVisibleField,
+                        earliestNoteIndex: 0,
+                        noteLetterCache: mockNoteLetterCache
+                    });
+
+                    let renderNowLineCalled = false;
+                    threeJSRenderer.renderNowLine = () => { renderNowLineCalled = true; };
+
+                    const originalNow = window.Tone.now;
+                    window.Tone.now = () => 1050;
+
+                    threeJSGameController.gameLoop(mockAppState);
+
+                    window.Tone.now = originalNow;
+
+                    expect(renderNowLineCalled).to.be.true;
+                });
+
+                it('should update 3D notes position', function() {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 28;
+                    tempCanvas.height = 28;
+                    
+                    const mockNoteLetterCache = {
+                        'z': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'x': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'c': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } }
+                    };
+
+                    mockAppState.threeGameState = getGameState();
+                    mockAppState.threeGameState.initialize({
+                        startTime: 1000,
+                        delay: 4,
+                        songEnd: 100,
+                        threeJSRenderer: threeJSRenderer,
+                        scoreKeeper: mockComponentRegistry.getService('scoreKeeper'),
+                        songNoteRenderer: mockComponentRegistry.getService('songNoteRenderer'),
+                        invertedKeyNoteMap: { 'C4': 'z' },
+                        pressedKeys: {},
+                        visibleField: mockVisibleField,
+                        earliestNoteIndex: 0,
+                        noteLetterCache: mockNoteLetterCache
+                    });
+
+                    let updateNotesCalled = false;
+                    
+                    const originalUpdateAllNotes = threeJSRenderer.updateAllNotes;
+                    threeJSRenderer.updateAllNotes = () => { updateNotesCalled = true; };
+
+                    const originalNow = window.Tone.now;
+                    window.Tone.now = () => 1050;
+
+                    threeJSGameController.gameLoop(mockAppState);
+
+                    window.Tone.now = originalNow;
+                    threeJSRenderer.updateAllNotes = originalUpdateAllNotes;
+
+                    expect(updateNotesCalled).to.be.true;
+                });
+
+                it('should update 3D note colors based on scoring', function() {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 28;
+                    tempCanvas.height = 28;
+                    
+                    const mockNoteLetterCache = {
+                        'z': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'x': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'c': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } }
+                    };
+
+                    const mockNoteGroup = {
+                        children: [
+                            { userData: { id: '0_0' } },
+                            { userData: { id: '1_1' } }
+                        ]
+                    };
+
+                    const mockVisibleFieldWithIds = [
+                        { time: 0, duration: 1.0, name: 'C4', state: 'unplayed', id: '0_0', letter: 'z' },
+                        { time: 1, duration: 1.0, name: 'D4', state: 'unplayed', id: '1_1', letter: 'x' }
+                    ];
+
+                    mockAppState.threeGameState = getGameState();
+                    
+                    const scoreKeeperWithScores = {
+                        calculateNewScore: function(visibleField, pressedKeys, now) {
+                            return {
+                                total: 100,
+                                keyScores: {
+                                    '0_0': { points: 50, tag: 'good' },
+                                    '1_1': { points: 35, tag: 'ok' }
+                                }
+                            };
+                        },
+                        getCounts: function() {
+                            return { goodCount: 1, okCount: 1, badCount: 0, missedCount: 0 };
+                        }
+                    };
+                    
+                    mockAppState.threeGameState.initialize({
+                        startTime: 1000,
+                        delay: 4,
+                        songEnd: 100,
+                        threeJSRenderer: threeJSRenderer,
+                        scoreKeeper: scoreKeeperWithScores,
+                        songNoteRenderer: mockComponentRegistry.getService('songNoteRenderer'),
+                        invertedKeyNoteMap: { 'C4': 'z', 'D4': 'x' },
+                        pressedKeys: {},
+                        visibleField: mockVisibleFieldWithIds,
+                        earliestNoteIndex: 0,
+                        noteLetterCache: mockNoteLetterCache
+                    });
+
+                    let setNoteStateCalled = false;
+                    
+                    const originalSetNoteState = threeJSRenderer.setNoteState;
+                    threeJSRenderer.setNoteState = () => { setNoteStateCalled = true; };
+
+                    const originalGetNoteGroup = threeJSRenderer.getNoteGroup;
+                    threeJSRenderer.getNoteGroup = () => mockNoteGroup;
+
+                    const originalNow = window.Tone.now;
+                    window.Tone.now = () => 1050;
+
+                    threeJSGameController.gameLoop(mockAppState);
+
+                    window.Tone.now = originalNow;
+                    threeJSRenderer.setNoteState = originalSetNoteState;
+                    threeJSRenderer.getNoteGroup = originalGetNoteGroup;
+
+                    expect(setNoteStateCalled).to.be.true;
+                });
+
+                it('should update high scores when song ends', function() {
+                    let setHighScoreCalled = false;
+                    
+                    const originalSetHighScore = mockComponentRegistry.getService('highScoreTracker').setHighScore;
+                    mockComponentRegistry.getService('highScoreTracker').setHighScore = (filename, difficultyKey, score) => {
+                        setHighScoreCalled = true;
+                    };
+
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 28;
+                    tempCanvas.height = 28;
+                    
+                    const mockNoteLetterCache = {
+                        'z': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'x': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'c': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } }
+                    };
+
+                    mockAppState.toggleTrackHighScores = true;
+                    mockAppState.selectedMidiSong = { filename: 'test.mid' };
+                    mockAppState.selectedDifficulty = { difficultyKey: 'medium' };
+                    mockAppState.highScore = 0;
+                    mockAppState.challengeScore = 0;
+                    
+                    mockAppState.threeGameState = getGameState();
+                    
+                    const scoreKeeper = mockComponentRegistry.getService('scoreKeeper');
+                    const songNoteRenderer = mockComponentRegistry.getService('songNoteRenderer');
+                    const highScoreTracker = mockComponentRegistry.getService('highScoreTracker');
+                    const challengeScores = mockComponentRegistry.getService('challengeScores');
+                    
+                    mockAppState.threeGameState.initialize({
+                        startTime: 1000,
+                        delay: 4,
+                        songEnd: 10, // Very short song - ends at 10 seconds
+                        threeJSRenderer: threeJSRenderer,
+                        scoreKeeper: scoreKeeper,
+                        songNoteRenderer: songNoteRenderer,
+                        highScoreTracker: highScoreTracker,
+                        challengeScores: challengeScores,
+                        invertedKeyNoteMap: { 'C4': 'z' },
+                        pressedKeys: {},
+                        visibleField: mockVisibleField,
+                        earliestNoteIndex: 0,
+                        noteLetterCache: mockNoteLetterCache
+                    });
+
+                    const originalNow = window.Tone.now;
+                    
+                    // visiblePast = intervalNow - 1
+                    // For song to end: visiblePast > songEnd (10)
+                    // So intervalNow must be > 11
+                    // With startTime=1000 and delay=4: intervalNow = Tone.now() - 1000 - 4
+                    // So Tone.now() must be > 1015
+                    window.Tone.now = () => 2000;
+
+                    threeJSGameController.gameLoop(mockAppState);
+
+                    window.Tone.now = originalNow;
+                    mockComponentRegistry.getService('highScoreTracker').setHighScore = originalSetHighScore;
+
+                    expect(setHighScoreCalled).to.be.true;
+                });
+
+                it('should not update high scores when toggleTrackHighScores is false', function() {
+                    mockAppState.toggleTrackHighScores = false;
+                    
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 28;
+                    tempCanvas.height = 28;
+                    
+                    const mockNoteLetterCache = {
+                        'z': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'x': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'c': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } }
+                    };
+
+                    mockAppState.threeGameState = getGameState();
+                    mockAppState.threeGameState.initialize({
+                        startTime: 1000,
+                        delay: 4,
+                        songEnd: 10,
+                        threeJSRenderer: threeJSRenderer,
+                        scoreKeeper: mockComponentRegistry.getService('scoreKeeper'),
+                        songNoteRenderer: mockComponentRegistry.getService('songNoteRenderer'),
+                        invertedKeyNoteMap: { 'C4': 'z' },
+                        pressedKeys: {},
+                        visibleField: mockVisibleField,
+                        earliestNoteIndex: 0,
+                        noteLetterCache: mockNoteLetterCache
+                    });
+
+                    let setHighScoreCalled = false;
+                    mockComponentRegistry.getService('highScoreTracker').setHighScore = () => {
+                        setHighScoreCalled = true;
+                    };
+
+                    const originalNow = window.Tone.now;
+                    window.Tone.now = () => 2000;
+
+                    threeJSGameController.gameLoop(mockAppState);
+
+                    window.Tone.now = originalNow;
+
+                    expect(setHighScoreCalled).to.be.false;
+                });
+
+                it('should handle null threeJSRenderer in gameLoop', function() {
+                    mockAppState.threeGameState = getGameState();
+                    mockAppState.threeGameState.initialize({
+                        threeJSRenderer: null
+                    });
+
+                    let stopGameCalled = false;
+                    
+                    const originalStopGame = threeJSGameController.stopGame;
+                    threeJSGameController.stopGame = function(app) { stopGameCalled = true; };
+
+                    expect(() => {
+                        threeJSGameController.gameLoop(mockAppState);
+                    }).to.not.throw();
+
+                    threeJSGameController.stopGame = originalStopGame;
+                    expect(stopGameCalled).to.be.true;
+                });
+
+                it('should call renderNotesPlayingForCanvas', function() {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 28;
+                    tempCanvas.height = 28;
+                    
+                    const mockNoteLetterCache = {
+                        'z': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'x': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } },
+                        'c': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } }
+                    };
+
+                    mockAppState.threeGameState = getGameState();
+                    mockAppState.threeGameState.initialize({
+                        startTime: 1000,
+                        delay: 4,
+                        songEnd: 100,
+                        threeJSRenderer: threeJSRenderer,
+                        scoreKeeper: mockComponentRegistry.getService('scoreKeeper'),
+                        songNoteRenderer: mockComponentRegistry.getService('songNoteRenderer'),
+                        invertedKeyNoteMap: { 'C4': 'z' },
+                        pressedKeys: {},
+                        visibleField: mockVisibleField,
+                        earliestNoteIndex: 0,
+                        noteLetterCache: mockNoteLetterCache
+                    });
+
+                    let renderNotesCalled = false;
+                    mockComponentRegistry.getService('songNoteRenderer').renderNotesPlayingForCanvas = () => {
+                        renderNotesCalled = true;
+                    };
+
+                    const originalNow = window.Tone.now;
+                    window.Tone.now = () => 1050;
+
+                    threeJSGameController.gameLoop(mockAppState);
+
+                    window.Tone.now = originalNow;
+
+                    expect(renderNotesCalled).to.be.true;
+                });
+            });
+
+            describe('ThreeJSGameController - update3DNotesPosition', function() {
+                it('should call threeJSRenderer.updateAllNotes with correct parameters', function() {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 28;
+                    tempCanvas.height = 28;
+                    
+                    const mockNoteLetterCache = {
+                        'z': { unplayedNoteCanvas: { canvas: tempCanvas, fillStyle: 'blue' } }
+                    };
+
+                    mockAppState.threeGameState = getGameState();
+                    mockAppState.threeGameState.initialize({ delay: 4, noteLetterCache: mockNoteLetterCache });
+
+                    let capturedTime = null;
+                    let capturedDelay = null;
+                    
+                    const originalUpdateAllNotes = threeJSRenderer.updateAllNotes;
+                    threeJSRenderer.updateAllNotes = (time, delay) => {
+                        capturedTime = time;
+                        capturedDelay = delay;
+                    };
+
+                    threeJSGameController.update3DNotesPosition(
+                        threeJSRenderer,
+                        mockAppState.threeGameState,
+                        1050,
+                        mockAppState
+                    );
+
+                    threeJSRenderer.updateAllNotes = originalUpdateAllNotes;
+
+                    expect(capturedTime).to.equal(1050);
+                    expect(capturedDelay).to.equal(4);
+                });
+
+                it('should handle null threeJSRenderer gracefully', function() {
+                    expect(() => {
+                        threeJSGameController.update3DNotesPosition(
+                            null,
+                            mockAppState.threeGameState,
+                            1050,
+                            mockAppState
+                        );
+                    }).to.not.throw();
+                });
+
+                it('should handle null gameState gracefully', function() {
+                    expect(() => {
+                        threeJSGameController.update3DNotesPosition(
+                            threeJSRenderer,
+                            null,
+                            1050,
+                            mockAppState
+                        );
+                    }).to.not.throw();
+                });
+
+                it('should use delay from gameState when available', function() {
+                    mockAppState.threeGameState = getGameState();
+                    mockAppState.threeGameState.initialize({ delay: 8 });
+
+                    let capturedDelay = null;
+                    
+                    const originalUpdateAllNotes = threeJSRenderer.updateAllNotes;
+                    threeJSRenderer.updateAllNotes = (time, delay) => {
+                        capturedDelay = delay;
+                    };
+
+                    threeJSGameController.update3DNotesPosition(
+                        threeJSRenderer,
+                        mockAppState.threeGameState,
+                        1050,
+                        mockAppState
+                    );
+
+                    threeJSRenderer.updateAllNotes = originalUpdateAllNotes;
+
+                    expect(capturedDelay).to.equal(8);
+                });
+
+                it('should fall back to CONSTANTS.DEFAULT_DELAY when gameState delay is missing', function() {
+                    mockAppState.threeGameState = getGameState();
+                    mockAppState.threeGameState.initialize({});
+
+                    let capturedDelay = null;
+                    
+                    const originalUpdateAllNotes = threeJSRenderer.updateAllNotes;
+                    threeJSRenderer.updateAllNotes = (time, delay) => {
+                        capturedDelay = delay;
+                    };
+
+                    threeJSGameController.update3DNotesPosition(
+                        threeJSRenderer,
+                        mockAppState.threeGameState,
+                        1050,
+                        mockAppState
+                    );
+
+                    threeJSRenderer.updateAllNotes = originalUpdateAllNotes;
+
+                    expect(capturedDelay).to.equal(4); // DEFAULT_DELAY from constants
+                });
+
+                it('should pass time and delay to updateAllNotes', function() {
+                    let capturedTime = null;
+                    let capturedDelay = null;
+                    
+                    threeJSRenderer.updateAllNotes = (time, delay) => {
+                        capturedTime = time;
+                        capturedDelay = delay;
+                    };
+
+                    const testGameState = getGameState();
+                    testGameState.initialize({
+                        delay: 4
+                    });
+
+                    threeJSGameController.update3DNotesPosition(
+                        threeJSRenderer,
+                        testGameState,
+                        1050,
+                        mockAppState
+                    );
+
+                    expect(capturedTime).to.equal(1050);
+                    expect(capturedDelay).to.equal(4);
+                });
+            });
+
+            describe('ThreeJSGameController - update3DNoteColors', function() {
+                it('should call setNoteState for notes that have been hit', function() {
+                    const mockNoteGroup = {
+                        children: [
+                            { userData: { id: 'note1' } },
+                            { userData: { id: 'note2' } }
+                        ]
+                    };
+
+                    threeJSRenderer.getNoteGroup = () => mockNoteGroup;
+
+                    let setNoteStateCalls = [];
+                    threeJSRenderer.setNoteState = (id, tag) => {
+                        setNoteStateCalls.push({ id, tag });
+                    };
+
+                    const currentScore = {
+                        keyScores: {
+                            'note1': { tag: 'good' },
+                            'note2': { tag: 'ok' }
+                        }
+                    };
+
+                    threeJSGameController.update3DNoteColors(threeJSRenderer, currentScore, mockAppState);
+
+                    expect(setNoteStateCalls).to.have.lengthOf(2);
+                    expect(setNoteStateCalls[0].id).to.equal('note1');
+                    expect(setNoteStateCalls[0].tag).to.equal('good');
+                });
+
+                it('should handle notes without userData gracefully', function() {
+                    const mockNoteGroup = {
+                        children: [
+                            { userData: { id: 'note1' } },
+                            { userData: null },
+                            null
+                        ]
+                    };
+
+                    threeJSRenderer.getNoteGroup = () => mockNoteGroup;
+
+                    let setNoteStateCalled = false;
+                    threeJSRenderer.setNoteState = () => { setNoteStateCalled = true; };
+
+                    const currentScore = {
+                        keyScores: { 'note1': { tag: 'good' } }
+                    };
+
+                    expect(() => {
+                        threeJSGameController.update3DNoteColors(threeJSRenderer, currentScore, mockAppState);
+                    }).to.not.throw();
+
+                    expect(setNoteStateCalled).to.be.true;
+                });
+
+                it('should handle null threeJSRenderer gracefully', function() {
+                    expect(() => {
+                        threeJSGameController.update3DNoteColors(
+                            null,
+                            { keyScores: {} },
+                            mockAppState
+                        );
+                    }).to.not.throw();
+                });
+
+                it('should handle empty note group gracefully', function() {
+                    threeJSRenderer.getNoteGroup = () => ({ children: [] });
+
+                    let setNoteStateCalled = false;
+                    threeJSRenderer.setNoteState = () => { setNoteStateCalled = true; };
+
+                    const currentScore = {
+                        keyScores: { 'note1': { tag: 'good' } }
+                    };
+
+                    threeJSGameController.update3DNoteColors(threeJSRenderer, currentScore, mockAppState);
+
+                    expect(setNoteStateCalled).to.be.false;
+                });
+
+                it('should only update notes with valid score tags', function() {
+                    const mockNoteGroup = {
+                        children: [
+                            { userData: { id: 'note1' } },
+                            { userData: { id: 'note2' } }
+                        ]
+                    };
+
+                    threeJSRenderer.getNoteGroup = () => mockNoteGroup;
+
+                    let setNoteStateCalls = [];
+                    threeJSRenderer.setNoteState = (id, tag) => {
+                        setNoteStateCalls.push({ id, tag });
+                    };
+
+                    // note2 has no tag in score
+                    const currentScore = {
+                        keyScores: {
+                            'note1': { tag: 'good' },
+                            'note2': {} // No tag
+                        }
+                    };
+
+                    threeJSGameController.update3DNoteColors(threeJSRenderer, currentScore, mockAppState);
+
+                    // Only note1 should be updated since it has a valid tag
+                    expect(setNoteStateCalls).to.have.lengthOf(1);
+                    expect(setNoteStateCalls[0].id).to.equal('note1');
+                });
+
+                it('should handle null keyScores gracefully', function() {
+                    const mockNoteGroup = {
+                        children: [
+                            { userData: { id: 'note1' } }
+                        ]
+                    };
+
+                    threeJSRenderer.getNoteGroup = () => mockNoteGroup;
+
+                    let setNoteStateCalled = false;
+                    threeJSRenderer.setNoteState = () => { setNoteStateCalled = true; };
+
+                    const currentScore = {
+                        keyScores: null
+                    };
+
+                    expect(() => {
+                        threeJSGameController.update3DNoteColors(threeJSRenderer, currentScore, mockAppState);
+                    }).to.not.throw();
+
+                    expect(setNoteStateCalled).to.be.false;
+                });
+            });
+
+            describe('ThreeJSGameController - render3DNowLine', function() {
+                it('should call threeJSRenderer.renderNowLine with delay from gameState', function() {
+                    mockAppState.threeGameState = getGameState();
+                    mockAppState.threeGameState.initialize({ delay: 8 });
+
+                    let capturedDelay = null;
+                    threeJSRenderer.renderNowLine = (delay) => {
+                        capturedDelay = delay;
+                    };
+
+                    threeJSGameController.render3DNowLine(threeJSRenderer, mockAppState);
+
+                    expect(capturedDelay).to.equal(8);
+                });
+
+                it('should handle null threeJSRenderer gracefully', function() {
+                    expect(() => {
+                        threeJSGameController.render3DNowLine(
+                            null,
+                            mockAppState
+                        );
+                    }).to.not.throw();
+                });
+
+                it('should handle null threeGameState gracefully', function() {
+                    expect(() => {
+                        threeJSGameController.render3DNowLine(
+                            threeJSRenderer,
+                            { threeGameState: null }
+                        );
+                    }).to.not.throw();
+                });
+
+                it('should handle missing delay in gameState', function() {
+                    mockAppState.threeGameState = getGameState();
+                    mockAppState.threeGameState.initialize({ delay: undefined });
+
+                    let capturedDelay = null;
+                    
+                    const originalRenderNowLine = threeJSRenderer.renderNowLine;
+                    threeJSRenderer.renderNowLine = (delay) => {
+                        capturedDelay = delay;
+                    };
+
+                    threeJSGameController.render3DNowLine(threeJSRenderer, mockAppState);
+
+                    threeJSRenderer.renderNowLine = originalRenderNowLine;
+
+                    // Should pass undefined when delay is missing
+                    expect(capturedDelay).to.be.undefined;
+                });
+            });
+
+            describe('ThreeJSGameController - stopGame', function() {
+                it('should clear the play interval', function() {
+                    const originalClearInterval = window.clearInterval;
+                    let clearedId = null;
+
+                    window.clearInterval = (id) => {
+                        clearedId = id;
+                    };
+
+                    threeJSGameController.playIntervalId = 99999;
+
+                    threeJSGameController.stopGame(mockAppState);
+
+                    window.clearInterval = originalClearInterval;
+
+                    expect(clearedId).to.equal(99999);
+                    expect(threeJSGameController.playIntervalId).to.be.null;
+                });
+
+                it('should stop Tone.Transport', function() {
+                    let transportStopped = false;
+                    
+                    const originalTransportStop = window.Tone.Transport.stop;
+                    window.Tone.Transport.stop = () => { transportStopped = true; };
+
+                    threeJSGameController.stopGame(mockAppState);
+
+                    window.Tone.Transport.stop = originalTransportStop;
+
+                    expect(transportStopped).to.be.true;
+                });
+
+                it('should reset Tone.Transport.position to 0', function() {
+                    window.Tone.Transport.position = 500;
+                    
+                    threeJSGameController.stopGame(mockAppState);
+
+                    expect(window.Tone.Transport.position).to.equal(0);
+                });
+
+                it('should call Tone.Transport.cancel', function() {
+                    let cancelCalled = false;
+                    
+                    const originalTransportCancel = window.Tone.Transport.cancel;
+                    window.Tone.Transport.cancel = () => { cancelCalled = true; };
+
+                    threeJSGameController.stopGame(mockAppState);
+
+                    window.Tone.Transport.cancel = originalTransportCancel;
+
+                    expect(cancelCalled).to.be.true;
+                });
+
+                it('should dispose all synths', function() {
+                    let disconnections = 0;
+                    let disposals = 0;
+
+                    const trackingSynth = {
+                        disconnect: () => { disconnections++; },
+                        dispose: () => { disposals++; }
+                    };
+
+                    mockAppState.threeGameState = getGameState();
+                    
+                    // Add synth to controller's private storage via addSynth method
+                    threeJSGameController.addSynth(trackingSynth);
+
+                    threeJSGameController.stopGame(mockAppState);
+
+                    expect(disconnections).to.be.at.least(1);
+                    expect(disposals).to.be.at.least(1);
+                });
+
+                it('should cleanup threeGameState from app', function() {
+                    mockAppState.threeGameState = getGameState();
+                    mockAppState.threeGameState.initialize({});
+
+                    threeJSGameController.stopGame(mockAppState);
+
+                    expect(mockAppState.threeGameState).to.be.undefined;
+                });
+
+                it('should handle already stopped game gracefully', function() {
+                    threeJSGameController.playIntervalId = null;
+                    
+                    const originalClearInterval = window.clearInterval;
+                    let clearedId = null;
+
+                    window.clearInterval = (id) => {
+                        clearedId = id;
+                    };
+
+                    mockAppState.threeGameState = getGameState();
+                    mockAppState.threeGameState.initialize({});
+
+                    threeJSGameController.stopGame(mockAppState);
+
+                    window.clearInterval = originalClearInterval;
+
+                    expect(clearedId).to.be.null;
+                });
+
+                it('should handle empty synths array gracefully', function() {
+                    mockAppState.threeGameState = getGameState();
+                    mockAppState.threeGameState.set('synths', []);
+
+                    expect(() => {
+                        threeJSGameController.stopGame(mockAppState);
+                    }).to.not.throw();
+                });
+
+                it('should handle null synth in synths array gracefully', function() {
+                    mockAppState.threeGameState = getGameState();
+                    mockAppState.threeGameState.set('synths', [null, { disconnect: () => {}, dispose: () => {} }]);
+
+                    expect(() => {
+                        threeJSGameController.stopGame(mockAppState);
+                    }).to.not.throw();
+                });
+
+                it('should clear synths array after disposal', function() {
+                    const trackingSynth = {
+                        disconnect: () => {},
+                        dispose: () => {}
+                    };
+
+                    mockAppState.threeGameState = getGameState();
+                    mockAppState.threeGameState.set('synths', [trackingSynth]);
+
+                    threeJSGameController.stopGame(mockAppState);
+
+                    expect(mockAppState.threeGameState).to.be.undefined;
+                });
+
+                it('should handle null app gracefully', function() {
+                    const originalClearInterval = window.clearInterval;
+                    let clearedId = null;
+
+                    window.clearInterval = (id) => {
+                        clearedId = id;
+                    };
+
+                    expect(() => {
+                        threeJSGameController.stopGame(null);
+                    }).to.not.throw();
+
+                    window.clearInterval = originalClearInterval;
+                });
+            });
+
+            describe('ThreeJSGameController - resize', function() {
+                it('should call threeJSRenderer.resize when renderer is provided', function() {
+                    let resizeCalled = false;
+                    threeJSRenderer.resize = () => { resizeCalled = true; };
+
+                    threeJSGameController.resize(threeJSRenderer);
+
+                    expect(resizeCalled).to.be.true;
+                });
+
+                it('should handle null threeJSRenderer gracefully', function() {
+                    expect(() => {
+                        threeJSGameController.resize(null);
+                    }).to.not.throw();
+                });
+
+                it('should not call resize when renderer is missing', function() {
+                    let resizeCalled = false;
+                    threeJSRenderer.resize = () => { resizeCalled = true; };
+
+                    threeJSGameController.resize(null);
+
+                    expect(resizeCalled).to.be.false;
+                });
+            });
+
+            describe('ThreeJSGameController - integration tests', function() {
+                it('should complete full game cycle from start to end', function() {
+                    const originalSetInterval = window.setInterval;
+                    const originalClearInterval = window.clearInterval;
+                    const originalNow = window.Tone.now;
+                    
+                    let intervalId = null;
+                    let callCount = 0;
+                    let stopGameCalled = false;
+                    
+                    window.setInterval = (callback) => {
+                        intervalId = 12345;
+                        return intervalId;
+                    };
+
+                    window.clearInterval = (id) => {
+                        if (id === intervalId) {
+                            threeJSGameController.playIntervalId = null;
+                        }
+                    };
+
+                    window.Tone.now = () => 1000;
+
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    // First call - game is still running
+                    window.Tone.now = () => 1050;
+                    threeJSGameController.gameLoop(mockAppState);
+
+                    // Second call - still running
+                    window.Tone.now = () => 1060;
+                    threeJSGameController.gameLoop(mockAppState);
+
+                    // Third call - song should end (visiblePast > songEnd)
+                    window.Tone.now = () => 2000;
+                    threeJSGameController.gameLoop(mockAppState);
+
+                    window.setInterval = originalSetInterval;
+                    window.clearInterval = originalClearInterval;
+                    window.Tone.now = originalNow;
+
+                    expect(threeJSGameController.playIntervalId).to.be.null;
+                    expect(mockAppState.threeGameState).to.be.undefined;
+                });
+
+                it('should maintain state consistency throughout game loop', function() {
+                    const originalSetInterval = window.setInterval;
+                    const originalNow = window.Tone.now;
+                    
+                    window.setInterval = (callback) => { return 12345; };
+                    
+                    window.Tone.now = () => 1000;
+
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    expect(mockAppState.threeGameState).to.not.be.null;
+                    expect(mockAppState.threeGameState.get('startTime')).to.equal(1000);
+
+                    window.Tone.now = () => 1050;
+                    threeJSGameController.gameLoop(mockAppState);
+
+                    expect(mockAppState.score).to.be.at.least(0);
+                    expect(mockAppState.goodCount).to.be.at.least(0);
+
+                    threeJSGameController.stopGame(mockAppState);
+
+                    window.setInterval = originalSetInterval;
+                    window.Tone.now = originalNow;
+
+                    expect(mockAppState.threeGameState).to.be.undefined;
+                });
+
+                it('should handle multiple game sessions correctly', function() {
+                    const originalSetInterval = window.setInterval;
+                    const originalClearInterval = window.clearInterval;
+                    const originalNow = window.Tone.now;
+                    
+                    let intervalId = 0;
+                    
+                    window.setInterval = (callback) => {
+                        intervalId++;
+                        return intervalId;
+                    };
+
+                    window.clearInterval = (id) => {
+                        threeJSGameController.playIntervalId = null;
+                    };
+
+                    window.Tone.now = () => 1000;
+
+                    // First game session
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    window.Tone.now = () => 2000;
+                    threeJSGameController.gameLoop(mockAppState);
+
+                    // Second game session
+                    window.Tone.now = () => 1000;
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    window.Tone.now = () => 2000;
+                    threeJSGameController.gameLoop(mockAppState);
+
+                    window.setInterval = originalSetInterval;
+                    window.clearInterval = originalClearInterval;
+                    window.Tone.now = originalNow;
+
+                    expect(mockAppState.score).to.equal(0);
+                });
+
+                it('should properly clean up resources on game stop', function() {
+                    const originalNow = window.Tone.now;
+                    window.Tone.now = () => 1000;
+
+                    threeJSGameController.startGame(
+                        mockAppState,
+                        mockMidiData,
+                        null,
+                        10,
+                        mockVisibleField,
+                        threeJSRenderer,
+                        mockPressedKeys
+                    );
+
+                    const synthsBefore = threeJSGameController.synths;
+                    expect(synthsBefore).to.have.lengthOf(1);
+
+                    threeJSGameController.stopGame(mockAppState);
+
+                    const synthsAfter = threeJSGameController.synths;
+                    expect(synthsAfter.length).to.equal(0);
+
+                    window.Tone.now = originalNow;
+                });
+
+                it('should handle game loop with missing dependencies gracefully', function() {
+                    const originalNow = window.Tone.now;
+                    window.Tone.now = () => 1000;
+
+                    mockAppState.threeGameState = getGameState();
+                    mockAppState.threeGameState.initialize({
+                        threeJSRenderer: null,
+                        scoreKeeper: null,
+                        songNoteRenderer: null
+                    });
+
+                    expect(() => {
+                        threeJSGameController.gameLoop(mockAppState);
+                    }).to.not.throw();
+
+                    window.Tone.now = originalNow;
+                });
+            });
+        }
+
+        window.onload = function() {
+            runTests();
+            mocha.run();
+        };
+    </script>
+</head>
+
+<body>
+    <div id="mocha"></div>
+</body>
+
+</html>

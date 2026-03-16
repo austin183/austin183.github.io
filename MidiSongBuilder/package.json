@@ -1,0 +1,14 @@
+{
+  "name": "midisongbuilder",
+  "version": "1.0.0",
+  "description": "Midi Song Builder - Rhythm game with MIDI files",
+  "type": "module",
+  "scripts": {
+    "test": "mocha MyESModules/**/*.test.js"
+  },
+  "devDependencies": {
+    "chai": "^5.1.0",
+    "mocha": "^10.2.0",
+    "sinon": "^21.0.2"
+  }
+}

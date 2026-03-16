@@ -384,6 +384,11 @@
                     this.notesCalculatedCanvas = document.getElementById("calculatedNotesCanvas");
                     var calculatedCtx = this.notesCalculatedCanvas.getContext('2d');
                     this.vueCalculatedCanvas = calculatedCtx;
+                },
+                methods: {
+                    handleMidiSongSelection,
+                    renderSongFromSettings,
+                    setDifficulty
                 }
             });
 

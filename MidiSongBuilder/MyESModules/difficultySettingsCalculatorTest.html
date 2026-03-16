@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>DifficultySettingsCalculator Tests</title>
+    <script src="../Libraries/mocha.js"></script>
+    <link rel="stylesheet" href="../Libraries/mocha.css" />
+    <script src="../Libraries/chai.min.js"></script>
+    <script src="KeyNoteMapService.js"></script>
+    <script src="keyRenderInfo.js"></script>
+    <script src="VisibleFieldFilterer.js"></script>
+    <script src="SongNoteRenderer.js"></script>
+    <script src="difficultySettingsCalculator.js"></script>
+
+    <script>
+        mocha.setup('bdd');
+        const { expect } = chai;
+
+        let calculator, visibleFieldFilterer, songNoteRenderer, keyRenderInfo, notesCanvas;
+
+        function setup() {
+            const mockKeyNoteMapService = getKeyNoteMapService();
+            songNoteRenderer = getSongNoteRenderer(mockKeyNoteMapService);
+            
+            calculator = getDifficultySettingsCalculator();
+            visibleFieldFilterer = getVisibleFieldFilterer();
+            keyRenderInfo = getKeyRenderInfo();
+            
+            notesCanvas = document.createElement('canvas');
+            notesCanvas.width = 800;
+            notesCanvas.height = 600;
+        }
+
+        function getInvertedMap() {
+            const keyNoteMap = { 'z': 'C4', 'x': 'D4', 'c': 'E4', 'v': 'F4' };
+            const mockKeyNoteMapService = getKeyNoteMapService();
+            return mockKeyNoteMapService.getInvertedMap(keyNoteMap);
+        }
+
+        function runTests() {
+            describe('DifficultySettingsCalculator', () => {
+                describe('getSongStats()', () => {
+                    it('should calculate note distributions for a simple song', () => {
+                        setup();
+                        
+                        const song = [
+                            { time: 0, duration: 0.5, name: 'C4' },
+                            { time: 1, duration: 0.5, name: 'D4' },
+                            { time: 2, duration: 0.5, name: 'E4' }
+                        ];
+                        
+                        const invertedMap = getInvertedMap();
+                        const stats = calculator.getSongStats(song, invertedMap);
+                        
+                        expect(stats).to.have.property('noteDistanceStats');
+                        expect(stats).to.have.property('noteDurationStats');
+                        expect(stats).to.have.property('totalNote');
+                    });
+
+                    it('should correctly count total notes', () => {
+                        setup();
+                        
+                        const song = [
+                            { time: 0, duration: 0.5, name: 'C4' },
+                            { time: 1, duration: 0.5, name: 'D4' },
+                            { time: 2, duration: 0.5, name: 'E4' },
+                            { time: 3, duration: 0.5, name: 'F4' }
+                        ];
+                        
+                        const invertedMap = getInvertedMap();
+                        const stats = calculator.getSongStats(song, invertedMap);
+                        
+                        expect(stats.totalNote).to.equal(4);
+                    });
+
+                    it('should handle uniform note spacing', () => {
+                        setup();
+                        
+                        const song = [
+                            { time: 0, duration: 0.5, name: 'C4' },
+                            { time: 1, duration: 0.5, name: 'D4' },
+                            { time: 2, duration: 0.5, name: 'C4' },
+                            { time: 3, duration: 0.5, name: 'D4' }
+                        ];
+                        
+                        const invertedMap = getInvertedMap();
+                        const stats = calculator.getSongStats(song, invertedMap);
+                        
+                        expect(stats.noteDistanceStats).to.have.property('0.50');
+                    });
+
+                    it('should handle songs with only a few notes', () => {
+                        setup();
+                        
+                        const song = [
+                            { time: 0, duration: 0.5, name: 'C4' },
+                            { time: 1, duration: 0.5, name: 'D4' }
+                        ];
+                        
+                        const invertedMap = getInvertedMap();
+                        const stats = calculator.getSongStats(song, invertedMap);
+                        
+                        expect(stats.totalNote).to.equal(2);
+                    });
+
+                    it('should handle songs with 1000+ notes without performance issues', () => {
+                        setup();
+                        
+                        const song = [];
+                        for (let i = 0; i < 1000; i++) {
+                            song.push({ time: i * 0.5, duration: 0.25, name: 'C4' });
+                        }
+                        
+                        const invertedMap = getInvertedMap();
+                        
+                        expect(() => {
+                            calculator.getSongStats(song, invertedMap);
+                        }).to.not.throw();
+                    });
+
+                    it('should handle notes all same distance', () => {
+                        setup();
+                        
+                        const song = [
+                            { time: 0, duration: 1.0, name: 'C4' },
+                            { time: 2, duration: 1.0, name: 'D4' },
+                            { time: 4, duration: 1.0, name: 'E4' }
+                        ];
+                        
+                        const invertedMap = getInvertedMap();
+                        const stats = calculator.getSongStats(song, invertedMap);
+                        
+                        expect(Object.keys(stats.noteDistanceStats)).to.have.lengthOf(2);
+                    });
+
+                    it('should handle notes all same duration', () => {
+                        setup();
+                        
+                        const song = [
+                            { time: 0, duration: 0.5, name: 'C4' },
+                            { time: 1, duration: 0.5, name: 'D4' },
+                            { time: 2, duration: 0.5, name: 'E4' }
+                        ];
+                        
+                        const invertedMap = getInvertedMap();
+                        const stats = calculator.getSongStats(song, invertedMap);
+                        
+                        expect(Object.keys(stats.noteDurationStats)).to.have.lengthOf(1);
+                    });
+
+                    it('should sort noteDistanceStats by key', () => {
+                        setup();
+                        
+                        const song = [
+                            { time: 0, duration: 0.5, name: 'C4' },
+                            { time: 2, duration: 0.5, name: 'D4' },
+                            { time: 3, duration: 0.5, name: 'E4' },
+                            { time: 5, duration: 0.5, name: 'C4' }
+                        ];
+                        
+                        const invertedMap = getInvertedMap();
+                        const stats = calculator.getSongStats(song, invertedMap);
+                        
+                        const keys = Object.keys(stats.noteDistanceStats);
+                        expect(keys).to.deep.equal(keys.sort((a, b) => parseFloat(a) - parseFloat(b)));
+                    });
+                });
+
+                describe('getTargetVisibleField()', () => {
+                    it('should calculate visibleFuture for song with uniform note spacing', () => {
+                        setup();
+                        
+                        const song = [
+                            { time: 0, duration: 0.5, name: 'C4' },
+                            { time: 1, duration: 0.5, name: 'D4' },
+                            { time: 2, duration: 0.5, name: 'E4' },
+                            { time: 3, duration: 0.5, name: 'F4' },
+                            { time: 4, duration: 0.5, name: 'C4' }
+                        ];
+                        
+                        const invertedMap = getInvertedMap();
+                        const result = calculator.getTargetVisibleField(60, song, invertedMap, visibleFieldFilterer, keyRenderInfo, notesCanvas, songNoteRenderer, 5);
+                        
+                        expect(result).to.have.property('minNoteDistance');
+                        expect(result).to.have.property('minNoteDuration');
+                        expect(result).to.have.property('visibleField');
+                    });
+
+                    it('should decrease visibleFuture when targetNotesPerMinute is high (200+)', () => {
+                        setup();
+                        
+                        const song = [];
+                        for (let i = 0; i < 100; i++) {
+                            song.push({ time: i * 0.3, duration: 0.2, name: 'C4' });
+                        }
+                        
+                        const invertedMap = getInvertedMap();
+                        const result = calculator.getTargetVisibleField(200, song, invertedMap, visibleFieldFilterer, keyRenderInfo, notesCanvas, songNoteRenderer, 30);
+                        
+                        expect(result).to.not.be.null;
+                    });
+
+                    it('should increase visibleFuture when targetNotesPerMinute is low (80-)', () => {
+                        setup();
+                        
+                        const song = [];
+                        for (let i = 0; i < 30; i++) {
+                            song.push({ time: i * 1.0, duration: 0.5, name: 'C4' });
+                        }
+                        
+                        const invertedMap = getInvertedMap();
+                        const result = calculator.getTargetVisibleField(40, song, invertedMap, visibleFieldFilterer, keyRenderInfo, notesCanvas, songNoteRenderer, 30);
+                        
+                        expect(result).to.not.be.null;
+                    });
+
+                    it('should never return minNoteDistance less than 0', () => {
+                        setup();
+                        
+                        const song = [
+                            { time: 0, duration: 0.5, name: 'C4' },
+                            { time: 1, duration: 0.5, name: 'D4' }
+                        ];
+                        
+                        const invertedMap = getInvertedMap();
+                        const result = calculator.getTargetVisibleField(10, song, invertedMap, visibleFieldFilterer, keyRenderInfo, notesCanvas, songNoteRenderer, 2);
+                        
+                        expect(parseFloat(result.minNoteDistance)).to.be.greaterThanOrEqual(0);
+                    });
+
+                    it('should handle early termination when currentNotesPerMinute exceeds target', () => {
+                        setup();
+                        
+                        const song = [];
+                        for (let i = 0; i < 500; i++) {
+                            song.push({ time: i * 0.1, duration: 0.05, name: 'C4' });
+                        }
+                        
+                        const invertedMap = getInvertedMap();
+                        
+                        expect(() => {
+                            calculator.getTargetVisibleField(100, song, invertedMap, visibleFieldFilterer, keyRenderInfo, notesCanvas, songNoteRenderer, 50);
+                        }).to.not.throw();
+                    });
+
+                    it('should throw error when visibleFieldFilterer is null', () => {
+                        setup();
+                        
+                        const song = [
+                            { time: 0, duration: 0.5, name: 'C4' }
+                        ];
+                        
+                        const invertedMap = getInvertedMap();
+                        
+                        expect(() => {
+                            calculator.getTargetVisibleField(60, song, invertedMap, null, keyRenderInfo, notesCanvas, songNoteRenderer, 1);
+                        }).to.throw();
+                    });
+
+                    it('should handle case where noteDistribution has no entries', () => {
+                        setup();
+                        
+                        const song = [
+                            { time: 0, duration: 0.5, name: 'Z9' }
+                        ];
+                        
+                        const invertedMap = getInvertedMap();
+                        const result = calculator.getTargetVisibleField(60, song, invertedMap, visibleFieldFilterer, keyRenderInfo, notesCanvas, songNoteRenderer, 1);
+                        
+                        expect(result).to.satisfy(r => r === null || (r && typeof r.notesPerMinute === 'number'));
+                    });
+
+                    it('should return best combination within 10 notes per minute of target', () => {
+                        setup();
+                        
+                        const song = [
+                            { time: 0, duration: 0.5, name: 'C4' },
+                            { time: 1, duration: 0.5, name: 'D4' },
+                            { time: 2, duration: 0.5, name: 'E4' },
+                            { time: 3, duration: 0.5, name: 'F4' }
+                        ];
+                        
+                        const invertedMap = getInvertedMap();
+                        const result = calculator.getTargetVisibleField(60, song, invertedMap, visibleFieldFilterer, keyRenderInfo, notesCanvas, songNoteRenderer, 4);
+                        
+                        expect(Math.abs(result.notesPerMinute - 60)).to.be.lessThanOrEqual(10);
+                    });
+
+                    it('should return combination with greatest minNoteDistance when multiple within target', () => {
+                        setup();
+                        
+                        const song = [
+                            { time: 0, duration: 0.2, name: 'C4' },
+                            { time: 0.5, duration: 0.2, name: 'C4' },
+                            { time: 1.0, duration: 0.2, name: 'D4' },
+                            { time: 1.5, duration: 0.2, name: 'D4' },
+                            { time: 2.0, duration: 0.2, name: 'E4' }
+                        ];
+                        
+                        const invertedMap = getInvertedMap();
+                        const result = calculator.getTargetVisibleField(100, song, invertedMap, visibleFieldFilterer, keyRenderInfo, notesCanvas, songNoteRenderer, 3);
+                        
+                        expect(result).to.have.property('minNoteDistance');
+                    });
+
+                    it('should fall back to bestResult when no combinations within 10 nppm', () => {
+                        setup();
+                        
+                        const song = [
+                            { time: 0, duration: 2.0, name: 'C4' },
+                            { time: 10, duration: 2.0, name: 'D4' }
+                        ];
+                        
+                        const invertedMap = getInvertedMap();
+                        const result = calculator.getTargetVisibleField(500, song, invertedMap, visibleFieldFilterer, keyRenderInfo, notesCanvas, songNoteRenderer, 15);
+                        
+                        expect(result).to.satisfy(r => r === null || (r && typeof r.notesPerMinute === 'number'));
+                    });
+                });
+
+                describe('Edge Cases', () => {
+                    it('should handle empty song array', () => {
+                        setup();
+                        
+                        const invertedMap = getInvertedMap();
+                        const stats = calculator.getSongStats([], invertedMap);
+                        
+                        expect(stats.totalNote).to.equal(0);
+                    });
+
+                    it('should handle notes outside invertedKeyNoteMap', () => {
+                        setup();
+                        
+                        const song = [
+                            { time: 0, duration: 0.5, name: 'Z9' },
+                            { time: 1, duration: 0.5, name: 'Z8' }
+                        ];
+                        
+                        const invertedMap = getInvertedMap();
+                        const stats = calculator.getSongStats(song, invertedMap);
+                        
+                        expect(stats.totalNote).to.equal(0);
+                    });
+
+                    it('should skip notes with negative distance', () => {
+                        setup();
+                        
+                        const song = [
+                            { time: 0, duration: 2.0, name: 'C4' },
+                            { time: 1, duration: 2.0, name: 'D4' }
+                        ];
+                        
+                        const invertedMap = getInvertedMap();
+                        const stats = calculator.getSongStats(song, invertedMap);
+                        
+                        expect(stats.totalNote).to.equal(1);
+                    });
+
+                    it('should handle very large duration values', () => {
+                        setup();
+                        
+                        const song = [
+                            { time: 0, duration: 10.0, name: 'C4' },
+                            { time: 15, duration: 10.0, name: 'D4' }
+                        ];
+                        
+                        const invertedMap = getInvertedMap();
+                        const stats = calculator.getSongStats(song, invertedMap);
+                        
+                        expect(stats.totalNote).to.equal(2);
+                    });
+                });
+            });
+
+            mocha.run();
+        }
+    </script>
+</head>
+
+<body onload="runTests()">
+    <div id="mocha"></div>
+</body>
+
+</html>

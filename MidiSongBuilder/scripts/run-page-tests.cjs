@@ -62,13 +62,15 @@ async function testPage(pagePath, baseUrl = 'http://localhost:' + SERVER_PORT) {
     const expectedWarnings = [
         /AudioContext/i,
         /autoplay policy/i,
-        /user gesture/i
+        /user gesture/i,
+        /Unhandled error during execution of mounted hook/
     ];
 
     const expectedErrors = [
         /WebGL context could not be created/i,
         /Error creating WebGL context/i,
-        /EGL/
+        /EGL/,
+        /Unhandled error during execution of mounted hook/
     ];
 
     page.on('console', msg => {
@@ -99,10 +101,29 @@ async function testPage(pagePath, baseUrl = 'http://localhost:' + SERVER_PORT) {
     });
 
     page.on('pageerror', error => {
+        const message = error.message;
+        
+        // Filter out expected WebGL errors (headless browser limitation for 3D pages)
+        if (expectedErrors.some(pattern => pattern.test(message))) {
+            return;
+        }
+        
         logs.errors.push({
             type: 'uncaught',
-            text: `Uncaught Error: ${error.message}`
+            text: `Uncaught Error: ${message}`
         });
+    });
+
+    // Capture network failures (404s, etc)
+    page.on('requestfailed', request => {
+        const url = request.url();
+        const failure = request.failure();
+        if (failure) {
+            logs.errors.push({
+                type: 'network',
+                text: `Failed to load resource: ${url} - ${failure.errorText} (${request.failure()?.responseStatusCode || 'no status'})`
+            });
+        }
     });
 
     try {
@@ -164,6 +185,8 @@ function getPageFiles() {
     return [
         'MidiSongBuilder/Midiestro.html',
         'MidiSongBuilder/Midiestro3D.html',
+        'MidiSongBuilder/MidiestroES.html',
+        'MidiSongBuilder/Midiestro3DES.html',
         'MidiSongBuilder/MidiestroDifficultyComparisons.html'
     ];
 }

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ES Module CDN Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .success { color: green; }
+        .error { color: red; }
+        pre { background: #f4f4f4; padding: 10px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>ES Module CDN URL Test</h1>
+    
+    <button id="testTone">Test Tone.js ES Modules</button>
+    <pre id="toneResults"></pre>
+    
+    <button id="testThree">Test Three.js ES Modules</button>
+    <pre id="threeResults"></pre>
+    
+    <script type="module">
+        const toneResults = document.getElementById('toneResults');
+        const threeResults = document.getElementById('threeResults');
+        
+        // Test Tone.js from jsDelivr
+        document.getElementById('testTone').addEventListener('click', async () => {
+            try {
+                const toneModule = await import('https://cdn.jsdelivr.net/npm/tone@14.7.77/build/esm/Tone.js');
+                
+                toneResults.innerHTML = '<span class="success">✓ Tone.js ES Module loaded successfully!</span>\n\n';
+                toneResults.innerHTML += 'Version: ' + (toneModule.Version || 'unknown') + '\n\n';
+                toneResults.innerHTML += 'Available exports:\n' + Object.keys(toneModule).slice(0, 30).join(', ') + '...\n\n';
+                
+                // Test PolySynth creation (won't actually play without audio context)
+                const polySynth = new toneModule.PolySynth();
+                toneResults.innerHTML += 'PolySynth created: ' + !!polySynth + '\n';
+                toneResults.innerHTML += 'PolySynth methods: ' + Object.getOwnPropertyNames(Object.getPrototypeOf(polySynth)).filter(m => !m.startsWith('_')).slice(0, 10).join(', ') + '...';
+            } catch (error) {
+                toneResults.innerHTML = '<span class="error">✗ Tone.js failed:</span>\n' + error.message;
+            }
+        });
+        
+        // Test Three.js from Skypack
+        document.getElementById('testThree').addEventListener('click', async () => {
+            try {
+                const threeModule = await import('https://cdn.skypack.dev/three@0.160.0');
+                
+                threeResults.innerHTML = '<span class="success">✓ Three.js ES Module loaded successfully!</span>\n\n';
+                threeResults.innerHTML += 'Version: 0.160.0 (requested)\n\n';
+                threeResults.innerHTML += 'Available exports:\n' + Object.keys(threeModule).slice(0, 50).join(', ') + '...\n\n';
+                
+                // Test basic Three.js classes
+                const scene = new threeModule.Scene();
+                const camera = new threeModule.PerspectiveCamera(75, 16/9, 0.1, 1000);
+                const vector3 = new threeModule.Vector3(1, 2, 3);
+                
+                threeResults.innerHTML += 'Scene created: ' + !!scene + '\n';
+                threeResults.innerHTML += 'PerspectiveCamera created: ' + !!camera + '\n';
+                threeResults.innerHTML += 'Vector3 created: ' + !!vector3 + ' (' + vector3.x + ', ' + vector3.y + ', ' + vector3.z + ')';
+            } catch (error) {
+                threeResults.innerHTML = '<span class="error">✗ Three.js failed:</span>\n' + error.message;
+            }
+        });
+    </script>
+    
+    <p><strong>Instructions:</strong> Click each button to test CDN imports. Check console for errors.</p>
+    <p><strong>If both pass:</strong> Use Option A (direct imports) for Phase 2 conversions.</p>
+    <p><strong>If either fails:</strong> Use Option B (dependency injection) for that library.</p>
+</body>
+</html>
