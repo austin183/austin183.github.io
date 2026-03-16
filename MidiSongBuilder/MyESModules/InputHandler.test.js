@@ -111,7 +111,7 @@ describe('getInputHandler', function() {
             const h = getInputHandler();
             
             // Manually set internal state (since we can't call setupKeyListeners)
-            h.app = { selectedKeyNoteMap: { keyNoteMap: { 'z': 'D3' } } };
+            h.keyMapProvider = { getCurrentKeyNoteMap: () => ({ 'z': 'D3' }) };
             h.pressedKeys = {};
             h.synthMap = { 'z': {} };
             h.onNotePlay = sinon.stub();
@@ -126,7 +126,7 @@ describe('getInputHandler', function() {
             const h = getInputHandler(null);
             
             // Should not throw when handling events with debugLogger=null
-            h.app = { selectedKeyNoteMap: { keyNoteMap: { 'z': 'D3' } } };
+            h.keyMapProvider = { getCurrentKeyNoteMap: () => ({ 'z': 'D3' }) };
             h.pressedKeys = {};
             h.synthMap = { 'z': {} };
             h.onNotePlay = sinon.stub();
@@ -142,7 +142,7 @@ describe('getInputHandler', function() {
             const mockLogger = { enabled: true, log: sinon.stub() };
             const h = getInputHandler(mockLogger);
             
-            h.app = { selectedKeyNoteMap: { keyNoteMap: { 'z': 'D3' } } };
+            h.keyMapProvider = { getCurrentKeyNoteMap: () => ({ 'z': 'D3' }) };
             h.pressedKeys = {};
             h.synthMap = { 'z': {} };
             h.onNotePlay = sinon.stub();

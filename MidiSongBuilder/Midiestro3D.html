@@ -262,6 +262,7 @@
         import getThreeJSRenderer from './MyESModules/ThreeJSRenderer.js';
         import { getGameSessionManager } from './MyESModules/GameSessionManager.js';
         import { createMidiestroApp } from './MyESModules/createMidiestroApp.js';
+        import { getCameraUIManager } from './MyESModules/CameraUIManager.js';
 
         const queryString = window.location.search;
         const debugPage = queryString == "?debug";
@@ -357,6 +358,7 @@
         var gameController = getGameController(Tone);
         var threeJSGameController = getThreeJSGameController(Tone);
         var gameSessionManager = getGameSessionManager();
+        var cameraUIManager = getCameraUIManager();
 
         var playing = false;
         var cameraControlsActive = false;
@@ -455,13 +457,7 @@
                 app.threeJSRenderer.resetCamera();
                 var state = app.threeJSRenderer.getCameraDisplayState();
 
-                document.getElementById('cameraPosX').value = state.position.x.toFixed(2);
-                document.getElementById('cameraPosY').value = state.position.y.toFixed(2);
-                document.getElementById('cameraPosZ').value = state.position.z.toFixed(2);
-
-                document.getElementById('cameraLookAtX').value = state.lookAt.x.toFixed(2);
-                document.getElementById('cameraLookAtY').value = state.lookAt.y.toFixed(2);
-                document.getElementById('cameraLookAtZ').value = state.lookAt.z.toFixed(2);
+                cameraUIManager.updateCameraInputFields(state);
             }
         }
 
@@ -512,14 +508,7 @@
 
             var state = app.threeJSRenderer.getCameraDisplayState();
 
-            document.getElementById('cameraPosX').value = state.position.x.toFixed(2);
-            document.getElementById('cameraPosY').value = state.position.y.toFixed(2);
-            document.getElementById('cameraPosZ').value = state.position.z.toFixed(2);
-
-            document.getElementById('cameraLookAtX').value = state.lookAt.x.toFixed(2);
-            document.getElementById('cameraLookAtY').value = state.lookAt.y.toFixed(2);
-            document.getElementById('cameraLookAtZ').value = state.lookAt.z.toFixed(2);
-
+            cameraUIManager.updateCameraInputFields(state);
             app.threeJSRenderer.updateCameraFromControls();
         }
 
@@ -561,13 +550,7 @@
             var defaults = appInstance.threeJSRenderer.getDefaultCameraStateForUI();
             if (!defaults) return;
 
-            document.getElementById('cameraPosX').value = defaults.position.x;
-            document.getElementById('cameraPosY').value = defaults.position.y;
-            document.getElementById('cameraPosZ').value = defaults.position.z;
-
-            document.getElementById('cameraLookAtX').value = defaults.lookAt.x;
-            document.getElementById('cameraLookAtY').value = defaults.lookAt.y;
-            document.getElementById('cameraLookAtZ').value = defaults.lookAt.z;
+            cameraUIManager.setCameraInputDefaults(defaults);
         }
 
         // Expose functions to window for onclick handlers in ES module scope

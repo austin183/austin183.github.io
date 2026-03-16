@@ -1,6 +1,15 @@
 /**
  * InputHandler - Manages keyboard input event listeners for Midiestro
  * Extracts keyboard event listeners from the main script
+ * 
+ * DIP Compliance: Depends on KeyMapProvider abstraction instead of concrete Vue app
+ */
+
+/**
+ * @interface KeyMapProvider
+ * @description Provides access to key-note mappings without tight coupling to Vue app structure
+ * @method getCurrentKeyNoteMap - Returns current key-note mapping object
+ * @returns {Object} Key-note mapping dictionary
  */
 
 export default function getInputHandler(debugLogger = null) {
@@ -9,9 +18,9 @@ export default function getInputHandler(debugLogger = null) {
         // When false, keys are available for camera controls
         noteInputEnabled: true,
 
-        setupKeyListeners: function(app, pressedKeys, synthMap, synthArray, onNotePlay) {
+        setupKeyListeners: function(keyMapProvider, pressedKeys, synthMap, synthArray, onNotePlay) {
             // Attach keydown and keyup listeners
-            this.app = app;
+            this.keyMapProvider = keyMapProvider;
             this.pressedKeys = pressedKeys;
             this.synthMap = synthMap;
             this.synthArray = synthArray;
@@ -33,7 +42,7 @@ export default function getInputHandler(debugLogger = null) {
             if (this.boundKeyupHandler) {
                 document.removeEventListener("keyup", this.boundKeyupHandler);
             }
-            this.app = null;
+            this.keyMapProvider = null;
             this.pressedKeys = null;
             this.synthMap = null;
             this.synthArray = null;
@@ -68,16 +77,18 @@ export default function getInputHandler(debugLogger = null) {
         handleKeyDown: function(event) {
             // Process key press - only if note input is enabled
             if (this.debugLogger?.enabled) {
-                this.debugLogger.log("handleKeyDown called with key:", event.key, "noteInputEnabled:", this.noteInputEnabled, "app exists:", !!this.app);
+                this.debugLogger.log("handleKeyDown called with key:", event.key, "noteInputEnabled:", this.noteInputEnabled, "keyMapProvider exists:", !!this.keyMapProvider);
             }
             
             if (!this.noteInputEnabled) {
                 return;
             }
 
-            if (this.app && this.isKeyInMap(event.key, this.app.selectedKeyNoteMap.keyNoteMap)) {
+            const keyNoteMap = this.keyMapProvider.getCurrentKeyNoteMap();
+            
+            if (this.keyMapProvider && this.isKeyInMap(event.key, keyNoteMap)) {
                 if (this.debugLogger?.enabled) {
-                    this.debugLogger.log("Pressed key for " + this.app.selectedKeyNoteMap.keyNoteMap[event.key]);
+                    this.debugLogger.log("Pressed key for " + keyNoteMap[event.key]);
                 }
 
                 this.pressedKeys[event.key] = true;
@@ -95,11 +106,13 @@ export default function getInputHandler(debugLogger = null) {
                 return;
             }
 
-            if (this.app &&
-                this.isKeyInMap(event.key, this.app.selectedKeyNoteMap.keyNoteMap) &&
+            const keyNoteMap = this.keyMapProvider.getCurrentKeyNoteMap();
+            
+            if (this.keyMapProvider &&
+                this.isKeyInMap(event.key, keyNoteMap) &&
                 event.key in this.synthMap) {
                 if (this.debugLogger?.enabled) {
-                    this.debugLogger.log("Release key for " + this.app.selectedKeyNoteMap.keyNoteMap[event.key]);
+                    this.debugLogger.log("Release key for " + keyNoteMap[event.key]);
                 }
                 this.pressedKeys[event.key] = false;
                 this.onNotePlay();

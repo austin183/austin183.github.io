@@ -12,6 +12,7 @@
  */
 
 import getComponentRegistry from './ComponentRegistry.js';
+import { getVisibleFieldFactory } from './VisibleFieldFactory.js';
 
 export function getGameSessionManager() {
     const registry = getComponentRegistry();
@@ -55,7 +56,7 @@ export function getGameSessionManager() {
         },
         
         /**
-         * Calculate visible field based on difficulty settings
+         * Calculate visible field based on difficulty settings using Strategy pattern
          * @param {Object} app - Vue.js app instance
          * @param {Object} songDifficultySettings - Song-specific difficulty overrides
          * @param {Array} notes - Array of notes from selected track
@@ -73,29 +74,35 @@ export function getGameSessionManager() {
                                         songNoteRenderer, getInvertedMapFn, difficultySettingsCalculator) {
             const invertedKeyNoteMap = getInvertedMapFn(app.selectedKeyNoteMap.keyNoteMap);
             
+            const factoryConfig = {
+                songDifficultySettings: songDifficultySettings,
+                visibleFieldFilterer: visibleFieldFilterer,
+                difficultySettingsCalculator: difficultySettingsCalculator || visibleFieldFilterer,
+                songNoteRenderer: songNoteRenderer
+            };
+            
+            const visibleFieldFactory = getVisibleFieldFactory(factoryConfig);
+            
             var visibleField = [];
             
             if (songDifficultySettings) {
                 const songDifficulty = songDifficultySettings[app.selectedDifficulty.difficultyKey];
-                visibleField = visibleFieldFilterer.filterToFullVisibleField(
+                visibleField = visibleFieldFactory.build(
                     notes, 
                     songDifficulty.minNoteDistance, 
                     songDifficulty.minDuration, 
                     invertedKeyNoteMap, 
                     keyRenderInfo, 
-                    notesCanvas, 
-                    songNoteRenderer
+                    notesCanvas
                 );
             } else {
                 const targetNotesPerMinute = app.selectedDifficulty.targetNotesPerMinute;
-                const result = visibleFieldFilterer.filterToTargetVisibleField(
+                const result = visibleFieldFactory.build(
                     targetNotesPerMinute, 
                     notes, 
                     invertedKeyNoteMap, 
-                    difficultySettingsCalculator || visibleFieldFilterer, 
                     keyRenderInfo, 
                     notesCanvas, 
-                    songNoteRenderer, 
                     songEnd
                 );
                 visibleField = result.visibleField;
