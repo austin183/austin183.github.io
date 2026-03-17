@@ -560,11 +560,6 @@ import { createSongDisplayManager } from './MyESModules/SongDisplayManager.js';
             cameraUIManager.setCameraInputDefaults(defaults);
         }
 
-        // Expose functions to window for onclick handlers in ES module scope
-        window.togglePlay = togglePlay;
-        window.toggleCameraControls = toggleCameraControls;
-        window.resetCamera = resetCamera;
-
         window.onload = function(){
             const createAppRef = createApp; // Reference at top of function
             
@@ -691,6 +686,11 @@ import { createSongDisplayManager } from './MyESModules/SongDisplayManager.js';
 
             // Create playButtonService AFTER Vue mounts to ensure correct button reference
             playButtonService = createPlayButtonService('tonePlayToggle');
+            
+            // Expose functions to window for onclick handlers
+            window.togglePlay = togglePlay;
+            window.toggleCameraControls = toggleCameraControls;
+            window.resetCamera = resetCamera;
 
 };
     </script>
