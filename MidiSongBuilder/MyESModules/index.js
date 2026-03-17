@@ -119,3 +119,18 @@ export { default as getSongCompression } from './SongCompression.js';
 
 export { default as getGameSessionManager } from './GameSessionManager.js';
 export { default as createMidiestroApp } from './createMidiestroApp.js';
+
+// ===========================================================================
+// GAME MODE STRATEGY
+// Strategy pattern for game mode abstraction (2D, 3D, VR, etc.)
+// ===========================================================================
+
+export { 
+    BaseGameMode, 
+    TwoDMode, 
+    ThreeDMode,
+    createTwoDMode,
+    createThreeDMode,
+    createGameMode 
+} from './GameModeStrategy.js';
+

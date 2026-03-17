@@ -270,6 +270,7 @@
         import { createGameLifecycle } from './MyESModules/createGameLifecycle.js';
         import { createGameServices } from './MyESModules/createGameServices.js';
 import { createSongDisplayManager } from './MyESModules/SongDisplayManager.js';
+import { createThreeDMode } from './MyESModules/GameModeStrategy.js';
 
         const queryString = window.location.search;
         const debugPage = queryString == "?debug";
@@ -561,6 +562,8 @@ import { createSongDisplayManager } from './MyESModules/SongDisplayManager.js';
         }
 
         window.onload = function(){
+            const gameMode = createThreeDMode();
+
             const createAppRef = createApp; // Reference at top of function
             
             // Define renderSongNotes using SongDisplayManager
@@ -609,7 +612,7 @@ import { createSongDisplayManager } from './MyESModules/SongDisplayManager.js';
             }
 
             const dataConfig = createGameData({ 
-                mode: '3d',
+                mode: gameMode.modeId,
                 midiSongs,
                 defaultKeyNoteMap,
                 keyNoteMapCollection,
@@ -631,7 +634,7 @@ import { createSongDisplayManager } from './MyESModules/SongDisplayManager.js';
                 midiParser
             });
 
-            const lifecycleConfig = createGameLifecycle('3d', {
+            const lifecycleConfig = createGameLifecycle(gameMode.modeId, {
                 getScoreKeeper,
                 getScoringSettings,
                 getInputHandler,
@@ -643,27 +646,7 @@ import { createSongDisplayManager } from './MyESModules/SongDisplayManager.js';
                 songNoteRenderer,
                 keyNoteMapService,
                 highScoreTracker,
-                challengeScoresObj,
-                onMount3D: function(appInstance, registry) {
-                    // Initialize Three.js renderer
-                    var threeJSRenderer = getThreeJSRenderer(THREE, FontLoader, TextGeometry);
-                    threeJSRenderer.init("threeCanvas");
-                    appInstance.threeJSRenderer = threeJSRenderer;
-                    threeJSRenderer.startAnimation();
-
-                    // Initialize camera coordinator with renderer and inputHandler
-                    cameraCoordinator = createCameraCoordinator(threeJSRenderer, appInstance.inputHandler);
-
-                    setupCameraPresetDropdown(appInstance);
-                    setupCameraInputDefaults(appInstance);
-
-                    registry.registerService('threeJSRenderer', threeJSRenderer);
-                },
-                beforeUnmount3D: function(appInstance) {
-                    if (appInstance.threeJSRenderer) {
-                        appInstance.threeJSRenderer.dispose();
-                    }
-                }
+                challengeScoresObj
             });
 
             const servicesConfig = createGameServices({ 
@@ -676,22 +659,35 @@ import { createSongDisplayManager } from './MyESModules/SongDisplayManager.js';
             });
 
             app = createMidiestroApp({ 
-                mode: '3d',
+                mode: gameMode,
                 createApp: createAppRef,
                 dataConfig,
                 methodsConfig,
                 lifecycleConfig,
-                servicesConfig 
+                servicesConfig,
+                dependencies: {
+                    registry: componentRegistry,
+                    THREE: THREE,
+                    FontLoader: FontLoader,
+                    TextGeometry: TextGeometry
+                }
             }).mount('#app');
+
+            // Initialize camera coordinator AFTER Vue mounts (when threeJSRenderer is available)
+            if (app.threeJSRenderer && app.inputHandler) {
+                cameraCoordinator = createCameraCoordinator(app.threeJSRenderer, app.inputHandler);
+            }
+
+            // Expose camera functions to window for onclick handlers
+            window.toggleCameraControls = toggleCameraControls;
+            window.resetCamera = resetCamera;
 
             // Create playButtonService AFTER Vue mounts to ensure correct button reference
             playButtonService = createPlayButtonService('tonePlayToggle');
             
-            // Expose functions to window for onclick handlers
+            // Expose togglePlay to window for onclick handlers (defined inside onload)
             window.togglePlay = togglePlay;
-            window.toggleCameraControls = toggleCameraControls;
-            window.resetCamera = resetCamera;
-
+            
 };
     </script>
 </body>

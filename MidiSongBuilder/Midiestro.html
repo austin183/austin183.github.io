@@ -196,6 +196,7 @@
         import { createGameServices } from './MyESModules/createGameServices.js';
 import { createSongDisplayManager } from './MyESModules/SongDisplayManager.js';
 import { enablePlayButton } from './MyESModules/MidiParser.js';
+import { createTwoDMode } from './MyESModules/GameModeStrategy.js';
 
         const queryString = window.location.search;
         const debugPage = queryString == "?debug";
@@ -360,8 +361,10 @@ import { enablePlayButton } from './MyESModules/MidiParser.js';
                 renderSongNotes();
             }
 
+            const gameMode = createTwoDMode();
+
             const dataConfig = createGameData({ 
-                mode: '2d',
+                mode: gameMode.modeId,
                 midiSongs,
                 defaultKeyNoteMap,
                 keyNoteMapCollection,
@@ -383,7 +386,7 @@ import { enablePlayButton } from './MyESModules/MidiParser.js';
                 midiParser
             });
 
-            const lifecycleConfig = createGameLifecycle('2d', {
+            const lifecycleConfig = createGameLifecycle(gameMode.modeId, {
                 getScoreKeeper,
                 getScoringSettings,
                 getInputHandler,
@@ -395,12 +398,7 @@ import { enablePlayButton } from './MyESModules/MidiParser.js';
                 songNoteRenderer,
                 keyNoteMapService,
                 highScoreTracker,
-                challengeScoresObj,
-                beforeUnmount2D: function(appInstance) {
-                    if (appInstance.inputHandler) {
-                        appInstance.inputHandler.removeKeyListeners();
-                    }
-                }
+                challengeScoresObj
             });
 
             const servicesConfig = createGameServices({ 
@@ -413,7 +411,7 @@ import { enablePlayButton } from './MyESModules/MidiParser.js';
             });
 
             app = createMidiestroApp({ 
-                mode: '2d',
+                mode: gameMode,
                 createApp: createAppRef,
                 dataConfig,
                 methodsConfig,

@@ -3,6 +3,8 @@ import { createLogger } from './Logger.js';
 export function createSongDisplayManager(songNoteRenderer, keyNoteMapService) {
     let debugMode = false;
 
+    const logger = createLogger('SongDisplayManager', false);
+
     return {
         setDebugMode: function(mode) {
             debugMode = mode;
@@ -28,7 +30,8 @@ export function createSongDisplayManager(songNoteRenderer, keyNoteMapService) {
 
             return {
                 songNotes: renderedNotes.renderedSongNotes,
-                songNotesOnKeyMap: renderedNotes.renderedSongNotesOnKeyMap
+                songNotesOnKeyMap: renderedNotes.renderedSongNotesOnKeyMap,
+                invertedKeyNoteMap
             };
         },
 
@@ -50,6 +53,14 @@ export function createSongDisplayManager(songNoteRenderer, keyNoteMapService) {
                 }
                 return null;
             }).filter(function(n) { return n !== null; });
+        },
+
+        renderNotesForMode: function(mode, visibleField, keyRenderInfo, app) {
+            if (mode && typeof mode.renderNotesForMode === 'function') {
+                mode.renderNotesForMode(visibleField, keyRenderInfo, app);
+            } else {
+                logger.warn('No mode-specific rendering available');
+            }
         }
     };
 }

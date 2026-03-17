@@ -109,55 +109,7 @@ describe('createGameLifecycle', () => {
                 expect(mockComponentRegistry.registerService.calledWith('challengeScores')).to.be.true;
             });
 
-            it('calls 2D mode-specific callback when provided', () => {
-                const onMount2DCallback = sinon.stub();
-                
-                const lifecycle = createGameLifecycle('2d', {
-                    getScoreKeeper: mockGetScoreKeeper,
-                    getScoringSettings: mockGetScoringSettings,
-                    getInputHandler: mockGetInputHandler,
-                    pressedKeys: {},
-                    synthMap: new Map(),
-                    synthArray: [],
-                    playNotesFn: sinon.stub(),
-                    componentRegistry: mockComponentRegistry,
-                    songNoteRenderer: mockSongNoteRenderer,
-                    keyNoteMapService: mockKeyNoteMapService,
-                    highScoreTracker: mockHighScoreTracker,
-                    challengeScoresObj: mockChallengeScoresObj,
-                    onMount2D: onMount2DCallback
-                });
-
-                const mockThis = {};
-                lifecycle.mounted.call(mockThis);
-
-                expect(onMount2DCallback.calledOnce).to.be.true;
-            });
-
-            it('calls 3D mode-specific callback when provided', () => {
-                const onMount3DCallback = sinon.stub();
-                
-                const lifecycle = createGameLifecycle('3d', {
-                    getScoreKeeper: mockGetScoreKeeper,
-                    getScoringSettings: mockGetScoringSettings,
-                    getInputHandler: mockGetInputHandler,
-                    pressedKeys: {},
-                    synthMap: new Map(),
-                    synthArray: [],
-                    playNotesFn: sinon.stub(),
-                    componentRegistry: mockComponentRegistry,
-                    songNoteRenderer: mockSongNoteRenderer,
-                    keyNoteMapService: mockKeyNoteMapService,
-                    highScoreTracker: mockHighScoreTracker,
-                    challengeScoresObj: mockChallengeScoresObj,
-                    onMount3D: onMount3DCallback
-                });
-
-                const mockThis = {};
-                lifecycle.mounted.call(mockThis);
-
-                expect(onMount3DCallback.calledOnce).to.be.true;
-            });
+            
 
             it('does not call mode-specific callback when not provided', () => {
                 const lifecycle = createGameLifecycle('2d', {
@@ -247,55 +199,7 @@ describe('createGameLifecycle', () => {
                 expect(() => lifecycle.beforeUnmount.call(mockThis)).to.not.throw();
             });
 
-            it('calls 2D mode-specific cleanup callback when provided', () => {
-                const beforeUnmount2DCallback = sinon.stub();
-
-                const lifecycle = createGameLifecycle('2d', {
-                    getScoreKeeper: mockGetScoreKeeper,
-                    getScoringSettings: mockGetScoringSettings,
-                    getInputHandler: mockGetInputHandler,
-                    pressedKeys: {},
-                    synthMap: new Map(),
-                    synthArray: [],
-                    playNotesFn: sinon.stub(),
-                    componentRegistry: mockComponentRegistry,
-                    songNoteRenderer: mockSongNoteRenderer,
-                    keyNoteMapService: mockKeyNoteMapService,
-                    highScoreTracker: mockHighScoreTracker,
-                    challengeScoresObj: mockChallengeScoresObj,
-                    beforeUnmount2D: beforeUnmount2DCallback
-                });
-
-                const mockThis = { inputHandler: null };
-                lifecycle.beforeUnmount.call(mockThis);
-
-                expect(beforeUnmount2DCallback.calledOnce).to.be.true;
-            });
-
-            it('calls 3D mode-specific cleanup callback when provided', () => {
-                const beforeUnmount3DCallback = sinon.stub();
-
-                const lifecycle = createGameLifecycle('3d', {
-                    getScoreKeeper: mockGetScoreKeeper,
-                    getScoringSettings: mockGetScoringSettings,
-                    getInputHandler: mockGetInputHandler,
-                    pressedKeys: {},
-                    synthMap: new Map(),
-                    synthArray: [],
-                    playNotesFn: sinon.stub(),
-                    componentRegistry: mockComponentRegistry,
-                    songNoteRenderer: mockSongNoteRenderer,
-                    keyNoteMapService: mockKeyNoteMapService,
-                    highScoreTracker: mockHighScoreTracker,
-                    challengeScoresObj: mockChallengeScoresObj,
-                    beforeUnmount3D: beforeUnmount3DCallback
-                });
-
-                const mockThis = { inputHandler: null };
-                lifecycle.beforeUnmount.call(mockThis);
-
-                expect(beforeUnmount3DCallback.calledOnce).to.be.true;
-            });
+            
 
             it('does not call mode-specific cleanup when not provided', () => {
                 const lifecycle = createGameLifecycle('2d', {
@@ -317,31 +221,7 @@ describe('createGameLifecycle', () => {
                 expect(() => lifecycle.beforeUnmount.call(mockThis)).to.not.throw();
             });
 
-            it('ensures cleanup happens in correct order: inputHandler first, then mode-specific', () => {
-                const mockInputHandler = { removeKeyListeners: sinon.stub() };
-                const beforeUnmount3DCallback = sinon.stub();
-
-                const lifecycle = createGameLifecycle('3d', {
-                    getScoreKeeper: mockGetScoreKeeper,
-                    getScoringSettings: mockGetScoringSettings,
-                    getInputHandler: mockGetInputHandler,
-                    pressedKeys: {},
-                    synthMap: new Map(),
-                    synthArray: [],
-                    playNotesFn: sinon.stub(),
-                    componentRegistry: mockComponentRegistry,
-                    songNoteRenderer: mockSongNoteRenderer,
-                    keyNoteMapService: mockKeyNoteMapService,
-                    highScoreTracker: mockHighScoreTracker,
-                    challengeScoresObj: mockChallengeScoresObj,
-                    beforeUnmount3D: beforeUnmount3DCallback
-                });
-
-                const mockThis = { inputHandler: mockInputHandler };
-                lifecycle.beforeUnmount.call(mockThis);
-
-                expect(mockInputHandler.removeKeyListeners.calledBefore(beforeUnmount3DCallback)).to.be.true;
-            });
+            
         });
 
         describe('Mode abstraction', () => {

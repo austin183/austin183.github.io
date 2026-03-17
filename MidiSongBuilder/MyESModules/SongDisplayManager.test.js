@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import sinon from 'sinon';
 import { createSongDisplayManager } from './SongDisplayManager.js';
 
 describe('SongDisplayManager', function() {
@@ -113,6 +114,64 @@ describe('SongDisplayManager', function() {
             const result = songDisplayManager.create3DVisibleField(song, invertedKeyNoteMap);
             
             expect(result).to.have.length(0);
+        });
+    });
+
+    describe('renderNotesForMode', function() {
+        it('should delegate to mode.renderNotesForMode when mode has the method', function() {
+            const mockMode = {
+                renderNotesForMode: sinon.stub()
+            };
+            const visibleField = [{ id: 'C4_0' }];
+            const keyRenderInfo = { width: 800 };
+            const mockApp = {};
+
+            songDisplayManager.renderNotesForMode(mockMode, visibleField, keyRenderInfo, mockApp);
+
+            expect(mockMode.renderNotesForMode.calledOnce).to.be.true;
+            expect(mockMode.renderNotesForMode.calledWith(visibleField, keyRenderInfo, mockApp)).to.be.true;
+        });
+
+        it('should handle null mode gracefully', function() {
+            expect(() => songDisplayManager.renderNotesForMode(null, [], {}, {})).to.not.throw();
+        });
+
+        it('should handle undefined mode gracefully', function() {
+            expect(() => songDisplayManager.renderNotesForMode(undefined, [], {}, {})).to.not.throw();
+        });
+
+        it('should handle mode without renderNotesForMode method gracefully', function() {
+            const mockMode = {};
+
+            expect(() => songDisplayManager.renderNotesForMode(mockMode, [], {}, {})).to.not.throw();
+        });
+
+        it('should handle mode with renderNotesForMode set to null gracefully', function() {
+            const mockMode = { renderNotesForMode: null };
+
+            expect(() => songDisplayManager.renderNotesForMode(mockMode, [], {}, {})).to.not.throw();
+        });
+
+        it('should handle mode with renderNotesForMode set to non-function gracefully', function() {
+            const mockMode = { renderNotesForMode: 'not a function' };
+
+            expect(() => songDisplayManager.renderNotesForMode(mockMode, [], {}, {})).to.not.throw();
+        });
+
+        it('should pass all parameters correctly to mode.renderNotesForMode', function() {
+            const mockMode = {
+                renderNotesForMode: sinon.stub()
+            };
+            const visibleField = [{ id: 'C4_0', time: 0 }];
+            const keyRenderInfo = { width: 800, height: 600 };
+            const mockApp = { selectedTrack: 'track1' };
+
+            songDisplayManager.renderNotesForMode(mockMode, visibleField, keyRenderInfo, mockApp);
+
+            const callArgs = mockMode.renderNotesForMode.getCall(0).args;
+            expect(callArgs[0]).to.deep.equal(visibleField);
+            expect(callArgs[1]).to.deep.equal(keyRenderInfo);
+            expect(callArgs[2]).to.equal(mockApp);
         });
     });
 });
