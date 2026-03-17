@@ -141,6 +141,58 @@ export function getGameSessionManager() {
          */
         stopGameLoop: function(gameController, app) {
             gameController.stopGame(app);
+        },
+        
+        /**
+         * Prepare and start the game with all necessary setup
+         * @param {Object} app - Vue.js app instance
+         * @param {Object} songDifficultySettings - Song-specific difficulty overrides
+         * @param {Object} visibleFieldFilterer - Service for filtering notes
+         * @param {Object} keyRenderInfo - Key render information
+         * @param {Object} gameController - GameController or ThreeJSGameController instance
+         * @param {Object} currentMidi - Current MIDI data
+         * @param {Number} songEnd - Song end time in seconds
+         * @param {Object} songNoteRenderer - Song note renderer service
+         * @param {Function} getInvertedMapFn - Function to get inverted key note map
+         * @param {Object} difficultySettingsCalculator - Service for calculating target-based filtering (optional)
+         * @param {Object} threeJSRenderer - Three.js renderer (optional, for 3D mode)
+         * @param {Object} pressedKeys - Pressed keys state
+         * @returns {*} Result from startGameLoop call
+         */
+        prepareAndStartGame: function(app, songDifficultySettings, visibleFieldFilterer, keyRenderInfo, gameController, currentMidi, songEnd, songNoteRenderer, getInvertedMapFn, difficultySettingsCalculator, threeJSRenderer, pressedKeys) {
+            this.prepareForPlayback(app);
+            
+            const result = this.calculateVisibleField(
+                app, 
+                songDifficultySettings, 
+                app.selectedTrack.notes, 
+                songEnd || 0,
+                visibleFieldFilterer, 
+                keyRenderInfo, 
+                app.notesCanvas, 
+                songNoteRenderer,
+                getInvertedMapFn,
+                difficultySettingsCalculator
+            );
+            
+            const visibleField = result.visibleField;
+            
+            this.buildAndSetNoteCache(app, songNoteRenderer, keyRenderInfo);
+            
+            if (threeJSRenderer) {
+                return this.startGameLoop(gameController, app, currentMidi, songDifficultySettings, songEnd, visibleField, threeJSRenderer, pressedKeys);
+            } else {
+                return this.startGameLoop(gameController, app, currentMidi, songDifficultySettings, songEnd, visibleField, pressedKeys);
+            }
+        },
+        
+        /**
+         * Stop the game and perform cleanup
+         * @param {Object} gameController - GameController or ThreeJSGameController instance  
+         * @param {Object} app - Vue.js app instance
+         */
+        stopGame: function(gameController, app) {
+            return this.stopGameLoop(gameController, app);
         }
     };
 }

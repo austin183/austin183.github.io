@@ -261,6 +261,8 @@
         import { getMidiParser } from './MyESModules/MidiParser.js';
         import getThreeJSRenderer from './MyESModules/ThreeJSRenderer.js';
         import { getGameSessionManager } from './MyESModules/GameSessionManager.js';
+        import { createPlayButtonService } from './MyESModules/PlayButtonService.js';
+        import { createCameraCoordinator } from './MyESModules/CameraCoordinator.js';
         import { createMidiestroApp } from './MyESModules/createMidiestroApp.js';
         import { getCameraUIManager } from './MyESModules/CameraUIManager.js';
 
@@ -361,18 +363,16 @@
         var cameraUIManager = getCameraUIManager();
 
         var playing = false;
+        let playButtonService = null;
         var cameraControlsActive = false;
+        var cameraCoordinator = null;
 
         function togglePlay() {
-            var playButton = document.getElementById('tonePlayToggle');
+            const wasPlaying = playing;
             playing = !playing;
             
-            if (playing) {
-                playButton.textContent = 'Stop';
-                disableCameraControls();
-            } else {
-                playButton.textContent = 'Restart';
-                enableCameraControls();
+            if (playButtonService) {
+                playButtonService.updateText(playing);
             }
 
             if (playing && currentMidi) {
@@ -381,44 +381,45 @@
                     containerElement.scrollIntoView({ behavior: "smooth" });
                 }
 
-                const result = gameSessionManager.calculateVisibleField(
-                    app, 
-                    songDifficultySettings, 
-                    app.selectedTrack.notes, 
+                if (cameraCoordinator) {
+                    cameraCoordinator.onGameStarted();
+                }
+
+                return gameSessionManager.prepareAndStartGame(
+                    app,
+                    songDifficultySettings,
+                    visibleFieldFilterer,
+                    keyRenderInfo,
+                    threeJSGameController,
+                    currentMidi,
                     songEnd,
-                    visibleFieldFilterer, 
-                    keyRenderInfo, 
-                    app.notesCanvas, 
                     songNoteRenderer,
                     keyNoteMapService.getInvertedMap.bind(keyNoteMapService),
-                    difficultySettingsCalculator
-                );
-
-                gameSessionManager.buildAndSetNoteCache(app, songNoteRenderer, keyRenderInfo);
-
-                return gameSessionManager.startGameLoop(
-                    threeJSGameController,
-                    app,
-                    currentMidi,
-                    songDifficultySettings,
-                    songEnd,
-                    result.visibleField,
+                    difficultySettingsCalculator,
                     app.threeJSRenderer,
                     componentRegistry.getPressedKeys()
                 );
             } else {
-                return gameSessionManager.stopGameLoop(threeJSGameController, app);
+                if (cameraCoordinator) {
+                    cameraCoordinator.onGameStopped();
+                }
+
+                return gameSessionManager.stopGame(threeJSGameController, app);
             }
         }
 
         function disableCameraControls() {
             cameraControlsActive = false;
-            if (app && app.threeJSRenderer) {
-                app.threeJSRenderer.disableCameraControls();
-                app.threeJSRenderer.disableHoverInfo();
-            }
-            if (app && app.inputHandler) {
-                app.inputHandler.setNoteInputEnabled(true);
+            if (cameraCoordinator) {
+                cameraCoordinator.disableControls();
+            } else {
+                if (app && app.threeJSRenderer) {
+                    app.threeJSRenderer.disableCameraControls();
+                    app.threeJSRenderer.disableHoverInfo();
+                }
+                if (app && app.inputHandler) {
+                    app.inputHandler.setNoteInputEnabled(true);
+                }
             }
             document.getElementById('cameraControlPanel').style.display = 'none';
             stopCameraUpdateLoop();
@@ -426,16 +427,20 @@
 
         function enableCameraControls() {
             cameraControlsActive = true;
-            if (app && app.threeJSRenderer) {
-                app.threeJSRenderer.enableCameraControls();
-                app.threeJSRenderer.enableHoverInfo();
-                var hoverInfoElement = document.getElementById('hoverInfo');
-                if (hoverInfoElement) {
-                    app.threeJSRenderer.setHoverInfoElement(hoverInfoElement);
+            if (cameraCoordinator) {
+                cameraCoordinator.enableControls();
+            } else {
+                if (app && app.threeJSRenderer) {
+                    app.threeJSRenderer.enableCameraControls();
+                    app.threeJSRenderer.enableHoverInfo();
+                    var hoverInfoElement = document.getElementById('hoverInfo');
+                    if (hoverInfoElement) {
+                        app.threeJSRenderer.setHoverInfoElement(hoverInfoElement);
+                    }
                 }
-            }
-            if (app && app.inputHandler) {
-                app.inputHandler.setNoteInputEnabled(false);
+                if (app && app.inputHandler) {
+                    app.inputHandler.setNoteInputEnabled(false);
+                }
             }
             document.getElementById('cameraControlPanel').style.display = 'block';
             document.getElementById('cameraInstructions').style.display = 'none';
@@ -612,9 +617,8 @@
                 songEnd = parsed.songEnd;
                 currentMidi = { tracks: parsed.tracks };
 
-                var playButton = document.getElementById('tonePlayToggle');
-                playButton.removeAttribute('disabled');
-                playButton.textContent = 'Play';
+                playButtonService.enable();
+                playButtonService.setInitialText();
 
                 renderSongNotes();
             }
@@ -653,6 +657,9 @@
                     appInstance.threeJSRenderer = threeJSRenderer;
                     threeJSRenderer.startAnimation();
 
+                    // Initialize camera coordinator with renderer and inputHandler
+                    cameraCoordinator = createCameraCoordinator(threeJSRenderer, appInstance.inputHandler);
+
                     setupCameraPresetDropdown(appInstance);
                     setupCameraInputDefaults(appInstance);
 
@@ -667,6 +674,9 @@
                     }
                 }
             }).mount('#app');
+
+            // Create playButtonService AFTER Vue mounts to ensure correct button reference
+            playButtonService = createPlayButtonService('tonePlayToggle');
 
 };
     </script>

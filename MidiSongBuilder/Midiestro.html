@@ -188,6 +188,7 @@
         import getComponentRegistry from './MyESModules/ComponentRegistry.js';
         import { getMidiParser } from './MyESModules/MidiParser.js';
         import { getGameSessionManager } from './MyESModules/GameSessionManager.js';
+        import { createPlayButtonService } from './MyESModules/PlayButtonService.js';
         import { createMidiestroApp } from './MyESModules/createMidiestroApp.js';
 
         const queryString = window.location.search;
@@ -281,53 +282,39 @@
 
         var gameController = getGameController();
         var gameSessionManager = getGameSessionManager();
-        var playing = false;
-
-        window.togglePlay = togglePlay;
-
-        function togglePlay() {
-            playing = !playing;
-            
-            if (playing) {
-                gameSessionManager.updatePlayButtonText(true);
-                gameSessionManager.prepareForInput();
-            } else {
-                gameSessionManager.updatePlayButtonText(false);
-            }
-
-            if (playing && currentMidi) {
-                gameSessionManager.prepareForPlayback(app);
-
-                const result = gameSessionManager.calculateVisibleField(
-                    app, 
-                    songDifficultySettings, 
-                    app.selectedTrack.notes, 
-                    songEnd,
-                    visibleFieldFilterer, 
-                    keyRenderInfo, 
-                    app.notesCanvas, 
-                    songNoteRenderer,
-                    keyNoteMapService.getInvertedMap.bind(keyNoteMapService),
-                    difficultySettingsCalculator
-                );
-
-                gameSessionManager.buildAndSetNoteCache(app, songNoteRenderer, keyRenderInfo);
-
-                return gameSessionManager.startGameLoop(
-                    gameController,
-                    app,
-                    currentMidi,
-                    songDifficultySettings,
-                    songEnd,
-                    result.visibleField,
-                    pressedKeys
-                );
-            } else {
-                return gameSessionManager.stopGameLoop(gameController, app);
-            }
-        }
 
         window.onload = function(){
+            var playing = false;
+            let playButtonService = null;
+
+            function togglePlay() {
+                const wasPlaying = playing;
+                playing = !playing;
+                
+                if (playButtonService) {
+                    playButtonService.updateText(playing);
+                }
+
+                if (playing && currentMidi) {
+                    return gameSessionManager.prepareAndStartGame(
+                        app,
+                        songDifficultySettings,
+                        visibleFieldFilterer,
+                        keyRenderInfo,
+                        gameController,
+                        currentMidi,
+                        songEnd,
+                        songNoteRenderer,
+                        keyNoteMapService.getInvertedMap.bind(keyNoteMapService),
+                        difficultySettingsCalculator,
+                        pressedKeys
+                    );
+                } else {
+                    return gameSessionManager.stopGame(gameController, app);
+                }
+            }
+            
+            window.togglePlay = togglePlay;
             const createAppRef = createApp; // Reference at top of function
             
             // Define renderSongNotes before it's referenced in config
@@ -363,9 +350,12 @@
                 songEnd = parsed.songEnd;
                 currentMidi = { tracks: parsed.tracks };
 
-                var playButton = document.getElementById('tonePlayToggle');
-                playButton.removeAttribute('disabled');
-                playButton.textContent = 'Play';
+                if (playButtonService) {
+                    playButtonService.enable();
+                    playButtonService.setInitialText();
+                } else {
+                    console.error('playButtonService is null or undefined!');
+                }
 
                 renderSongNotes();
             }
@@ -404,6 +394,9 @@
                 }
             }).mount('#app');
 
+            // Create playButtonService AFTER Vue mounts to ensure correct button reference
+            playButtonService = createPlayButtonService('tonePlayToggle');
+            
             app.componentRegistry = componentRegistry;
         };
     </script>
