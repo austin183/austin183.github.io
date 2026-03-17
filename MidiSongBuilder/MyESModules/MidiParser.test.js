@@ -1,5 +1,6 @@
 import { expect } from 'chai';
-import { getMidiParser } from './MidiParser.js';
+import sinon from 'sinon';
+import { getMidiParser, enablePlayButton } from './MidiParser.js';
 
 describe('MidiParser', () => {
     let midiParser;
@@ -186,6 +187,100 @@ describe('MidiParser', () => {
             const filtered = midiParser.filterTracksByNoteCount(tracks, 5);
 
             expect(filtered).to.deep.equal([]);
+        });
+    });
+
+describe('setupSongFromMidiResult', function() {
+        it('should set up app with tracks from midi result', function() {
+            const mockMidiResult = {
+                tracks: [
+                    { name: 'Piano', notes: [{ time: 0, duration: 1 }] },
+                    { name: 'Drums', notes: [{ time: 0.5, duration: 0.5 }] }
+                ]
+            };
+
+            const mockApp = {
+                availableTracks: [],
+                selectedTrack: null
+            };
+
+            const result = midiParser.setupSongFromMidiResult(mockMidiResult, mockApp);
+
+            expect(result).to.have.property('songEnd');
+            expect(result).to.have.property('tracks');
+
+            expect(mockApp.availableTracks.length).to.equal(3);
+            expect(mockApp.selectedTrack).to.equal(mockApp.availableTracks[0]);
+        });
+
+
+        it('should add fullTrack to available tracks', function() {
+            const mockMidiResult = {
+                tracks: [
+                    { name: 'Track1', notes: [{ time: 0, duration: 1 }] }
+                ]
+            };
+
+            const mockApp = {
+                availableTracks: [],
+                selectedTrack: null
+            };
+
+            midiParser.setupSongFromMidiResult(mockMidiResult, mockApp);
+
+            expect(mockApp.availableTracks.length).to.equal(2);
+            expect(mockApp.availableTracks[0].name).to.equal('Full Track');
+        });
+
+        it('should select the first track (fullTrack) by default', function() {
+            const mockMidiResult = {
+                tracks: [
+                    { name: 'Track1', notes: [{ time: 0, duration: 1 }] }
+                ]
+            };
+
+            const mockApp = {
+                availableTracks: [],
+                selectedTrack: null
+            };
+
+            midiParser.setupSongFromMidiResult(mockMidiResult, mockApp);
+
+            expect(mockApp.selectedTrack.name).to.equal('Full Track');
+        });
+    });
+
+    describe('enablePlayButton', function() {
+        beforeEach(function() {
+            sinon.spy(console, 'error');
+        });
+
+        afterEach(function() {
+            console.error.restore();
+        });
+
+        it('should enable play button when service exists', function() {
+            const mockPlayButtonService = {
+                enable: sinon.spy(),
+                setInitialText: sinon.spy()
+            };
+
+            enablePlayButton(mockPlayButtonService);
+
+            sinon.assert.calledOnce(mockPlayButtonService.enable);
+            sinon.assert.calledOnce(mockPlayButtonService.setInitialText);
+        });
+
+        it('should log error when service is null', function() {
+            enablePlayButton(null);
+
+            sinon.assert.calledOnce(console.error);
+        });
+
+        it('should log error when service is undefined', function() {
+            enablePlayButton(undefined);
+
+            sinon.assert.calledOnce(console.error);
         });
     });
 });

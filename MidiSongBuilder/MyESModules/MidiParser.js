@@ -86,6 +86,28 @@ extractTracks: function(midi) {
 
         filterTracksByNoteCount: function(tracks, minNotes) {
             return tracks.filter(track => track.notes.length >= minNotes);
+        },
+
+        setupSongFromMidiResult: function(midiResult, app) {
+            const parsed = this.extractTracks(midiResult);
+
+            app.availableTracks = parsed.tracks;
+            app.availableTracks.unshift(parsed.fullTrack);
+            app.selectedTrack = app.availableTracks[0];
+
+            return {
+                songEnd: parsed.songEnd,
+                tracks: parsed.tracks
+            };
         }
     };
+}
+
+export function enablePlayButton(playButtonService) {
+    if (playButtonService) {
+        playButtonService.enable();
+        playButtonService.setInitialText();
+    } else {
+        console.error('playButtonService is null or undefined!');
+    }
 }

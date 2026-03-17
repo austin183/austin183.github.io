@@ -269,6 +269,7 @@
         import { createGameMethods } from './MyESModules/createGameMethods.js';
         import { createGameLifecycle } from './MyESModules/createGameLifecycle.js';
         import { createGameServices } from './MyESModules/createGameServices.js';
+import { createSongDisplayManager } from './MyESModules/SongDisplayManager.js';
 
         const queryString = window.location.search;
         const debugPage = queryString == "?debug";
@@ -334,12 +335,6 @@
             synthKeyPlayer.playNotes(app, pressedKeys, synthMap, synthArray);
         }
 
-        function writeLog(logEntry){
-            if(debugPage == true){
-                console.log(logEntry);
-            }
-        }
-
         var fileDropHandler = getFileDropHandler();
 
         if (fileDropHandler.isFileAPISupported()) {
@@ -355,6 +350,9 @@
         
         let currentMidi = null;
         var midiParser = getMidiParser(markRaw);
+
+        const songDisplayManager = createSongDisplayManager(songNoteRenderer, keyNoteMapService);
+        songDisplayManager.setDebugMode(debugPage);
         
         async function parseFile(file) {
             await midiParser.parseMidiFile(file, setupSongFromMidiResult);
@@ -570,37 +568,27 @@
         window.onload = function(){
             const createAppRef = createApp; // Reference at top of function
             
-            // Define renderSongNotes before it's referenced in config
+            // Define renderSongNotes using SongDisplayManager
             function renderSongNotes(){
                 if(songEnd) {
                     app.songEnd = (songEnd / 60).toFixed(2) + " minutes";
                 }
-                if(currentMidi && app.selectedTrack !== "" && debugPage){
-                    var invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
-                    var song = app.selectedTrack.notes;
-                    writeLog(JSON.stringify(song));
-                    var renderedNotes = songNoteRenderer.renderSongNotes(song, app.selectedKeyNoteMap.keyNoteMap);
+                
+                const displayData = songDisplayManager.renderSongNotesForDisplay(currentMidi, app);
+                
+                if (displayData) {
+                    app.songNotes = displayData.songNotes;
+                    app.songNotesOnKeyMap = displayData.songNotesOnKeyMap;
+                    
+                    if (debugPage && currentMidi && app.selectedTrack !== "") {
+                        var invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
+                        var song = app.selectedTrack.notes;
+                        app.renderedNotesPlaying = songDisplayManager.renderDebugNotesPlaying(app.notesCanvas, song, {keyScores: {}}, invertedKeyNoteMap, 0, 0);
 
-                    app.songNotes = renderedNotes.renderedSongNotes;
-                    app.songNotesOnKeyMap = renderedNotes.renderedSongNotesOnKeyMap;
-                    app.renderedNotesPlaying = songNoteRenderer.renderDebugNotesPlaying(app.notesCanvas, song, {keyScores: {}}, invertedKeyNoteMap, 0, 0);
-
-                    if (app.threeJSRenderer && app.keyRenderInfo) {
-                        var visibleField = song.map(function(note) {
-                            var keyNote = invertedKeyNoteMap[note.name];
-                            if (keyNote) {
-                                return {
-                                    id: note.name + "_" + note.time,
-                                    letter: keyNote,
-                                    time: note.time,
-                                    duration: note.duration,
-                                    state: 'unplayed'
-                                };
-                            }
-                            return null;
-                        }).filter(function(n) { return n !== null; });
-
-                        app.threeJSRenderer.addNotesFromVisibleField(visibleField, app.keyRenderInfo);
+                        if (app.threeJSRenderer && app.keyRenderInfo) {
+                            var visibleField = songDisplayManager.create3DVisibleField(song, invertedKeyNoteMap);
+                            app.threeJSRenderer.addNotesFromVisibleField(visibleField, app.keyRenderInfo);
+                        }
                     }
 
                     window.focus();
@@ -610,19 +598,17 @@
                 }
             }
 
-            // Define setupSongFromMidiResult before it's referenced in config
+            // Define setupSongFromMidiResult using MidiParser methods
             function setupSongFromMidiResult(midiResult) {
-                const parsed = midiParser.extractTracks(midiResult);
+                const result = midiParser.setupSongFromMidiResult(midiResult, app);
+                
+                songEnd = result.songEnd;
+                currentMidi = { tracks: result.tracks };
 
-                app.availableTracks = parsed.tracks;
-                app.availableTracks.unshift(parsed.fullTrack);
-                app.selectedTrack = app.availableTracks[0];
-
-                songEnd = parsed.songEnd;
-                currentMidi = { tracks: parsed.tracks };
-
-                playButtonService.enable();
-                playButtonService.setInitialText();
+                if (playButtonService) {
+                    playButtonService.enable();
+                    playButtonService.setInitialText();
+                }
 
                 renderSongNotes();
             }

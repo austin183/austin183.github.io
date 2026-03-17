@@ -194,6 +194,8 @@
         import { createGameMethods } from './MyESModules/createGameMethods.js';
         import { createGameLifecycle } from './MyESModules/createGameLifecycle.js';
         import { createGameServices } from './MyESModules/createGameServices.js';
+import { createSongDisplayManager } from './MyESModules/SongDisplayManager.js';
+import { enablePlayButton } from './MyESModules/MidiParser.js';
 
         const queryString = window.location.search;
         const debugPage = queryString == "?debug";
@@ -258,12 +260,6 @@
             synthKeyPlayer.playNotes(app, pressedKeys, synthMap, synthArray);
         }
 
-        function writeLog(logEntry){
-            if(debugPage == true){
-                console.log(logEntry);
-            }
-        }
-
         var fileDropHandler = getFileDropHandler();
 
         if (fileDropHandler.isFileAPISupported()) {
@@ -279,6 +275,9 @@
         
         let currentMidi = null;
         var midiParser = getMidiParser(markRaw);
+
+        const songDisplayManager = createSongDisplayManager(songNoteRenderer, keyNoteMapService);
+        songDisplayManager.setDebugMode(debugPage);
 
         async function parseFile(file) {
             await midiParser.parseMidiFile(file, setupSongFromMidiResult);
@@ -321,20 +320,23 @@
             window.togglePlay = togglePlay;
             const createAppRef = createApp; // Reference at top of function
             
-            // Define renderSongNotes before it's referenced in config
+            // Define renderSongNotes using SongDisplayManager
             function renderSongNotes(){
                 if(songEnd) {
                     app.songEnd = (songEnd / 60).toFixed(2) + " minutes";
                 }
-                if(currentMidi && app.selectedTrack !== "" && debugPage){
-                    var invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
-                    var song = app.selectedTrack.notes;
-                    writeLog(JSON.stringify(song));
-                    var renderedNotes = songNoteRenderer.renderSongNotes(song, app.selectedKeyNoteMap.keyNoteMap);
+                
+                const displayData = songDisplayManager.renderSongNotesForDisplay(currentMidi, app);
+                
+                if (displayData) {
+                    app.songNotes = displayData.songNotes;
+                    app.songNotesOnKeyMap = displayData.songNotesOnKeyMap;
                     
-                    app.songNotes = renderedNotes.renderedSongNotes;
-                    app.songNotesOnKeyMap = renderedNotes.renderedSongNotesOnKeyMap;
-                    app.renderedNotesPlaying = songNoteRenderer.renderDebugNotesPlaying(app.notesCanvas, song, {keyScores: {}}, invertedKeyNoteMap, 0, 0);
+                    if (debugPage && currentMidi && app.selectedTrack !== "") {
+                        var invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
+                        var song = app.selectedTrack.notes;
+                        app.renderedNotesPlaying = songDisplayManager.renderDebugNotesPlaying(app.notesCanvas, song, {keyScores: {}}, invertedKeyNoteMap, 0, 0);
+                    }
 
                     window.focus();
                     if (document.activeElement) {
@@ -343,22 +345,16 @@
                 }
             }
             
-            // Define setupSongFromMidiResult before it's referenced in config
+            // Define setupSongFromMidiResult using MidiParser methods
             function setupSongFromMidiResult(midiResult) {
-                const parsed = midiParser.extractTracks(midiResult);
-                console.log(parsed);
-                app.availableTracks = parsed.tracks;
-                app.availableTracks.unshift(parsed.fullTrack);
-                app.selectedTrack = app.availableTracks[0];
-
-                songEnd = parsed.songEnd;
-                currentMidi = { tracks: parsed.tracks };
+                const result = midiParser.setupSongFromMidiResult(midiResult, app);
+                
+                songEnd = result.songEnd;
+                currentMidi = { tracks: result.tracks };
 
                 if (playButtonService) {
                     playButtonService.enable();
                     playButtonService.setInitialText();
-                } else {
-                    console.error('playButtonService is null or undefined!');
                 }
 
                 renderSongNotes();
