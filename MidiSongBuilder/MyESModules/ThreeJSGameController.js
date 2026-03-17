@@ -20,10 +20,13 @@
  * Uses ComponentRegistry for dependency injection of services.
  * Services are retrieved from the registry during startGame.
  * threeJSRenderer is the only parameter passed directly (required for initialization).
+ * 
+ * @implements {IGameController}
  */
 
 import getBaseController from './BaseController.js';
 import getKeyRenderInfo from './keyRenderInfo.js';
+import { IGameController } from './IGameController.js';
 
 function getThreeJSGameController(Tone) {
     // Use BaseController as base and add 3D-specific extensions

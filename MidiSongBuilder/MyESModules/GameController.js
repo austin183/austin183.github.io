@@ -4,9 +4,12 @@
  *
  * Uses ComponentRegistry for dependency injection of services.
  * Services are retrieved from the registry during startGame.
+ * 
+ * @implements {IGameController}
  */
 
 import getBaseController from './BaseController.js';
+import { IGameController } from './IGameController.js';
 
 function getGameController(_Tone) {
     // Use passed Tone or fallback to window.Tone

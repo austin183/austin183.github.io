@@ -7,7 +7,11 @@
  * - gameLoopMixin: Core game loop logic (abstract rendering hooks)
  * 
  * Usage: Compose with controller-specific extensions
+ * 
+ * @implements {IGameController}
  */
+
+import { IGameController } from './IGameController.js';
 
 import getGameState from './GameState.js';
 import getKeyRenderInfo from './keyRenderInfo.js';
