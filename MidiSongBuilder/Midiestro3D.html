@@ -265,6 +265,10 @@
         import { createCameraCoordinator } from './MyESModules/CameraCoordinator.js';
         import { createMidiestroApp } from './MyESModules/createMidiestroApp.js';
         import { getCameraUIManager } from './MyESModules/CameraUIManager.js';
+        import { createGameData } from './MyESModules/createGameData.js';
+        import { createGameMethods } from './MyESModules/createGameMethods.js';
+        import { createGameLifecycle } from './MyESModules/createGameLifecycle.js';
+        import { createGameServices } from './MyESModules/createGameServices.js';
 
         const queryString = window.location.search;
         const debugPage = queryString == "?debug";
@@ -623,33 +627,42 @@
                 renderSongNotes();
             }
 
-            app = createMidiestroApp({
+            const dataConfig = createGameData({ 
                 mode: '3d',
-                createApp: createAppRef,
-                midiSongs: midiSongs,
-                defaultKeyNoteMap: defaultKeyNoteMap,
-                keyNoteMapCollection: keyNoteMapCollection,
-                difficultySettingsObj: difficultySettingsObj,
-                highScoreTracker: highScoreTracker,
-                challengeScoresObj: challengeScoresObj,
-                midiParser: midiParser,
-                songNoteRenderer: songNoteRenderer,
-                keyNoteMapService: keyNoteMapService,
-                componentRegistry: componentRegistry,
-                pressedKeys: pressedKeys,
-                synthMap: synthMap,
-                synthArray: synthArray,
-                playNotesFn: playNotes,
-                defaultNotesPlaying: defaultNotesPlaying,
-                defaultSongNotes: defaultSongNotes,
-                defaultSongNotesOnKeyMap: defaultSongNotesOnKeyMap,
-                keyRenderInfo: keyRenderInfo,
-                getScoreKeeper: getScoreKeeper,
-                getScoringSettings: getScoringSettings,
-                getInputHandler: getInputHandler,
-                gameController: gameController,
+                midiSongs,
+                defaultKeyNoteMap,
+                keyNoteMapCollection,
+                difficultySettingsObj,
+                highScoreTracker,
+                challengeScoresObj,
+                defaultNotesPlaying,
+                defaultSongNotes,
+                defaultSongNotesOnKeyMap,
+                keyRenderInfo
+            });
+
+            const methodsConfig = createGameMethods({ 
                 renderSongNotesFn: renderSongNotes,
                 setupSongFromMidiResultFn: setupSongFromMidiResult,
+                highScoreTracker,
+                challengeScoresObj,
+                gameController,
+                midiParser
+            });
+
+            const lifecycleConfig = createGameLifecycle('3d', {
+                getScoreKeeper,
+                getScoringSettings,
+                getInputHandler,
+                pressedKeys,
+                synthMap,
+                synthArray,
+                playNotesFn: playNotes,
+                componentRegistry,
+                songNoteRenderer,
+                keyNoteMapService,
+                highScoreTracker,
+                challengeScoresObj,
                 onMount3D: function(appInstance, registry) {
                     // Initialize Three.js renderer
                     var threeJSRenderer = getThreeJSRenderer(THREE, FontLoader, TextGeometry);
@@ -669,10 +682,25 @@
                     if (appInstance.threeJSRenderer) {
                         appInstance.threeJSRenderer.dispose();
                     }
-                    if (appInstance.inputHandler) {
-                        appInstance.inputHandler.removeKeyListeners();
-                    }
                 }
+            });
+
+            const servicesConfig = createGameServices({ 
+                midiParser,
+                songNoteRenderer,
+                keyNoteMapService,
+                componentRegistry,
+                getScoreKeeper,
+                getScoringSettings 
+            });
+
+            app = createMidiestroApp({ 
+                mode: '3d',
+                createApp: createAppRef,
+                dataConfig,
+                methodsConfig,
+                lifecycleConfig,
+                servicesConfig 
             }).mount('#app');
 
             // Create playButtonService AFTER Vue mounts to ensure correct button reference

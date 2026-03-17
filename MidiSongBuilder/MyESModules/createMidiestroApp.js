@@ -1,37 +1,33 @@
 /**
  * createMidiestroApp - Shared Vue.js app factory for 2D and 3D game modes
  * 
- * Extracts common Vue.js app setup logic including:
- * - Shared data properties (score tracking, difficulty settings, song selection)
- * - Shared methods (handleMidiSongSelection, setDifficulty, handleToggleTrackHighScores)
- * - Shared mounted() lifecycle setup (canvas initialization, component registry)
- * - Mode-specific extensions via config callbacks and composable pattern
+ * Creates a Vue.js application with focused configuration objects:
+ * - dataConfig: From createGameData() - all reactive state properties
+ * - methodsConfig: From createGameMethods() - all instance methods
+ * - lifecycleConfig: From createGameLifecycle() - mounted/beforeUnmount hooks
+ * - servicesConfig: From createGameServices() - provide/inject for DI
+ * 
+ * Reduces interface complexity from 28+ properties to ~6 focused objects,
+ * improving maintainability and testability via Interface Segregation Principle.
  */
 
-import { useMidiestroGame } from './useMidiestroGame.js';
-
-export function createMidiestroApp(config) {
-    const { 
-        mode, // '2d' | '3d'
-        createApp,
-        renderSongNotesFn
-    } = config;
-
-    // Get shared game composable
-    const gameComposable = useMidiestroGame(config);
-
+export function createMidiestroApp({ 
+    mode, // '2d' | '3d' - determines which lifecycle hooks to use
+    createApp, // Vue.createApp reference from window
+    
+    // Focused configuration objects (from dedicated factories)
+    dataConfig, // From createGameData() - reactive state factory function
+    methodsConfig, // From createGameMethods() - all app methods
+    lifecycleConfig, // From createGameLifecycle() - mounted/beforeUnmount hooks
+    servicesConfig // From createGameServices() - provide/inject setup
+}) {
     return createApp({
-        // Spread shared composable data, methods, and lifecycle hooks
-        ...gameComposable,
+        // Data: reactive state properties (factory function required by Vue)
+        data: dataConfig,
         
-        // Override renderSongNotes with mode-specific implementation
+        // Methods: all instance methods with access to this (Vue context)
         methods: {
-            ...gameComposable.methods,
-            renderSongNotes: function() {
-                if (renderSongNotesFn) {
-                    renderSongNotesFn.call(this);
-                }
-            },
+            ...methodsConfig,
             
             // 3D-specific methods (only added in 3D mode)
             ...(mode === '3d' ? {
@@ -39,6 +35,12 @@ export function createMidiestroApp(config) {
                     // To be overridden by caller if needed
                 }
             } : {})
-        }
+        },
+        
+        // Lifecycle hooks: mounted/beforeUnmount from lifecycleConfig
+        ...lifecycleConfig,
+        
+        // Services: provide/inject for dependency injection
+        ...servicesConfig
     });
 }
