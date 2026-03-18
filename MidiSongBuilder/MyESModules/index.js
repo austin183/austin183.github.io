@@ -58,7 +58,7 @@ export { default as getChallengeScores } from './challengeScores.js';
 // 2D canvas and 3D Three.js rendering services
 // ===========================================================================
 
-export { default as getSongNoteRenderer } from './SongNoteRenderer.js';
+
 export { default as ThreeJSRenderer } from './ThreeJSRenderer.js';
 
 // ===========================================================================
@@ -133,4 +133,20 @@ export {
     createThreeDMode,
     createGameMode 
 } from './GameModeStrategy.js';
+
+// ===========================================================================
+// BASE INITIALIZATION
+// Shared variable declarations and service initialization for 2D/3D modes
+// ===========================================================================
+
+export { 
+    initializeMidiestroBase, 
+    createLocalStorageService,
+    getDebugFlag,
+    createGameStateTracker,
+    setupFileDropHandlers,
+    initializeUIVisibility,
+    createGlobalExports 
+} from './MidiestroBase.js';
+export { createSongDisplayManager } from './SongDisplayManager.js';
 

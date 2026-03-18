@@ -237,30 +237,23 @@
         console.log('Tone version:', Tone.Version);
         console.log('THREE version:', THREE.REVISION);
 
-        import { getToneHelper } from './MyESModules/ToneHelper.js';
-        import { getSynthKeyPlayer } from './MyESModules/SynthKeyPlayer.js';
-        import getKeyNoteMaps from './MyESModules/keyNoteMaps.js';
-        import { getKeyNoteMapService } from './MyESModules/KeyNoteMapService.js';
-        import { getSongNoteRenderer } from './MyESModules/SongNoteRenderer.js';
-        import getKeyRenderInfo from './MyESModules/keyRenderInfo.js';
-        import { getVisibleFieldFilterer } from './MyESModules/VisibleFieldFilterer.js';
-        import getScoreKeeper from './MyESModules/ScoreKeeper.js';
+        import { 
+    initializeMidiestroBase, 
+    getDebugFlag, 
+    setupFileDropHandlers, 
+    initializeUIVisibility, 
+    createGameStateTracker 
+} from './MyESModules/MidiestroBase.js';
+        import { getMidiParser, enablePlayButton } from './MyESModules/MidiParser.js';
+        import { getGameSessionManager } from './MyESModules/GameSessionManager.js';
+        import getChallengeScores from './MyESModules/challengeScores.js';
+        import { createSongDisplayManager } from './MyESModules/SongDisplayManager.js';
         import getScoringSettings from './MyESModules/scoringSettings.js';
+        import getScoreKeeper from './MyESModules/ScoreKeeper.js';
         import getGameController from './MyESModules/GameController.js';
         import getThreeJSGameController from './MyESModules/ThreeJSGameController.js';
-        import getGameState from './MyESModules/GameState.js';
-        import getMidiSongList from './MyESModules/midiSongList.js';
-        import getDifficultySettings from './MyESModules/difficultySettings.js';
-        import getHighScoreTracker from './MyESModules/highScoreTracker.js';
-        import getChallengeScores from './MyESModules/challengeScores.js';
-        import { getDifficultySettingsCalculator } from './MyESModules/difficultySettingsCalculator.js';
-        import getDomUtils from './MyESModules/DomUtils.js';
-        import getFileDropHandler from './MyESModules/FileDropHandler.js';
-        import getInputHandler from './MyESModules/InputHandler.js';
-        import getComponentRegistry from './MyESModules/ComponentRegistry.js';
-        import { getMidiParser } from './MyESModules/MidiParser.js';
+        import { getVisibleFieldFilterer } from './MyESModules/VisibleFieldFilterer.js';
         import getThreeJSRenderer from './MyESModules/ThreeJSRenderer.js';
-        import { getGameSessionManager } from './MyESModules/GameSessionManager.js';
         import { createPlayButtonService } from './MyESModules/PlayButtonService.js';
         import { createCameraCoordinator } from './MyESModules/CameraCoordinator.js';
         import { createMidiestroApp } from './MyESModules/createMidiestroApp.js';
@@ -269,282 +262,60 @@
         import { createGameMethods } from './MyESModules/createGameMethods.js';
         import { createGameLifecycle } from './MyESModules/createGameLifecycle.js';
         import { createGameServices } from './MyESModules/createGameServices.js';
-import { createSongDisplayManager } from './MyESModules/SongDisplayManager.js';
-import { createThreeDMode } from './MyESModules/GameModeStrategy.js';
+        import getDomUtils from './MyESModules/DomUtils.js';
+        import getInputHandler from './MyESModules/InputHandler.js';
+        import { createThreeDMode } from './MyESModules/GameModeStrategy.js';
 
-        const queryString = window.location.search;
-        const debugPage = queryString == "?debug";
+        const debugPage = getDebugFlag();
 
-        // Make domUtils globally accessible for onclick handlers
         window.domUtils = getDomUtils();
-        window.domUtils.toggleElementById('Instructions');
-        window.domUtils.toggleElementById('gameConfig');
+        initializeUIVisibility(debugPage);
 
-        if(!debugPage){
-            window.domUtils.toggleElementById('songNoteKeys');
-            window.domUtils.toggleElementById('notesPlaying');
-            window.domUtils.toggleElementById('exportHighScores');
-        }
+        const base = initializeMidiestroBase(Tone);
 
-        var midiSongs = getMidiSongList();
-        const sortedMidiSongs = Object.fromEntries(Object.keys(midiSongs).sort().map(key => [key, midiSongs[key]]));
-        midiSongs = sortedMidiSongs;
+        const {
+            localStorageService,
+            midiSongs,
+            difficultySettingsObj,
+            highScoreTracker,
+            keyNoteMapService,
+            songNoteRenderer,
+            componentRegistry,
+            synthKeyPlayer,
+            keyRenderInfo,
+            difficultySettingsCalculator,
+            toneHelper,
+            keyNoteMapCollection,
+            keyNoteMapKeys,
+            defaultKeyNoteMap,
+            synthArray,
+            defaultNotesPlaying,
+            defaultSongNotes,
+            defaultSongNotesOnKeyMap
+        } = base;
 
-        const localStorageService = {
-            getItem: localStorage.getItem.bind(localStorage),
-            setItem: localStorage.setItem.bind(localStorage),
-            key: localStorage.key.bind(localStorage),
-            get length() { return localStorage.length; }
-        };
+        const gameState = createGameStateTracker();
 
-        const highScoreTracker = getHighScoreTracker(localStorageService);
         window.highScoreTracker = highScoreTracker;
-        const challengeScoresObj = getChallengeScores();
-
-        var synthKeyPlayer = getSynthKeyPlayer();
-        var keyNoteMapService = getKeyNoteMapService();
-        var songNoteRenderer = getSongNoteRenderer(keyNoteMapService);
-        const keyRenderInfo = getKeyRenderInfo();
-        const difficultySettingsObj = getDifficultySettings();
-        const difficultySettingsCalculator = getDifficultySettingsCalculator();
-        var songDifficultySettings = null;
-        var noteLetterCache = songNoteRenderer.buildSongNoteLetterCache(keyRenderInfo);
-        var toneHelper = getToneHelper(Tone);
+        
+        var challengeScoresObj = getChallengeScores();
         var visibleFieldFilterer = getVisibleFieldFilterer();
+
         var synthMap = {};
         var songEnd = null;
-        const synthArray = [];
-
-        // Create ComponentRegistry for dependency injection
-        var componentRegistry = getComponentRegistry();
-        const pressedKeys = componentRegistry.getPressedKeys();
-
-        const keyNoteMapCollection = getKeyNoteMaps();
-        const keyNoteMapKeys = Object.keys(keyNoteMapCollection);
-        const defaultKeyNoteMap = keyNoteMapCollection[keyNoteMapKeys[0]];
-
-        var defaultNotesPlaying = "";
-        var defaultSongNotes = "";
-        var defaultSongNotesOnKeyMap = "";
-        var defaultFMSynthParams = toneHelper.getDefaultFMSynthParams();
-
-        toneHelper.buildSynths(defaultFMSynthParams, synthArray, 10);
-
-        var app;
-
-        function playNotes(){
-            synthKeyPlayer.playNotes(app, pressedKeys, synthMap, synthArray);
-        }
-
-        var fileDropHandler = getFileDropHandler();
-
-        if (fileDropHandler.isFileAPISupported()) {
-            fileDropHandler.setupFileDrop("FileDrop", function(file) {
-                document.querySelector("#FileDrop #Text").textContent = file.name;
-                parseFile(file);
-            });
-        } else {
-            document.querySelector("#FileDrop #Text").textContent = "Reading files not supported by this browser";
-        }
-
-        var inputHandler;
-        
         let currentMidi = null;
+        var songDifficultySettings = base.songDifficultySettings.get();
+
+        const pressedKeys = componentRegistry.getPressedKeys();
         var midiParser = getMidiParser(markRaw);
 
         const songDisplayManager = createSongDisplayManager(songNoteRenderer, keyNoteMapService);
         songDisplayManager.setDebugMode(debugPage);
-        
-        async function parseFile(file) {
-            await midiParser.parseMidiFile(file, setupSongFromMidiResult);
-        }
-        
-        // Create the game controller instances
+
         var gameController = getGameController(Tone);
         var threeJSGameController = getThreeJSGameController(Tone);
         var gameSessionManager = getGameSessionManager();
         var cameraUIManager = getCameraUIManager();
-
-        var playing = false;
-        let playButtonService = null;
-        var cameraControlsActive = false;
-        var cameraCoordinator = null;
-
-        function togglePlay() {
-            const wasPlaying = playing;
-            playing = !playing;
-            
-            if (playButtonService) {
-                playButtonService.updateText(playing);
-            }
-
-            if (playing && currentMidi) {
-                const containerElement = document.getElementById("canvasContainer");
-                if (containerElement) {
-                    containerElement.scrollIntoView({ behavior: "smooth" });
-                }
-
-                if (cameraCoordinator) {
-                    cameraCoordinator.onGameStarted();
-                }
-
-                return gameSessionManager.prepareAndStartGame(
-                    app,
-                    songDifficultySettings,
-                    visibleFieldFilterer,
-                    keyRenderInfo,
-                    threeJSGameController,
-                    currentMidi,
-                    songEnd,
-                    songNoteRenderer,
-                    keyNoteMapService.getInvertedMap.bind(keyNoteMapService),
-                    difficultySettingsCalculator,
-                    app.threeJSRenderer,
-                    componentRegistry.getPressedKeys()
-                );
-            } else {
-                if (cameraCoordinator) {
-                    cameraCoordinator.onGameStopped();
-                }
-
-                return gameSessionManager.stopGame(threeJSGameController, app);
-            }
-        }
-
-        function disableCameraControls() {
-            cameraControlsActive = false;
-            if (cameraCoordinator) {
-                cameraCoordinator.disableControls();
-            } else {
-                if (app && app.threeJSRenderer) {
-                    app.threeJSRenderer.disableCameraControls();
-                    app.threeJSRenderer.disableHoverInfo();
-                }
-                if (app && app.inputHandler) {
-                    app.inputHandler.setNoteInputEnabled(true);
-                }
-            }
-            document.getElementById('cameraControlPanel').style.display = 'none';
-            stopCameraUpdateLoop();
-        }
-
-        function enableCameraControls() {
-            cameraControlsActive = true;
-            if (cameraCoordinator) {
-                cameraCoordinator.enableControls();
-            } else {
-                if (app && app.threeJSRenderer) {
-                    app.threeJSRenderer.enableCameraControls();
-                    app.threeJSRenderer.enableHoverInfo();
-                    var hoverInfoElement = document.getElementById('hoverInfo');
-                    if (hoverInfoElement) {
-                        app.threeJSRenderer.setHoverInfoElement(hoverInfoElement);
-                    }
-                }
-                if (app && app.inputHandler) {
-                    app.inputHandler.setNoteInputEnabled(false);
-                }
-            }
-            document.getElementById('cameraControlPanel').style.display = 'block';
-            document.getElementById('cameraInstructions').style.display = 'none';
-            startCameraUpdateLoop();
-        }
-
-        function toggleCameraControls() {
-            if (cameraControlsActive) {
-                disableCameraControls();
-                document.getElementById('toggleCameraControls').textContent = 'Start Camera Control';
-            } else {
-                enableCameraControls();
-                document.getElementById('toggleCameraControls').textContent = 'Stop Camera Control';
-            }
-        }
-
-        function resetCamera() {
-            if (app && app.threeJSRenderer) {
-                app.threeJSRenderer.resetCamera();
-                var state = app.threeJSRenderer.getCameraDisplayState();
-
-                cameraUIManager.updateCameraInputFields(state);
-            }
-        }
-
-        function applyCameraPreset() {
-            if (!app || !app.threeJSRenderer) return;
-
-            var select = document.getElementById('cameraPresetSelect');
-            var presetKey = select.value;
-
-            if (presetKey) {
-                app.threeJSRenderer.applyCameraPreset(presetKey);
-                select.value = "";
-            }
-        }
-
-        function setupCameraPresetDropdown(appInstance) {
-            var select = document.getElementById('cameraPresetSelect');
-            if (!select || !appInstance || !appInstance.threeJSRenderer) return;
-
-            var presets = appInstance.threeJSRenderer.getCameraPresetList();
-            presets.forEach(function(presetKey) {
-                var option = document.createElement('option');
-                option.value = presetKey;
-                option.textContent = appInstance.threeJSRenderer.getCameraPresetName(presetKey);
-                select.appendChild(option);
-            });
-
-            select.addEventListener('change', applyCameraPreset);
-        }
-
-        // Camera update loop variables
-        var cameraUpdateInterval = null;
-
-        function startCameraUpdateLoop() {
-            if (cameraUpdateInterval) return;
-            cameraUpdateInterval = setInterval(updateCameraDisplay, 50);
-        }
-
-        function stopCameraUpdateLoop() {
-            if (cameraUpdateInterval) {
-                clearInterval(cameraUpdateInterval);
-                cameraUpdateInterval = null;
-            }
-        }
-
-        function updateCameraDisplay() {
-            if (!app || !app.threeJSRenderer) return;
-
-            var state = app.threeJSRenderer.getCameraDisplayState();
-
-            cameraUIManager.updateCameraInputFields(state);
-            app.threeJSRenderer.updateCameraFromControls();
-        }
-
-        function setupCameraInputHandlers() {
-            document.getElementById('cameraPosX').addEventListener('change', updateCameraFromUI);
-            document.getElementById('cameraPosY').addEventListener('change', updateCameraFromUI);
-            document.getElementById('cameraPosZ').addEventListener('change', updateCameraFromUI);
-            document.getElementById('cameraLookAtX').addEventListener('change', updateCameraFromUI);
-            document.getElementById('cameraLookAtY').addEventListener('change', updateCameraFromUI);
-            document.getElementById('cameraLookAtZ').addEventListener('change', updateCameraFromUI);
-        }
-
-        function updateCameraFromUI() {
-            if (!app || !app.threeJSRenderer || !cameraControlsActive) return;
-
-            var position = {
-                x: parseFloat(document.getElementById('cameraPosX').value),
-                y: parseFloat(document.getElementById('cameraPosY').value),
-                z: parseFloat(document.getElementById('cameraPosZ').value)
-            };
-            var lookAt = {
-                x: parseFloat(document.getElementById('cameraLookAtX').value),
-                y: parseFloat(document.getElementById('cameraLookAtY').value),
-                z: parseFloat(document.getElementById('cameraLookAtZ').value)
-            };
-
-            app.threeJSRenderer.setCameraFromUI(position, lookAt);
-        }
 
         window.addEventListener('resize', function() {
             if (app && app.threeJSRenderer) {
@@ -552,16 +323,213 @@ import { createThreeDMode } from './MyESModules/GameModeStrategy.js';
             }
         });
 
-        function setupCameraInputDefaults(appInstance) {
-            if (!appInstance || !appInstance.threeJSRenderer) return;
-
-            var defaults = appInstance.threeJSRenderer.getDefaultCameraStateForUI();
-            if (!defaults) return;
-
-            cameraUIManager.setCameraInputDefaults(defaults);
-        }
-
         window.onload = function(){
+            let app = null;
+            
+            // Game state and UI variables (must be declared before functions that use them)
+            let playButtonService = null;
+            var cameraControlsActive = false;
+            var cameraCoordinator = null;
+
+            // Camera update loop variables
+            var cameraUpdateInterval = null;
+
+            // Helper functions that reference app (defined before use)
+            function playNotes(){
+                synthKeyPlayer.playNotes(app, pressedKeys, synthMap, synthArray);
+            }
+
+            async function parseFile(file) {
+                await midiParser.parseMidiFile(file, setupSongFromMidiResult);
+            }
+
+            setupFileDropHandlers("FileDrop", parseFile, debugPage);
+
+            function togglePlay() {
+                const wasPlaying = gameState.isPlaying;
+                gameState.toggle();
+                const playing = gameState.isPlaying;
+
+                
+                if (playButtonService) {
+                    playButtonService.updateText(playing);
+                }
+
+                if (playing && currentMidi) {
+                    const containerElement = document.getElementById("canvasContainer");
+                    if (containerElement) {
+                        containerElement.scrollIntoView({ behavior: "smooth" });
+                    }
+
+                    if (cameraCoordinator) {
+                        cameraCoordinator.onGameStarted();
+                    }
+
+                    return gameSessionManager.prepareAndStartGame(
+                        app,
+                        songDifficultySettings,
+                        visibleFieldFilterer,
+                        keyRenderInfo,
+                        threeJSGameController,
+                        currentMidi,
+                        songEnd,
+                        songNoteRenderer,
+                        keyNoteMapService.getInvertedMap.bind(keyNoteMapService),
+                        difficultySettingsCalculator,
+                        app.threeJSRenderer,
+                        componentRegistry.getPressedKeys()
+                    );
+                } else {
+                    if (cameraCoordinator) {
+                        cameraCoordinator.onGameStopped();
+                    }
+
+                    return gameSessionManager.stopGame(threeJSGameController, app);
+                }
+            }
+
+            function disableCameraControls() {
+                cameraControlsActive = false;
+                if (cameraCoordinator) {
+                    cameraCoordinator.disableControls();
+                } else {
+                    if (app && app.threeJSRenderer) {
+                        app.threeJSRenderer.disableCameraControls();
+                        app.threeJSRenderer.disableHoverInfo();
+                    }
+                    if (app && app.inputHandler) {
+                        app.inputHandler.setNoteInputEnabled(true);
+                    }
+                }
+                document.getElementById('cameraControlPanel').style.display = 'none';
+                stopCameraUpdateLoop();
+            }
+
+            function enableCameraControls() {
+                cameraControlsActive = true;
+                if (cameraCoordinator) {
+                    cameraCoordinator.enableControls();
+                } else {
+                    if (app && app.threeJSRenderer) {
+                        app.threeJSRenderer.enableCameraControls();
+                        app.threeJSRenderer.enableHoverInfo();
+                        var hoverInfoElement = document.getElementById('hoverInfo');
+                        if (hoverInfoElement) {
+                            app.threeJSRenderer.setHoverInfoElement(hoverInfoElement);
+                        }
+                    }
+                    if (app && app.inputHandler) {
+                        app.inputHandler.setNoteInputEnabled(false);
+                    }
+                }
+                document.getElementById('cameraControlPanel').style.display = 'block';
+                document.getElementById('cameraInstructions').style.display = 'none';
+                startCameraUpdateLoop();
+            }
+
+            function toggleCameraControls() {
+                if (cameraControlsActive) {
+                    disableCameraControls();
+                    document.getElementById('toggleCameraControls').textContent = 'Start Camera Control';
+                } else {
+                    enableCameraControls();
+                    document.getElementById('toggleCameraControls').textContent = 'Stop Camera Control';
+                }
+            }
+
+            function resetCamera() {
+                if (app && app.threeJSRenderer) {
+                    app.threeJSRenderer.resetCamera();
+                    var state = app.threeJSRenderer.getCameraDisplayState();
+
+                    cameraUIManager.updateCameraInputFields(state);
+                }
+            }
+
+            function applyCameraPreset() {
+                if (!app || !app.threeJSRenderer) return;
+
+                var select = document.getElementById('cameraPresetSelect');
+                var presetKey = select.value;
+
+                if (presetKey) {
+                    app.threeJSRenderer.applyCameraPreset(presetKey);
+                    select.value = "";
+                }
+            }
+
+            function setupCameraPresetDropdown(appInstance) {
+                var select = document.getElementById('cameraPresetSelect');
+                if (!select || !appInstance || !appInstance.threeJSRenderer) return;
+
+                var presets = appInstance.threeJSRenderer.getCameraPresetList();
+                presets.forEach(function(presetKey) {
+                    var option = document.createElement('option');
+                    option.value = presetKey;
+                    option.textContent = appInstance.threeJSRenderer.getCameraPresetName(presetKey);
+                    select.appendChild(option);
+                });
+
+                select.addEventListener('change', applyCameraPreset);
+            }
+
+            function startCameraUpdateLoop() {
+                if (cameraUpdateInterval) return;
+                cameraUpdateInterval = setInterval(updateCameraDisplay, 50);
+            }
+
+            function stopCameraUpdateLoop() {
+                if (cameraUpdateInterval) {
+                    clearInterval(cameraUpdateInterval);
+                    cameraUpdateInterval = null;
+                }
+            }
+
+            function updateCameraDisplay() {
+                if (!app || !app.threeJSRenderer) return;
+
+                var state = app.threeJSRenderer.getCameraDisplayState();
+
+                cameraUIManager.updateCameraInputFields(state);
+                app.threeJSRenderer.updateCameraFromControls();
+            }
+
+            function setupCameraInputHandlers() {
+                document.getElementById('cameraPosX').addEventListener('change', updateCameraFromUI);
+                document.getElementById('cameraPosY').addEventListener('change', updateCameraFromUI);
+                document.getElementById('cameraPosZ').addEventListener('change', updateCameraFromUI);
+                document.getElementById('cameraLookAtX').addEventListener('change', updateCameraFromUI);
+                document.getElementById('cameraLookAtY').addEventListener('change', updateCameraFromUI);
+                document.getElementById('cameraLookAtZ').addEventListener('change', updateCameraFromUI);
+            }
+
+            function updateCameraFromUI() {
+                if (!app || !app.threeJSRenderer || !cameraControlsActive) return;
+
+                var position = {
+                    x: parseFloat(document.getElementById('cameraPosX').value),
+                    y: parseFloat(document.getElementById('cameraPosY').value),
+                    z: parseFloat(document.getElementById('cameraPosZ').value)
+                };
+                var lookAt = {
+                    x: parseFloat(document.getElementById('cameraLookAtX').value),
+                    y: parseFloat(document.getElementById('cameraLookAtY').value),
+                    z: parseFloat(document.getElementById('cameraLookAtZ').value)
+                };
+
+                app.threeJSRenderer.setCameraFromUI(position, lookAt);
+            }
+
+            function setupCameraInputDefaults(appInstance) {
+                if (!appInstance || !appInstance.threeJSRenderer) return;
+
+                var defaults = appInstance.threeJSRenderer.getDefaultCameraStateForUI();
+                if (!defaults) return;
+
+                cameraUIManager.setCameraInputDefaults(defaults);
+            }
+
+            // Main initialization code starts here
             const gameMode = createThreeDMode();
 
             const createAppRef = createApp; // Reference at top of function

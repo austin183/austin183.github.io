@@ -166,134 +166,93 @@
 
         const Tone = window.Tone;
 
-        import { getToneHelper } from './MyESModules/ToneHelper.js';
-        import { getSynthKeyPlayer } from './MyESModules/SynthKeyPlayer.js';
-        import getKeyNoteMaps from './MyESModules/keyNoteMaps.js';
-        import { getKeyNoteMapService } from './MyESModules/KeyNoteMapService.js';
-        import { getSongNoteRenderer } from './MyESModules/SongNoteRenderer.js';
-        import getKeyRenderInfo from './MyESModules/keyRenderInfo.js';
-        import { getVisibleFieldFilterer } from './MyESModules/VisibleFieldFilterer.js';
-        import getScoreKeeper from './MyESModules/ScoreKeeper.js';
-        import getScoringSettings from './MyESModules/scoringSettings.js';
-        import getGameController from './MyESModules/GameController.js';
-        import getGameState from './MyESModules/GameState.js';
-        import getMidiSongList from './MyESModules/midiSongList.js';
-        import getDifficultySettings from './MyESModules/difficultySettings.js';
-        import getHighScoreTracker from './MyESModules/highScoreTracker.js';
-        import getChallengeScores from './MyESModules/challengeScores.js';
-        import { getDifficultySettingsCalculator } from './MyESModules/difficultySettingsCalculator.js';
-        import getDomUtils from './MyESModules/DomUtils.js';
-        import getFileDropHandler from './MyESModules/FileDropHandler.js';
-        import getInputHandler from './MyESModules/InputHandler.js';
-        import getComponentRegistry from './MyESModules/ComponentRegistry.js';
-        import { getMidiParser } from './MyESModules/MidiParser.js';
+        import { initializeMidiestroBase, getDebugFlag, setupFileDropHandlers, initializeUIVisibility, createGlobalExports, createGameStateTracker } from './MyESModules/MidiestroBase.js';
+import getDomUtils from './MyESModules/DomUtils.js';
+        import { getMidiParser, enablePlayButton } from './MyESModules/MidiParser.js';
         import { getGameSessionManager } from './MyESModules/GameSessionManager.js';
+        import getChallengeScores from './MyESModules/challengeScores.js';
+        import { createSongDisplayManager } from './MyESModules/SongDisplayManager.js';
+        import getScoringSettings from './MyESModules/scoringSettings.js';
+        import getScoreKeeper from './MyESModules/ScoreKeeper.js';
+        import { createGameServices } from './MyESModules/createGameServices.js';
+        import getGameController from './MyESModules/GameController.js';
+        import getInputHandler from './MyESModules/InputHandler.js';
         import { createPlayButtonService } from './MyESModules/PlayButtonService.js';
+        import { getVisibleFieldFilterer } from './MyESModules/VisibleFieldFilterer.js';
         import { createMidiestroApp } from './MyESModules/createMidiestroApp.js';
         import { createGameData } from './MyESModules/createGameData.js';
         import { createGameMethods } from './MyESModules/createGameMethods.js';
         import { createGameLifecycle } from './MyESModules/createGameLifecycle.js';
-        import { createGameServices } from './MyESModules/createGameServices.js';
-import { createSongDisplayManager } from './MyESModules/SongDisplayManager.js';
-import { enablePlayButton } from './MyESModules/MidiParser.js';
-import { createTwoDMode } from './MyESModules/GameModeStrategy.js';
+        import { createTwoDMode } from './MyESModules/GameModeStrategy.js';
 
-        const queryString = window.location.search;
-        const debugPage = queryString == "?debug";
+        const debugPage = getDebugFlag();
 
-        // Make domUtils globally accessible for onclick handlers
         window.domUtils = getDomUtils();
-        window.domUtils.toggleElementById('Instructions');
-        window.domUtils.toggleElementById('gameConfig');
+        initializeUIVisibility(debugPage);
 
-        if(!debugPage){
-            window.domUtils.toggleElementById('songNoteKeys');
-            window.domUtils.toggleElementById('notesPlaying');
-            window.domUtils.toggleElementById('exportHighScores');
-        }
+        const base = initializeMidiestroBase(Tone);
 
-        var midiSongs = getMidiSongList();
-        const sortedMidiSongs = Object.fromEntries(Object.keys(midiSongs).sort().map(key => [key, midiSongs[key]]));
-        midiSongs = sortedMidiSongs;
+        const {
+            localStorageService,
+            midiSongs,
+            difficultySettingsObj,
+            highScoreTracker,
+            keyNoteMapService,
+            songNoteRenderer,
+            componentRegistry,
+            synthKeyPlayer,
+            keyRenderInfo,
+            difficultySettingsCalculator,
+            toneHelper,
+            keyNoteMapCollection,
+            keyNoteMapKeys,
+            defaultKeyNoteMap,
+            synthArray,
+            defaultNotesPlaying,
+            defaultSongNotes,
+            defaultSongNotesOnKeyMap
+        } = base;
 
-        const localStorageService = {
-            getItem: localStorage.getItem.bind(localStorage),
-            setItem: localStorage.setItem.bind(localStorage),
-            key: localStorage.key.bind(localStorage),
-            get length() { return localStorage.length; }
-        };
+const gameState = createGameStateTracker();
 
-        const highScoreTracker = getHighScoreTracker(localStorageService);
         window.highScoreTracker = highScoreTracker;
-        const challengeScoresObj = getChallengeScores();
-
-        var synthKeyPlayer = getSynthKeyPlayer();
-        var keyNoteMapService = getKeyNoteMapService();
-        var songNoteRenderer = getSongNoteRenderer(keyNoteMapService);
-        const keyRenderInfo = getKeyRenderInfo();
-        const difficultySettingsObj = getDifficultySettings();
-        const difficultySettingsCalculator = getDifficultySettingsCalculator();
-        var songDifficultySettings = null;
-        var noteLetterCache = songNoteRenderer.buildSongNoteLetterCache(keyRenderInfo);
-        var toneHelper = getToneHelper(Tone);
+        
+        var challengeScoresObj = getChallengeScores();
         var visibleFieldFilterer = getVisibleFieldFilterer();
+
         var synthMap = {};
         var songEnd = null;
-        const synthArray = [];
-
-        var componentRegistry = getComponentRegistry();
-        const pressedKeys = componentRegistry.getPressedKeys();
-
-        const keyNoteMapCollection = getKeyNoteMaps();
-        const keyNoteMapKeys = Object.keys(keyNoteMapCollection);
-        const defaultKeyNoteMap = keyNoteMapCollection[keyNoteMapKeys[0]];
-
-        var defaultNotesPlaying = "";
-        var defaultSongNotes = "";
-        var defaultSongNotesOnKeyMap = "";
-        var defaultFMSynthParams = toneHelper.getDefaultFMSynthParams();
-
-        toneHelper.buildSynths(defaultFMSynthParams, synthArray, 10);
-
-        var app;
-
-        function playNotes(){
-            synthKeyPlayer.playNotes(app, pressedKeys, synthMap, synthArray);
-        }
-
-        var fileDropHandler = getFileDropHandler();
-
-        if (fileDropHandler.isFileAPISupported()) {
-            fileDropHandler.setupFileDrop("FileDrop", function(file) {
-                document.querySelector("#FileDrop #Text").textContent = file.name;
-                parseFile(file);
-            });
-        } else {
-            document.querySelector("#FileDrop #Text").textContent = "Reading files not supported by this browser";
-        }
-
-        var inputHandler;
-        
         let currentMidi = null;
+        var songDifficultySettings = base.songDifficultySettings.get();
+
+        const pressedKeys = componentRegistry.getPressedKeys();
         var midiParser = getMidiParser(markRaw);
 
         const songDisplayManager = createSongDisplayManager(songNoteRenderer, keyNoteMapService);
         songDisplayManager.setDebugMode(debugPage);
 
+        var gameController = getGameController();
+        var gameSessionManager = getGameSessionManager();
+
         async function parseFile(file) {
             await midiParser.parseMidiFile(file, setupSongFromMidiResult);
         }
 
-        var gameController = getGameController();
-        var gameSessionManager = getGameSessionManager();
+        setupFileDropHandlers("FileDrop", parseFile, debugPage);
 
         window.onload = function(){
-            var playing = false;
             let playButtonService = null;
+            let app = null;
+
+            function playNotes(){
+                synthKeyPlayer.playNotes(app, pressedKeys, synthMap, synthArray);
+            }
 
             function togglePlay() {
-                const wasPlaying = playing;
-                playing = !playing;
+                const wasPlaying = gameState.isPlaying;
+                gameState.toggle();
+                const playing = gameState.isPlaying;
+
                 
                 if (playButtonService) {
                     playButtonService.updateText(playing);

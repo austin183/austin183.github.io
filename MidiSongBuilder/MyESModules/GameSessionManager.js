@@ -162,6 +162,11 @@ export function getGameSessionManager() {
         prepareAndStartGame: function(app, songDifficultySettings, visibleFieldFilterer, keyRenderInfo, gameController, currentMidi, songEnd, songNoteRenderer, getInvertedMapFn, difficultySettingsCalculator, threeJSRenderer, pressedKeys) {
             this.prepareForPlayback(app);
             
+            if (!app.selectedTrack || !app.selectedTrack.notes) {
+                console.error('No track selected or track has no notes');
+                return;
+            }
+            
             const result = this.calculateVisibleField(
                 app, 
                 songDifficultySettings, 

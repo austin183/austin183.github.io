@@ -89,11 +89,19 @@ extractTracks: function(midi) {
         },
 
         setupSongFromMidiResult: function(midiResult, app) {
+            console.log('[midiParser.setupSongFromMidiResult] midiResult:', midiResult);
+            console.log('[midiParser.setupSongFromMidiResult] app received:', app);
             const parsed = this.extractTracks(midiResult);
 
+            console.log('[midiParser.setupSongFromMidiResult] Setting app.availableTracks:', parsed.tracks);
+            console.log('[midiParser.setupSongFromMidiResult] Setting app.availableTracks.unshift fullTrack:', parsed.fullTrack);
+            console.log('[midiParser.setupSongFromMidiResult] Setting app.selectedTrack:', parsed.fullTrack);
+            
             app.availableTracks = parsed.tracks;
             app.availableTracks.unshift(parsed.fullTrack);
             app.selectedTrack = app.availableTracks[0];
+
+            console.log('[midiParser.setupSongFromMidiResult] After setting, app.selectedTrack:', app.selectedTrack);
 
             return {
                 songEnd: parsed.songEnd,

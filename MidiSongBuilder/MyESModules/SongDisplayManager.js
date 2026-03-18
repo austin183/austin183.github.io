@@ -1,9 +1,11 @@
-import { createLogger } from './Logger.js';
-
 export function createSongDisplayManager(songNoteRenderer, keyNoteMapService) {
     let debugMode = false;
 
-    const logger = createLogger('SongDisplayManager', false);
+    const logger = {
+        log: () => {},
+        error: () => {},
+        warn: (msg) => console.warn(msg)
+    };
 
     return {
         setDebugMode: function(mode) {
