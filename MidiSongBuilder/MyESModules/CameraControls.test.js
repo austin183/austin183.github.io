@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
-import { getCameraControls, setTHREE } from './CameraControls.js';
+import { getCameraControls } from './CameraControls.js';
 
 describe('CameraControls', () => {
     let cameraControls;
@@ -17,9 +17,8 @@ describe('CameraControls', () => {
         };
         
         const mockTHREE = { Vector3: mockVector3 };
-        setTHREE(mockTHREE);
 
-        cameraControls = getCameraControls();
+        cameraControls = getCameraControls(mockTHREE);
     });
 
     describe('getDefaultCameraState', () => {
@@ -717,11 +716,23 @@ describe('CameraControls', () => {
         it('allows reusing service and display across camera controls instances', () => {
             const mockService = { setConstants: sinon.stub() };
             const mockDisplay = { hide: sinon.stub(), update: sinon.stub() };
+            
+            // Set up mock THREE library for second instance
+            const mockVector3 = function(x, y, z) {
+                this.x = x || 0;
+                this.y = y || 0;
+                this.z = z || 0;
+            };
+            mockVector3.prototype.applyAxisAngle = function(axis, angle) {
+                return this;
+            };
+            
+            const mockTHREE = { Vector3: mockVector3 };
 
             expect(() => {
                 cameraControls.setHoverInfoComponents(mockService, mockDisplay);
                 
-                const anotherCameraControls = getCameraControls();
+                const anotherCameraControls = getCameraControls(mockTHREE);
                 anotherCameraControls.setHoverInfoComponents(mockService, mockDisplay);
             }).to.not.throw();
         });

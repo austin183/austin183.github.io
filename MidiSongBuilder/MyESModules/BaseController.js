@@ -12,6 +12,7 @@
  */
 
 import { IGameController } from './IGameController.js';
+import { GAMEPLAY } from './GameConstants.js';
 
 import getGameState from './GameState.js';
 import getKeyRenderInfo from './keyRenderInfo.js';
@@ -308,6 +309,10 @@ var cleanupMixin = {
             var targetApp = null;
             var keyToUse = 'gameState';
             
+            if (!controllerOrApp && !this) {
+                return;
+            }
+            
             // If called with 3 args, format is: stopGame(controller, app, gameStateKey)
             if (arguments.length === 3) {
                 targetController = controllerOrApp;
@@ -327,7 +332,7 @@ var cleanupMixin = {
                 // app is missing in this case
             }
             // If called with 1 arg, format is: stopGame(app) or from .call(controller, app, key)
-            else if (arguments.length === 1 && !controllerOrApp.playIntervalId) {
+            else if (arguments.length === 1 && (!controllerOrApp || !controllerOrApp.playIntervalId)) {
                 targetController = this;
                 targetApp = controllerOrApp;
             } else if (arguments.length === 1 && controllerOrApp.playIntervalId) {
@@ -465,7 +470,7 @@ var cleanupMixin = {
                 // Create and start the game loop
                 this.playIntervalId = setInterval(
                     () => this.gameLoopMixin.baseGameLoop.call(this, app, 'gameState', _Tone || Tone), 
-                    10
+                    GAMEPLAY.GAME_LOOP_INTERVAL
                 );
                 
                 return this.playIntervalId;

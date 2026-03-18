@@ -127,6 +127,35 @@ export const GAMEPLAY = {
 };
 
 // ===========================================================================
+// CAMERA CONSTANTS
+ // Camera controls configuration for 3D view manipulation
+// ===========================================================================
+
+/**
+ * Camera control constants for Three.js camera manipulation.
+ * @type {Object}
+ */
+export const CAMERA = {
+    MOVE_SPEED: 0.2,           // World units per key press (WASD movement)
+    LOOK_SENSITIVITY: 0.005,   // Rotation sensitivity for mouse drag
+    PITCH_CLAMP_FACTOR: 2.5    // Divisor for Math.PI to clamp pitch (-90/+90 degrees)
+};
+
+// ===========================================================================
+// DIFFICULTY CALCULATION CONSTANTS  
+ // Thresholds for automatic difficulty settings calculation
+// ===========================================================================
+
+/**
+ * Difficulty calculation constants used by difficultySettingsCalculator.
+ * @type {Object}
+ */
+export const DIFFICULTY = {
+    MAX_DISTANCE_DURATION: 0.6, // Maximum note distance/duration to consider (seconds)
+    NOTES_PER_MINUTE_TOLERANCE: 10 // Tolerance range when matching target BPM
+};
+
+// ===========================================================================
 // UI CONSTANTS
  // User interface and debugging configuration
 // ===========================================================================
@@ -159,6 +188,8 @@ export const GameConstants = {
     RENDERING_3D,
     RENDERING_2D,
     GAMEPLAY,
+    CAMERA,
+    DIFFICULTY,
     UI
 };
 

@@ -1,8 +1,8 @@
 import getNoteCacheBuilder from './NoteCacheBuilder.js';
 import getCoordinateCalculator from './CoordinateCalculator.js';
-import { getHoverInfoService, setTHREE as setHoverInfoTHREE } from './HoverInfoService.js';
+import { getHoverInfoService } from './HoverInfoService.js';
 import { getHoverInfoDisplay } from './HoverInfoDisplay.js';
-import { getCameraControls, setTHREE as setCameraControlsTHREE } from './CameraControls.js';
+import { getCameraControls } from './CameraControls.js';
 
 function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
     if (!THREE) {
@@ -10,9 +10,9 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
         return null;
     }
 
-    // Set THREE for dependencies that use lazy initialization
-    setHoverInfoTHREE(THREE);
-    setCameraControlsTHREE(THREE);
+    // Initialize dependencies with THREE directly (no setter functions)
+    const hoverInfoService = getHoverInfoService(THREE);
+    const cameraControls = getCameraControls(THREE);
 
     var renderer = null;
     var scene = null;
@@ -31,13 +31,8 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
     // Font loading promise for graceful async handling
     var fontLoadPromise = null;
 
-    // Camera controls
-    var cameraControls = null;
+    // Camera controls and hover info already initialized at top level with THREE
     var isCameraControlsEnabled = false;
-
-    // Hover info components
-    var hoverInfoService = null;
-    var hoverInfoDisplay = null;
 
     // Note cache builder utility
     var noteCacheBuilder = getNoteCacheBuilder();
@@ -58,6 +53,9 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
 
     // Now line visualization (3D plane at player position)
     var nowLine = null;
+
+    // Hover info display (created in init, not at top level)
+    var hoverInfoDisplay = null;
 
     var threeJSRenderer = {
         /**
@@ -90,12 +88,10 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
             );
 
             // Initialize hover info service and display
-            hoverInfoService = getHoverInfoService();
             hoverInfoService.setConstants(CONSTANTS);
             hoverInfoDisplay = getHoverInfoDisplay();
 
             // Initialize camera controls first to get defaults (CameraControls is source of truth)
-            cameraControls = getCameraControls();
             var defaultCameraState = cameraControls.getDefaultCameraState();
 
             // Position camera using CameraControls defaults
@@ -116,7 +112,7 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
             scene.add(noteGroup);
 
             // Initialize camera controls (no longer passes defaults - CameraControls is source of truth)
-            cameraControls.init(camera, scene, renderer, renderer.domElement, noteGroup, null, hoverInfoService, hoverInfoDisplay, THREE);
+            cameraControls.init(camera, scene, renderer, renderer.domElement, noteGroup, null, hoverInfoService, hoverInfoDisplay);
             isCameraControlsEnabled = false;
             noteGroup.rotation.x = 0;  // Tilt notes to face the camera from the new higher angle
 
@@ -536,7 +532,6 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
             // Dispose camera controls (Issue #2 - cleanup event listeners)
             if (cameraControls) {
                 cameraControls.dispose();
-                cameraControls = null;
             }
 
             this.clearNotes();
@@ -553,9 +548,6 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
             }
 
             // Dispose hover info components
-            if (hoverInfoService) {
-                hoverInfoService = null;
-            }
             if (hoverInfoDisplay) {
                 hoverInfoDisplay = null;
             }

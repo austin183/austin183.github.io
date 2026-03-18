@@ -1,14 +1,12 @@
-let THREE = null;
-
-function setTHREE(library) {
-    THREE = library;
-}
-
-export function getHoverInfoService() {
+export function getHoverInfoService(threeLibrary) {
+    if (!threeLibrary) {
+        console.error('HoverInfoService requires THREE library instance');
+        return null;
+    }
+    
+    const THREE = threeLibrary;
+    
     var CONSTANTS = null;
-
-    var raycaster = THREE ? new THREE.Raycaster() : null;
-    var mouse = THREE ? new THREE.Vector2() : null;
 
     /**
      * Set the constants for coordinate calculations
@@ -36,8 +34,6 @@ export function getHoverInfoService() {
      * @returns {Object} Hover info object with data about what's being hovered
      */
     function getHoverInfo(mouseEvent, canvas, camera, noteGroup, nowLine) {
-        if (!THREE) return null;
-
         var Raycaster = THREE.Raycaster;
         var Vector2 = THREE.Vector2;
         var raycaster = new Raycaster();
@@ -229,6 +225,4 @@ export function getHoverInfoService() {
         extractNoteData: extractNoteData
     };
 }
-
-export { setTHREE };
 

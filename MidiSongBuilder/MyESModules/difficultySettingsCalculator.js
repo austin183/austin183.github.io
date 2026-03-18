@@ -1,3 +1,5 @@
+import { DIFFICULTY } from './GameConstants.js';
+
 export function getDifficultySettingsCalculator(){
 var statCalculators = {
     gatherNoteDistributions: function(song, invertedKeyNoteMap){
@@ -64,14 +66,14 @@ return {
     
         // Iterate over all combinations of distances and durations
         Object.keys(noteDistribution.noteDistanceStats).sort((a, b) => parseFloat(b) - parseFloat(a)).forEach(distance => {
-            if (parseFloat(distance) <= 0.6) {
+            if (parseFloat(distance) <= DIFFICULTY.MAX_DISTANCE_DURATION) {
                 Object.keys(noteDistribution.noteDurationStats).forEach(duration => {                    
-                    if (parseFloat(duration) <= 0.6) {
+                    if (parseFloat(duration) <= DIFFICULTY.MAX_DISTANCE_DURATION) {
                         // Calculate visible field
                         const visibleField = visibleFieldFilterer.filterToFullVisibleField(song, parseFloat(distance), parseFloat(duration), invertedKeyNoteMap, keyRenderInfo, notesCanvas, songNoteRenderer);
                         const currentNotesPerMinute = Math.floor((visibleField.length / songEnd) * 60);
                         const currentDistanceToTarget = Math.abs(currentNotesPerMinute - targetNotesPerMinute);
-                        if(currentDistanceToTarget < 10){
+                        if(currentDistanceToTarget < DIFFICULTY.NOTES_PER_MINUTE_TOLERANCE){
                             allCombinationsWithin10NotesPerMinute.push({
                                 notesPerMinute: currentNotesPerMinute,
                                 minNoteDistance: parseFloat(distance),

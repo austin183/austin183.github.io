@@ -1,12 +1,14 @@
 import cameraPresets from './CameraPresets.js';
+import { CAMERA } from './GameConstants.js';
 
-let THREE = null;
-
-function setTHREE(library) {
-    THREE = library;
-}
-
-export function getCameraControls(default_camera_state) {
+export function getCameraControls(threeLibrary, default_camera_state) {
+    if (!threeLibrary) {
+        console.error('CameraControls requires THREE library instance');
+        return null;
+    }
+    
+    const THREE = threeLibrary;
+    
     var camera = null;
     var scene = null;
     var renderer = null;
@@ -26,8 +28,8 @@ export function getCameraControls(default_camera_state) {
     var isCameraControlsEnabled = false;
 
     // Movement speed
-    var moveSpeed = 0.2;
-    var lookSensitivity = 0.005;
+    var moveSpeed = CAMERA.MOVE_SPEED;
+    var lookSensitivity = CAMERA.LOOK_SENSITIVITY;
 
     // Input state
     var keys = {};
@@ -163,7 +165,10 @@ export function getCameraControls(default_camera_state) {
                     cameraRotation.pitch -= deltaMove.y * lookSensitivity;
 
                     // Clamp pitch to avoid flipping (limit to roughly -90 to +90 degrees)
-                    cameraRotation.pitch = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, cameraRotation.pitch));
+                    cameraRotation.pitch = Math.max(
+                        -Math.PI / CAMERA.PITCH_CLAMP_FACTOR, 
+                        Math.min(Math.PI / CAMERA.PITCH_CLAMP_FACTOR, cameraRotation.pitch)
+                    );
 
                     previousMousePosition = { x: e.offsetX, y: e.offsetY };
 
@@ -582,6 +587,4 @@ export function getCameraControls(default_camera_state) {
 
     return cameraControls;
 }
-
-export { setTHREE };
 

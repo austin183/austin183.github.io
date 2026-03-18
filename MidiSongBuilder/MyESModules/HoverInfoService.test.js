@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { getHoverInfoService, setTHREE } from './HoverInfoService.js';
+import { getHoverInfoService } from './HoverInfoService.js';
 
 describe('HoverInfoService', () => {
     let hoverInfoService;
@@ -10,34 +10,33 @@ describe('HoverInfoService', () => {
         Z_SCALE: 2
     };
 
+    // Mock THREE library for tests that need it
+    const mockVector3 = function(x, y, z) {
+        this.x = x || 0;
+        this.y = y || 0;
+        this.z = z || 0;
+    };
+    mockVector3.prototype.clone = function() { return new mockVector3(this.x, this.y, this.z); };
+    mockVector3.prototype.project = function() { return this; };
+
+    const mockVector2 = function(x, y) {
+        this.x = x || 0;
+        this.y = y || 0;
+    };
+
+    const mockRaycaster = function() {};
+    mockRaycaster.prototype.setFromCamera = function() {};
+    mockRaycaster.prototype.intersectObjects = function() { return []; };
+    mockRaycaster.prototype.intersectObject = function() { return []; };
+
+    const mockTHREE = {
+        Raycaster: mockRaycaster,
+        Vector2: mockVector2,
+        Vector3: mockVector3
+    };
+
     beforeEach(() => {
-        // Set up mock THREE library for tests that need it
-        const mockVector3 = function(x, y, z) {
-            this.x = x || 0;
-            this.y = y || 0;
-            this.z = z || 0;
-        };
-        mockVector3.prototype.clone = function() { return new mockVector3(this.x, this.y, this.z); };
-        mockVector3.prototype.project = function() { return this; };
-
-        const mockVector2 = function(x, y) {
-            this.x = x || 0;
-            this.y = y || 0;
-        };
-
-        const mockRaycaster = function() {};
-        mockRaycaster.prototype.setFromCamera = function() {};
-        mockRaycaster.prototype.intersectObjects = function() { return []; };
-        mockRaycaster.prototype.intersectObject = function() { return []; };
-
-        const mockTHREE = {
-            Raycaster: mockRaycaster,
-            Vector2: mockVector2,
-            Vector3: mockVector3
-        };
-        setTHREE(mockTHREE);
-
-        hoverInfoService = getHoverInfoService();
+        hoverInfoService = getHoverInfoService(mockTHREE);
         hoverInfoService.setConstants(mockConstants);
     });
 
@@ -62,7 +61,7 @@ describe('HoverInfoService', () => {
 
     describe('getConstants', () => {
         it('returns null before constants are set', () => {
-            const service = getHoverInfoService();
+            const service = getHoverInfoService(mockTHREE);
 
             expect(service.getConstants()).to.be.null;
         });
@@ -94,13 +93,13 @@ describe('HoverInfoService', () => {
         });
 
         it('returns null when constants is null', () => {
-            const service = getHoverInfoService();
+            const service = getHoverInfoService(mockTHREE);
 
             expect(service.calculateGridColumn(0, null)).to.be.null;
         });
 
         it('returns null when constants is undefined', () => {
-            const service = getHoverInfoService();
+            const service = getHoverInfoService(mockTHREE);
 
             expect(service.calculateGridColumn(0, undefined)).to.be.null;
         });
@@ -156,13 +155,13 @@ describe('HoverInfoService', () => {
         });
 
         it('returns null when constants is null', () => {
-            const service = getHoverInfoService();
+            const service = getHoverInfoService(mockTHREE);
 
             expect(service.calculateNoteTime(0, null)).to.be.null;
         });
 
         it('returns null when constants is undefined', () => {
-            const service = getHoverInfoService();
+            const service = getHoverInfoService(mockTHREE);
 
             expect(service.calculateNoteTime(0, undefined)).to.be.null;
         });
