@@ -298,24 +298,24 @@
 
         window.highScoreTracker = highScoreTracker;
         
-        var challengeScoresObj = getChallengeScores();
-        var visibleFieldFilterer = getVisibleFieldFilterer();
+        const challengeScoresObj = getChallengeScores();
+        const visibleFieldFilterer = getVisibleFieldFilterer();
 
-        var synthMap = {};
-        var songEnd = null;
+        const synthMap = {};
+        let songEnd = null;
         let currentMidi = null;
-        var songDifficultySettings = base.songDifficultySettings.get();
+        const songDifficultySettings = base.songDifficultySettings.get();
 
         const pressedKeys = componentRegistry.getPressedKeys();
-        var midiParser = getMidiParser(markRaw);
+        const midiParser = getMidiParser(markRaw);
 
         const songDisplayManager = createSongDisplayManager(songNoteRenderer, keyNoteMapService);
         songDisplayManager.setDebugMode(debugPage);
 
-        var gameController = getGameController(Tone);
-        var threeJSGameController = getThreeJSGameController(Tone);
-        var gameSessionManager = getGameSessionManager();
-        var cameraUIManager = getCameraUIManager();
+        const gameController = getGameController(Tone);
+        const threeJSGameController = getThreeJSGameController(Tone);
+        const gameSessionManager = getGameSessionManager();
+        const cameraUIManager = getCameraUIManager();
 
         window.addEventListener('resize', function() {
             if (app && app.threeJSRenderer) {
@@ -328,11 +328,11 @@
             
             // Game state and UI variables (must be declared before functions that use them)
             let playButtonService = null;
-            var cameraControlsActive = false;
-            var cameraCoordinator = null;
+            let cameraControlsActive = false;
+            let cameraCoordinator = null;
 
             // Camera update loop variables
-            var cameraUpdateInterval = null;
+            let cameraUpdateInterval = null;
 
             // Helper functions that reference app (defined before use)
             function playNotes(){
@@ -411,12 +411,12 @@
                     cameraCoordinator.enableControls();
                 } else {
                     if (app && app.threeJSRenderer) {
-                        app.threeJSRenderer.enableCameraControls();
-                        app.threeJSRenderer.enableHoverInfo();
-                        var hoverInfoElement = document.getElementById('hoverInfo');
-                        if (hoverInfoElement) {
-                            app.threeJSRenderer.setHoverInfoElement(hoverInfoElement);
-                        }
+app.threeJSRenderer.enableCameraControls();
+                         app.threeJSRenderer.enableHoverInfo();
+                         const hoverInfoElement = document.getElementById('hoverInfo');
+                         if (hoverInfoElement) {
+                             app.threeJSRenderer.setHoverInfoElement(hoverInfoElement);
+                         }
                     }
                     if (app && app.inputHandler) {
                         app.inputHandler.setNoteInputEnabled(false);
@@ -440,7 +440,7 @@
             function resetCamera() {
                 if (app && app.threeJSRenderer) {
                     app.threeJSRenderer.resetCamera();
-                    var state = app.threeJSRenderer.getCameraDisplayState();
+                    const state = app.threeJSRenderer.getCameraDisplayState();
 
                     cameraUIManager.updateCameraInputFields(state);
                 }
@@ -449,8 +449,8 @@
             function applyCameraPreset() {
                 if (!app || !app.threeJSRenderer) return;
 
-                var select = document.getElementById('cameraPresetSelect');
-                var presetKey = select.value;
+                const select = document.getElementById('cameraPresetSelect');
+                const presetKey = select.value;
 
                 if (presetKey) {
                     app.threeJSRenderer.applyCameraPreset(presetKey);
@@ -459,12 +459,12 @@
             }
 
             function setupCameraPresetDropdown(appInstance) {
-                var select = document.getElementById('cameraPresetSelect');
+                const select = document.getElementById('cameraPresetSelect');
                 if (!select || !appInstance || !appInstance.threeJSRenderer) return;
 
-                var presets = appInstance.threeJSRenderer.getCameraPresetList();
+                const presets = appInstance.threeJSRenderer.getCameraPresetList();
                 presets.forEach(function(presetKey) {
-                    var option = document.createElement('option');
+                    const option = document.createElement('option');
                     option.value = presetKey;
                     option.textContent = appInstance.threeJSRenderer.getCameraPresetName(presetKey);
                     select.appendChild(option);
@@ -488,7 +488,7 @@
             function updateCameraDisplay() {
                 if (!app || !app.threeJSRenderer) return;
 
-                var state = app.threeJSRenderer.getCameraDisplayState();
+                const state = app.threeJSRenderer.getCameraDisplayState();
 
                 cameraUIManager.updateCameraInputFields(state);
                 app.threeJSRenderer.updateCameraFromControls();
@@ -506,12 +506,12 @@
             function updateCameraFromUI() {
                 if (!app || !app.threeJSRenderer || !cameraControlsActive) return;
 
-                var position = {
+                const position = {
                     x: parseFloat(document.getElementById('cameraPosX').value),
                     y: parseFloat(document.getElementById('cameraPosY').value),
                     z: parseFloat(document.getElementById('cameraPosZ').value)
                 };
-                var lookAt = {
+                const lookAt = {
                     x: parseFloat(document.getElementById('cameraLookAtX').value),
                     y: parseFloat(document.getElementById('cameraLookAtY').value),
                     z: parseFloat(document.getElementById('cameraLookAtZ').value)
@@ -523,7 +523,7 @@
             function setupCameraInputDefaults(appInstance) {
                 if (!appInstance || !appInstance.threeJSRenderer) return;
 
-                var defaults = appInstance.threeJSRenderer.getDefaultCameraStateForUI();
+                const defaults = appInstance.threeJSRenderer.getDefaultCameraStateForUI();
                 if (!defaults) return;
 
                 cameraUIManager.setCameraInputDefaults(defaults);
@@ -546,16 +546,16 @@
                     app.songNotes = displayData.songNotes;
                     app.songNotesOnKeyMap = displayData.songNotesOnKeyMap;
                     
-                    if (debugPage && currentMidi && app.selectedTrack !== "") {
-                        var invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
-                        var song = app.selectedTrack.notes;
-                        app.renderedNotesPlaying = songDisplayManager.renderDebugNotesPlaying(app.notesCanvas, song, {keyScores: {}}, invertedKeyNoteMap, 0, 0);
+if (debugPage && currentMidi && app.selectedTrack !== "") {
+                         const invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
+                         const song = app.selectedTrack.notes;
+                         app.renderedNotesPlaying = songDisplayManager.renderDebugNotesPlaying(app.notesCanvas, song, {keyScores: {}}, invertedKeyNoteMap, 0, 0);
 
-                        if (app.threeJSRenderer && app.keyRenderInfo) {
-                            var visibleField = songDisplayManager.create3DVisibleField(song, invertedKeyNoteMap);
-                            app.threeJSRenderer.addNotesFromVisibleField(visibleField, app.keyRenderInfo);
-                        }
-                    }
+                         if (app.threeJSRenderer && app.keyRenderInfo) {
+                             const visibleField = songDisplayManager.create3DVisibleField(song, invertedKeyNoteMap);
+                             app.threeJSRenderer.addNotesFromVisibleField(visibleField, app.keyRenderInfo);
+                         }
+                     }
 
                     window.focus();
                     if (document.activeElement) {

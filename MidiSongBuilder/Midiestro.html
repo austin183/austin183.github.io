@@ -217,22 +217,22 @@ const gameState = createGameStateTracker();
 
         window.highScoreTracker = highScoreTracker;
         
-        var challengeScoresObj = getChallengeScores();
-        var visibleFieldFilterer = getVisibleFieldFilterer();
+        const challengeScoresObj = getChallengeScores();
+        const visibleFieldFilterer = getVisibleFieldFilterer();
 
-        var synthMap = {};
-        var songEnd = null;
+        const synthMap = {};
+        let songEnd = null;
         let currentMidi = null;
-        var songDifficultySettings = base.songDifficultySettings.get();
+        const songDifficultySettings = base.songDifficultySettings.get();
 
         const pressedKeys = componentRegistry.getPressedKeys();
-        var midiParser = getMidiParser(markRaw);
+        const midiParser = getMidiParser(markRaw);
 
         const songDisplayManager = createSongDisplayManager(songNoteRenderer, keyNoteMapService);
         songDisplayManager.setDebugMode(debugPage);
 
-        var gameController = getGameController();
-        var gameSessionManager = getGameSessionManager();
+        const gameController = getGameController();
+        const gameSessionManager = getGameSessionManager();
 
         async function parseFile(file) {
             await midiParser.parseMidiFile(file, setupSongFromMidiResult);
@@ -292,11 +292,11 @@ const gameState = createGameStateTracker();
                     app.songNotes = displayData.songNotes;
                     app.songNotesOnKeyMap = displayData.songNotesOnKeyMap;
                     
-                    if (debugPage && currentMidi && app.selectedTrack !== "") {
-                        var invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
-                        var song = app.selectedTrack.notes;
-                        app.renderedNotesPlaying = songDisplayManager.renderDebugNotesPlaying(app.notesCanvas, song, {keyScores: {}}, invertedKeyNoteMap, 0, 0);
-                    }
+if (debugPage && currentMidi && app.selectedTrack !== "") {
+                         const invertedKeyNoteMap = keyNoteMapService.getInvertedMap(app.selectedKeyNoteMap.keyNoteMap);
+                         const song = app.selectedTrack.notes;
+                         app.renderedNotesPlaying = songDisplayManager.renderDebugNotesPlaying(app.notesCanvas, song, {keyScores: {}}, invertedKeyNoteMap, 0, 0);
+                     }
 
                     window.focus();
                     if (document.activeElement) {
