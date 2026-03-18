@@ -41,17 +41,21 @@ export function getToneHelper(Tone){
         },
 
         buildSynths: function(params, synthArray, maxSynths){
-            if(synthArray.length > 0){
-                for (let i = synthArray.length - 1; i >= 0; i--) {
-                    synthArray[i].dispose();
-                    synthArray.splice(i,1);
+            try {
+                if(synthArray.length > 0){
+                    for (let i = synthArray.length - 1; i >= 0; i--) {
+                        synthArray[i].dispose();
+                        synthArray.splice(i,1);
+                    }
                 }
-            }
 
-            for (let i = 0; i < maxSynths; i++) {
-                synthArray.push(
-                    new Tone.FMSynth( params ).toDestination()
-                );
+                for (let i = 0; i < maxSynths; i++) {
+                    const synth = new Tone.FMSynth( params ).toDestination();
+                    synthArray.push(synth);
+                }
+            } catch (error) {
+                console.error('Error building synths:', error);
+                throw error;
             }
         }
     }

@@ -145,7 +145,7 @@ export function getGameSessionManager() {
         
         /**
          * Prepare and start the game with all necessary setup
-         * @param {Object} app - Vue.js app instance
+         * @param {Object} app - Vue.js app instance (with componentRegistry for DI)
          * @param {Object} songDifficultySettings - Song-specific difficulty overrides
          * @param {Object} visibleFieldFilterer - Service for filtering notes
          * @param {Object} keyRenderInfo - Key render information
@@ -155,11 +155,10 @@ export function getGameSessionManager() {
          * @param {Object} songNoteRenderer - Song note renderer service
          * @param {Function} getInvertedMapFn - Function to get inverted key note map
          * @param {Object} difficultySettingsCalculator - Service for calculating target-based filtering (optional)
-         * @param {Object} threeJSRenderer - Three.js renderer (optional, for 3D mode)
          * @param {Object} pressedKeys - Pressed keys state
          * @returns {*} Result from startGameLoop call
          */
-        prepareAndStartGame: function(app, songDifficultySettings, visibleFieldFilterer, keyRenderInfo, gameController, currentMidi, songEnd, songNoteRenderer, getInvertedMapFn, difficultySettingsCalculator, threeJSRenderer, pressedKeys) {
+        prepareAndStartGame: function(app, songDifficultySettings, visibleFieldFilterer, keyRenderInfo, gameController, currentMidi, songEnd, songNoteRenderer, getInvertedMapFn, difficultySettingsCalculator, pressedKeys) {
             this.prepareForPlayback(app);
             
             if (!app.selectedTrack || !app.selectedTrack.notes) {
@@ -184,11 +183,7 @@ export function getGameSessionManager() {
             
             this.buildAndSetNoteCache(app, songNoteRenderer, keyRenderInfo);
             
-            if (threeJSRenderer) {
-                return this.startGameLoop(gameController, app, currentMidi, songDifficultySettings, songEnd, visibleField, threeJSRenderer, pressedKeys);
-            } else {
-                return this.startGameLoop(gameController, app, currentMidi, songDifficultySettings, songEnd, visibleField, pressedKeys);
-            }
+            return this.startGameLoop(gameController, app, currentMidi, songDifficultySettings, songEnd, visibleField, pressedKeys);
         },
         
         /**

@@ -91,7 +91,11 @@ export function initializeMidiestroBase(Tone, localStorageImpl = typeof window !
     if (Tone && isBrowserEnvironment()) {
         toneHelper = getToneHelper(Tone);
         const defaultFMSynthParams = toneHelper.getDefaultFMSynthParams();
-        toneHelper.buildSynths(defaultFMSynthParams, synthArray, 10);
+        try {
+            toneHelper.buildSynths(defaultFMSynthParams, synthArray, 10);
+        } catch (error) {
+            console.error('Failed to build synths, continuing without audio:', error);
+        }
     }
     
     // Mutable state (initialized to defaults)

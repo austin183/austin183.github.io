@@ -57,37 +57,47 @@ describe('ThreeJSGameController', () => {
     });
 
     describe('startGame', () => {
-        it('should throw error when threeJSRenderer is not provided', () => {
-            const mockApp = {};
-
-            expect(() => {
-                controller.startGame(mockApp, {}, {}, 60, [], null);
-            }).to.throw('ThreeJSGameController requires threeJSRenderer for 3D rendering');
-        });
-
         it('should throw error when app is not provided', () => {
-            const mockThreeJSRenderer = {};
-
             expect(() => {
-                controller.startGame(null, {}, {}, 60, [], mockThreeJSRenderer);
+                controller.startGame(null, {}, {}, 60, [], {});
             }).to.throw('ThreeJSGameController requires app instance');
         });
 
-        it('should throw error when visibleField is not an array', () => {
-            const mockApp = {};
-            const mockThreeJSRenderer = {};
+        it('should throw error when threeJSRenderer is not in registry', () => {
+            const mockApp = {
+                componentRegistry: { getService: sinon.stub().returns(null) }
+            };
 
             expect(() => {
-                controller.startGame(mockApp, {}, {}, 60, null, mockThreeJSRenderer);
+                controller.startGame(mockApp, {}, {}, 60, [], {});
+            }).to.throw('ThreeJSGameController requires threeJSRenderer for 3D rendering');
+        });
+
+        it('should throw error when visibleField is not an array', () => {
+            const mockThreeJSRenderer = {};
+            const mockApp = {
+                componentRegistry: { 
+                    getService: sinon.stub().returns(mockThreeJSRenderer)
+                },
+                selectedKeyNoteMap: { keyNoteMap: {} }
+            };
+
+            expect(() => {
+                controller.startGame(mockApp, {}, {}, 60, null, {});
             }).to.throw('visibleField must be an array of notes');
         });
 
         it('should throw error when visibleField is empty object', () => {
-            const mockApp = {};
             const mockThreeJSRenderer = {};
+            const mockApp = {
+                componentRegistry: { 
+                    getService: sinon.stub().returns(mockThreeJSRenderer)
+                },
+                selectedKeyNoteMap: { keyNoteMap: {} }
+            };
 
             expect(() => {
-                controller.startGame(mockApp, {}, {}, 60, {}, mockThreeJSRenderer);
+                controller.startGame(mockApp, {}, {}, 60, {}, {});
             }).to.throw('visibleField must be an array of notes');
         });
 
@@ -96,12 +106,25 @@ describe('ThreeJSGameController', () => {
                 clearNotes: sinon.stub(),
                 addNotesFromVisibleField: sinon.stub()
             };
+            const mockScoreKeeper = { reset: sinon.stub() };
+            const mockSongNoteRenderer = { buildSongNoteLetterCache: sinon.stub().returns({}) };
+            const mockKeyNoteMapService = { getInvertedMap: sinon.stub().returns({}) };
             const mockApp = {
-                componentRegistry: { getService: sinon.stub() },
+                componentRegistry: { 
+                    getService: sinon.stub().callsFake(function(serviceName) {
+                        switch (serviceName) {
+                            case 'threeJSRenderer': return mockThreeJSRenderer;
+                            case 'scoreKeeper': return mockScoreKeeper;
+                            case 'songNoteRenderer': return mockSongNoteRenderer;
+                            case 'keyNoteMapService': return mockKeyNoteMapService;
+                            default: return null;
+                        }
+                    })
+                },
                 selectedKeyNoteMap: { keyNoteMap: {} }
             };
 
-            controller.startGame(mockApp, {}, {}, 60, [], mockThreeJSRenderer);
+            controller.startGame(mockApp, {}, {}, 60, [], {});
 
             expect(mockThreeJSRenderer.clearNotes.calledOnce).to.be.true;
         });
@@ -111,12 +134,25 @@ describe('ThreeJSGameController', () => {
                 clearNotes: sinon.stub(),
                 addNotesFromVisibleField: sinon.stub()
             };
+            const mockScoreKeeper = { reset: sinon.stub() };
+            const mockSongNoteRenderer = { buildSongNoteLetterCache: sinon.stub().returns({}) };
+            const mockKeyNoteMapService = { getInvertedMap: sinon.stub().returns({}) };
             const mockApp = {
-                componentRegistry: { getService: sinon.stub() },
+                componentRegistry: { 
+                    getService: sinon.stub().callsFake(function(serviceName) {
+                        switch (serviceName) {
+                            case 'threeJSRenderer': return mockThreeJSRenderer;
+                            case 'scoreKeeper': return mockScoreKeeper;
+                            case 'songNoteRenderer': return mockSongNoteRenderer;
+                            case 'keyNoteMapService': return mockKeyNoteMapService;
+                            default: return null;
+                        }
+                    })
+                },
                 selectedKeyNoteMap: { keyNoteMap: {} }
             };
 
-            controller.startGame(mockApp, {}, {}, 60, [], mockThreeJSRenderer);
+            controller.startGame(mockApp, {}, {}, 60, [], {});
 
             expect(mockApp.threeGameState).to.not.be.null;
         });
@@ -126,13 +162,26 @@ describe('ThreeJSGameController', () => {
                 clearNotes: sinon.stub(),
                 addNotesFromVisibleField: sinon.stub()
             };
+            const mockScoreKeeper = { reset: sinon.stub() };
+            const mockSongNoteRenderer = { buildSongNoteLetterCache: sinon.stub().returns({}) };
+            const mockKeyNoteMapService = { getInvertedMap: sinon.stub().returns({}) };
             const mockApp = {
-                componentRegistry: { getService: sinon.stub() },
+                componentRegistry: { 
+                    getService: sinon.stub().callsFake(function(serviceName) {
+                        switch (serviceName) {
+                            case 'threeJSRenderer': return mockThreeJSRenderer;
+                            case 'scoreKeeper': return mockScoreKeeper;
+                            case 'songNoteRenderer': return mockSongNoteRenderer;
+                            case 'keyNoteMapService': return mockKeyNoteMapService;
+                            default: return null;
+                        }
+                    })
+                },
                 selectedKeyNoteMap: { keyNoteMap: {} },
                 keyRenderInfo: {}
             };
 
-            controller.startGame(mockApp, {}, {}, 60, [], mockThreeJSRenderer);
+            controller.startGame(mockApp, {}, {}, 60, [], {});
 
             expect(mockThreeJSRenderer.addNotesFromVisibleField.calledOnce).to.be.true;
         });
@@ -142,12 +191,25 @@ describe('ThreeJSGameController', () => {
                 clearNotes: sinon.stub(),
                 addNotesFromVisibleField: sinon.stub()
             };
+            const mockScoreKeeper = { reset: sinon.stub() };
+            const mockSongNoteRenderer = { buildSongNoteLetterCache: sinon.stub().returns({}) };
+            const mockKeyNoteMapService = { getInvertedMap: sinon.stub().returns({}) };
             const mockApp = {
-                componentRegistry: { getService: sinon.stub() },
+                componentRegistry: { 
+                    getService: sinon.stub().callsFake(function(serviceName) {
+                        switch (serviceName) {
+                            case 'threeJSRenderer': return mockThreeJSRenderer;
+                            case 'scoreKeeper': return mockScoreKeeper;
+                            case 'songNoteRenderer': return mockSongNoteRenderer;
+                            case 'keyNoteMapService': return mockKeyNoteMapService;
+                            default: return null;
+                        }
+                    })
+                },
                 selectedKeyNoteMap: { keyNoteMap: {} }
             };
 
-            controller.startGame(mockApp, {}, {}, 60, [], mockThreeJSRenderer);
+            controller.startGame(mockApp, {}, {}, 60, [], {});
 
             expect(controller.playIntervalId).to.not.be.null;
         });
@@ -157,12 +219,25 @@ describe('ThreeJSGameController', () => {
                 clearNotes: sinon.stub(),
                 addNotesFromVisibleField: sinon.stub()
             };
+            const mockScoreKeeper = { reset: sinon.stub() };
+            const mockSongNoteRenderer = { buildSongNoteLetterCache: sinon.stub().returns({}) };
+            const mockKeyNoteMapService = { getInvertedMap: sinon.stub().returns({}) };
             const mockApp = {
-                componentRegistry: { getService: sinon.stub() },
+                componentRegistry: { 
+                    getService: sinon.stub().callsFake(function(serviceName) {
+                        switch (serviceName) {
+                            case 'threeJSRenderer': return mockThreeJSRenderer;
+                            case 'scoreKeeper': return mockScoreKeeper;
+                            case 'songNoteRenderer': return mockSongNoteRenderer;
+                            case 'keyNoteMapService': return mockKeyNoteMapService;
+                            default: return null;
+                        }
+                    })
+                },
                 selectedKeyNoteMap: { keyNoteMap: {} }
             };
 
-            const intervalId = controller.startGame(mockApp, {}, {}, 60, [], mockThreeJSRenderer);
+            const intervalId = controller.startGame(mockApp, {}, {}, 60, [], {});
 
             expect(intervalId).to.not.be.null;
         });
@@ -191,6 +266,7 @@ describe('ThreeJSGameController', () => {
                 componentRegistry: { 
                     getService: sinon.stub().callsFake(function(serviceName) {
                         switch (serviceName) {
+                            case 'threeJSRenderer': return mockThreeJSRenderer;
                             case 'scoreKeeper': return mockScoreKeeper;
                             case 'songNoteRenderer': return mockSongNoteRenderer;
                             case 'keyNoteMapService': return mockKeyNoteMapService;
@@ -203,7 +279,7 @@ describe('ThreeJSGameController', () => {
                 notesCanvas: { width: 800, height: 600 }
             };
 
-            controller.startGame(mockApp, {}, {}, 60, [], mockThreeJSRenderer);
+            controller.startGame(mockApp, {}, {}, 60, [], {});
 
             const updateStub = sinon.stub(controller, 'update3DNotesPosition');
             
@@ -234,6 +310,7 @@ describe('ThreeJSGameController', () => {
                 componentRegistry: { 
                     getService: sinon.stub().callsFake(function(serviceName) {
                         switch (serviceName) {
+                            case 'threeJSRenderer': return mockThreeJSRenderer;
                             case 'scoreKeeper': return mockScoreKeeper;
                             case 'songNoteRenderer': return mockSongNoteRenderer;
                             case 'keyNoteMapService': return mockKeyNoteMapService;
@@ -246,7 +323,7 @@ describe('ThreeJSGameController', () => {
                 notesCanvas: { width: 800, height: 600 }
             };
 
-            controller.startGame(mockApp, {}, {}, 60, [], mockThreeJSRenderer);
+            controller.startGame(mockApp, {}, {}, 60, [], {});
 
             const updateColorsStub = sinon.stub(controller, 'update3DNoteColors');
             
@@ -255,7 +332,7 @@ describe('ThreeJSGameController', () => {
             expect(updateColorsStub.calledOnce).to.be.true;
         });
 
-it('should call render3DNowLine', () => {
+        it('should call render3DNowLine', () => {
             const mockThreeJSRenderer = { 
                 clearNotes: sinon.stub(),
                 addNotesFromVisibleField: sinon.stub(),
@@ -277,6 +354,7 @@ it('should call render3DNowLine', () => {
                 componentRegistry: { 
                     getService: sinon.stub().callsFake(function(serviceName) {
                         switch (serviceName) {
+                            case 'threeJSRenderer': return mockThreeJSRenderer;
                             case 'scoreKeeper': return mockScoreKeeper;
                             case 'songNoteRenderer': return mockSongNoteRenderer;
                             case 'keyNoteMapService': return mockKeyNoteMapService;
@@ -289,7 +367,7 @@ it('should call render3DNowLine', () => {
                 notesCanvas: { width: 800, height: 600 }
             };
 
-            controller.startGame(mockApp, {}, {}, 60, [], mockThreeJSRenderer);
+            controller.startGame(mockApp, {}, {}, 60, [], {});
 
             const renderNowLineStub = sinon.stub(controller, 'render3DNowLine');
             
@@ -322,6 +400,7 @@ it('should call render3DNowLine', () => {
                 componentRegistry: { 
                     getService: sinon.stub().callsFake(function(serviceName) {
                         switch (serviceName) {
+                            case 'threeJSRenderer': return mockThreeJSRenderer;
                             case 'scoreKeeper': return mockScoreKeeper;
                             case 'songNoteRenderer': return mockSongNoteRenderer;
                             case 'keyNoteMapService': return mockKeyNoteMapService;
@@ -334,7 +413,7 @@ it('should call render3DNowLine', () => {
                 notesCanvas: { width: 800, height: 600 }
             };
 
-            controller.startGame(mockApp, {}, {}, 60, [], mockThreeJSRenderer);
+            controller.startGame(mockApp, {}, {}, 60, [], {});
             
             controller.doRenderAfterLoop(mockApp, mockApp.threeGameState, {}, 0, -1, 9);
 

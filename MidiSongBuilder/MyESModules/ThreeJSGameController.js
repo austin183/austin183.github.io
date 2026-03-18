@@ -33,28 +33,31 @@ function getThreeJSGameController(Tone) {
     var base = getBaseController(Tone);
 
     return Object.assign({}, base, {
-        /**
-         * Start the 3D game loop with animation
-         * Uses BaseController's stateMixin, audioMixin, and gameLoopMixin.
-         * Dependencies (scoreKeeper, songNoteRenderer, keyNoteMapService, highScoreTracker, challengeScores)
-         * are retrieved from ComponentRegistry. Only pressedKeys and threeJSRenderer are passed directly.
-         *
-         * @param {Object} app - The Vue.js app instance
-         * @param {Object} currentMidi - The parsed MIDI data with tracks
-         * @param {Object} difficultySettings - The selected difficulty settings
-         * @param {Number} songEnd - The end time of the song in seconds
-         * @param {Array} visibleField - The filtered notes ready for rendering
-         * @param {Object} threeJSRenderer - The ThreeJSRenderer instance
-         * @param {Object} pressedKeys - The pressedKeys object tracking keyboard state
-         * @returns {number} - The interval ID for cleanup
-         */
-        startGame: function(app, currentMidi, difficultySettings, songEnd, visibleField, threeJSRenderer, pressedKeys) {
-            // Validate required dependencies
-            if (!threeJSRenderer) {
-                throw new Error('ThreeJSGameController requires threeJSRenderer for 3D rendering');
-            }
+/**
+ * Start the 3D game loop with animation
+ * Uses BaseController's stateMixin, audioMixin, and gameLoopMixin.
+ * All dependencies are retrieved from ComponentRegistry for consistent DI.
+ *
+ * @param {Object} app - The Vue.js app instance
+ * @param {Object} currentMidi - The parsed MIDI data with tracks
+ * @param {Object} difficultySettings - The selected difficulty settings
+ * @param {Number} songEnd - The end time of the song in seconds
+ * @param {Array} visibleField - The filtered notes ready for rendering
+ * @param {Object} pressedKeys - The pressedKeys object tracking keyboard state
+ * @returns {number} - The interval ID for cleanup
+ */
+        startGame: function(app, currentMidi, difficultySettings, songEnd, visibleField, pressedKeys) {
+            // Validate required parameters first (before accessing app properties)
             if (!app) {
                 throw new Error('ThreeJSGameController requires app instance');
+            }
+            
+            // Retrieve all dependencies from ComponentRegistry
+            var threeJSRenderer = app.componentRegistry ? 
+                app.componentRegistry.getService('threeJSRenderer') : null;
+            
+            if (!threeJSRenderer) {
+                throw new Error('ThreeJSGameController requires threeJSRenderer for 3D rendering');
             }
             if (!visibleField || !Array.isArray(visibleField)) {
                 throw new Error('visibleField must be an array of notes');

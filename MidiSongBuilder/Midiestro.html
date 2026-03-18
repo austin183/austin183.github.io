@@ -305,8 +305,14 @@ if (debugPage && currentMidi && app.selectedTrack !== "") {
                 }
             }
             
-            // Define setupSongFromMidiResult using MidiParser methods
-            function setupSongFromMidiResult(midiResult) {
+            // Define setupSongFromMidiResult using MidiParser methods (error-first callback)
+            function setupSongFromMidiResult(error, midiResult) {
+                if (error) {
+                    console.error('Failed to parse MIDI file:', error);
+                    alert('Error parsing MIDI file: ' + error.message);
+                    return;
+                }
+                
                 const result = midiParser.setupSongFromMidiResult(midiResult, app);
                 
                 songEnd = result.songEnd;

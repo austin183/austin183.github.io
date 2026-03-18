@@ -21,7 +21,9 @@
  * Starts the game with provided configuration.
  * 
  * Initializes game state, schedules audio events, and begins the game loop.
- * Retrieves dependencies from ComponentRegistry (scoreKeeper, songNoteRenderer, etc.)
+ * Both GameController and ThreeJSGameController use the same signature:
+ * - Dependencies retrieved from app.componentRegistry (scoreKeeper, songNoteRenderer, etc.)
+ * - ThreeJSGameController retrieves threeJSRenderer from registry internally
  * 
  * @method startGame
  * @memberof IGameController
@@ -30,9 +32,7 @@
  * @param {Object} difficultySettings - Settings for current difficulty level
  * @param {number} songEnd - Song end time in seconds
  * @param {Array<Object>} visibleField - Array of note objects ready for rendering
- * @param {...*} additionalArgs - Controller-specific arguments:
- *   - GameController: pressedKeys (Object)
- *   - ThreeJSGameController: threeJSRenderer (Object), pressedKeys (Object)
+ * @param {Object} pressedKeys - Object tracking keyboard input state
  * @returns {number} Interval ID for the game loop
  */
 
@@ -79,7 +79,7 @@
 
 /**
  * @typedef {Object} IGameController
- * @property {function(Object, Object, Object, number, Array<Object>, ...*):number} startGame
+ * @property {function(Object, Object, Object, number, Array<Object>, Object):number} startGame
  * @property {function(Object, string=):void} stopGame
  * @property {function(Object):void} resetAppStateScores
  * @property {function(Object, Object, Object, number, number, number):void} doRenderAfterLoop

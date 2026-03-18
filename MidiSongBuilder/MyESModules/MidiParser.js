@@ -6,6 +6,7 @@ export function getMidiParser(markRawImpl) {
                 this.parseMidiArrayBuffer(arrayBuffer, callback);
             } catch (error) {
                 console.error('Error reading MIDI file:', error);
+                callback(error, null);
             }
         },
 
@@ -13,18 +14,23 @@ export function getMidiParser(markRawImpl) {
             try {
                 const Midi = window.Midi;
                 if (!Midi) {
-                    console.error('Midi class not found in window');
+                    const error = new Error('Midi class not found in window');
+                    console.error(error.message);
+                    callback(error, null);
                     return;
                 }
                 
                 const midi = markRawImpl(new Midi(arrayBuffer));
                 if (midi && midi.tracks) {
-                    callback(midi);
+                    callback(null, midi);
                 } else {
-                    console.error('MIDI parsed but no tracks found:', midi);
+                    const error = new Error('MIDI parsed but no tracks found');
+                    console.error(error.message);
+                    callback(error, null);
                 }
             } catch (error) {
                 console.error('Error parsing MIDI file:', error);
+                callback(error, null);
             }
         },
 
