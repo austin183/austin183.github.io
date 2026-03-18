@@ -19,7 +19,7 @@ export function createGameData({
     midiSongs,
     defaultKeyNoteMap,
     keyNoteMapCollection,
-    difficultySettingsObj,
+    difficultySettings,
     highScoreTracker,
     challengeScoresObj,
     defaultNotesPlaying = "",
@@ -59,8 +59,8 @@ export function createGameData({
         missedCount: 0,
         
         // Difficulty properties (initialized from Normal difficulty)
-        minDuration: difficultySettingsObj["Normal"].minNoteDuration,
-        minNoteDistance: difficultySettingsObj["Normal"].minNoteDistance,
+        minDuration: difficultySettings["Normal"].minNoteDuration,
+        minNoteDistance: difficultySettings["Normal"].minNoteDistance,
         
         // Volume control properties
         playerVolume: 0.7,
@@ -73,8 +73,8 @@ export function createGameData({
         songEnd: null,
         
         // Difficulty settings reference
-        difficultySettings: difficultySettingsObj,
-        selectedDifficulty: difficultySettingsObj["Normal"],
+        difficultySettings: difficultySettings,
+        selectedDifficulty: difficultySettings["Normal"],
         
         // High score tracking (enabled via localStorage toggle)
         toggleTrackHighScores: false,

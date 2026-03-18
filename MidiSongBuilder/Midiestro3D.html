@@ -276,7 +276,7 @@
         const {
             localStorageService,
             midiSongs,
-            difficultySettingsObj,
+            difficultySettings,
             highScoreTracker,
             keyNoteMapService,
             songNoteRenderer,
@@ -584,7 +584,7 @@ if (debugPage && currentMidi && app.selectedTrack !== "") {
                 midiSongs,
                 defaultKeyNoteMap,
                 keyNoteMapCollection,
-                difficultySettingsObj,
+                difficultySettings,
                 highScoreTracker,
                 challengeScoresObj,
                 defaultNotesPlaying,
@@ -594,8 +594,8 @@ if (debugPage && currentMidi && app.selectedTrack !== "") {
             });
 
             const methodsConfig = createGameMethods({ 
-                renderSongNotesFn: renderSongNotes,
-                setupSongFromMidiResultFn: setupSongFromMidiResult,
+                renderSongNotes,
+                setupSongFromMidiResult,
                 highScoreTracker,
                 challengeScoresObj,
                 gameController,
@@ -609,7 +609,7 @@ if (debugPage && currentMidi && app.selectedTrack !== "") {
                 pressedKeys,
                 synthMap,
                 synthArray,
-                playNotesFn: playNotes,
+                playNotes,
                 componentRegistry,
                 songNoteRenderer,
                 keyNoteMapService,

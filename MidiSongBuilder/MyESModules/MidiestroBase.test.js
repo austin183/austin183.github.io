@@ -246,7 +246,7 @@ describe('MidiestroBase', function() {
             // Services (read-only references)
             expect(result.localStorageService).to.exist;
             expect(result.midiSongs).to.exist;
-            expect(result.difficultySettingsObj).to.exist;
+            expect(result.difficultySettings).to.exist;
             expect(result.highScoreTracker).to.exist;
             expect(result.keyNoteMapService).to.exist;
             expect(result.midiParserFactory).to.exist;

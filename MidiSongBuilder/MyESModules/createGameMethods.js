@@ -10,8 +10,8 @@
  */
 
 export function createGameMethods({ 
-    renderSongNotesFn,
-    setupSongFromMidiResultFn,
+    renderSongNotes,
+    setupSongFromMidiResult,
     highScoreTracker,
     challengeScoresObj,
     gameController,
@@ -46,7 +46,7 @@ export function createGameMethods({
                 fetch(`PublicDomainSongs/midi/${midiFilename}`)
                     .then(response => response.arrayBuffer())
                     .then(arrayBuffer => {
-                        return midiParser.parseMidiArrayBuffer(arrayBuffer, setupSongFromMidiResultFn);
+                        return midiParser.parseMidiArrayBuffer(arrayBuffer, setupSongFromMidiResult);
                     })
                     .catch(error => {
                         console.error('Error fetching MIDI file:', error);
@@ -85,8 +85,8 @@ export function createGameMethods({
         
         // Mode-specific rendering (2D canvas or 3D Three.js)
         renderSongNotes: function() {
-            if (renderSongNotesFn) {
-                renderSongNotesFn.call(this);
+            if (renderSongNotes) {
+                renderSongNotes.call(this);
             }
         }
     };

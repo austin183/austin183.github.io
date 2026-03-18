@@ -14,7 +14,7 @@ export function createGameLifecycle(mode, {
     pressedKeys,
     synthMap,
     synthArray,
-    playNotesFn,
+    playNotes,
     componentRegistry,
     songNoteRenderer,
     keyNoteMapService,
@@ -62,7 +62,7 @@ export function createGameLifecycle(mode, {
 
             // Shared input handler setup (keyboard event listeners)
             var inputHandler = getInputHandler(debugLogger);
-            inputHandler.setupKeyListeners(keyMapProvider, pressedKeys, synthMap, synthArray, playNotesFn);
+            inputHandler.setupKeyListeners(keyMapProvider, pressedKeys, synthMap, synthArray, playNotes);
             
             // Store inputHandler on app for later cleanup in beforeUnmount
             this.inputHandler = inputHandler;

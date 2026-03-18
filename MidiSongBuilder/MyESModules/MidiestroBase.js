@@ -65,7 +65,7 @@ export function initializeMidiestroBase(Tone, localStorageImpl = typeof window !
     const sortedMidiSongs = Object.fromEntries(Object.keys(midiSongs).sort().map(key => [key, midiSongs[key]]));
     midiSongs = sortedMidiSongs;
     
-    const difficultySettingsObj = getDifficultySettings();
+    const difficultySettings = getDifficultySettings();
     const difficultySettingsCalculator = getDifficultySettingsCalculator();
     
     // Services
@@ -107,7 +107,7 @@ export function initializeMidiestroBase(Tone, localStorageImpl = typeof window !
         // Services (read-only references)
         localStorageService,
         midiSongs,
-        difficultySettingsObj,
+        difficultySettings,
         highScoreTracker,
         keyNoteMapService,
         midiParserFactory,

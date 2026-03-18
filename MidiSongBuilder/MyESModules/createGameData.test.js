@@ -6,7 +6,7 @@ describe('createGameData', () => {
     let mockMidiSongs;
     let mockDefaultKeyNoteMap;
     let mockKeyNoteMapCollection;
-    let mockDifficultySettingsObj;
+    let mockDifficultySettings;
     let mockHighScoreTracker;
     let mockChallengeScoresObj;
 
@@ -14,7 +14,7 @@ describe('createGameData', () => {
         mockMidiSongs = [{ filename: 'song1.mid', difficultySettings: {} }];
         mockDefaultKeyNoteMap = { keyNoteMap: {} };
         mockKeyNoteMapCollection = [mockDefaultKeyNoteMap];
-        mockDifficultySettingsObj = {
+        mockDifficultySettings = {
             Normal: { minNoteDuration: 0.1, minNoteDistance: 50, difficultyKey: 'Normal' }
         };
         mockHighScoreTracker = { getHighScore: sinon.stub() };
@@ -37,7 +37,7 @@ describe('createGameData', () => {
                 midiSongs: mockMidiSongs,
                 defaultKeyNoteMap: mockDefaultKeyNoteMap,
                 keyNoteMapCollection: mockKeyNoteMapCollection,
-                difficultySettingsObj: mockDifficultySettingsObj,
+                difficultySettings: mockDifficultySettings,
                 highScoreTracker: mockHighScoreTracker,
                 challengeScoresObj: mockChallengeScoresObj
             });
@@ -83,8 +83,8 @@ describe('createGameData', () => {
             expect(data.songEnd).to.equal(null);
 
             // Difficulty settings reference
-            expect(data.difficultySettings).to.equal(mockDifficultySettingsObj);
-            expect(data.selectedDifficulty).to.deep.equal(mockDifficultySettingsObj.Normal);
+            expect(data.difficultySettings).to.equal(mockDifficultySettings);
+            expect(data.selectedDifficulty).to.deep.equal(mockDifficultySettings.Normal);
 
             // High score tracking
             expect(data.toggleTrackHighScores).to.equal(false);
@@ -103,7 +103,7 @@ describe('createGameData', () => {
                 midiSongs: mockMidiSongs,
                 defaultKeyNoteMap: mockDefaultKeyNoteMap,
                 keyNoteMapCollection: mockKeyNoteMapCollection,
-                difficultySettingsObj: mockDifficultySettingsObj,
+                difficultySettings: mockDifficultySettings,
                 highScoreTracker: mockHighScoreTracker,
                 challengeScoresObj: mockChallengeScoresObj,
                 keyRenderInfo: mockKeyRenderInfo
@@ -122,7 +122,7 @@ describe('createGameData', () => {
                 midiSongs: mockMidiSongs,
                 defaultKeyNoteMap: mockDefaultKeyNoteMap,
                 keyNoteMapCollection: mockKeyNoteMapCollection,
-                difficultySettingsObj: mockDifficultySettingsObj,
+                difficultySettings: mockDifficultySettings,
                 highScoreTracker: mockHighScoreTracker,
                 challengeScoresObj: mockChallengeScoresObj,
                 defaultNotesPlaying: 'custom playing',
@@ -143,7 +143,7 @@ describe('createGameData', () => {
                 midiSongs: mockMidiSongs,
                 defaultKeyNoteMap: mockDefaultKeyNoteMap,
                 keyNoteMapCollection: mockKeyNoteMapCollection,
-                difficultySettingsObj: mockDifficultySettingsObj,
+                difficultySettings: mockDifficultySettings,
                 highScoreTracker: mockHighScoreTracker,
                 challengeScoresObj: mockChallengeScoresObj
             });

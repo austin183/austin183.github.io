@@ -3,8 +3,8 @@ import sinon from 'sinon';
 import { createGameMethods } from './createGameMethods.js';
 
 describe('createGameMethods', () => {
-    let mockRenderSongNotesFn;
-    let mockSetupSongFromMidiResultFn;
+    let mockRenderSongNotes;
+    let mockSetupSongFromMidiResult;
     let mockHighScoreTracker;
     let mockChallengeScoresObj;
     let mockGameController;
@@ -15,8 +15,8 @@ describe('createGameMethods', () => {
     let mockLocalStorageRemoveItem;
 
     beforeEach(() => {
-        mockRenderSongNotesFn = sinon.stub();
-        mockSetupSongFromMidiResultFn = sinon.stub();
+        mockRenderSongNotes = sinon.stub();
+        mockSetupSongFromMidiResult = sinon.stub();
         mockHighScoreTracker = { getHighScore: sinon.stub() };
         mockChallengeScoresObj = { getSelectedScore: sinon.stub() };
         mockGameController = { resetAppStateScores: sinon.stub() };
@@ -41,8 +41,8 @@ describe('createGameMethods', () => {
 
         it('returns an object with all required methods', () => {
             const methods = createGameMethods({
-                renderSongNotesFn: mockRenderSongNotesFn,
-                setupSongFromMidiResultFn: mockSetupSongFromMidiResultFn,
+                renderSongNotes: mockRenderSongNotes,
+                setupSongFromMidiResult: mockSetupSongFromMidiResult,
                 highScoreTracker: mockHighScoreTracker,
                 challengeScoresObj: mockChallengeScoresObj,
                 gameController: mockGameController,
@@ -58,8 +58,8 @@ describe('createGameMethods', () => {
         describe('handleMidiSongSelection', () => {
             it('does nothing when no song is selected', () => {
                 const methods = createGameMethods({
-                    renderSongNotesFn: mockRenderSongNotesFn,
-                    setupSongFromMidiResultFn: mockSetupSongFromMidiResultFn,
+                    renderSongNotes: mockRenderSongNotes,
+                    setupSongFromMidiResult: mockSetupSongFromMidiResult,
                     highScoreTracker: mockHighScoreTracker,
                     challengeScoresObj: mockChallengeScoresObj,
                     gameController: mockGameController,
@@ -74,8 +74,8 @@ describe('createGameMethods', () => {
 
             it('resets app state and fetches MIDI file when song is selected', async () => {
                 const methods = createGameMethods({
-                    renderSongNotesFn: mockRenderSongNotesFn,
-                    setupSongFromMidiResultFn: mockSetupSongFromMidiResultFn,
+                    renderSongNotes: mockRenderSongNotes,
+                    setupSongFromMidiResult: mockSetupSongFromMidiResult,
                     highScoreTracker: mockHighScoreTracker,
                     challengeScoresObj: mockChallengeScoresObj,
                     gameController: mockGameController,
@@ -101,8 +101,8 @@ describe('createGameMethods', () => {
 
             it('gets high scores when tracking is enabled', async () => {
                 const methods = createGameMethods({
-                    renderSongNotesFn: mockRenderSongNotesFn,
-                    setupSongFromMidiResultFn: mockSetupSongFromMidiResultFn,
+                    renderSongNotes: mockRenderSongNotes,
+                    setupSongFromMidiResult: mockSetupSongFromMidiResult,
                     highScoreTracker: mockHighScoreTracker,
                     challengeScoresObj: mockChallengeScoresObj,
                     gameController: mockGameController,
@@ -135,8 +135,8 @@ describe('createGameMethods', () => {
                 global.fetch = mockFetch;
 
                 const methods = createGameMethods({
-                    renderSongNotesFn: mockRenderSongNotesFn,
-                    setupSongFromMidiResultFn: mockSetupSongFromMidiResultFn,
+                    renderSongNotes: mockRenderSongNotes,
+                    setupSongFromMidiResult: mockSetupSongFromMidiResult,
                     highScoreTracker: mockHighScoreTracker,
                     challengeScoresObj: mockChallengeScoresObj,
                     gameController: mockGameController,
@@ -156,8 +156,8 @@ describe('createGameMethods', () => {
         describe('setDifficulty', () => {
             it('updates difficulty parameters', () => {
                 const methods = createGameMethods({
-                    renderSongNotesFn: mockRenderSongNotesFn,
-                    setupSongFromMidiResultFn: mockSetupSongFromMidiResultFn,
+                    renderSongNotes: mockRenderSongNotes,
+                    setupSongFromMidiResult: mockSetupSongFromMidiResult,
                     highScoreTracker: mockHighScoreTracker,
                     challengeScoresObj: mockChallengeScoresObj,
                     gameController: mockGameController,
@@ -177,8 +177,8 @@ describe('createGameMethods', () => {
 
             it('updates high scores when tracking is enabled and song selected', () => {
                 const methods = createGameMethods({
-                    renderSongNotesFn: mockRenderSongNotesFn,
-                    setupSongFromMidiResultFn: mockSetupSongFromMidiResultFn,
+                    renderSongNotes: mockRenderSongNotes,
+                    setupSongFromMidiResult: mockSetupSongFromMidiResult,
                     highScoreTracker: mockHighScoreTracker,
                     challengeScoresObj: mockChallengeScoresObj,
                     gameController: mockGameController,
@@ -203,8 +203,8 @@ describe('createGameMethods', () => {
 
             it('does not update high scores when no song is selected', () => {
                 const methods = createGameMethods({
-                    renderSongNotesFn: mockRenderSongNotesFn,
-                    setupSongFromMidiResultFn: mockSetupSongFromMidiResultFn,
+                    renderSongNotes: mockRenderSongNotes,
+                    setupSongFromMidiResult: mockSetupSongFromMidiResult,
                     highScoreTracker: mockHighScoreTracker,
                     challengeScoresObj: mockChallengeScoresObj,
                     gameController: mockGameController,
@@ -227,8 +227,8 @@ describe('createGameMethods', () => {
         describe('handleToggleTrackHighScores', () => {
             it('saves to localStorage when tracking is enabled', () => {
                 const methods = createGameMethods({
-                    renderSongNotesFn: mockRenderSongNotesFn,
-                    setupSongFromMidiResultFn: mockSetupSongFromMidiResultFn,
+                    renderSongNotes: mockRenderSongNotes,
+                    setupSongFromMidiResult: mockSetupSongFromMidiResult,
                     highScoreTracker: mockHighScoreTracker,
                     challengeScoresObj: mockChallengeScoresObj,
                     gameController: mockGameController,
@@ -245,8 +245,8 @@ describe('createGameMethods', () => {
 
             it('removes from localStorage when tracking is disabled', () => {
                 const methods = createGameMethods({
-                    renderSongNotesFn: mockRenderSongNotesFn,
-                    setupSongFromMidiResultFn: mockSetupSongFromMidiResultFn,
+                    renderSongNotes: mockRenderSongNotes,
+                    setupSongFromMidiResult: mockSetupSongFromMidiResult,
                     highScoreTracker: mockHighScoreTracker,
                     challengeScoresObj: mockChallengeScoresObj,
                     gameController: mockGameController,
@@ -264,8 +264,8 @@ describe('createGameMethods', () => {
         describe('renderSongNotes', () => {
             it('calls the provided render function with correct context', () => {
                 const methods = createGameMethods({
-                    renderSongNotesFn: mockRenderSongNotesFn,
-                    setupSongFromMidiResultFn: mockSetupSongFromMidiResultFn,
+                    renderSongNotes: mockRenderSongNotes,
+                    setupSongFromMidiResult: mockSetupSongFromMidiResult,
                     highScoreTracker: mockHighScoreTracker,
                     challengeScoresObj: mockChallengeScoresObj,
                     gameController: mockGameController,
@@ -275,13 +275,13 @@ describe('createGameMethods', () => {
                 const mockThis = { score: 100 };
                 methods.renderSongNotes.call(mockThis);
 
-                expect(mockRenderSongNotesFn.calledOnce).to.be.true;
+                expect(mockRenderSongNotes.calledOnce).to.be.true;
             });
 
             it('handles missing render function gracefully', () => {
                 const methods = createGameMethods({
-                    renderSongNotesFn: null,
-                    setupSongFromMidiResultFn: mockSetupSongFromMidiResultFn,
+                    renderSongNotes: null,
+                    setupSongFromMidiResult: mockSetupSongFromMidiResult,
                     highScoreTracker: mockHighScoreTracker,
                     challengeScoresObj: mockChallengeScoresObj,
                     gameController: mockGameController,
