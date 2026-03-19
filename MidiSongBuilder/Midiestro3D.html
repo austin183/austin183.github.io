@@ -128,6 +128,25 @@
         </div>
         <button id="toggleGameConfig" onclick="window.domUtils.toggleElementById('gameConfig')">Toggle Game Configurations</button>
 
+        <div id="playProgress">
+            <div id="SongTime">
+                Song EndTime: [{{ songEnd }}]
+                <input type="checkbox" v-model="toggleTrackHighScores" v-on:change="handleToggleTrackHighScores()"> Track High Scores (uses <a href="https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage">localStorage)</a></input>
+            </div>
+            <button id="tonePlayToggle" onclick="togglePlay()" disabled>Play</button>
+            <span>Score: [{{ score }}]  Good [{{ goodCount }}] Ok [{{ okCount }}] Bad [{{badCount}}] Missed [{{missedCount}}]</span>
+            <div id="SongHighScore">
+                High Score: [{{ highScore }}] Challenge Score: [{{ challengeScore }}]
+                <button id="clearHighScores" onclick="window.highScoreTracker.exportHighScoresToClipBoardAsJsonString(); localStorage.clear(); app.toggleTrackHighScores = false; window.domUtils.toggleElementById('SongHighScore');">Clear High Scores</button>
+                <button id="exportHighScores" onclick="window.highScoreTracker.exportHighScoresToClipBoardAsJsonString()">Copy High Scores to Clipboard</button>
+            </div>
+        </div>
+
+        <div id="threeJSContainer" class="bordered">
+            <h3>3D View</h3>
+            <canvas id="threeCanvas"></canvas>
+        </div>
+
         <!-- Camera Control UI (visible only when game is stopped) -->
         <div id="cameraControlPanel" class="bordered" style="display: none;">
             <div class="side-by-side">
@@ -177,25 +196,6 @@
                     <option value="">-- Select a preset --</option>
                 </select>
             </div>
-        </div>
-
-        <div id="playProgress">
-            <div id="SongTime">
-                Song EndTime: [{{ songEnd }}]
-                <input type="checkbox" v-model="toggleTrackHighScores" v-on:change="handleToggleTrackHighScores()"> Track High Scores (uses <a href="https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage">localStorage)</a></input>
-            </div>
-            <button id="tonePlayToggle" onclick="togglePlay()" disabled>Play</button>
-            <span>Score: [{{ score }}]  Good [{{ goodCount }}] Ok [{{ okCount }}] Bad [{{badCount}}] Missed [{{missedCount}}]</span>
-            <div id="SongHighScore">
-                High Score: [{{ highScore }}] Challenge Score: [{{ challengeScore }}]
-                <button id="clearHighScores" onclick="window.highScoreTracker.exportHighScoresToClipBoardAsJsonString(); localStorage.clear(); app.toggleTrackHighScores = false; window.domUtils.toggleElementById('SongHighScore');">Clear High Scores</button>
-                <button id="exportHighScores" onclick="window.highScoreTracker.exportHighScoresToClipBoardAsJsonString()">Copy High Scores to Clipboard</button>
-            </div>
-        </div>
-
-        <div id="threeJSContainer" class="bordered">
-            <h3>3D View</h3>
-            <canvas id="threeCanvas"></canvas>
         </div>
 
         <!-- Hidden canvas for 2D debug rendering -->
@@ -385,43 +385,18 @@
                 }
             }
 
-            function disableCameraControls() {
+function disableCameraControls() {
                 cameraControlsActive = false;
                 if (cameraCoordinator) {
                     cameraCoordinator.disableControls();
-                } else {
-                    if (app && app.threeJSRenderer) {
-                        app.threeJSRenderer.disableCameraControls();
-                        app.threeJSRenderer.disableHoverInfo();
-                    }
-                    if (app && app.inputHandler) {
-                        app.inputHandler.setNoteInputEnabled(true);
-                    }
                 }
-                document.getElementById('cameraControlPanel').style.display = 'none';
-                stopCameraUpdateLoop();
             }
 
             function enableCameraControls() {
                 cameraControlsActive = true;
                 if (cameraCoordinator) {
                     cameraCoordinator.enableControls();
-                } else {
-                    if (app && app.threeJSRenderer) {
-app.threeJSRenderer.enableCameraControls();
-                         app.threeJSRenderer.enableHoverInfo();
-                         const hoverInfoElement = document.getElementById('hoverInfo');
-                         if (hoverInfoElement) {
-                             app.threeJSRenderer.setHoverInfoElement(hoverInfoElement);
-                         }
-                    }
-                    if (app && app.inputHandler) {
-                        app.inputHandler.setNoteInputEnabled(false);
-                    }
                 }
-                document.getElementById('cameraControlPanel').style.display = 'block';
-                document.getElementById('cameraInstructions').style.display = 'none';
-                startCameraUpdateLoop();
             }
 
             function toggleCameraControls() {
@@ -646,7 +621,7 @@ if (debugPage && currentMidi && app.selectedTrack !== "") {
 
             // Initialize camera coordinator AFTER Vue mounts (when threeJSRenderer is available)
             if (app.threeJSRenderer && app.inputHandler) {
-                cameraCoordinator = createCameraCoordinator(app.threeJSRenderer, app.inputHandler);
+                cameraCoordinator = createCameraCoordinator(app.threeJSRenderer, app.inputHandler, startCameraUpdateLoop, stopCameraUpdateLoop);
             }
 
             // Expose camera functions to window for onclick handlers

@@ -19,6 +19,33 @@ describe('CameraCoordinator', () => {
         mockInputHandler = {
             setNoteInputEnabled: sinon.spy()
         };
+
+        // Create mock update loop callbacks for tests that need them
+        if (typeof document === 'undefined') {
+            // Only in Node.js environment since browser tests are skipped anyway
+            window.mockStartUpdateLoop = sinon.spy();
+            window.mockStopUpdateLoop = sinon.spy();
+        }
+    });
+
+    afterEach(() => {
+        // Clean up mock callbacks if they were created in beforeEach (Node.js only)
+        if (typeof document === 'undefined') {
+            try {
+                if (window.mockStartUpdateLoop && typeof window.mockStartUpdateLoop.restore === 'function') {
+                    window.mockStartUpdateLoop.restore();
+                }
+            } catch (e) {
+                // Ignore errors during cleanup
+            }
+            try {
+                if (window.mockStopUpdateLoop && typeof window.mockStopUpdateLoop.restore === 'function') {
+                    window.mockStopUpdateLoop.restore();
+                }
+            } catch (e) {
+                // Ignore errors during cleanup
+            }
+        }
     });
 
     describe('Node.js compatibility', () => {
@@ -180,6 +207,68 @@ describe('CameraCoordinator', () => {
             
             expect(consoleSpy2.called).to.be.true;
             consoleSpy2.restore();
+        });
+
+        it('accepts optional onStartUpdateLoop callback', () => {
+            const coordinator = createCameraCoordinator(mockRenderer, mockInputHandler, window.mockStartUpdateLoop, window.mockStopUpdateLoop);
+            expect(coordinator).to.not.be.null;
+        });
+
+        it('calls startUpdateLoop when enableControls is called', () => {
+            const coordinator = createCameraCoordinator(mockRenderer, mockInputHandler, window.mockStartUpdateLoop, window.mockStopUpdateLoop);
+            
+            coordinator.enableControls();
+            
+            expect(window.mockStartUpdateLoop.calledOnce).to.be.true;
+        });
+
+        it('calls stopUpdateLoop when disableControls is called', () => {
+            const coordinator = createCameraCoordinator(mockRenderer, mockInputHandler, window.mockStartUpdateLoop, window.mockStopUpdateLoop);
+            
+            coordinator.disableControls();
+            
+            expect(window.mockStopUpdateLoop.calledOnce).to.be.true;
+        });
+
+        it('calls stopUpdateLoop when onGameStarted is called', () => {
+            const coordinator = createCameraCoordinator(mockRenderer, mockInputHandler, window.mockStartUpdateLoop, window.mockStopUpdateLoop);
+            
+            coordinator.onGameStarted();
+            
+            expect(window.mockStopUpdateLoop.calledOnce).to.be.true;
+        });
+
+        it('calls startUpdateLoop when onGameStopped is called', () => {
+            const coordinator = createCameraCoordinator(mockRenderer, mockInputHandler, window.mockStartUpdateLoop, window.mockStopUpdateLoop);
+            
+            coordinator.onGameStopped();
+            
+            expect(window.mockStartUpdateLoop.calledOnce).to.be.true;
+        });
+
+        it('does not error when update loop callbacks are not provided', () => {
+            const coordinator = createCameraCoordinator(mockRenderer, mockInputHandler);
+            
+            expect(() => {
+                coordinator.enableControls();
+                coordinator.disableControls();
+            }).to.not.throw();
+        });
+
+        it('simulates full game cycle with update loop callbacks', () => {
+            const coordinator = createCameraCoordinator(mockRenderer, mockInputHandler, window.mockStartUpdateLoop, window.mockStopUpdateLoop);
+
+            // Game stops - should start update loop
+            coordinator.onGameStopped();
+            expect(window.mockStartUpdateLoop.calledOnce).to.be.true;
+
+            // Game starts - should stop update loop
+            coordinator.onGameStarted();
+            expect(window.mockStopUpdateLoop.calledOnce).to.be.true;
+
+            // Game stops again - should start update loop again
+            coordinator.onGameStopped();
+            expect(window.mockStartUpdateLoop.callCount).to.equal(2);
         });
     });
 

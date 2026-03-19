@@ -8,7 +8,7 @@
  * - Manages hover info display state
  */
 
-export function createCameraCoordinator(threeJSRenderer, inputHandler) {
+export function createCameraCoordinator(threeJSRenderer, inputHandler, onStartUpdateLoop, onStopUpdateLoop) {
     if (!threeJSRenderer || !inputHandler) {
         console.error('CameraCoordinator: Both threeJSRenderer and inputHandler are required');
         return null;
@@ -68,12 +68,18 @@ export function createCameraCoordinator(threeJSRenderer, inputHandler) {
                 this._renderer.disableCameraControls();
                 this._renderer.disableHoverInfo();
             }
+            if (this._stopUpdateLoop) {
+                this._stopUpdateLoop();
+            }
         },
         
         _enableRendererControls: function() {
             if (this._renderer) {
                 this._renderer.enableCameraControls();
                 this._renderer.enableHoverInfo();
+            }
+            if (this._startUpdateLoop) {
+                this._startUpdateLoop();
             }
         },
         
@@ -114,6 +120,8 @@ export function createCameraCoordinator(threeJSRenderer, inputHandler) {
         
         // Store references
         _renderer: threeJSRenderer,
-        _inputHandler: inputHandler
+        _inputHandler: inputHandler,
+        _startUpdateLoop: onStartUpdateLoop || function() {},
+        _stopUpdateLoop: onStopUpdateLoop || function() {}
     };
 }
