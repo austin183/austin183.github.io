@@ -110,6 +110,33 @@ function createThreeJSRenderer(THREE, FontLoader, TextGeometry) {
         };
     }
 
+    /**
+     * Create text geometry configuration object
+     * @param {string} letter - The letter to create geometry for
+     * @returns {THREE.TextGeometry}
+     */
+    function createTextGeometryConfig(letter) {
+        return new TextGeometry(letter, {
+            font: loadedFont,
+            size: 0.8,
+            depth: .3,
+            height: CONSTANTS.NOTE_THICKNESS,
+            curveSegments: 4,
+            bevelEnabled: false
+        });
+    }
+
+    /**
+     * Center text geometry by computing bounding box and translating
+     * @param {THREE.TextGeometry} textGeometry - The geometry to center
+     */
+    function centerTextGeometry(textGeometry) {
+        textGeometry.computeBoundingBox();
+        const xOffset = -textGeometry.boundingBox.max.x / 2;
+        const yOffset = -textGeometry.boundingBox.max.y / 2;
+        textGeometry.translate(xOffset, yOffset, 0);
+    }
+
     let threeJSRenderer = {
         /**
          * Initialize the Three.js renderer
@@ -327,18 +354,8 @@ function createThreeJSRenderer(THREE, FontLoader, TextGeometry) {
             if (noteCache[letter]) {
                 return noteCache[letter].geometry;
             }
-            const textGeometry = new TextGeometry(letter, {
-                font: loadedFont,
-                size: 0.8,
-                depth: .3,
-                height: CONSTANTS.NOTE_THICKNESS,
-                curveSegments: 4,
-                bevelEnabled: false
-            });
-            textGeometry.computeBoundingBox();
-            const xOffset = -textGeometry.boundingBox.max.x / 2;
-            const yOffset = -textGeometry.boundingBox.max.y / 2;
-            textGeometry.translate(xOffset, yOffset, 0);
+            const textGeometry = createTextGeometryConfig(letter);
+            centerTextGeometry(textGeometry);
             return textGeometry;
         },
 
@@ -439,19 +456,8 @@ function createThreeJSRenderer(THREE, FontLoader, TextGeometry) {
             noteCache = noteCacheBuilder.buildNoteCache(keyRenderInfo, function(key, keyInfo) {
                 const letter = key.toUpperCase();
 
-                const textGeometry = new TextGeometry(letter, {
-                    font: loadedFont,
-                    size: 0.8,
-                    depth: .3,
-                    height: CONSTANTS.NOTE_THICKNESS,
-                    curveSegments: 4,
-                    bevelEnabled: false
-                });
-                textGeometry.computeBoundingBox();
-
-                const xOffset = -textGeometry.boundingBox.max.x / 2;
-                const yOffset = -textGeometry.boundingBox.max.y / 2;
-                textGeometry.translate(xOffset, yOffset, 0);
+                const textGeometry = createTextGeometryConfig(letter);
+                centerTextGeometry(textGeometry);
 
                 return {
                     geometry: textGeometry,
