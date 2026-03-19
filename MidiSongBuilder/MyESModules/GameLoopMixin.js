@@ -12,7 +12,7 @@ export function getGameLoopMixin(cleanupMixin) {
      * Handle song end - render final score and update high scores
      */
     function handleSongEnd(app, gameState) {
-        if (gameState.get('songNoteRenderer')) {
+        if (gameState.get('songNoteRenderer') && app.notesCanvas && app.vueCanvas) {
             gameState.get('songNoteRenderer').renderFinalScore(
                 app.notesCanvas, 
                 app.vueCanvas, 

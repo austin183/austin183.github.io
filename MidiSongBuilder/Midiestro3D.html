@@ -193,15 +193,13 @@
             </div>
         </div>
 
-        <div class="canvas-container-wrapper">
-            <div id="canvasContainer" class="bordered">
-                <canvas id="notesCanvas"></canvas>
-            </div>
-            <div id="threeJSContainer" class="bordered">
-                <h3>3D View</h3>
-                <canvas id="threeCanvas"></canvas>
-            </div>
+        <div id="threeJSContainer" class="bordered">
+            <h3>3D View</h3>
+            <canvas id="threeCanvas"></canvas>
         </div>
+
+        <!-- Hidden canvas for 2D debug rendering -->
+        <canvas id="notesCanvas" style="display:none;"></canvas>
 
         <div id="notesPlaying">
             <div class="bordered">{{renderedNotesPlaying}}</div>

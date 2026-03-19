@@ -140,34 +140,24 @@ function getThreeJSGameController(Tone) {
          */
         doRenderAfterLoop: function(app, gameState, currentScore, intervalNow, visiblePast, visibleFuture) {
             var threeJSRenderer = gameState.get('threeJSRenderer');
-            var earliestNoteIndex = gameState.get('earliestNoteIndex') || 0;
-
+            
             // Update 3D note positions based on animation
             this.update3DNotesPosition(threeJSRenderer, gameState, intervalNow, app);
 
             // Update 3D note colors based on score (hit notes change color)
             this.update3DNoteColors(threeJSRenderer, currentScore, app);
 
-            // Render the 2D canvas
-            app.vueCanvas.clearRect(0, 0, app.notesCanvas.width, app.notesCanvas.height);
-            gameState.get('songNoteRenderer').renderNowLine(app.notesCanvas, app.vueCanvas);
-            gameState.get('songNoteRenderer').renderNotesPlayingForCanvas(
-                app.notesCanvas,
-                app.vueCanvas,
-                gameState.get('visibleField'),
-                currentScore,
-                intervalNow,
-                visiblePast,
-                visibleFuture,
-                earliestNoteIndex,
-                gameState.get('noteLetterCache') || {}
-            );
-
             // Render 3D now line
             this.render3DNowLine(threeJSRenderer, app);
 
-            // Debug output if enabled
-            if (window.location.search == "?debug") {
+            // Render 3D scene
+            if (threeJSRenderer) {
+                threeJSRenderer.render();
+            }
+
+            // Debug output if enabled (only for 2D canvas mode)
+            if (window.location.search == "?debug" && app.notesCanvas) {
+                var earliestNoteIndex = gameState.get('earliestNoteIndex') || 0;
                 app.renderedNotesPlaying = gameState.get('songNoteRenderer').renderDebugNotesPlaying(
                     app.notesCanvas,
                     app.selectedTrack.notes,

@@ -34,12 +34,14 @@ export function createGameLifecycle(mode, {
             
             // Shared canvas initialization (both 2D and 3D modes)
             this.notesCanvas = document.getElementById("notesCanvas");
-            var ctx = this.notesCanvas.getContext('2d');
-            this.vueCanvas = ctx;
-            this.vueCanvas.clearRect(0, 0, this.notesCanvas.width, this.notesCanvas.height);
-            this.vueCanvas.font = "18px Georgia";
-            this.vueCanvas.fillStyle = "black";
-            this.vueCanvas.fillText("Watch for falling note keys!", 0, 50);
+            if (this.notesCanvas) {
+                var ctx = this.notesCanvas.getContext('2d');
+                this.vueCanvas = ctx;
+                this.vueCanvas.clearRect(0, 0, this.notesCanvas.width, this.notesCanvas.height);
+                this.vueCanvas.font = "18px Georgia";
+                this.vueCanvas.fillStyle = "black";
+                this.vueCanvas.fillText("Watch for falling note keys!", 0, 50);
+            }
             
             // Shared high score toggle initialization from localStorage
             this.toggleTrackHighScores = localStorage.getItem("TrackScores") == "true";
