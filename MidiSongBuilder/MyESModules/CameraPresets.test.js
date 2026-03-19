@@ -55,7 +55,7 @@ describe('getCameraPresets', function() {
 
     it('should have roadView with position at { x: 0, y: 6.6, z: 12.6 }', function() {
         const presets = getCameraPresets();
-        expect(presets.roadView.position).to.deep.equal({ x: 0, y: 6.6, z: 12.6 });
+        expect(presets.roadView.position).to.deep.equal({ x: 0, y: 6.6, z: 14 });
     });
 
     it('should have isometric with position at { x: -10, y: 10, z: 10 }', function() {
@@ -75,7 +75,7 @@ describe('getCameraPresets', function() {
 
     it('should have roadView looking at { x: 0, y: 6, z: 11.8 }', function() {
         const presets = getCameraPresets();
-        expect(presets.roadView.lookAt).to.deep.equal({ x: 0, y: 6, z: 11.8 });
+        expect(presets.roadView.lookAt).to.deep.equal({ x: 0, y: 6, z: 13.2 });
     });
 
     it('should have isometric looking at { x: 0, y: 0, z: 5 }', function() {

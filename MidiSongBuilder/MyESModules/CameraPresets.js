@@ -12,8 +12,8 @@ export default function getCameraPresets() {
         },
         roadView: {
             name: 'Road View (Default)',
-            position: { x: 0, y: 6.6, z: 12.6 },
-            lookAt: { x: 0, y: 6, z: 11.8 }
+            position: { x: 0, y: 6.6, z: 14 },
+            lookAt: { x: 0, y: 6, z: 13.2 }
         },
         isometric: {
             name: '3/4 Isometric View',

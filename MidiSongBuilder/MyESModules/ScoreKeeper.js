@@ -94,9 +94,7 @@ function getScoreKeeper(scoringSettings, debugLogger = null) {
                     goodRange, 
                     okRange, 
                     badRange,
-                    inGoodRange: closestDistance <= goodRange,
-                    inOkRange: closestDistance <= okRange,
-                    inBadRange: closestDistance <= badRange,
+                    absDistance: Math.abs(closestDistance),
                     alreadyScored: !!score.keyScores[closestNoteId]
                 });
             }
@@ -107,25 +105,32 @@ function getScoreKeeper(scoringSettings, debugLogger = null) {
         },
 
         _applyScoreForDistance: function(noteId, distance) {
-            if (distance <= goodRange) {
+            const absDistance = Math.abs(distance);
+            
+            if (absDistance <= goodRange) {
                 if (debugLogger?.enabled) { 
-                    debugLogger.log('SCORING GOOD!', distance, '<=', goodRange); 
+                    debugLogger.log('SCORING GOOD!', absDistance, '<=', goodRange); 
                 }
                 score.total += goodPoints;
                 score.keyScores[noteId] = { 
                     points: goodPoints, 
                     tag: SCORING.TAGS.GOOD 
                 };
-            } else if (distance <= okRange) {
+            } else if (absDistance <= okRange) {
                 score.total += okPoints;
                 score.keyScores[noteId] = { 
                     points: okPoints, 
                     tag: SCORING.TAGS.OK 
                 };
-            } else if (distance <= badRange) {
+            } else if (absDistance <= badRange) {
                 score.keyScores[noteId] = { 
                     points: 0, 
                     tag: SCORING.TAGS.BAD 
+                };
+            } else {
+                score.keyScores[noteId] = { 
+                    points: 0, 
+                    tag: SCORING.TAGS.MISSED 
                 };
             }
         },

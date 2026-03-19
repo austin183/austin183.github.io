@@ -76,36 +76,36 @@ describe('ScoreKeeper', function() {
             expect(result.keyScores.note1.tag).to.equal('good');
         });
 
-        it('should award goodPoints when key pressed at exactly 400ms past note time (still in good range)', function() {
+        it('should award okPoints (50) when key pressed at exactly 400ms past note time', function() {
             setup();
             const result = scoreKeeper.calculateNewScore(visibleField, { 'A': true }, 1.4, 0, visibleFuture);
             
-            expect(result.total).to.equal(100);
-            expect(result.keyScores.note1.tag).to.equal('good');
+            expect(result.total).to.equal(50);
+            expect(result.keyScores.note1.tag).to.equal('ok');
         });
 
-        it('should award goodPoints when key pressed 200ms past note time (still in good range)', function() {
+        it('should award okPoints (50) when key pressed 200ms past note time', function() {
             setup();
             const result = scoreKeeper.calculateNewScore(visibleField, { 'A': true }, 1.2, 0, visibleFuture);
             
-            expect(result.total).to.equal(100);
-            expect(result.keyScores.note1.tag).to.equal('good');
+            expect(result.total).to.equal(50);
+            expect(result.keyScores.note1.tag).to.equal('ok');
         });
 
         it('should award badPoints (0) when key pressed at exactly 700ms past note time', function() {
             setup();
             const result = scoreKeeper.calculateNewScore(visibleField, { 'A': true }, 1.7, 0, visibleFuture);
             
-            expect(result.total).to.equal(100);
-            expect(result.keyScores.note1.tag).to.equal('good');
+            expect(result.total).to.equal(0);
+            expect(result.keyScores.note1.tag).to.equal('bad');
         });
 
         it('should award badPoints (0) when key pressed 500ms past note time', function() {
             setup();
             const result = scoreKeeper.calculateNewScore(visibleField, { 'A': true }, 1.5, 0, visibleFuture);
             
-            expect(result.total).to.equal(100);
-            expect(result.keyScores.note1.tag).to.equal('good');
+            expect(result.total).to.equal(0);
+            expect(result.keyScores.note1.tag).to.equal('bad');
         });
 
         it('should award zero points when key pressed more than 700ms past note time', function() {
@@ -226,7 +226,7 @@ describe('ScoreKeeper', function() {
             scoreKeeper.calculateNewScore(visibleField, { 'D': true }, 4.5, 0, visibleFuture);
             
             const counts = scoreKeeper.getCounts();
-            expect(counts.goodCount).to.equal(3);
+            expect(counts.goodCount).to.equal(2);
         });
 
         it('should count bad notes correctly', function() {
