@@ -330,7 +330,7 @@ function createThreeJSRenderer(THREE, FontLoader, TextGeometry) {
             const textGeometry = new TextGeometry(letter, {
                 font: loadedFont,
                 size: 0.8,
-                depth: .5,
+                depth: .3,
                 height: CONSTANTS.NOTE_THICKNESS,
                 curveSegments: 4,
                 bevelEnabled: false
@@ -442,7 +442,7 @@ function createThreeJSRenderer(THREE, FontLoader, TextGeometry) {
                 const textGeometry = new TextGeometry(letter, {
                     font: loadedFont,
                     size: 0.8,
-                    depth: .5,
+                    depth: .3,
                     height: CONSTANTS.NOTE_THICKNESS,
                     curveSegments: 4,
                     bevelEnabled: false

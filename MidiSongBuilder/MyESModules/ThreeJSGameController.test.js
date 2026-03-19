@@ -252,7 +252,8 @@ describe('ThreeJSGameController', () => {
                 updateAllNotes: sinon.stub(),
                 getNoteGroup: sinon.stub().returns({ children: [] }),
                 setNoteState: sinon.stub(),
-                renderNowLine: sinon.stub()
+                renderNowLine: sinon.stub(),
+                render: sinon.stub()
             };
             const mockScoreKeeper = { reset: sinon.stub() };
             const mockSongNoteRenderer = { 
@@ -296,7 +297,8 @@ describe('ThreeJSGameController', () => {
                 updateAllNotes: sinon.stub(),
                 getNoteGroup: sinon.stub().returns({ children: [] }),
                 setNoteState: sinon.stub(),
-                renderNowLine: sinon.stub()
+                renderNowLine: sinon.stub(),
+                render: sinon.stub()
             };
             const mockScoreKeeper = { reset: sinon.stub() };
             const mockSongNoteRenderer = { 
@@ -340,7 +342,8 @@ describe('ThreeJSGameController', () => {
                 updateAllNotes: sinon.stub(),
                 getNoteGroup: sinon.stub().returns({ children: [] }),
                 setNoteState: sinon.stub(),
-                renderNowLine: sinon.stub()
+                renderNowLine: sinon.stub(),
+                render: sinon.stub()
             };
             const mockScoreKeeper = { reset: sinon.stub() };
             const mockSongNoteRenderer = { 
@@ -390,7 +393,8 @@ describe('ThreeJSGameController', () => {
                 updateAllNotes: sinon.stub(),
                 getNoteGroup: sinon.stub().returns({ children: [] }),
                 setNoteState: sinon.stub(),
-                renderNowLine: sinon.stub()
+                renderNowLine: sinon.stub(),
+                render: sinon.stub()
             };
             
             const mockScoreKeeper = { reset: sinon.stub() };
