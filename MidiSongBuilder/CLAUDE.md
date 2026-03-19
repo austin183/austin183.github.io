@@ -19,5 +19,16 @@ DO THINK about:
 ## Read Files Before Writing
 Harnesses expect files to be read before getting written to.  Please be sure to read before writing.
 
+## Test Changes
+- [ ] `npm test` from /Users/austin/workspace/austin183.github.io/MidiSongBuilder/MyESModules
+- [ ] Test http://localhost:8000/MidiSongBuilder/Midiestro3D.html
+    - Page Loads
+    - Song can be selected
+    - Play button enables and can be clicked with no errors
+  - [ ] Test http://localhost:8000/MidiSongBuilder/Midiestro.html
+    - Page Loads
+    - Song can be selected
+    - Play button enables and can be clicked with no errors
+
 ## Committing to Github
 Sign Commits with `Co-Authored-By: LittleLight <noreply@traveler.dstny>`

@@ -9,7 +9,7 @@
 
 import getGameController from './GameController.js';
 import getThreeJSGameController from './ThreeJSGameController.js';
-import getThreeJSRenderer from './ThreeJSRenderer.js';
+import createThreeJSRenderer from './ThreeJSRenderer.js';
 
 /**
  * Base game mode strategy - defines interface for all modes
@@ -131,7 +131,7 @@ class ThreeDMode extends BaseGameMode {
         }
         
         // Create and initialize Three.js renderer
-        const threeJSRenderer = getThreeJSRenderer(THREE, FontLoader, TextGeometry);
+        const threeJSRenderer = createThreeJSRenderer(THREE, FontLoader, TextGeometry);
         
         threeJSRenderer.init("threeCanvas");
         app.threeJSRenderer = threeJSRenderer;

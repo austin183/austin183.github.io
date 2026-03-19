@@ -4,60 +4,113 @@ import { getHoverInfoService } from './HoverInfoService.js';
 import { getHoverInfoDisplay } from './HoverInfoDisplay.js';
 import { getCameraControls } from './CameraControls.js';
 
-function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
+function createThreeJSRenderer(THREE, FontLoader, TextGeometry) {
     if (!THREE) {
         console.error('ThreeJSRenderer: THREE library is required');
         return null;
     }
 
-    // Initialize dependencies with THREE directly (no setter functions)
     const hoverInfoService = getHoverInfoService(THREE);
     const cameraControls = getCameraControls(THREE);
 
-    var renderer = null;
-    var scene = null;
-    var camera = null;
-    var gridHelper = null;
-    var animationId = null;
+    let renderer = null;
+    let scene = null;
+    let camera = null;
+    let gridHelper = null;
+    let animationId = null;
 
-    // Note rendering variables
-    var noteGroup = null;
-    var noteCache = {};
-    var fontLoader = null;
-    var loadedFont = null;
-    var loadingFont = false;
-    var fontLoadError = null;
+    let noteGroup = null;
+    let noteCache = {};
+    let fontLoader = null;
+    let loadedFont = null;
+    let loadingFont = false;
+    let fontLoadError = null;
 
-    // Font loading promise for graceful async handling
-    var fontLoadPromise = null;
+    let fontLoadPromise = null;
+    let isCameraControlsEnabled = false;
 
-    // Camera controls and hover info already initialized at top level with THREE
-    var isCameraControlsEnabled = false;
+    const noteCacheBuilder = getNoteCacheBuilder();
+    const coordinateCalculator = getCoordinateCalculator();
+    const CONSTANTS = coordinateCalculator.getConstants();
 
-    // Note cache builder utility
-    var noteCacheBuilder = getNoteCacheBuilder();
-
-    // Coordinate calculator for consistent position calculations
-    var coordinateCalculator = getCoordinateCalculator();
-    var CONSTANTS = coordinateCalculator.getConstants();
-
-    // Colors matching 2D renderer
-    var noteColors = {
-        unplayed: [0.012, 0.125, 0.341],  // RGB for dark blue #031f57
-        good: [0.0, 0.502, 0.0],          // Green #008000
-        ok: [1.0, 0.843, 0.0],            // Yellow #FFD700
-        bad: [1.0, 0.0, 0.0]              // Red #FF0000
+    const noteColors = {
+        unplayed: [0.012, 0.125, 0.341],
+        good: [0.0, 0.502, 0.0],
+        ok: [1.0, 0.843, 0.0],
+        bad: [1.0, 0.0, 0.0]
     };
 
-    var colorCache = {};  // Cache for THREE.Color objects
+    let colorCache = {};
 
-    // Now line visualization (3D plane at player position)
-    var nowLine = null;
+    let nowLine = null;
+    let hoverInfoDisplay = null;
 
-    // Hover info display (created in init, not at top level)
-    var hoverInfoDisplay = null;
+    /**
+     * Validate note creation parameters
+     */
+    function validateNoteParams(letter, column, state) {
+        if (typeof letter !== 'string' || !letter) {
+            console.error('createNote: letter must be a non-empty string');
+            return false;
+        }
+        if (typeof column !== 'number' || column < 0) {
+            console.error('createNote: column must be a non-negative number');
+            return false;
+        }
+        if (typeof state !== 'string') {
+            console.error('createNote: state must be a string');
+            return false;
+        }
+        return true;
+    }
 
-    var threeJSRenderer = {
+    /**
+     * Create the note box mesh (border)
+     */
+    function createNoteBox(noteColor) {
+        const noteDims = coordinateCalculator.getNoteDimensions();
+        const boxGeometry = new THREE.BoxGeometry(
+            noteDims.width, 
+            noteDims.height, 
+            CONSTANTS.NOTE_THICKNESS
+        );
+        const boxMaterial = new THREE.MeshPhongMaterial({ color: noteColor });
+        const box = new THREE.Mesh(boxGeometry, boxMaterial);
+        box.position.set(0, 0, CONSTANTS.NOTE_THICKNESS / 2);
+        return box;
+    }
+
+    /**
+     * Create the text mesh for a note letter
+     */
+    function createNoteTextMesh(letter) {
+        const textGeometry = threeJSRenderer.createTextGeometry(letter);
+        const textMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const text = new THREE.Mesh(textGeometry, textMaterial);
+        text.position.set(0, -0.2, 0);
+        return text;
+    }
+
+    /**
+     * Create note metadata for userData
+     */
+    function createNoteUserData(letter, column, row, time, state, xPos, yPos, zPos, delay) {
+        const noteId = letter + "_" + time + "_" + column;
+        return {
+            id: noteId,
+            letter: letter,
+            column: column,
+            row: row,
+            time: time,
+            state: state,
+            xPos: xPos,
+            yPos: yPos,
+            zPos: zPos,
+            delay: delay
+        };
+    }
+
+    let threeJSRenderer = {
         /**
          * Initialize the Three.js renderer
          * @param {string} canvasId - The id of the canvas element to render to
@@ -92,7 +145,7 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
             hoverInfoDisplay = getHoverInfoDisplay();
 
             // Initialize camera controls first to get defaults (CameraControls is source of truth)
-            var defaultCameraState = cameraControls.getDefaultCameraState();
+            const defaultCameraState = cameraControls.getDefaultCameraState();
 
             // Position camera using CameraControls defaults
             camera.position.set(defaultCameraState.position.x, defaultCameraState.position.y, defaultCameraState.position.z);
@@ -157,7 +210,7 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
                     function(error) {
                         fontLoadError = error;
                         loadingFont = false;
-                        var errorMessage = 'Failed to load font from ' + fontUrl + ': ' + (error ? error.message : 'Unknown error');
+                        const errorMessage = 'Failed to load font from ' + fontUrl + ': ' + (error ? error.message : 'Unknown error');
                         console.error(errorMessage);
                         reject(new Error(errorMessage));
                     }
@@ -178,22 +231,12 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
          * @returns {THREE.Mesh|null} - The note mesh or null if font not loaded
          */
         createNote: function(letter, column, row, time, state, delay) {
-            // Validate required parameters
-            if (typeof letter !== 'string' || !letter) {
-                console.error('createNote: letter must be a non-empty string');
-                return null;
-            }
-            if (typeof column !== 'number' || column < 0) {
-                console.error('createNote: column must be a non-negative number');
-                return null;
-            }
-            if (typeof state !== 'string') {
-                console.error('createNote: state must be a string');
+            if (!validateNoteParams(letter, column, state)) {
                 return null;
             }
 
             if (!loadedFont) {
-                var errorMessage = 'Font not loaded. Call loadFont() first and wait for it to complete.';
+                let errorMessage = 'Font not loaded. Call loadFont() first and wait for it to complete.';
                 if (fontLoadError) {
                     errorMessage += ' Previous font load error: ' + fontLoadError.message;
                 }
@@ -201,56 +244,19 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
                 return null;
             }
 
-            // Use CoordinateCalculator for position
             delay = delay !== undefined ? delay : CONSTANTS.DEFAULT_DELAY;
+            const pos = coordinateCalculator.calculateNotePosition(column, time, delay);
 
-            // Initialize userData.id for consistency
-            var noteId = letter + "_" + time + "_" + column;
+            const noteColor = threeJSRenderer.getColor(state);
+            const noteMesh = new THREE.Group();
+            noteMesh.add(createNoteBox(noteColor));
+            noteMesh.add(createNoteTextMesh(letter));
 
-            // Calculate 3D position using the coordinate calculator
-            var pos = coordinateCalculator.calculateNotePosition(column, time, delay);
-            var xPos = pos.x;
-            var yPos = pos.y;
-            var zPos = pos.z;
-
-            // Use cached color
-            var noteColor = threeJSRenderer.getColor(state);
-
-            // Create note group
-            var noteMesh = new THREE.Group();
-
-            // Create box for note border using CoordinateCalculator
-            var noteDims = coordinateCalculator.getNoteDimensions();
-            var boxWidth = noteDims.width;
-            var boxHeight = noteDims.height;
-            var boxGeometry = new THREE.BoxGeometry(boxWidth, boxHeight, CONSTANTS.NOTE_THICKNESS);
-            var boxMaterial = new THREE.MeshPhongMaterial({ color: noteColor });
-            var box = new THREE.Mesh(boxGeometry, boxMaterial);
-            box.position.set(0, 0, CONSTANTS.NOTE_THICKNESS / 2);
-            noteMesh.add(box);
-
-            // Create text geometry using cached geometry if available
-            var textGeometry = threeJSRenderer.createTextGeometry(letter);
-            var textMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-            var text = new THREE.Mesh(textGeometry, textMaterial);
-            text.position.set(0, -0.2, 0);
-            noteMesh.add(text);
-
-            // Store note metadata
-            noteMesh.userData = {
-                id: noteId,
-                letter: letter,
-                column: column,
-                row: row,
-                time: time,
-                state: state,
-                xPos: xPos,
-                yPos: yPos,
-                zPos: zPos,
-                delay: delay  // Store delay for position updates
-            };
-
-            noteMesh.position.set(xPos, yPos, zPos);
+            noteMesh.userData = createNoteUserData(
+                letter, column, row, time, state, 
+                pos.x, pos.y, pos.z, delay
+            );
+            noteMesh.position.set(pos.x, pos.y, pos.z);
             noteMesh.castShadow = true;
 
             return noteMesh;
@@ -265,18 +271,13 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
         updateNotePosition: function(noteMesh, currentTime, delay) {
             if (!noteMesh || !noteMesh.userData) return;
 
-            var noteTime = noteMesh.userData.time;
-            // Default delay from coordinate calculator
+            const noteTime = noteMesh.userData.time;
             delay = delay !== undefined ? delay : (noteMesh.userData.delay !== undefined ? noteMesh.userData.delay : CONSTANTS.DEFAULT_DELAY);
-            // Notes move toward camera (positive Z) as time progresses
-            // Use CoordinateCalculator for dynamic position
-            var pos = coordinateCalculator.calculateDynamicPosition(noteTime, currentTime, delay);
-            var zPos = pos.z;
+            const pos = coordinateCalculator.calculateDynamicPosition(noteTime, currentTime, delay);
+            const zPos = pos.z;
 
-            // Update the stored zPos (keep Y position fixed)
             noteMesh.userData.zPos = zPos;
             noteMesh.position.z = zPos;
-            // Note: Y position remains fixed at 0 (set in createNote)
         },
 
         /**
@@ -301,7 +302,7 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
          */
         getColor: function(state) {
             if (!colorCache[state]) {
-                var colorArray = noteColors[state] || noteColors.unplayed;
+                const colorArray = noteColors[state] || noteColors.unplayed;
                 colorCache[state] = new THREE.Color(colorArray[0], colorArray[1], colorArray[2]);
             }
             return colorCache[state];
@@ -316,8 +317,7 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
             if (noteCache[letter]) {
                 return noteCache[letter].geometry;
             }
-            // Fallback if not in cache - create fresh geometry
-            var textGeometry = new TextGeometry(letter, {
+            const textGeometry = new TextGeometry(letter, {
                 font: loadedFont,
                 size: 0.8,
                 depth: .5,
@@ -326,8 +326,8 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
                 bevelEnabled: false
             });
             textGeometry.computeBoundingBox();
-            var xOffset = -textGeometry.boundingBox.max.x / 2;
-            var yOffset = -textGeometry.boundingBox.max.y / 2;
+            const xOffset = -textGeometry.boundingBox.max.x / 2;
+            const yOffset = -textGeometry.boundingBox.max.y / 2;
             textGeometry.translate(xOffset, yOffset, 0);
             return textGeometry;
         },
@@ -342,13 +342,10 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
 
             noteGroup.children.forEach(function(noteMesh) {
                 if (noteMesh.userData && noteMesh.userData.id === noteId) {
-                    // Update state
                     noteMesh.userData.state = state;
 
-                    // Update color using cached color
-                    var newColor = threeJSRenderer.getColor(state);
+                    const newColor = threeJSRenderer.getColor(state);
 
-                    // Update box color
                     if (noteMesh.children.length > 0) {
                         noteMesh.children[0].material.color = newColor;
                     }
@@ -361,14 +358,12 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
          */
         clearNotes: function() {
             if (noteGroup) {
-                // Remove all children
                 while (noteGroup.children.length > 0) {
-                    var child = noteGroup.children.pop();
+                    const child = noteGroup.children.pop();
                     if (child.geometry) child.geometry.dispose();
                     if (child.material) child.material.dispose();
                 }
             }
-            // Also clear the cache
             noteCache = {};
         },
 
@@ -378,24 +373,18 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
          * @param {Object} keyRenderInfo - Keyboard layout from keyRenderInfo.js
          */
         addNotesFromVisibleField: function(visibleField, keyRenderInfo) {
-            // Debug log - only visible when ?debug query parameter is present
             if (window.location.search === '?debug') {
                 console.log('addNotesFromVisibleField called, noteGroup:', noteGroup, 'children:', noteGroup ? noteGroup.children.length : 0);
             }
             if (!noteGroup) return;
 
-            // Clear existing notes
             this.clearNotes();
-
-            // Create cache for letter geometries using NoteCacheBuilder utility
             this.buildNoteCache(keyRenderInfo);
 
-            // Create notes for visible field
-            // Use a default delay of 4 seconds to match ThreeJSGameController
             visibleField.forEach(function(note) {
-                var keyInfo = keyRenderInfo[note.letter];
+                const keyInfo = keyRenderInfo[note.letter];
                 if (keyInfo) {
-                    var noteMesh = threeJSRenderer.createNote(
+                    const noteMesh = threeJSRenderer.createNote(
                         note.letter.toUpperCase(),
                         keyInfo.column,
                         keyInfo.row,
@@ -404,7 +393,6 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
                         CONSTANTS.DEFAULT_DELAY
                     );
                     if (noteMesh) {
-                        // Use the note.id from the visible field for consistency
                         noteMesh.userData.id = note.id;
                         noteGroup.add(noteMesh);
                     }
@@ -436,15 +424,12 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
         buildNoteCache: function(keyRenderInfo) {
             if (!loadedFont) return;
 
-            // Clear existing cache
             noteCache = {};
 
-            // Use NoteCacheBuilder utility with a custom builder for 3D text geometries
             noteCache = noteCacheBuilder.buildNoteCache(keyRenderInfo, function(key, keyInfo) {
                 const letter = key.toUpperCase();
 
-                // Create text geometry for each letter
-                var textGeometry = new TextGeometry(letter, {
+                const textGeometry = new TextGeometry(letter, {
                     font: loadedFont,
                     size: 0.8,
                     depth: .5,
@@ -454,12 +439,10 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
                 });
                 textGeometry.computeBoundingBox();
 
-                // Center the text
-                var xOffset = -textGeometry.boundingBox.max.x / 2;
-                var yOffset = -textGeometry.boundingBox.max.y / 2;
+                const xOffset = -textGeometry.boundingBox.max.x / 2;
+                const yOffset = -textGeometry.boundingBox.max.y / 2;
                 textGeometry.translate(xOffset, yOffset, 0);
 
-                // Store the geometry for reuse
                 return {
                     geometry: textGeometry,
                     letter: letter
@@ -591,15 +574,10 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
         renderNowLine: function(zPos) {
             if (!scene) return;
 
-            // Create or update now line - now using a translucent cuboid for better visibility
             if (!nowLine) {
-                // Use a box geometry with a translucent green material
-                // Width matches keyboard span (~12 units for 10 keys with 1.2 spacing)
-                // Height represents the note height, thickness is minimal
-                var boxGeometry = new THREE.BoxGeometry(14, 1, 0.2);
+                const boxGeometry = new THREE.BoxGeometry(14, 1, 0.2);
 
-                // Create a translucent green material
-                var material = new THREE.MeshPhongMaterial({
+                const material = new THREE.MeshPhongMaterial({
                     color: 0x00ff00,
                     transparent: true,
                     opacity: 0.3,
@@ -607,15 +585,12 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
                 });
 
                 nowLine = new THREE.Mesh(boxGeometry, material);
-                nowLine.userData.type = 'nowLine';  // Add type identifier for raycasting (Issue #3)
+                nowLine.userData.type = 'nowLine';
 
-                // Initial position - aligned with 2D "now line" at bottom of view
                 nowLine.position.y = 0;
-                // Use calculateNowLinePosition for consistent now line positioning
                 nowLine.position.z = coordinateCalculator.calculateNowLinePosition(zPos);
                 scene.add(nowLine);
 
-                // Update camera controls with nowLine reference
                 if (cameraControls) {
                     cameraControls.setNowLineReference(nowLine);
                 }
@@ -646,11 +621,8 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
         updateNoteRotation: function() {
             if (!noteGroup || !camera || !isCameraControlsEnabled) return;
 
-            // Get camera position
-            var cameraPosition = camera.position;
+            const cameraPosition = camera.position;
 
-            // For each note, make it look at the camera's position
-            // This makes notes face the camera from any angle (full 3D billboarding)
             noteGroup.children.forEach(function(noteMesh) {
                 if (!noteMesh) return;
                 noteMesh.lookAt(cameraPosition);
@@ -682,7 +654,7 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
          */
         updateCameraFromControls: function() {
             if (cameraControls && isCameraControlsEnabled) {
-                var state = cameraControls.getCameraState();
+                const state = cameraControls.getCameraState();
                 camera.position.set(state.position.x, state.position.y, state.position.z);
                 camera.lookAt(state.lookAt.x, state.lookAt.y, state.lookAt.z);
             }
@@ -758,7 +730,7 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
          */
         getCameraPresetName: function(presetKey) {
             if (cameraControls) {
-                var preset = cameraControls.getPreset(presetKey);
+                const preset = cameraControls.getPreset(presetKey);
                 return preset ? preset.name : presetKey;
             }
             return presetKey;
@@ -809,4 +781,4 @@ function getThreeJSRenderer(THREE, FontLoader, TextGeometry) {
     return threeJSRenderer;
 }
 
-export default getThreeJSRenderer;
+export default createThreeJSRenderer;
