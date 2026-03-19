@@ -263,10 +263,15 @@ function createThreeJSRenderer(THREE, FontLoader, TextGeometry) {
         },
 
         /**
-         * Update note position (for animation)
-         * @param {THREE.Mesh} noteMesh - The note to update
-         * @param {number} currentTime - Current time in song
-         * @param {number} delay - Optional delay (defaults to userData.delay or 3)
+         * Update a note's Z position based on current game time for animation.
+         * 
+         * Notes move toward the camera along Z-axis as time progresses.
+         * Updates both noteMesh.position.z and noteMesh.userData.zPos for consistency.
+         * 
+         * @param {THREE.Group} noteMesh - The note mesh group to update. Must have userData with time property.
+         * @param {number} currentTime - Current time in song playback (seconds).
+         * @param {number} [delay] - Optional delay offset. Defaults to userData.delay or 3 seconds if not set.
+         * @returns {void} This method modifies noteMesh in place and returns nothing.
          */
         updateNotePosition: function(noteMesh, currentTime, delay) {
             if (!noteMesh || !noteMesh.userData) return;
@@ -281,9 +286,14 @@ function createThreeJSRenderer(THREE, FontLoader, TextGeometry) {
         },
 
         /**
-         * Update all notes' positions based on current time
-         * @param {number} currentTime - Current time in song
-         * @param {number} delay - Optional delay (defaults to 3)
+         * Update all notes' Z positions based on current game time.
+         * 
+         * Iterates through all note meshes in the scene and updates their positions.
+         * Called during animation loop to create falling notes effect.
+         * 
+         * @param {number} currentTime - Current time in song playback (seconds).
+         * @param {number} [delay] - Optional delay offset. Defaults to 3 seconds if not set.
+         * @returns {void} This method modifies all notes in place and returns nothing.
          */
         updateAllNotes: function(currentTime, delay) {
             if (!noteGroup) return;
