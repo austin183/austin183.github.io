@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3-19-2026 - Agent-Assisted Refactoring Journey</title>
+    <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
+    <link rel="stylesheet" href="../src/css/Style.css">
+</head>
+
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()">Toggle Theme</button>
+    <script src="../src/js/themeSwitcher.js"></script>
+    <h1>From Coder to Director: An Agent-Assisted Refactoring Journey</h1>
+    
+    <div>
+        <p>
+            From February 28 to March 19, 2026, I embarked on an experiment: could I modernize my Midiestro rhythm game codebase by directing AI agents instead of writing the code myself? The answer turned out to be a resounding yes, but not in the way I expected.
+        </p>
+        <p>
+            What began as a simple desire to convert my JavaScript to ES modules became a three-week journey of learning how to work with AI agents—Claude Code, Open Code, and models including GLM 4.7 Flash, Qwen3-coder-next, and qwen3.5-27b. The result? A modernized codebase, a 3D version of my game built on top of the original 2D version, and a fundamental shift in how I think about software development.
+        </p>
+
+        <h2>The Starting Point</h2>
+        <p>
+            I had the 2D version of Midiestro from work I did last year with Llama 3.3 70b as a chat assistant.  It was not built with Test Driven Development in mind because I was testing the page after each change by hand and moving towards bug fixes and new features as I learned about the libraries and canvas elements I was using.  The scope of the page was small enough to manage without needing lots of tests to keep things in line.
+        </p>
+
+        <h2>Phase 1: Learning to Ask the Right Questions (Feb 28 - Mar 3)</h2>
+        <p>
+            At first, I took the same approach of adding features and testing them as we went, but that approach cuts out most of what agents need to be good at their job.  So after reaching a critical point with the 3D page, I made a decision to make the agent embrace Test Driven Development. I asked the agent to help me enumerate what tests should exist for my ScoreKeeper component. The result was an 816-line document covering 40+ test scenarios—edge cases I never would have thought to check.
+        </p>
+        <p>
+            This was my first revelation: the agent didn't need me to know how to do something, just what I wanted it to accomplish. I let the agent inspect the ScoreKeeper implementation, and the agent mapped out every scenario: good range scoring, ok range scoring, bad range scoring, missed notes, key tracking to prevent double-scoring, boundary conditions, and state management. By March 3rd, we had 52 comprehensive tests written—my entire test suite for the core scoring logic.
+        </p>
+
+        <h2>Phase 2: Architecture Without the Implementation Burden (Mar 4-9)</h2>
+        <p>
+            With tests in place, I turned to the 70% code duplication between my controllers. I asked the agent to propose architectural solutions, and it presented two options: prototype inheritance or a mixin pattern. I didn't need to understand the deep technical tradeoffs—I just needed to know what each approach meant for readability and maintainability. The agent explained that mixins would be more explicit, easier to debug, and clearer for developers unfamiliar with JavaScript's prototype chain. I chose mixins, and it planned out the BaseController architecture.
+        </p>
+        <p>
+            The plan document grew to 545 lines, covering state management decisions (I preferred keeping separate state instances for 2D and 3D modes), synth storage unification, test mocking strategies, and risk assessments. I reviewed, asked clarifying questions, made decisions on architectural preferences, but the agent wrote all the code and documentation. By March 9th, BaseController was implemented with state, audio, game loop, and cleanup mixins, reducing GameController from 257 lines to ~60 and ThreeJSGameController from 367 lines to ~80.
+        </p>
+
+        <h2>The Code Review Skill: Building Rails for the Agent</h2>
+        <p>
+            I noticed after working on tests and fixing bugs that the agent was duplicating methods and redefining variables in many places.  If I wanted quality work from the agent, I needed to put some better rails in place.  I added statements to the MidiSongBuilder/Claude.md file to avoid code duplication and to consider Separation of Concern more explicitly while writing code. I also asked the agent to create a <strong><a href="https://github.com/austin183/agent-ollama-projects/tree/main/claudeharness/.claude/skills/code-review">code-review skill</a></strong>, based on <a href="https://google.github.io/eng-practices/review/reviewer/standard.html">Google's Code Review Best Practices</a>, that taught the agent how to review code using SOLID principles, separation of concerns, and design quality metrics. This skill became my primary tool to decide how to refactor code for better maintainability.
+        </p>
+        <p>
+            The first comprehensive code review using this skill identified 32 modules with only 4 having tests. It found critical syntax errors blocking ES module conversion, inconsistent naming conventions, magic numbers scattered throughout the codebase, and module-level global state pollution. The review produced a prioritized roadmap that guided all subsequent work.
+        </p>
+        <p>
+            This was a pivotal moment: I wasn't just asking the agent to do tasks anymore. I was building documentation and skills that set the rails for how it should think about problems. My role shifted from "coder who occasionally asks for help" to "director who occasionally looks at code to provide help"  
+        </p>
+
+        <h2>Phase 3: Fix, Test, and Build Safety Nets (Mar 10-14)</h2>
+        <p>
+            Following the code review's roadmap, we tackled critical issues first. The agent fixed syntax errors in GameLoop.js that were blocking ES module loading, created a ComponentRegistry for dependency injection, and centralized game state management into a dedicated GameState module. It consolidated camera presets that were scattered across multiple files and fixed critical bugs where the 3D camera would jump around on first use or lose track of the notes during movement.
+        </p>
+        <p>
+            Throughout this phase, I tested everything manually. The agent would propose a fix, implement it, and then I'd run the game to verify it worked. When something didn't work perfectly, I'd describe the issue and the agent would fix it. This loop—describe, implement, test, refine—became our rhythm until I installed the Playwrite MCP Server to futher automate the test and refine steps in the workflow.
+        </p>
+        <p>
+            We also tried Playwright scripts to do the testing, but the Playwright MCP server was more useful because it let the agent query the console and perform actions more deliberately depending on how the application behaved.  I could give the agent a task before bed and wake up to something that worked rather than something that was ready for testing but didn't actually work.
+        </p>
+
+        <h2>Phase 4: The ES Module Conversion (Mar 14-19)</h2>
+        <p>
+            With the foundation solid, we began the actual ES module conversion. This involved three sub-phases: updating modules to accept dependencies as parameters instead of relying on global variables, converting HTML pages to import libraries from CDNs using ES module syntax, and migrating from Vue 2 to Vue 3 while maintaining the Options API I was comfortable with.
+        </p>
+        <p>
+            The agent created comprehensive plans for each phase.  I reviewed each plan, asked questions about tradeoffs, and gave the go-ahead to proceed. The implementation followed, with the agent handling all the mechanical work of updating imports, refactoring function signatures, and rewriting HTML script tags.
+        </p>
+
+        <h2>Phase 5: Code Review Round 7 and Bug Fixes (Mar 16-19)</h2>
+        <p>
+            A second comprehensive code review identified remaining issues across 7,562 lines of analysis. The agent prioritized them into critical, high, medium, and low categories, then we systematically addressed each one.  I asked the agent to tackle each plan, ran the tests, performed manual verification, and committed when the phase was done.
+        </p>
+        <p>
+            It consolidated magic numbers into a GameConstants module, cleaned up Three.js dependency injection to eliminate global state pollution, and implemented a ModeStrategy pattern that makes adding future game modes (VR? mobile?) trivial.
+        </p>
+        <p>
+            During this phase, the agent also fixed critical 3D rendering bugs: scoring calculations that weren't working correctly, note letters that were clipping through the 3D notes or appearing too far away, and camera presets that didn't show the notes properly. Each fix required me to test, describe what I saw, and have the agent adjust until it worked.
+        </p>
+
+        <h2>The Human Role: Testing and Direction</h2>
+        <p>
+            Throughout this three-week journey, I wrote almost no JavaScript. Instead, my work focused on:
+        </p>
+        <ul>
+            <li><strong>Testing:</strong> Every fix, every refactoring, every new feature—I tested it manually in the browser. The agent couldn't see what the game looked like or hear if the audio was working correctly.</li>
+            <li><strong>Architectural Decisions:</strong> When the agent presented options, I made choices based on my preferences for clarity, maintainability, and future extensibility.</li>
+            <li><strong>Skill Creation:</strong> The code-review skill I wrote became the quality gatekeeper, ensuring consistent standards across all work.</li>
+            <li><strong>Documentation Review:</strong> I reviewed plans, asked clarifying questions, and ensured the agent's approach matched my vision.</li>
+            <li><strong>Camera Positioning:</strong> After the agent built a coordinate display system for the 3D camera, I positioned the cameras manually to find good viewing angles.</li>
+            <li><strong>Visual UAT:</strong></li> None of the LLMs I used did a good job interpreting screeshots from the game, so I needed to describe with notes on the canvas and odd note movement in words.  Sometimes the way I described something did not resonate with the LLM, which would result in odd changes that did not address issues.  I also had to tell the LLM to look back at how things work in previous commits to get those behaviors back.
+            <li><strong>Checkpoint Maker:</strong></li> When things worked right, and I was happy with our progress, I would commit so we had a reference to what was working before we forged ahead with more changes.
+        </ul>
+
+        <h2>The Results</h2>
+        <p>
+            By March 19th, we had made the following changes to the application:
+        </p>
+        <ul>
+            <li><strong>Test coverage:</strong> From 12% to over 22%, with 325+ tests</li>
+            <li><strong>Code duplication:</strong> Reduced by over 76% through BaseController mixins</li>
+            <li><strong>Modern JavaScript:</strong> Zero <code>var</code> declarations, all ES6+ syntax</li>
+            <li><strong>Clean architecture:</strong> Dependencies injected, no global state pollution</li>
+            <li><strong>ES modules:</strong> True modular architecture with CDN imports</li>
+            <li><strong>3D version:</strong> Built on top of the 2D foundation without breaking existing functionality</li>
+        </ul>
+
+        <h2>What Changed for Me</h2>
+        <p>
+            The biggest change wasn't in the code—it was in my relationship with programming. It used to be my job to search the web for code that looked like it would meet my intentions and working with it til it actually did meet my intentions. Now it is my job to direct an agent to generate code based on what it predicts would fit my intentions based on code its creators gathered from the web.  
+        </p>
+        <p>
+            I could say that I am not learning anything about the code used in the application now.  But when I think about how that is different from my previous projects, I don't remember what I learned from them either.  The things I learn are how to work towards my goal and how to keep doing that in better ways. Those lessons were not captured in the code before, and they are not captured in the prompts now.  They are capture in how I work towards my next goals.
+        </p>
+        <p>
+            The work I did on this project is different from the agentic work at work too.  At work, there are often several competing priorities and parallel streams of work expected.  It was refreshing to have an experience with an agent that felt both productive and focused, without the pressure of spinning up a second terminal to start working on something urgent at the same time.
+        </p>
+
+        <h2>What's Next</h2>
+        <p>
+            I feel like there is room for polish still.  The 3D version is missing the final score scene, and there could be more animation when the user scores a `good` note, and there could be nicer skyboxes for the game, and the canvas still does not feel responsive to resizes.  It would also be cool to move all the User Interface elements into the game canvas.  These are all things I could talk to an agent about for planning and immplementation when I feel like making more progress on here.
+        </p>
+        <p>
+            But I have other ideas for projects that will lean more towards information sharing, similar to <a href="../TaxBracketVisualizer/index.html">Tax Bracket Visualizer</a> but different.
+        </p>
+
+        <h2>Links</h2>
+        <ul>
+            <li><a href="../MidiSongBuilder/Midiestro.html">Play the 2D version</a></li>
+            <li><a href="../MidiSongBuilder/Midiestro3D.html">Play the 3D version</a></li>
+            <li><a href="https://github.com/austin183/austin183.github.io">View the code on GitHub</a></li>
+        </ul>
+
+        <h2>Don't Like This Was Made with AI?</h2>
+        <p>
+            I have always liked working with computers and been amazed by what they can do.  I am still having fun working with them and sharing the results of that work.  Now I can do it while I take my dog for more walks.  He's happy about it, and that is the important thing.
+        </p>
+    </div>
+</body>
+</html>
