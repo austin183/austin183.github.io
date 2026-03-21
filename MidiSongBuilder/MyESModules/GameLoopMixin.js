@@ -24,6 +24,25 @@ export function getGameLoopMixin(cleanupMixin) {
             );
         }
 
+        // Render final score in 3D scene (for 3D mode)
+        if (app.threeJSRenderer && app.threeGameState) {
+            const zPos = gameState.get('delay') || 0;
+            app.threeJSRenderer.showFinalScore(
+                gameState.get('score') || 0,
+                gameState.get('goodCount') || 0,
+                gameState.get('okCount') || 0,
+                gameState.get('badCount') || 0,
+                gameState.get('missedCount') || 0,
+                zPos,
+                function() {
+                    // Stop the game after camera animation completes (wait for score view)
+                    if (app.threeJSGameController && app.threeGameState) {
+                        cleanupMixin.stopGame(app.threeJSGameController, app, 'threeGameState');
+                    }
+                }
+            );
+        }
+
         // Update high scores if enabled
         if (app.toggleTrackHighScores && gameState.get('highScoreTracker')) {
             gameState.get('highScoreTracker').setHighScore(
@@ -149,7 +168,15 @@ export function getGameLoopMixin(cleanupMixin) {
             // Check if song has ended
             if (shouldStopGame(gameState, timing.visiblePast)) {
                 handleSongEnd(app, gameState);
-                cleanupMixin.stopGame(controller, app, gameStateKey);
+                // For 3D mode (threeGameState), don't stop immediately - let camera animation play
+                // For 2D mode (gameState), stop normally
+                if (gameStateKey === 'threeGameState') {
+                    // Clear the interval but don't call stopGame yet - camera animation will trigger it later
+                    clearInterval(controller.playIntervalId);
+                    controller.playIntervalId = null;
+                } else {
+                    cleanupMixin.stopGame(controller, app, gameStateKey);
+                }
                 return;
             }
 

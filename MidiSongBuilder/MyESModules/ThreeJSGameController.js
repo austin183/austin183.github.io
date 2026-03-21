@@ -63,8 +63,9 @@ function getThreeJSGameController(Tone) {
                 throw new Error('visibleField must be an array of notes');
             }
 
-            // Clear 3D notes from previous game
+            // Clear 3D notes and scoreboard from previous game
             threeJSRenderer.clearNotes();
+            threeJSRenderer.hideFinalScore();
 
             // Retrieve dependencies from ComponentRegistry
             var scoreKeeper = app.componentRegistry ? 
@@ -94,6 +95,9 @@ function getThreeJSGameController(Tone) {
 
             // Store the GameState instance on app with threeGameState key
             app.threeGameState = gameState;
+
+            // Store controller reference for callback access (used by GameLoopMixin to stop game after camera animation)
+            app.threeJSGameController = this;
 
             // Set pressedKeys in gameState (stateMixin initializes it as null)
             gameState.set('pressedKeys', pressedKeys || {});
@@ -236,11 +240,14 @@ function getThreeJSGameController(Tone) {
   * Uses 'threeGameState' key instead of 'gameState' for 3D mode
   */
         stopGame: function(app) {
-            // Do a final render to preserve the last frame for raycasting and debugging
+            // Hide score display from previous game before final render
             if (app && app.threeJSRenderer) {
+                app.threeJSRenderer.hideFinalScore();
+
+                // Final render to preserve last frame for raycasting and debugging
                 app.threeJSRenderer.render();
             }
-            
+
             // Call BaseController's cleanup with threeGameState key (handles synth disposal via private storage)
             base.cleanupMixin.stopGame(this, app, 'threeGameState');
         },

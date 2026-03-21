@@ -20,6 +20,7 @@ function createThreeJSRenderer(THREE, FontLoader, TextGeometry) {
     let animationId = null;
 
     let noteGroup = null;
+    let scoreGroup = null;
     let noteCache = {};
     let fontLoader = null;
     let loadedFont = null;
@@ -487,6 +488,9 @@ function createThreeJSRenderer(THREE, FontLoader, TextGeometry) {
             // Update note rotation for billboarding effect when camera controls are active
             this.updateNoteRotation();
 
+            // Update score rotation for world-space orientation (reserved for future billboarding)
+            this.updateScoreRotation();
+
             renderer.render(scene, camera);
         },
 
@@ -777,10 +781,10 @@ function createThreeJSRenderer(THREE, FontLoader, TextGeometry) {
             }
         },
 
-        /**
-         * Set the hover info DOM element
-         * @param {HTMLElement} element - The hover info container element
-         */
+/**
+          * Set the hover info DOM element
+          * @param {HTMLElement} element - The hover info container element
+          */
         setHoverInfoElement: function(element) {
             if (hoverInfoDisplay) {
                 hoverInfoDisplay.init('hoverInfo');
@@ -791,6 +795,160 @@ function createThreeJSRenderer(THREE, FontLoader, TextGeometry) {
             if (cameraControls) {
                 cameraControls.setHoverInfoConstants(CONSTANTS);
             }
+        },
+
+        /**
+          * Show final score display in 3D space when song ends
+          * Creates a scoreboard with Total and breakdown lines (Good, OK, Bad, Missed)
+          * Positioned at the now line depth (where notes end up after passing through)
+          * @param {number} total - Total score value
+          * @param {number} goodCount - Number of "good" hits
+          * @param {number} okCount - Number of "ok" hits
+          * @param {number} badCount - Number of "bad" hits
+          * @param {number} missedCount - Number of missed notes
+          * @param {number} zPos - Z position for scoreboard (delay value to convert to now line depth)
+          * @param {function} onComplete - Optional callback when camera animation completes (for stopping game)
+          */
+        showFinalScore: function(total, goodCount, okCount, badCount, missedCount, zPos, onComplete) {
+            if (!loadedFont || !scene) return;
+
+            const scoreData = [
+                { text: 'Total: ' + total, y: 5.0, size: 1.2, color: 0xffd700, emissive: 0xffa500 }
+            ];
+
+            scoreGroup = new THREE.Group();
+            const nowLineZ = coordinateCalculator.calculateNowLinePosition(zPos);
+            scoreGroup.position.set(0, 0, nowLineZ);
+
+            const breakdown = [
+                { text: 'Good: ' + goodCount, y: 4.0, size: 0.9, color: 0x00ff00 },
+                { text: 'OK: ' + okCount, y: 3.0, size: 0.9, color: 0xffff00 },
+                { text: 'Bad: ' + badCount, y: 2.0, size: 0.9, color: 0xff0000 },
+                { text: 'Missed: ' + missedCount, y: 1.0, size: 0.9, color: 0x0080ff }
+            ];
+
+            scoreData.push(...breakdown);
+
+            scoreData.forEach(function(item) {
+                const textGeometry = new TextGeometry(item.text, {
+                    font: loadedFont,
+                    size: item.size,
+                    depth: 0.5,
+                    curveSegments: 6,
+                    bevelEnabled: true,
+                    bevelThickness: 0.05,
+                    bevelSize: 0.03,
+                    bevelOffset: 0,
+                    bevelSegments: 3
+                });
+
+                textGeometry.computeBoundingBox();
+                const xOffset = -textGeometry.boundingBox.max.x / 2;
+                textGeometry.translate(xOffset, 0, 0);
+
+                let material;
+                if (item.emissive) {
+                    material = new THREE.MeshStandardMaterial({
+                        color: item.color,
+                        emissive: item.emissive,
+                        emissiveIntensity: 0.5
+                    });
+                } else {
+                    material = new THREE.MeshPhongMaterial({ color: item.color });
+                }
+
+                const textMesh = new THREE.Mesh(textGeometry, material);
+                textMesh.position.set(0, item.y, 0);
+                scoreGroup.add(textMesh);
+            });
+
+            scene.add(scoreGroup);
+
+            // Animate camera to a good viewing position for the scoreboard
+            this.animateCameraToScoreboard(zPos, onComplete);
+        },
+
+        /**
+          * Animate camera smoothly to a position that shows the scoreboard well
+          * @param {number} zPos - Z position (delay value) to calculate scoreboard depth
+          * @param {function} onComplete - Optional callback when animation completes
+          */
+        animateCameraToScoreboard: function(zPos, onComplete) {
+            if (!camera || !scoreGroup) return;
+
+            const nowLineZ = coordinateCalculator.calculateNowLinePosition(zPos);
+            
+            // Target camera position: higher and further back to see the full scoreboard
+            const targetPosition = new THREE.Vector3(0, 8, nowLineZ + 12);
+            const targetLookAt = new THREE.Vector3(0, 4, nowLineZ);
+
+            const startPos = camera.position.clone();
+            const startLookAt = new THREE.Vector3(
+                camera.getWorldDirection(new THREE.Vector3()).add(camera.position).sub(camera.position),
+                0, 
+                nowLineZ - 5
+            );
+
+            // Get current lookAt by calculating direction from camera
+            const dir = new THREE.Vector3();
+            camera.getWorldDirection(dir);
+            startLookAt.copy(camera.position).add(dir);
+
+            const duration = 2000; // 2 seconds animation
+            const startTime = Date.now();
+
+            const animateCamera = () => {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+
+                // Ease out cubic for smooth deceleration
+                const eased = 1 - Math.pow(1 - progress, 3);
+
+                // Interpolate camera position
+                camera.position.lerpVectors(startPos, targetPosition, eased);
+
+                // Interpolate lookAt (clone startLookAt first to avoid modifying it, then lerp toward target)
+                const currentLookAt = startLookAt.clone().lerp(targetLookAt, eased);
+                camera.lookAt(currentLookAt);
+
+                if (progress < 1) {
+                    requestAnimationFrame(animateCamera);
+                } else {
+                    // Enable camera controls when animation completes
+                    this.enableCameraControls();
+                    
+                    // Call completion callback if provided (for stopping the game)
+                    if (typeof onComplete === 'function') {
+                        onComplete();
+                    }
+                }
+            };
+
+            animateCamera();
+        },
+
+        /**
+          * Hide and dispose the final score display
+          */
+        hideFinalScore: function() {
+            if (!scoreGroup) return;
+
+            while (scoreGroup.children.length > 0) {
+                const child = scoreGroup.children.pop();
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) child.material.dispose();
+            }
+
+            scene.remove(scoreGroup);
+            scoreGroup = null;
+        },
+
+        /**
+          * Update score rotation (reserved for future billboarding)
+          * Currently keeps scoreboard fixed in world space (no billboarding)
+          */
+        updateScoreRotation: function() {
+            if (!scoreGroup || !camera) return;
         }
     };
 

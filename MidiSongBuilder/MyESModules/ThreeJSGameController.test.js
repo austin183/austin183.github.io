@@ -104,6 +104,7 @@ describe('ThreeJSGameController', () => {
         it('should clear 3D notes from previous game', () => {
             const mockThreeJSRenderer = { 
                 clearNotes: sinon.stub(),
+                hideFinalScore: sinon.stub(),
                 addNotesFromVisibleField: sinon.stub()
             };
             const mockScoreKeeper = { reset: sinon.stub() };
@@ -132,6 +133,7 @@ describe('ThreeJSGameController', () => {
         it('should store GameState on app with threeGameState key', () => {
             const mockThreeJSRenderer = { 
                 clearNotes: sinon.stub(),
+                hideFinalScore: sinon.stub(),
                 addNotesFromVisibleField: sinon.stub()
             };
             const mockScoreKeeper = { reset: sinon.stub() };
@@ -160,6 +162,7 @@ describe('ThreeJSGameController', () => {
         it('should add 3D notes from visibleField', () => {
             const mockThreeJSRenderer = { 
                 clearNotes: sinon.stub(),
+                hideFinalScore: sinon.stub(),
                 addNotesFromVisibleField: sinon.stub()
             };
             const mockScoreKeeper = { reset: sinon.stub() };
@@ -189,6 +192,7 @@ describe('ThreeJSGameController', () => {
         it('should create game loop interval', () => {
             const mockThreeJSRenderer = { 
                 clearNotes: sinon.stub(),
+                hideFinalScore: sinon.stub(),
                 addNotesFromVisibleField: sinon.stub()
             };
             const mockScoreKeeper = { reset: sinon.stub() };
@@ -217,6 +221,7 @@ describe('ThreeJSGameController', () => {
         it('should return interval ID', () => {
             const mockThreeJSRenderer = { 
                 clearNotes: sinon.stub(),
+                hideFinalScore: sinon.stub(),
                 addNotesFromVisibleField: sinon.stub()
             };
             const mockScoreKeeper = { reset: sinon.stub() };
@@ -247,6 +252,7 @@ describe('ThreeJSGameController', () => {
         it('should call update3DNotesPosition with correct parameters', () => {
             const mockThreeJSRenderer = { 
                 clearNotes: sinon.stub(),
+                hideFinalScore: sinon.stub(),
                 addNotesFromVisibleField: sinon.stub(),
                 getConstants: sinon.stub().returns({ DEFAULT_DELAY: 3 }),
                 updateAllNotes: sinon.stub(),
@@ -292,6 +298,7 @@ describe('ThreeJSGameController', () => {
         it('should call update3DNoteColors', () => {
             const mockThreeJSRenderer = { 
                 clearNotes: sinon.stub(),
+                hideFinalScore: sinon.stub(),
                 addNotesFromVisibleField: sinon.stub(),
                 getConstants: sinon.stub().returns({ DEFAULT_DELAY: 3 }),
                 updateAllNotes: sinon.stub(),
@@ -337,6 +344,7 @@ describe('ThreeJSGameController', () => {
         it('should call render3DNowLine', () => {
             const mockThreeJSRenderer = { 
                 clearNotes: sinon.stub(),
+                hideFinalScore: sinon.stub(),
                 addNotesFromVisibleField: sinon.stub(),
                 getConstants: sinon.stub().returns({ DEFAULT_DELAY: 3 }),
                 updateAllNotes: sinon.stub(),
@@ -388,6 +396,7 @@ describe('ThreeJSGameController', () => {
 
             const mockThreeJSRenderer = { 
                 clearNotes: sinon.stub(),
+                hideFinalScore: sinon.stub(),
                 addNotesFromVisibleField: sinon.stub(),
                 getConstants: sinon.stub().returns({ DEFAULT_DELAY: 3 }),
                 updateAllNotes: sinon.stub(),
@@ -530,7 +539,7 @@ describe('ThreeJSGameController', () => {
 
     describe('stopGame', () => {
         it('should render final frame when threeJSRenderer exists on app', () => {
-            const mockThreeJSRenderer = { render: sinon.stub() };
+            const mockThreeJSRenderer = { render: sinon.stub(), hideFinalScore: sinon.stub() };
             const mockApp = { threeJSRenderer: mockThreeJSRenderer };
 
             controller.stopGame(mockApp);
@@ -547,7 +556,7 @@ describe('ThreeJSGameController', () => {
         });
 
         it('should be safe to call multiple times', () => {
-            const mockThreeJSRenderer = { render: sinon.stub() };
+            const mockThreeJSRenderer = { render: sinon.stub(), hideFinalScore: sinon.stub() };
             const mockApp = { threeJSRenderer: mockThreeJSRenderer };
 
             expect(() => {
@@ -557,7 +566,7 @@ describe('ThreeJSGameController', () => {
         });
 
         it('should delegate to BaseController cleanupMixin', () => {
-            const mockThreeJSRenderer = { render: sinon.stub() };
+            const mockThreeJSRenderer = { render: sinon.stub(), hideFinalScore: sinon.stub() };
             const mockApp = { threeJSRenderer: mockThreeJSRenderer };
 
             controller.playIntervalId = 123;
