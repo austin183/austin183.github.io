@@ -149,3 +149,67 @@ section {
     margin-bottom: 10px;
     color: var(--primary-text);
 }
+
+/* UrlQRCodeMaker Styles */
+.url-input-container {
+    width: 90%;
+    margin: 0 auto;
+    padding: 20px 0;
+}
+
+.url-input-container input[type="text"] {
+    width: 100%;
+    display: block;
+    padding: 12px;
+    font-size: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--primary-text);
+    box-sizing: border-box;
+}
+
+.url-input-container input[type="text"]:focus {
+    outline: none;
+    border-color: var(--accent-color);
+}
+
+.url-input-container input[type="text"]::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.url-input-container button {
+    width: 100%;
+    display: block;
+    padding: 12px;
+    font-size: 16px;
+    font-weight: bold;
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.url-input-container button:hover {
+    opacity: 0.9;
+}
+
+#qrcode {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 200px;
+    padding: 20px;
+}
+
+#qrcode canvas,
+#qrcode img {
+    max-width: 90vw;
+    max-height: calc(100vh - 250px);
+    width: auto;
+    height: auto;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
