@@ -206,10 +206,10 @@ section {
 
 #qrcode canvas,
 #qrcode img {
-    max-width: 90vw;
-    max-height: calc(100vh - 250px);
-    width: auto;
-    height: auto;
+    width: 280px;
+    height: 280px;
+    max-width: 95vw;
+    object-fit: contain;
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
