@@ -128,16 +128,10 @@
             // The QR code image
             const fullImage = document.createElement("img");
             fullImage.src = imageUrl;
-            fullImage.alt = "QR Code";
             fullImage.style.cssText = `
                 max-width: 90%;
                 max-height: 70vh;
                 border-radius: 8px;
-                pointer-events: auto;
-                user-select: none;
-                outline: 2px solid white;
-                outline-offset: -2px;
-                cursor: pointer;
             `;
             
             // Close button
