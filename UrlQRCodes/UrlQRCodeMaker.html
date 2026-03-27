@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>URL to QR Code Maker</title>
-        <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
-        <link rel="stylesheet" href="../src/css/Style.css">
-    </head>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL to QR Code Maker</title>
+    <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
+    <link rel="stylesheet" href="../src/css/Style.css">
+</head>
 
 <body>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSQX0FslNhTDadL4O5SAGapGt4FodqL8My0mA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -16,7 +16,6 @@
     <div class="url-input-container">
         <input type="text" id="urlInput" placeholder="Paste URL here..." />
         <button onclick="generateQRCode()">Generate</button>
-        <button id="copyButton" onclick="copyQRCodeToClipboard()" style="display: none; margin-top: 10px;">Copy QR Code</button>
     </div>
     
     <div id="qrcode"></div>
@@ -29,7 +28,7 @@
         document.getElementById("urlInput").value = defaultURL;
         
         // Generate QR code function
-        async function generateQRCode() {
+        function generateQRCode() {
             const url = document.getElementById("urlInput").value || defaultURL;
             const container = document.getElementById("qrcode");
             container.innerHTML = ""; // Clear previous QR code
@@ -38,55 +37,6 @@
                 width: 256,
                 height: 256
             });
-            
-            // Show copy button once QR code is generated
-            document.getElementById("copyButton").style.display = "inline-block";
-        }
-        
-        // Copy QR code to clipboard
-        async function copyQRCodeToClipboard() {
-            const container = document.getElementById("qrcode");
-            const imgElement = container.querySelector("img") || container.querySelector("canvas");
-            
-            if (!imgElement) {
-                notifyCopyStatus(false, "No QR code found");
-                return;
-            }
-            
-            try {
-                // Get the image data
-                let blob;
-                if (imgElement.tagName === "IMG") {
-                    const response = await fetch(imgElement.src);
-                    blob = await response.blob();
-                } else {
-                    // It's a canvas
-                    const dataUrl = imgElement.toDataURL("image/png");
-                    const response = await fetch(dataUrl);
-                    blob = await response.blob();
-                }
-                
-                // Copy to clipboard
-                await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-                notifyCopyStatus(true, "QR Code image copied to clipboard!");
-            } catch (error) {
-                console.error("Failed to copy QR code:", error);
-                notifyCopyStatus(false, "Failed to copy. Please try again.");
-            }
-        }
-        
-        // Show notification
-        function notifyCopyStatus(success, message) {
-            const notification = document.createElement("div");
-            notification.id = "copyNotification";
-            notification.className = success ? "notification success" : "notification error";
-            notification.textContent = message;
-            document.body.appendChild(notification);
-            
-            // Auto-remove after 2 seconds
-            setTimeout(() => {
-                notification.remove();
-            }, 2000);
         }
         
         // Generate default QR code on page load
