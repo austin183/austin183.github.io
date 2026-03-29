@@ -1,0 +1,309 @@
+diff --git a/BlogPosts/20241023_theBeginning.html b/BlogPosts/20241023_theBeginning.html
+index d3fb1a3..6b5758f 100644
+--- a/BlogPosts/20241023_theBeginning.html
++++ b/BlogPosts/20241023_theBeginning.html
+@@ -5,8 +5,15 @@
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>10-23-2024 - The Beginning</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <!-- Add this line to link your custom styles -->
++    <link rel="stylesheet" href="./src/css/Style.css" />
+ </head>
+-<body>
++<body class="light-theme container">
++    <!-- Add theme toggle button -->
++    <button class="theme-button">
++        Toggle Theme
++    </button>
++    <script src="./src/js/theme-toggle.js"></script>
+     <h1>The Beginning</h1>
+ 
+     <div>
+diff --git a/BlogPosts/20241024_IteratingTowardsPlayability.html b/BlogPosts/20241024_IteratingTowardsPlayability.html
+index 5260bbd..0123aa0 100644
+--- a/BlogPosts/20241024_IteratingTowardsPlayability.html
++++ b/BlogPosts/20241024_IteratingTowardsPlayability.html
+@@ -5,8 +5,15 @@
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>10-24-2024 - Iterating Towards Playability</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <!-- Add this line to link your custom styles -->
++    <link rel="stylesheet" href="./src/css/Style.css" />
+ </head>
+-<body>
++<body class="light-theme container">
++    <!-- Add theme toggle button -->
++    <button class="theme-button">
++        Toggle Theme
++    </button>
++    <script src="./src/js/theme-toggle.js"></script>
+     <h1>Developing the Player Experience</h1>
+ 
+     <div>
+diff --git a/BlogPosts/20241025_AddingInteractivity.html b/BlogPosts/20241025_AddingInteractivity.html
+index 430e4bf..fc9b650 100644
+--- a/BlogPosts/20241025_AddingInteractivity.html
++++ b/BlogPosts/20241025_AddingInteractivity.html
+@@ -5,8 +5,15 @@
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>10-25-2024 - Adding Interactivity</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <!-- Add this line to link your custom styles -->
++    <link rel="stylesheet" href="./src/css/Style.css" />
+ </head>
+-<body>
++<body class="light-theme container">
++    <!-- Add theme toggle button -->
++    <button class="theme-button">
++        Toggle Theme
++    </button>
++    <script src="./src/js/theme-toggle.js"></script>
+     <h1>Improving the Player Experience</h1>
+ 
+     <div>
+diff --git a/BlogPosts/20241026_GettingFeatureComplete.html b/BlogPosts/20241026_GettingFeatureComplete.html
+index b36b65a..733d17d 100644
+--- a/BlogPosts/20241026_GettingFeatureComplete.html
++++ b/BlogPosts/20241026_GettingFeatureComplete.html
+@@ -5,8 +5,15 @@
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>10-26-2024 - Getting to Feature Complete</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <!-- Add this line to link your custom styles -->
++    <link rel="stylesheet" href="./src/css/Style.css" />
+ </head>
+-<body>
++<body class="light-theme container">
++    <!-- Add theme toggle button -->
++    <button class="theme-button">
++        Toggle Theme
++    </button>
++    <script src="./src/js/theme-toggle.js"></script>
+     <h1>Getting to Feature Complete</h1>
+ 
+     <div>
+diff --git a/BlogPosts/20241028_modestOptimizations.html b/BlogPosts/20241028_modestOptimizations.html
+index 4586436..813ed32 100644
+--- a/BlogPosts/20241028_modestOptimizations.html
++++ b/BlogPosts/20241028_modestOptimizations.html
+@@ -5,8 +5,15 @@
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>10-28-2024 - Modest Optimizations</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <!-- Add this line to link your custom styles -->
++    <link rel="stylesheet" href="./src/css/Style.css" />
+ </head>
+-<body>
++<body class="light-theme container">
++    <!-- Add theme toggle button -->
++    <button class="theme-button">
++        Toggle Theme
++    </button>
++    <script src="./src/js/theme-toggle.js"></script>
+     <h1>Optimizing at Random</h1>
+     <p>
+         At this point, I didn't know what was slowing down the interval processing, so I tried using Firefox and Chromium to find bottlenecks in the system.  I ignored things that didn't look like they were coming from my code.  I felt like the libraries and the canvas api call itself were probably already optimized by the browser developers.  Nothing really jumped out at me this way, so I started looking for things in my code that were unnecessary or could be written in a faster way.  I also asked the AI's what they thought, but since I didn't have anything in particular, they gave me vagure or hallucinatory answers.  Nothing I felt worth pursuing.
+diff --git a/BlogPosts/20241029_effectiveOptimizations.html b/BlogPosts/20241029_effectiveOptimizations.html
+index 0faaeee..405007a 100644
+--- a/BlogPosts/20241029_effectiveOptimizations.html
++++ b/BlogPosts/20241029_effectiveOptimizations.html
+@@ -5,8 +5,15 @@
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>10-29-2024 - Effective Optimizations</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <!-- Add this line to link your custom styles -->
++    <link rel="stylesheet" href="./src/css/Style.css" />
+ </head>
+-<body>
++<body class="light-theme container">
++    <!-- Add theme toggle button -->
++    <button class="theme-button">
++        Toggle Theme
++    </button>
++    <script src="./src/js/theme-toggle.js"></script>
+     <h1>Digging into the Canvas API</h1>
+     <div>
+         <h2>Revisiting the Browser Performance Profilers</h2>
+diff --git a/BlogPosts/20241123_llama_exercise.html b/BlogPosts/20241123_llama_exercise.html
+index 418a044..c3cc724 100644
+--- a/BlogPosts/20241123_llama_exercise.html
++++ b/BlogPosts/20241123_llama_exercise.html
+@@ -5,8 +5,15 @@
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>11-23-2024 - Fixing the Filterer with Llama 3.3 70b</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <!-- Add this line to link your custom styles -->
++    <link rel="stylesheet" href="./src/css/Style.css" />
+ </head>
+-<body>
++<body class="light-theme container">
++    <!-- Add theme toggle button -->
++    <button class="theme-button">
++        Toggle Theme
++    </button>
++    <script src="./src/js/theme-toggle.js"></script>
+     <h1>Writing Unit Tests to Keep from Making New Bugs</h1>
+     <div>
+         <h2>What was my Problem?</h2>
+diff --git a/BlogPosts/PrettifyPrompt.md b/BlogPosts/PrettifyPrompt.md
+new file mode 100644
+index 0000000..7350786
+--- /dev/null
++++ b/BlogPosts/PrettifyPrompt.md
+@@ -0,0 +1,8 @@
++# Creating a Style.css for BlogPosts
++We want a central Style.css sheet to apply to all the html files in the BlogPosts folder, 1 level deep.  
++
++# Adding a Dark and Light Theme Button to all Blog Post Pages
++We want the option to change the text from white on black to black on white to help with readability.
++
++# Adding Visual Pleasantries
++It would be nice if the page remained readable on a phone and on a computer, but a bit of visual distinction between sections would be nice.
+\ No newline at end of file
+diff --git a/BlogPosts/index.html b/BlogPosts/index.html
+index 6696334..162f8c2 100644
+--- a/BlogPosts/index.html
++++ b/BlogPosts/index.html
+@@ -5,8 +5,15 @@
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>Austin183's Blog Posts</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <!-- Add this line to link your custom styles -->
++    <link rel="stylesheet" href="./src/css/Style.css" />
+ </head>
+-<body>
++<body class="light-theme container">
++    <!-- Add theme toggle button -->
++    <button class="theme-button">
++        Toggle Theme
++    </button>
++    <script src="./src/js/theme-toggle.js"></script>
+     <h1>Midiestro Posts</h1>
+ 
+     <div>
+diff --git a/BlogPosts/src/css/Style.css b/BlogPosts/src/css/Style.css
+new file mode 100644
+index 0000000..b9e6009
+--- /dev/null
++++ b/BlogPosts/src/css/Style.css
+@@ -0,0 +1,82 @@
++/* src/BlogPosts/Style.css */
++body {
++    margin: 0;
++    padding: 20px;
++    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
++    line-height: 1.6;
++    transition: background-color 0.3s, color 0.3s;
++    --bg-color: #ffffff;
++    /* Default light theme */
++    --text-color: #000000;
++}
++
++.container {
++    max-width: 800px;
++    margin: 0 auto;
++    padding: 20px;
++    background-color: var(--bg-color);
++    color: var(--text-color);
++    border-radius: 8px;
++}
++
++/* Light theme (optional, overrides default) */
++body.light-theme {
++    --bg-color: #ffffff;
++    --text-color: #000000;
++}
++
++/* Dark theme */
++body.dark-theme {
++    --bg-color: #121212;
++    --text-color: #ffffff;
++}
++
++/* Section styling with visual distinction */
++section {
++    margin-bottom: 40px;
++    padding: 15px;
++    background-color: rgba(128, 128, 128, 0.1);
++    border-left: 4px solid #333;
++}
++
++/* Theme toggle button styling */
++.theme-button {
++    position: fixed;
++    top: 20px;
++    right: 20px;
++    padding: 10px 16px;
++    background-color: #333;
++    color: white;
++    border: none;
++    border-radius: 4px;
++    cursor: pointer;
++    z-index: 1000;
++}
++
++.theme-button:hover {
++    background-color: #555;
++}
++
++/* Responsive design */
++@media (max-width: 600px) {
++    .container {
++        padding: 10px;
++    }
++
++    section {
++        padding: 10px;
++        font-size: 14px;
++    }
++}
++
++
++section {
++    padding: 10px;
++    font-size: 14px;
++
++    /* Light theme (optional, overrides default) */
++    body.light-theme {
++        --bg-color: #ffffff;
++        --text-color: #000000;
++    }
++}
+\ No newline at end of file
+diff --git a/BlogPosts/src/js/theme-toggle.js b/BlogPosts/src/js/theme-toggle.js
+new file mode 100644
+index 0000000..7967458
+--- /dev/null
++++ b/BlogPosts/src/js/theme-toggle.js
+@@ -0,0 +1,30 @@
++// src/js/theme-toggle.js
++const themeButton = document.querySelector('.theme-button');
++
++// Function to apply the saved theme
++function applySavedTheme() {
++  const savedTheme = localStorage.getItem('theme');
++  if (savedTheme) {
++    document.body.classList.add(savedTheme);
++    document.body.classList.remove(savedTheme === 'dark-theme' ? 'light-theme' : 'dark-theme');
++  }
++}
++
++// Apply theme when the page is shown (including from cache)
++window.addEventListener('pageshow', applySavedTheme);
++
++// Apply theme when navigating via browser back/forward buttons
++window.addEventListener('popstate', applySavedTheme);
++
++// Toggle theme on button click and save to localStorage
++themeButton.addEventListener('click', () => {
++  if (document.body.classList.contains('light-theme')) {
++    document.body.classList.remove('light-theme');
++    document.body.classList.add('dark-theme');
++    localStorage.setItem('theme', 'dark-theme');
++  } else {
++    document.body.classList.remove('dark-theme');
++    document.body.classList.add('light-theme');
++    localStorage.setItem('theme', 'light-theme');
++  }
++});
+\ No newline at end of file
