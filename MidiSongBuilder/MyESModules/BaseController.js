@@ -59,7 +59,9 @@ function getBaseController(_Tone) {
             highScoreTracker: app.componentRegistry ? 
                 app.componentRegistry.getService('highScoreTracker') : null,
             challengeScores: app.componentRegistry ? 
-                app.componentRegistry.getService('challengeScores') : null
+                app.componentRegistry.getService('challengeScores') : null,
+            themeService: app.componentRegistry ? 
+                app.componentRegistry.getService('themeService') : null
         };
     }
 

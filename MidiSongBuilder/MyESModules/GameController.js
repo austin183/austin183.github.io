@@ -46,6 +46,7 @@ function getGameController(_Tone) {
             var keyNoteMapService = app.componentRegistry ? app.componentRegistry.getService('keyNoteMapService') : null;
             var highScoreTracker = app.componentRegistry ? app.componentRegistry.getService('highScoreTracker') : null;
             var challengeScores = app.componentRegistry ? app.componentRegistry.getService('challengeScores') : null;
+            var themeService = app.componentRegistry ? app.componentRegistry.getService('themeService') : null;
 
             // Initialize game state using BaseController's stateMixin
             var gameState = this.stateMixin.initializeGameState(

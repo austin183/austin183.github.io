@@ -7,10 +7,15 @@
     <title>Austin183's Page</title>
     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
     <link rel="stylesheet" href="./src/css/Style.css">
+    <script type="module">
+      import '@material/web/icon/index.js';
+    </script>    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 </head>
 
 <body>
-    <button class="theme-toggle" onclick="toggleTheme()">Toggle Theme</button>
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+        <span id="theme-icon" class="material-icons">sunny</span>
+    </button>
     <script src="./src/js/themeSwitcher.js"></script>
     <h1>Things that Pop into Austin183's Head</h1>
 

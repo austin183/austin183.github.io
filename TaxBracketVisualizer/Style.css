@@ -1,0 +1,185 @@
+/* TaxBracketVisualizer-Specific Styles */
+
+/* Content Sections */
+#synopsis, #breakdown-panel, #incomes-panel, #taxes-panel {
+  margin-bottom: var(--space-6);
+}
+
+#configuration, #breakdownInput {
+  margin: var(--space-4) auto;
+  max-width: 600px;
+}
+
+#TaxAmountYearlyConfig {
+  margin: var(--space-4) auto;
+  max-width: 500px;
+}
+
+/* Tab Panels */
+[role="tabpanel"] {
+  animation: fadeIn var(--transition-normal);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Material Card for Synopsis */
+md-card.synopsis-card {
+  width: min(100%, 900px);
+  margin: var(--space-4) auto var(--space-6);
+  border-radius: var(--radius-medium);
+  box-shadow: var(--elevation-2);
+  overflow: hidden;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-4) var(--space-6);
+  cursor: pointer;
+  background-color: var(--color-surface);
+  transition: background-color var(--transition-fast);
+}
+
+.card-header:hover {
+  background-color: var(--color-surface-variant);
+}
+
+.card-header h2 {
+  margin: 0;
+  font-size: var(--font-size-lg);
+}
+
+.card-content {
+  padding: var(--space-6);
+  text-align: left;
+  border: 1px solid var(--color-surface-variant);
+  border-top: none;
+}
+
+.card-content p {
+  margin: var(--space-3) 0;
+  max-width: 70ch;
+}
+
+.card-content h4 {
+  margin-top: var(--space-5);
+  margin-bottom: var(--space-3);
+}
+
+.chevron {
+  font-size: 24px;
+  transition: transform var(--transition-fast);
+}
+
+md-card[expanded] .chevron {
+  transform: rotate(180deg);
+}
+
+/* Theme Toggle Overrides for TaxBracketVisualizer */
+.theme-toggle {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 12px;
+  background-color: var(--color-primary);
+  border: none;
+  color: white;
+  cursor: pointer;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.theme-toggle .material-icons {
+  font-size: 24px;
+  color: white;
+}
+
+.theme-toggle:hover {
+  background-color: var(--color-primary-hover);
+}
+
+[data-theme="dark"] .theme-toggle {
+  background-color: var(--color-primary);
+}
+
+.theme-toggle md-icon {
+  fill: var(--color-on-primary);
+}
+
+.synopsis-card .card-header {
+  justify-content: left;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  md-card.synopsis-card {
+    width: 100%;
+  }
+  
+  .card-header h2 {
+    font-size: var(--font-size-base);
+  }
+}
+
+/* Info Tooltip Styles */
+.info-tooltip-button {
+  position: relative;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 12px;
+  background-color: var(--color-primary);
+  border: none;
+  color: white;
+  cursor: pointer;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.info-tooltip-button:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.info-tooltip-button .material-icons {
+  font-size: 24px;
+  color: white;
+}
+
+.info-tooltip-content {
+  position: absolute;
+  top: 60px;
+  left: 0;
+  background-color: var(--color-surface);
+  box-shadow: var(--elevation-2);
+  border-radius: var(--radius-medium);
+  padding: 16px;
+  min-width: 300px;
+  max-width: 400px;
+  z-index: 1001;
+  display: none;
+}
+
+.info-tooltip-content.visible {
+  display: block;
+}
+
+.info-tooltip-content h4 {
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+
+.info-tooltip-content p {
+  margin: 8px 0;
+  font-size: 0.875rem;
+}
+

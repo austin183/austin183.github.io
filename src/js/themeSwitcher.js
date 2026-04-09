@@ -1,3 +1,24 @@
+function getInitialTheme() {
+  const savedTheme = localStorage.getItem('theme');
+  
+  if (savedTheme) {
+    return savedTheme;
+  }
+  
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    return 'dark';
+  }
+  
+  return 'light';
+}
+
+function updateThemeIcon(theme) {
+  const icon = document.getElementById('theme-icon');
+  if (icon) {
+    icon.textContent = theme === 'dark' ? 'sunny' : 'bedtime';
+  }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
   applyUserTheme();
 });
@@ -9,14 +30,16 @@ window.addEventListener('pageshow', function(event) {
 });
 
 function applyUserTheme() {
-  const preferredTheme = localStorage.getItem('theme') || 'dark'; // Use the saved or default theme
+  const preferredTheme = getInitialTheme();
   document.documentElement.setAttribute('data-theme', preferredTheme);
 
   if (preferredTheme === 'light') {
     document.documentElement.classList.add('light');
   } else {
-    document.documentElement.classList.remove('light'); // Ensure light class is removed for dark theme
+    document.documentElement.classList.remove('light');
   }
+  
+  updateThemeIcon(preferredTheme);
 }
 
 function toggleTheme() {
@@ -30,8 +53,12 @@ function toggleTheme() {
   } else {
     localStorage.setItem('theme', 'dark');
     html.setAttribute('data-theme', 'dark');
-    html.classList.remove('light'); // Ensure light class is removed for dark theme
+    html.classList.remove('light');
   }
 
-  applyUserTheme(); // Reapply the theme immediately to ensure visual consistency
+  const newTheme = html.getAttribute('data-theme');
+  updateThemeIcon(newTheme);
+  
+  // Dispatch custom event for theme change
+  window.dispatchEvent(new CustomEvent('themeproject:change', { detail: { theme: newTheme } }));
 }

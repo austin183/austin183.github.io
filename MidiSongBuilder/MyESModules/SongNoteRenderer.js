@@ -2,13 +2,15 @@ import { getKeyNoteMapService } from './KeyNoteMapService.js';
 import getNoteCacheBuilder from './NoteCacheBuilder.js';
 import { getNowLineRenderer } from './NowLineRenderer.js';
 import { getNoteDrawInstructionsCalculator } from './NoteDrawInstructions.js';
+import { getThemeService } from './themeService.js';
 
-export function getSongNoteRenderer(keyNoteMapService) {
+export function getSongNoteRenderer(keyNoteMapService, themeService = null) {
     if (!keyNoteMapService) {
         throw new Error('SongNoteRenderer requires a KeyNoteMapService instance. Please pass getKeyNoteMapService() to the constructor.');
     }
 
     const _service = keyNoteMapService;
+    const _themeService = themeService || getThemeService();
     const noteCacheBuilder = getNoteCacheBuilder();
     const nowLineRenderer = getNowLineRenderer();
     const noteDrawInstructionsCalculator = getNoteDrawInstructionsCalculator();
@@ -20,22 +22,20 @@ export function getSongNoteRenderer(keyNoteMapService) {
             tempUnplayedCanvas.height = 28;
             const tempUnplayedCtx = tempUnplayedCanvas.getContext('2d');
             tempUnplayedCtx.font = "16px Verdana";
+
+            const palette = _themeService.getColorPalette();
+
             if(fillStyle == "blue"){
-                switch (keyInfo.row) {
-                    case 0: // Dark Blue
-                        fillStyle = "#031f57";
-                        break;
-                    case 1: // Medium-Blue
-                        fillStyle = "#025b97";
-                        break;
-                    case 2: // Light-Medium Blue
-                        fillStyle = "#0077c7";
-                        break;
-                    case 3: // Light Blue
-                        fillStyle = "#51bbe6";
-                        break;
-                }
+                const unplayedColors = palette.unplayed;
+                fillStyle = unplayedColors[keyInfo.row] || unplayedColors[0];
+            } else if (fillStyle == "green") {
+                fillStyle = palette.good;
+            } else if (fillStyle == "yellow") {
+                fillStyle = palette.ok;
+            } else if (fillStyle == "red") {
+                fillStyle = palette.bad;
             }
+
             tempUnplayedCtx.fillStyle = fillStyle;
             tempUnplayedCtx.fillText(key.toUpperCase(), 0,20);
             return {
@@ -170,24 +170,25 @@ export function getSongNoteRenderer(keyNoteMapService) {
             var initialYPosition = rowHeight * 2;
             ctx.font = "20px Georgia";
 
+            const palette = _themeService.getColorPalette();
             var gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
-            gradient.addColorStop("0", "magenta");
-            gradient.addColorStop("0.5", "blue");
-            gradient.addColorStop("1.0", "red");
+            gradient.addColorStop("0", palette.scoreGradient[0]);
+            gradient.addColorStop("0.5", palette.scoreGradient[1]);
+            gradient.addColorStop("1.0", palette.scoreGradient[2]);
 
             ctx.fillStyle = gradient;
             ctx.fillText("Total: " + total, initialXPosition, initialYPosition);
 
-            ctx.fillStyle = "green";
+            ctx.fillStyle = palette.good;
             ctx.fillText("Good: " + goodCount, initialXPosition, initialYPosition + rowHeight + 10);
 
-            ctx.fillStyle = "yellow";
+            ctx.fillStyle = palette.ok;
             ctx.fillText("OK: " + okCount, initialXPosition, initialYPosition + (rowHeight * 2) + 20);
 
-            ctx.fillStyle = "red";
+            ctx.fillStyle = palette.bad;
             ctx.fillText("Bad: " + badCount, initialXPosition, initialYPosition + (rowHeight * 3) + 30);
 
-            ctx.fillStyle = "blue";
+            ctx.fillStyle = palette.missed;
             ctx.fillText("Missed: " + missedCount, initialXPosition, initialYPosition + (rowHeight * 4) + 40);
         }
     };

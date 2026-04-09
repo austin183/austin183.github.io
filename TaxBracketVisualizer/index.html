@@ -11,41 +11,81 @@
     <script src="ChartHelper.js"></script>
     <script src="TaxCalculator.js"></script>
     <script src="ColorDefinitions.js"></script>
-    <link href="../Styles.css" rel="stylesheet">
+    <link href="../Style.css" rel="stylesheet">
+    <link href="./Style.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <script type="importmap">
+      {
+        "imports": {
+          "@material/web/": "https://esm.run/@material/web/"
+        }
+      }
+    </script>
+    <script type="module">
+      import '@material/web/all.js';
+      import {styles as typescaleStyles} from '@material/web/typography/md-typescale-styles.js';
+
+      document.adoptedStyleSheets.push(typescaleStyles.styleSheet);
+    </script>
 </head>
 
 <body>
-    <button id="toggleBreakDown" class="pure-button button-toggle" onclick="toggleVisibility('synopsis', 'Synopsis', this)">Hide Synopsis</button>
-    <div id="synopsis" class="bordered centered">
-        <h2>How Tax Brackets Work in the United States - Synopsis</h2>
-        <p>
-            When taxes are calculated, everyone's first bracket is taxed equally. Once an individual's yearly income surpasses the first
-            bracket, any amount of income above the first bracket and below the next bracket is taxed at the next
-            bracket's rate.
-        </p>
-        <p>
-            A deduction is something that reduces an individual's taxable income. Someone could make $40,000, and if
-            they deducted $10,000, they would only get taxed on $30,000.  Every year a Standard Deduction is established that applies for everyone by default.  However, if someone could show they spent more on deductible expenses than the standard, they could use their own deductions instead.
-        </p>
-        <p>
-            Every year, US tax brackets are redefined by law.  By looking at income and tax brackets per year, we can see how changes in tax policy affect incomes differently.
-        </p>
-        <p>
-            Please see the interactive examples below.  You can show and hide sections of the page when you are done with them.
-        </p>
-        <p>
-            In addition to the charts below, you can view a 3D graph of taxes paid on a range of incomes over time at the link below:
-        </p>
-        <p>
-            <a href="theTaxCube.html">3D - Tax on Incomes over Time</a>
-        </p>
-        <br />
-    </div>
+    <!-- Theme Toggle Component -->
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+        <span id="theme-icon" class="material-icons">sunny</span>
+    </button>
+    <script src="../src/js/themeSwitcher.js"></script>
+    <md-card id="synopsisCard" class="synopsis-card" expanded>
+        <div id="synopsisHeader" slot="headline" class="card-header">
+            <span id="synopsisChevron" class="chevron material-icons">keyboard_arrow_down</span>
+            <h2>How Tax Brackets Work in the United States - Synopsis</h2>
+        </div>
+        <div id="synopsisContent" slot="content" class="card-content">
+            <p>
+                When taxes are calculated, everyone's first bracket is taxed equally. Once an individual's yearly income surpasses the first
+                bracket, any amount of income above the first bracket and below the next bracket is taxed at the next
+                bracket's rate.
+            </p>
+            <p>
+                A deduction is something that reduces an individual's taxable income. Someone could make $40,000, and if
+                they deducted $10,000, they would only get taxed on $30,000.  Every year a Standard Deduction is established that applies for everyone by default.  However, if someone could show they spent more on deductible expenses than the standard, they could use their own deductions instead.
+            </p>
+            <p>
+                Every year, US tax brackets are redefined by law.  By looking at income and tax brackets per year, we can see how changes in tax policy affect incomes differently.
+            </p>
+            <p>
+                Please see the interactive examples below.  You can show and hide sections of the page when you are done with them.
+            </p>
+            <p>
+                In addition to the charts below, you can view a 3D graph of taxes paid on a range of incomes over time at the link below:
+            </p>
+            <p>
+                <a href="theTaxCube.html">3D - Tax on Incomes over Time</a>
+            </p>
+            
+            <h4>Further Resources</h4>
+            <p>
+                For historical tax rates, please visit <a
+                    href="https://files.taxfoundation.org/legacy/docs/fed_individual_rate_history_nominal.pdf">TaxFoundation.org</a>
+            </p>
+            <p>
+                For more recent tax rates, please visit <a
+                    href="http://www.moneychimp.com/features/tax_brackets.htm">MoneyChimp.com</a>
+            </p>
+        </div>
+    </md-card>
 
     <div id="app">
 
-        <button id="toggleBreakDown" class="pure-button button-toggle" onclick="toggleVisibility('breakdown', 'Breakdown', this)">Hide Breakdown</button>
-        <div id="breakdown" class="bordered centered">
+        <md-tabs id="mainTabs" align="start" role="tablist" aria-label="Tax visualizer tabs">
+            <md-primary-tab id="breakdown-tab" aria-labelledby="breakdown-tab" aria-controls="breakdown-panel">Breakdown</md-primary-tab>
+            <md-primary-tab id="incomes-tab" aria-labelledby="incomes-tab" aria-controls="incomes-panel">Incomes for Year</md-primary-tab>
+            <md-primary-tab id="taxes-tab" aria-labelledby="taxes-tab" aria-controls="taxes-panel">Taxes over Time</md-primary-tab>
+            <md-primary-tab id="3d-tab" aria-labelledby="3d-tab" aria-controls="3d-panel">3D Visualization</md-primary-tab>
+        </md-tabs>
+
+        <div id="breakdown-panel" role="tabpanel" aria-labelledby="breakdown-tab" class="bordered centered">
             <h3>Specific Income Breakdown for a Single Year</h3>
             <p>
                 Here is how the taxes would be calculated for a specific income based on the selected Tax Year.
@@ -118,8 +158,7 @@
             <br />
         </div>
 
-        <button id="toggleSingleIncomeByYearChart" class="pure-button button-toggle" onclick="toggleVisibility('SingleIncomeByYearChart', 'Incomes for Year', this)">Hide Incomes for Year</button>
-        <div id="SingleIncomeByYearChart" class="bordered centered">
+        <div id="incomes-panel" role="tabpanel" aria-labelledby="incomes-tab" class="bordered centered" hidden>
             <h4>
                 Range of Incomes for a Specific Year
             </h4>
@@ -165,8 +204,7 @@
             <br />
         </div>
 
-        <button id="toggleTaxAmountYearly" class="pure-button button-toggle" onclick="toggleVisibility('TaxAmountYearly', 'Taxes over Time', this)">Hide Taxes over Time</button>
-        <div id="TaxAmountYearly" class="bordered centered">
+        <div id="taxes-panel" role="tabpanel" aria-labelledby="taxes-tab" class="bordered centered" hidden>
             <h4>
                 Taxes over Time
             </h4>
@@ -182,19 +220,21 @@
                 <canvas id="canvasYearly"></canvas>
             </div>
         </div>
-        <br />
-    </div>
 
-    <div id="furtherResources" class="centered">
-        <h4>Further Resources</h4>
-        <p>
-            For historical tax rates, please visit <a
-                href="https://files.taxfoundation.org/legacy/docs/fed_individual_rate_history_nominal.pdf">TaxFoundation.org</a>
-        </p>
-        <p>
-            For more recent tax rates, please visit <a
-                href="http://www.moneychimp.com/features/tax_brackets.htm">MoneyChimp.com</a>
-        </p>
+        <div id="3d-panel" role="tabpanel" aria-labelledby="3d-tab" class="bordered centered" hidden>
+            <h4>3D - Tax on Incomes Over Time</h4>
+            <p>
+                This interactive 3D graph shows how effective tax rates change year over year across a range of incomes.
+                You can adjust the income range and step count to explore different perspectives on how tax policy has evolved.
+            </p>
+            <p>
+                <strong>Note:</strong> This visualization requires additional loading time (~10 seconds) due to the computational complexity of rendering a 3D surface plot.
+            </p>
+            <button class="pure-button button-toggle" onclick="window.location.href='theTaxCube.html'">
+                Open 3D Visualization
+            </button>
+        </div>
+        <br />
     </div>
 
     <script>
@@ -295,6 +335,20 @@
             effectiveTaxRateComparison: 5
         };
 
+        var resizeTimeout;
+        
+        function handleResize() {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(function () {
+                if (window.myLine) {
+                    window.myLine.resize();
+                }
+                if (window.myLineYearly) {
+                    window.myLineYearly.resize();
+                }
+            }, 100);
+        }
+
         window.onload = function () {
             app = new Vue({
                 el: '#app',
@@ -311,7 +365,26 @@
                     selectedTaxYearIncomeRangeGraphComparison: {},
                     amountForYearlyGraph: defaultAmountForYearlyGraph,
                     vueCanvas: null,
-                    vueCanvasYearly: null
+                    vueCanvasYearly: null,
+                    activeTab: 'breakdown'
+                },
+                watch: {
+                    activeTab(newTab) {
+                        document.querySelectorAll('[role="tabpanel"]').forEach(panel => {
+                            panel.hidden = true;
+                        });
+                        var activePanel = document.getElementById(newTab + '-panel');
+                        if (activePanel) {
+                            activePanel.hidden = false;
+                        }
+
+                        if (newTab === 'incomes' && window.myLine) {
+                            setTimeout(() => window.myLine.resize(), 100);
+                        }
+                        if (newTab === 'taxes' && window.myLineYearly) {
+                            setTimeout(() => window.myLineYearly.resize(), 100);
+                        }
+                    }
                 },
                 mounted() {
                     var ctx = document.getElementById('canvas').getContext('2d');
@@ -321,11 +394,25 @@
                     var yearlyctx = document.getElementById('canvasYearly').getContext('2d');
                     this.vueCanvasYearly = yearlyctx;
                     window.myLineYearly = new Chart(this.vueCanvasYearly, yearlyConfig);
+
+                    var mainTabs = document.getElementById('mainTabs');
+                    if (mainTabs) {
+                        mainTabs.addEventListener('change', (e) => {
+                            var activeTabElement = e.target.activeTab;
+                            if (activeTabElement) {
+                                var tabId = activeTabElement.id.replace('-tab', '');
+                                this.activeTab = tabId;
+                            }
+                        });
+                    }
                 }
             });
             app.selectedTaxYearBreakdown = defaultTaxYear;
             app.selectedTaxYearIncomeRangeGraph = defaultTaxYear;
             app.selectedTaxYearIncomeRangeGraphComparison = defaultTaxYear;
+            
+            window.addEventListener('resize', handleResize);
+            
             calculateBreakdown();
             rebuildGraph();
             rebuildYearlyGraph();
@@ -411,6 +498,16 @@
                 actionElement.innerHTML = "Show " + label;
             }
         };
+    </script>
+    <script type="module">
+      import { createSynopsisToggle, bindToggleToHeader } from '../src/js/synopsis.js';
+      
+      const toggleFn = createSynopsisToggle('synopsisCard', 'synopsisContent', 'synopsisChevron');
+      const header = document.getElementById('synopsisHeader');
+      
+      if (header) {
+        bindToggleToHeader(header, toggleFn);
+      }
     </script>
 </body>
 

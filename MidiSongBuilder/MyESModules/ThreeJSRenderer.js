@@ -151,8 +151,12 @@ function createThreeJSRenderer(THREE, FontLoader, TextGeometry) {
             this.loadFont();
 
             // Create renderer
-            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById(canvasId), antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            const canvas = document.getElementById(canvasId);
+            const container = canvas.parentElement;
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+            const containerWidth = container.clientWidth;
+            const containerHeight = container.clientHeight || (containerWidth * 0.75);
+            renderer.setSize(containerWidth, containerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
 
             // Create scene
@@ -163,7 +167,7 @@ function createThreeJSRenderer(THREE, FontLoader, TextGeometry) {
             // Camera positioned for "road effect" - looking down at notes from ~27 degree angle
             camera = new THREE.PerspectiveCamera(
                 60, // Field of view
-                window.innerWidth / window.innerHeight, // Aspect ratio
+                containerWidth / containerHeight, // Aspect ratio
                 0.1, // Near clipping plane
                 1000 // Far clipping plane
             );
@@ -474,9 +478,13 @@ function createThreeJSRenderer(THREE, FontLoader, TextGeometry) {
             if (!renderer || !camera) return;
 
             const canvas = renderer.domElement;
-            camera.aspect = window.innerWidth / window.innerHeight;
+            const container = canvas.parentElement;
+            const containerWidth = container.clientWidth;
+            const containerHeight = container.clientHeight || (containerWidth * 0.75);
+            
+            camera.aspect = containerWidth / containerHeight;
             camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setSize(containerWidth, containerHeight);
         },
 
         /**

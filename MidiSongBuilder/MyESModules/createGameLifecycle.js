@@ -20,6 +20,7 @@ export function createGameLifecycle(mode, {
     keyNoteMapService,
     highScoreTracker,
     challengeScoresObj,
+    themeService,
     
     // Mode-specific callbacks (optional)
     onMount2D = null,
@@ -75,6 +76,7 @@ export function createGameLifecycle(mode, {
             componentRegistry.registerService('keyNoteMapService', keyNoteMapService);
             componentRegistry.registerService('highScoreTracker', highScoreTracker);
             componentRegistry.registerService('challengeScores', challengeScoresObj);
+            componentRegistry.registerService('themeService', themeService);
 
             this.componentRegistry = componentRegistry;
             

@@ -1,0 +1,392 @@
+/* Design Tokens */
+:root {
+  /* Color System */
+  --color-primary: rgb(103, 58, 183);
+  --color-primary-hover: rgb(90, 45, 173);
+  --color-primary-pressed: rgb(80, 35, 160);
+  --color-secondary: rgb(0, 95, 124);
+  --color-surface: #ffffff;
+  --color-surface-variant: rgb(237, 234, 246);
+  --color-background: rgb(255, 253, 250);
+  --color-on-surface: rgb(34, 32, 42);
+  --color-on-primary: #ffffff;
+  --color-error: rgb(186, 26, 26);
+  --color-success: rgb(0, 93, 51);
+  
+  /* Chart Colors (Semantic) */
+  --chart-tax: rgb(213, 94, 0);
+  --chart-net-income: rgb(0, 114, 178);
+  --chart-effective-rate: rgb(204, 121, 167);
+  --chart-tax-compare: rgb(86, 180, 233);
+  --chart-net-compare: rgb(230, 159, 0);
+  --chart-rate-compare: rgb(0, 158, 115);
+  
+  /* Elevation (Box Shadows) */
+  --elevation-1: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+  --elevation-2: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
+  --elevation-3: 0 10px 20px rgba(0,0,0,0.18), 0 6px 6px rgba(0,0,0,0.23);
+  
+  /* Spacing Scale (4dp base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  
+  /* Shape Scale */
+  --radius-small: 4px;
+  --radius-medium: 8px;
+  --radius-large: 12px;
+  
+  /* Typography Scale */
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.5rem;
+  --font-size-2xl: 2rem;
+  
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+}
+
+/* Dark theme support using data attribute */
+[data-theme="dark"] {
+  --color-primary: rgb(163, 128, 213);
+  --color-primary-hover: rgb(173, 138, 223);
+  --color-primary-pressed: rgb(153, 118, 203);
+  --color-surface: rgb(27, 26, 31);
+  --color-surface-variant: rgb(49, 47, 58);
+  --color-background: rgb(20, 19, 24);
+  --color-on-surface: rgb(235, 234, 240);
+  --color-on-primary: #ffffff;
+}
+
+/* Base */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+  color: var(--color-on-surface);
+  background-color: var(--color-background);
+  margin: 0;
+  padding: var(--space-4) var(--space-6);
+}
+
+canvas {
+  -moz-user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+div.canvas {
+  position: relative;
+  width: 95vw;
+  height: 50vh;
+  margin: var(--space-4) auto;
+}
+
+/* Panels with elevation instead of borders */
+div.bordered {
+  background-color: var(--color-surface);
+  box-shadow: var(--elevation-2);
+  border-radius: var(--radius-medium);
+  padding: var(--space-6);
+  margin: var(--space-4) auto;
+  max-width: 1200px;
+}
+
+div.centered {
+  text-align: center;
+}
+
+/* Typography */
+h1, h2, h3, h4 {
+  color: var(--color-on-surface);
+  margin-top: 0;
+  margin-bottom: var(--space-3);
+}
+
+h1 { font-size: var(--font-size-2xl); font-weight: 700; }
+h2 { font-size: var(--font-size-xl); font-weight: 600; }
+h3 { font-size: var(--font-size-lg); font-weight: 500; }
+h4 { font-size: var(--font-size-base); font-weight: 500; }
+
+p {
+  margin: var(--space-3) 0;
+}
+
+/* Buttons */
+button, .pure-button {
+  font-family: 'Roboto', sans-serif;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-small);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), box-shadow var(--transition-fast);
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+button:hover:not(:disabled), .pure-button:hover {
+  box-shadow: var(--elevation-1);
+}
+
+button:active:not(:disabled), .pure-button:active {
+  transform: scale(0.98);
+}
+
+button:disabled, .pure-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.button-toggle {
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+  border: none;
+  margin-bottom: var(--space-4);
+}
+
+button.button-toggle:hover {
+  background-color: var(--color-primary-hover);
+}
+
+button.button-toggle:active {
+  background-color: var(--color-primary-pressed);
+}
+
+/* Form Controls */
+label {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-on-surface);
+  margin-right: var(--space-2);
+}
+
+input, select {
+  font-family: 'Roboto', sans-serif;
+  font-size: var(--font-size-base);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-surface-variant);
+  border-radius: var(--radius-small);
+  background-color: var(--color-surface);
+  color: var(--color-on-surface);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+input:focus, select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(103, 58, 183, 0.2);
+}
+
+.pure-input-rounded {
+  border-radius: var(--radius-medium);
+}
+
+input[type="number"] {
+  width: 150px;
+}
+
+input.range {
+  width: min(60%, 600px);
+  margin: var(--space-3) 0;
+}
+
+input[type="range"] {
+  height: 6px;
+  padding: 0;
+}
+
+/* Tables */
+table {
+  margin: var(--space-4) auto;
+  border-collapse: collapse;
+  width: min(100%, 800px);
+}
+
+.pure-table {
+  width: 100%;
+}
+
+.pure-table-bordered {
+  border-radius: var(--radius-small);
+  overflow: hidden;
+}
+
+.pure-table td, .pure-table th {
+  padding: var(--space-3) var(--space-4);
+  text-align: inherit;
+}
+
+.pure-table-striped tr:nth-of-type(odd) {
+  background-color: var(--color-surface-variant);
+}
+
+.pure-table-head th {
+  background-color: var(--color-surface-variant);
+  font-weight: 500;
+}
+
+/* Lists */
+ul.no-bullets {
+  list-style-type: none;
+  padding-left: 0;
+  margin: var(--space-3) 0;
+}
+
+ul.no-bullets li {
+  margin: var(--space-2) 0;
+}
+
+/* Links */
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Grid Layouts */
+.side-by-side {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  body {
+    padding: var(--space-2);
+  }
+  
+  div.bordered {
+    padding: var(--space-4);
+  }
+  
+  .side-by-side {
+    grid-template-columns: 1fr;
+  }
+  
+  input[type="number"] {
+    width: 100%;
+  }
+  
+  table {
+    font-size: var(--font-size-sm);
+  }
+}
+
+/* Legacy Component Styles */
+div.app {
+  height: fit-content;
+  width: fit-content;
+}
+
+#FileDrop {
+  position: relative;
+  width: 100%;
+  height: 100px;
+  border: 2px dashed var(--color-on-surface);
+  color: var(--color-on-surface);
+  margin: var(--space-4) auto;
+  background-color: var(--color-surface-variant);
+  border-radius: var(--radius-medium);
+}
+
+#FileDrop.Hover {
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+  border-color: var(--color-on-primary);
+}
+
+#FileDrop input {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  left: 0px;
+  top: 0px;
+}
+
+#FileDrop #Text {
+  position: absolute;
+  width: 100%;
+  height: 20px;
+  line-height: 20px;
+  left: 0px;
+  top: 50%;
+  transform: translate(0, -50%);
+  text-align: center;    
+}
+
+textarea {
+  font-family: inherit;
+  height: 100px;
+  width: 100%;
+  display: inline-block;
+}
+
+input.fullRange {
+  width: 95%;
+}
+
+/* Canvas containers */
+#canvasContainer, #threeJSContainer {
+  width: 100%;
+}
+
+#notesCanvas, #threeCanvas {
+  width: 100%;
+  border-radius: var(--radius-small);
+}
+
+#threeCanvas {
+  cursor: grab;
+}
+
+#threeCanvas:active {
+  cursor: grabbing;
+}
+
+.canvas-container-wrapper {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 1400px;
+  margin: var(--space-4) auto;
+}
+
+@media (max-width: 768px) {
+  .canvas-container-wrapper {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Accessibility: Reduced Motion Preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  [role="tabpanel"] {
+    animation: none;
+  }
+}

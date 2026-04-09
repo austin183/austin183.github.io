@@ -3,18 +3,21 @@
   --primary-bg: #1a1a1a;
   --primary-text: #ffffff;
   --accent-color: #00ff00;
+  --link-color: #00ff7f;
 }
 
 [data-theme="dark"] {
   --primary-bg: #1a1a1a;
   --primary-text: #ffffff;
   --accent-color: #00ff00;
+  --link-color: #00ff7f;
 }
 
 [data-theme="light"] {
   --primary-bg: #ffffff;
   --primary-text: #1a1a1a;
   --accent-color: #00cc00;
+  --link-color: #006400;
 }
 
 /* BlogPosts/src/css/Style.css */
@@ -63,16 +66,37 @@ body {
   position: fixed;
   top: 20px;
   right: 20px;
-  padding: 10px;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 12px;
   background-color: var(--accent-color);
   border: none;
   color: white;
   cursor: pointer;
-  border-radius: 5px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.theme-toggle .material-icons {
+  font-size: 24px;
+  color: white;
 }
 
 .theme-toggle:hover {
   opacity: 0.9;
+}
+
+.theme-toggle md-icon {
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
+}
+
+[data-theme="light"] .theme-toggle {
+  background-color: var(--accent-color);
 }
 
 /* Content Styles */

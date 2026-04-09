@@ -33,6 +33,7 @@ import { getToneHelper } from './ToneHelper.js';
 import { getVisibleFieldFilterer } from './VisibleFieldFilterer.js';
 import getFileDropHandler from './FileDropHandler.js';
 import getDomUtils from './DomUtils.js';
+import { getThemeService } from './themeService.js';
 
 /**
  * Create localStorage service wrapper (injected for testability)
@@ -71,8 +72,9 @@ export function initializeMidiestroBase(Tone, localStorageImpl = typeof window !
     // Services
     const highScoreTracker = localStorageService ? getHighScoreTracker(localStorageService) : null;
     const keyNoteMapService = getKeyNoteMapService();
+    const themeService = getThemeService();
     const midiParserFactory = getMidiParser;
-    const songNoteRenderer = getSongNoteRenderer(keyNoteMapService);
+    const songNoteRenderer = getSongNoteRenderer(keyNoteMapService, themeService);
     const componentRegistry = getComponentRegistry();
     const keyRenderInfo = getKeyRenderInfo();
     
@@ -116,6 +118,7 @@ export function initializeMidiestroBase(Tone, localStorageImpl = typeof window !
         keyNoteMapService,
         midiParserFactory,
         songNoteRenderer,
+        themeService,
         componentRegistry,
         synthKeyPlayer,
         keyRenderInfo,
@@ -234,8 +237,19 @@ export function setupFileDropHandlers(elementId, parseFileCallback, debugPage = 
 export function initializeUIVisibility(debugPage) {
     const domUtils = getDomUtils();
     
-    domUtils.toggleElementById('Instructions');
-    domUtils.toggleElementById('gameConfig');
+    // Instructions and gameConfig are now managed by collapsible-card CSS classes
+    // explicitly hide them to match the new collapsed-by-default behavior
+    const instructions = document.getElementById('Instructions');
+    if (instructions) {
+        instructions.classList.add('hidden');
+        instructions.style.display = '';
+    }
+    
+    const gameConfig = document.getElementById('gameConfig');
+    if (gameConfig) {
+        gameConfig.classList.add('hidden');
+        gameConfig.style.display = '';
+    }
     
     if (!debugPage) {
         domUtils.toggleElementById('songNoteKeys');
