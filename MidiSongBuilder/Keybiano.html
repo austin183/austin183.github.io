@@ -5,20 +5,17 @@
     <title>Midi Song Builder</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css" integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous">
-    <!-- <script src="https://unpkg.com/vue@2.6.12/dist/vue.min.js"></script> -->
     <link href="../Style.css" rel="stylesheet">
-    <!-- <script src="https://unpkg.com/tone"></script> -->
-    <script src="Libraries/vue.min.js"></script>
-    <script type="text/javascript" src="Libraries/Tone.js"></script>
-    <!-- Listing ToneHelper under tone because it makes use of the tone library -->
-    <script src="MyComponents/ToneHelper.js"></script>
-    <script src="MyComponents/SynthKeyPlayer.js"></script>
-    <script src="MyComponents/keyNoteMaps.js"></script>
-    <script src="MyComponents/SongNoteRenderer.js"></script>
-    <script src="MyComponents/songs.js"></script>
-    <script src="MyComponents/KeyNoteMapService.js"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/tone@14.9.17/build/Tone.js"></script>
+    <script src="../src/js/themeSwitcher.js"></script>
+    <script src="../src/js/collapsibleSections.js"></script>
 </head>
 <body>
+    <button id="themeToggle" onclick="toggleTheme()" title="Toggle theme">
+        <span id="theme-icon" class="material-icons">bedtime</span>
+    </button>
+
     <h1>Type To Play Notes</h1>
     <p class="bordered" id="loadingBanner">
         Performance Note: Please allow a few moments for the page to load.
@@ -30,30 +27,52 @@
         If at any point a note keeps playing after you stop pressing all the keys, I apologize for the bug.  Please refresh or close this browser window.
     </p>
     <div id="app">
-        <div id="configuration">
-            <div id="keyNoteMapConfigs">
+        <!-- Keyboard Layout Config Card -->
+        <div id="keyNoteMapWrapper" class="collapsible-card">
+            <div id="keyNoteMapHeader" class="card-header" onclick="toggleKeyNoteMapSection()">
+                <span id="keyNoteMapChevron" class="chevron material-icons">keyboard_arrow_down</span>
+                <h3>Keyboard Layout</h3>
+            </div>
+            <div id="keyNoteMapConfig" class="card-content">
                 <label for="keyNoteMapSelect">Select a Keyboard Layout</label>
                 <select id="keyNoteMapSelect" v-model="selectedKeyNoteMap" class="pure-input-rounded" v-on:change="renderSongNotes()">
                     <option v-for="(item, key, index) in availableKeyNoteMaps" :value="item">{{key}}</option>
                 </select>
                 <p>Description: {{selectedKeyNoteMap.description}}</p>
             </div>
-            <div id="CurrentNotes">
-                Current Notes Playing: | {{ notesPlaying }} |
+        </div>
+
+        <!-- Song Selection Card -->
+        <div id="songConfigWrapper" class="collapsible-card">
+            <div id="songConfigHeader" class="card-header" onclick="toggleSongSection()">
+                <span id="songConfigChevron" class="chevron material-icons">keyboard_arrow_down</span>
+                <h3>Song Selection</h3>
             </div>
-            <div id="SongNotes">
-                <label for="songNoteSelect">Select a Song</label>
-                <select id="songNoteSelect" v-model="selectedSongNotes" class="pure-input-rounded" v-on:change="renderSongNotes()">
-                    <option v-for="(item, key, index) in availableSongs" :value="item">{{item}}</option>
-                </select>
-                <div class="side-by-side">
-                    <div class="bordered">Mapped Keys<br />{{ songNotesOnKeyMap }}</div>
-                    <div class="bordered">Song Notes<br />{{ songNotes }}</div>
+            <div id="songConfig" class="card-content">
+                <div id="CurrentNotes">
+                    Current Notes Playing: | {{ notesPlaying }} |
+                </div>
+                <div id="SongNotes">
+                    <label for="songNoteSelect">Select a Song</label>
+                    <select id="songNoteSelect" v-model="selectedSongNotes" class="pure-input-rounded" v-on:change="renderSongNotes()">
+                        <option v-for="(item, key, index) in availableSongs" :value="item">{{item}}</option>
+                    </select>
+                    <div class="side-by-side">
+                        <div class="bordered">Mapped Keys<br />{{ songNotesOnKeyMap }}</div>
+                        <div class="bordered">Song Notes<br />{{ songNotes }}</div>
+                    </div>
                 </div>
             </div>
-            <button onclick="toggleFMSynthConfigs()">Toggle Instrument Config</button>
-            <div id="FMSynthConfigs" class="bordered">
-                <h3>Configure the Sound of the Instrument</h3>
+        </div>
+
+        <!-- Synth Config Card -->
+        <div id="synthConfigWrapper" class="collapsible-card">
+            <div id="synthConfigHeader" class="card-header" onclick="toggleSynthSection()">
+                <span id="synthConfigChevron" class="chevron material-icons">keyboard_arrow_down</span>
+                <h3>Instrument Configuration</h3>
+            </div>
+            <div id="synthConfig" class="card-content">
+                    <h3 id="FMSynthConfigs">Configure the Sound of the Instrument</h3>
                 <ul>
                     <li>
                         <label for="detune">Set Detune Number</label>
@@ -129,177 +148,165 @@
                         </ul>
                     </li>
                 </ul>
-                <button id="reloadSynthOptions" class="pure-button button-toggle" onclick="changeSynthOptions()">Update Instrument Sound</button>
+                <button id="reloadSynthOptions" class="pure-button button-toggle" @click="changeSynthOptions">Update Instrument Sound</button>
             </div>
         </div>
     </div>
+
     <script>
-        //If the user enters something after the url, like http://url.com?debug
-        //The window.location.search field holds everything after the main url
-        const queryString = window.location.search;
-        const debugPage = queryString == "?debug";
-        //Declare / Initialize global variables
-        var toneHelper = getToneHelper();
-        var synthKeyPlayer = getSynthKeyPlayer();
-        var keyNoteMapService = getKeyNoteMapService();
-        var songNoteRenderer = getSongNoteRenderer(keyNoteMapService);
-        var app; //The Vue.js variable
-        var synthMap = {}; //Contains which key goes with with synth when the user presses keys on the keyboard
-        const conga = toneHelper.getCongaSynth();
+        // Section toggle functions for collapsible cards
+        window.toggleKeyNoteMapSection = createSectionToggle('keyNoteMapConfig', 'keyNoteMapWrapper');
+        window.toggleSongSection = createSectionToggle('songConfig', 'songConfigWrapper');
+        window.toggleSynthSection = createSectionToggle('synthConfig', 'synthConfigWrapper');
+    </script>
 
-        const synthArray = [];  //Holds all the available synths
-        const pressedKeys = {}; //Holds which keys are pressed down on the keyboard
-        const oscillatorTypes = toneHelper.getOscillatorTypes(); //These types apply to both oscillator type and modulation type
+    <script type="module">
+import { createApp } from 'https://unpkg.com/vue@3.5.30/dist/vue.esm-browser.js';
+import { getToneHelper } from './MyESModules/ToneHelper.js';
+import { getSynthKeyPlayer } from './MyESModules/SynthKeyPlayer.js';
+import { getKeyNoteMapService } from './MyESModules/KeyNoteMapService.js';
+import { getSongNoteRenderer } from './MyESModules/SongNoteRenderer.js';
+import getKeyNoteMaps from './MyESModules/keyNoteMaps.js';
+import getSongs from './MyESModules/songs.js';
 
-        //Get all the keyNoteMaps
-        const keyNoteMapCollection = getKeyNoteMaps();  //Supplied from ./keyNoteMap.js
-        const songCollection = getSongs();
+// Debug flag from URL parameter
+const queryString = window.location.search;
+const debugPage = queryString === "?debug";
 
-        //Get all the available keyNoteMapKeys keys
-        const keyNoteMapKeys = Object.keys(keyNoteMapCollection);
-        const songKeys = Object.keys(songCollection);
+function writeLog(logEntry) {
+    if (debugPage) {
+        console.log(logEntry);
+    }
+}
 
-        //Get a default value for the keyNoteMap
-        const defaultKeyNoteMap = keyNoteMapCollection[keyNoteMapKeys[0]];
-        const defaultSong = songKeys[0];
+// Initialize services with Tone.js
+const toneHelper = getToneHelper(window.Tone);
+const synthKeyPlayer = getSynthKeyPlayer();
+const keyNoteMapService = getKeyNoteMapService();
+const songNoteRenderer = getSongNoteRenderer(keyNoteMapService);
 
-        //The current keys
-        var defaultNotesPlayed = "";
-        var defaultSongNotes = "";
-        var defaultSongNotesOnKeyMap = "";
+// Get data collections
+const keyNoteMapCollection = getKeyNoteMaps();
+const songCollection = getSongs();
 
-        var defaultFMSynthParams = toneHelper.getDefaultFMSynthParams();
+// Extract keys for dropdowns
+const keyNoteMapKeys = Object.keys(keyNoteMapCollection);
+const songKeys = Object.keys(songCollection);
 
-        //Disposes of existing synths and creates synths based on FMSynth options
-        //First call uses the default
-        toneHelper.buildSynths(defaultFMSynthParams, synthArray, 10);
+// Defaults
+const defaultKeyNoteMap = keyNoteMapCollection[keyNoteMapKeys[0]];
+const defaultSong = songKeys[0];
 
+// Synth setup
+const synthArray = [];
+const pressedKeys = {};
+const synthMap = {};
+const oscillatorTypes = toneHelper.getOscillatorTypes();
 
-        /*
-            Any time a user presses a key down on the keyboard:
-                Check if the key is in the selected keyNoteMap
-                If it is, add it as pressed in the pressedKeys object
-                Then run the playNotes method to handle reading the pressedKeys and handling them
+// Get default FM synth params and build initial synths
+const defaultFMSynthParams = toneHelper.getDefaultFMSynthParams();
+toneHelper.buildSynths(defaultFMSynthParams, synthArray, 10);
 
-                If the key is the space key, just play the conga for "4n" time units
-                More about time units: https://tonejs.github.io/docs/14.9.17/types/Unit.Time.html
-        */
-        document.addEventListener("keydown", function(event) {
-            if (event.key in app.selectedKeyNoteMap.keyNoteMap) {
-                writeLog("Pressed key for " + app.selectedKeyNoteMap.keyNoteMap[event.key]);
+// Get conga for spacebar percussion
+const conga = toneHelper.getCongaSynth();
 
-                pressedKeys[event.key] = true;
-                playNotes();
-            }
-            else if (event.key === ' ') { // added if statement for space bar
-                writeLog('Space bar pressed!');
-                conga.triggerAttackRelease("C4", "4n");
-            }
-
-        });
-
-        /*
-            When the user releases a key, the pressedKey for it should stop appearing as pressed
-                Then run playNotes again to handle playing the notes in pressedKeys
-        */
-        document.addEventListener("keyup", function() {
-            if(event.key in app.selectedKeyNoteMap.keyNoteMap && event.key in synthMap){
-                writeLog("Release key for " + app.selectedKeyNoteMap.keyNoteMap[event.key]);
-                pressedKeys[event.key] = false;
-                playNotes();
-            }
-        });
-
-        /*
-            Resets the Notes Playing field on the page
-            Evaluates which keys are pressed
-                If any keys are pressed
-                    Gets the notes mapped to the pressed keys
-                    Assigns free synths
-                    Starts playing the synths
-                If any synths are playing for a key that is not pressed
-                    Stops playing the synth
-
-        */
-        function playNotes(){
-            synthKeyPlayer.playNotes(app, pressedKeys, synthMap, synthArray);
-        }
-
-        //Hiding console debug logs behind the "?debug" string in the url, like https://austin183.github.io/MidiSongBuilder/Keybiano.html?debug
-        function writeLog(logEntry){
-            if(debugPage == true){
-                console.log(logEntry);
-            }
-        }
-
-        //Once everything is downloaded, and the page has loaded, start rendering the Vue.js app
-        window.onload = function(){
-            app = new Vue({
-                el: '#app', //The div id to put the Vue.js app in.  I can end sentences with prepositions if I want.  It's what my repo is really about!
-                data: {
-                    selectedKeyNoteMap: defaultKeyNoteMap, //Which keyboard map the user has selected in the drop down.
-                    availableKeyNoteMaps: keyNoteMapCollection, //All the keyboard maps available in the drop down
-                    fmSynthOptions: defaultFMSynthParams, //Options set for all 10 of the FMSynths in the synthArray
-                    oscillatorTypes: oscillatorTypes, //The list of types for Modulation and Oscillator
-                    notesPlaying: defaultNotesPlayed, //The field to show which notes are playing based on the keys pressed at the time
-                    availableSongs: songKeys,
-                    selectedSongNotes: defaultSong,
-                    songNotes: defaultSongNotes,
-                    songNotesOnKeyMap: defaultSongNotesOnKeyMap
-                }
-            })
-            //hide the loading banner
-            var loadingBanner = document.getElementById('loadingBanner');
-            if (loadingBanner) {
-                loadingBanner.style.display = 'none';
-            }
-            renderSongNotes();
+// Vue 3 App
+const app = createApp({
+    data() {
+        return {
+            selectedKeyNoteMap: defaultKeyNoteMap,
+            availableKeyNoteMaps: keyNoteMapCollection,
+            fmSynthOptions: defaultFMSynthParams,
+            oscillatorTypes: oscillatorTypes,
+            notesPlaying: "",
+            availableSongs: songKeys,
+            selectedSongNotes: defaultSong,
+            songNotes: "",
+            songNotesOnKeyMap: ""
         };
-
-        function renderSongNotes(){
-            var renderedSongNotes = "";
-            var renderedSongNotesOnKeyMap = "";
-            writeLog("selectedSongNote " + app.selectedSongNotes);
-            var song = songCollection[app.selectedSongNotes];
+    },
+    
+    methods: {
+        renderSongNotes() {
+            writeLog("selectedSongNote " + this.selectedSongNotes);
+            const song = songCollection[this.selectedSongNotes];
             writeLog(song);
-            var renderedNotes = songNoteRenderer.renderSongNotes(song, app.selectedKeyNoteMap.keyNoteMap);
+            
+            const renderedNotes = songNoteRenderer.renderSongNotes(
+                song, 
+                this.selectedKeyNoteMap.keyNoteMap
+            );
 
-            app.songNotes = renderedNotes.renderedSongNotes;
-            app.songNotesOnKeyMap = renderedNotes.renderedSongNotesOnKeyMap;
+            this.songNotes = renderedNotes.renderedSongNotes;
+            this.songNotesOnKeyMap = renderedNotes.renderedSongNotesOnKeyMap;
 
-            //Move focus back to the document so when the user starts trying to play notes, they
-            //won't accidentally be on one of the option fields
-            //Found at https://stackoverflow.com/questions/6976486/is-there-any-way-in-javascript-to-focus-the-document-content-area
-            // Give the document focus
+            // Move focus back to document
             window.focus();
-
-            // Remove focus from any focused element
             if (document.activeElement) {
                 document.activeElement.blur();
             }
-        }
+        },
 
-        //This function is called when the user presses the button to change Synth options
-        function changeSynthOptions(){
-            writeLog(app.fmSynthOptions);
-            toneHelper.buildSynths(app.fmSynthOptions, synthArray, 10);
-        }
+        changeSynthOptions() {
+            writeLog(this.fmSynthOptions);
+            toneHelper.buildSynths(this.fmSynthOptions, synthArray, 10);
+        },
 
-        //This function shows or hides the FMSynthConfigs div
-        function toggleFMSynthConfigs(){
-             var configDiv = document.getElementById('FMSynthConfigs'); // Get a reference to the synth configuration DIV element by its ID (you may need to replace 'id' with actual id of your HTML structure)
-            if(configDiv){
+        toggleFMSynthConfigs() {
+            const configDiv = document.getElementById('synthConfig');
+            if (configDiv) {
                 const currentDisplayState = configDiv.style.display;
-
-                if(currentDisplayState === "none"){ // If it is currently hidden, then show the div (change its display style to block or inline-block as appropriate for your layout)
+                if (currentDisplayState === "none") {
                     configDiv.style.display = "";
-
-                } else { // Otherwise assume that FMSynthConfigs are already visible and hide them by setting their display property back to none
+                } else {
                     configDiv.style.display = "none";
                 }
             }
         }
+    },
 
+    mounted() {
+        // Hide loading banner
+        const loadingBanner = document.getElementById('loadingBanner');
+        if (loadingBanner) {
+            loadingBanner.style.display = 'none';
+        }
+        
+        // Initial render
+        this.renderSongNotes();
+
+        // Setup keyboard event listeners
+        document.addEventListener("keydown", (event) => {
+            if (event.key in this.selectedKeyNoteMap.keyNoteMap) {
+                writeLog("Pressed key for " + this.selectedKeyNoteMap.keyNoteMap[event.key]);
+                pressedKeys[event.key] = true;
+                playNotes();
+            } else if (event.key === ' ') {
+                writeLog('Space bar pressed!');
+                conga.triggerAttackRelease("C4", "4n");
+            }
+        });
+
+        document.addEventListener("keyup", (event) => {
+            if (event.key in this.selectedKeyNoteMap.keyNoteMap && event.key in synthMap) {
+                writeLog("Release key for " + this.selectedKeyNoteMap.keyNoteMap[event.key]);
+                pressedKeys[event.key] = false;
+                playNotes();
+            }
+        });
+    }
+}).mount('#app');
+
+// Expose app to window for playNotes function access
+window.app = app;
+
+function playNotes() {
+    synthKeyPlayer.playNotes(app, pressedKeys, synthMap, synthArray);
+}
+
+// Expose functions needed by HTML onclick attributes (if any remain)
+window.changeSynthOptions = app.changeSynthOptions.bind(app);
+window.toggleFMSynthConfigs = app.toggleFMSynthConfigs.bind(app);
     </script>
 </body>
 </html>
