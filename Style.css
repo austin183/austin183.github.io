@@ -1,10 +1,10 @@
 /* Design Tokens */
 :root {
-  /* Color System */
-  --color-primary: rgb(103, 58, 183);
-  --color-primary-hover: rgb(90, 45, 173);
-  --color-primary-pressed: rgb(80, 35, 160);
-  --color-secondary: rgb(0, 95, 124);
+  /* Color System - Teal/Purple Palette (Light Mode) */
+  --color-primary: rgb(4, 120, 87);
+  --color-primary-hover: rgb(6, 95, 70);
+  --color-primary-pressed: rgb(5, 74, 54);
+  --color-secondary: rgb(124, 58, 237);
   --color-surface: #ffffff;
   --color-surface-variant: rgb(237, 234, 246);
   --color-background: rgb(255, 253, 250);
@@ -55,9 +55,10 @@
 
 /* Dark theme support using data attribute */
 [data-theme="dark"] {
-  --color-primary: rgb(163, 128, 213);
-  --color-primary-hover: rgb(173, 138, 223);
-  --color-primary-pressed: rgb(153, 118, 203);
+  /* Color System - Teal/Purple Palette (Dark Mode) */
+  --color-primary: rgb(0, 212, 170);
+  --color-primary-hover: rgb(0, 194, 154);
+  --color-primary-pressed: rgb(0, 180, 140);
   --color-surface: rgb(27, 26, 31);
   --color-surface-variant: rgb(49, 47, 58);
   --color-background: rgb(20, 19, 24);
@@ -189,7 +190,7 @@ input, select {
 input:focus, select:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(103, 58, 183, 0.2);
+  box-shadow: 0 0 0 2px rgba(4, 120, 87, 0.2);
 }
 
 .pure-input-rounded {

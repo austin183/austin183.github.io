@@ -17,13 +17,13 @@
 }
 
 [data-theme="dark"] {
-  --card-bg: #2d2d2d;
-  --card-hover-bg: #383838;
+  --card-bg: var(--color-surface);
+  --card-hover-bg: var(--color-surface-variant);
 }
 
 [data-theme="light"] {
-  --card-bg: #ffffff;
-  --card-hover-bg: #f5f5f5;
+  --card-bg: var(--color-surface);
+  --card-hover-bg: var(--color-surface-variant);
 }
 
 /* Card Grid Layout */
@@ -68,27 +68,14 @@
   transform: translateY(-2px);
 }
 
-/* Theme-aware border colors */
-[data-theme="dark"] .card-blue { border-color: #42a5f5; }
-[data-theme="light"] .card-blue { border-color: #1e88e5; }
+/* Semantic card borders */
+.card-primary { border-color: var(--color-primary); }
 
-[data-theme="dark"] .card-orange { border-color: #ffb74d; }
-[data-theme="light"] .card-orange { border-color: #f57c00; }
+.card-secondary { border-color: var(--color-secondary); }
 
-[data-theme="dark"] .card-teal { border-color: #26a69a; }
-[data-theme="light"] .card-teal { border-color: #00897b; }
+.card-accent { border-color: var(--color-accent); }
 
-[data-theme="dark"] .card-coral { border-color: #ef5350; }
-[data-theme="light"] .card-coral { border-color: #e53935; }
-
-[data-theme="dark"] .card-coral-dark { border-color: #e64a19; }
-[data-theme="light"] .card-coral-dark { border-color: #bf360c; }
-
-[data-theme="dark"] .card-purple { border-color: #ba68c8; }
-[data-theme="light"] .card-purple { border-color: #7b1fa2; }
-
-[data-theme="dark"] .card-gray { border-color: #9e9e9e; }
-[data-theme="light"] .card-gray { border-color: #616161; }
+.card-neutral { border-color: var(--color-text-secondary); }
 
 /* Icon Styling (Square with Rounded Corners) */
 .card-icon {
@@ -147,18 +134,18 @@
 /* Launch Button */
 .launch-button {
   display: inline-block;
-  background-color: var(--accent-color);
-  color: white;
+  background-color: var(--color-primary);
+  color: white !important;
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-small);
   text-decoration: none;
   font-weight: bold;
   align-self: flex-start;
-  transition: opacity var(--transition-fast);
+  transition: background-color var(--transition-fast);
 }
 
 .launch-button:hover {
-  opacity: 0.9;
+  background-color: var(--color-primary-hover);
 }
 
 /* Hero Card Styling */
@@ -168,27 +155,16 @@
   border-radius: var(--radius-medium);
   box-shadow: var(--elevation-3);
   overflow: hidden;
-}
-
-[data-theme="dark"] .hero-card {
-  background-color: #2d2d2d;
-}
-
-[data-theme="light"] .hero-card {
-  background-color: #ffffff;
+  background-color: var(--color-surface);
 }
 
 .hero-card .card-header {
-  background-color: #4a4a4a;
+  background-color: var(--color-primary);
   padding: var(--space-4);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: space-between;
-}
-
-[data-theme="light"] .hero-card .card-header {
-  background-color: #616161;
 }
 
 .hero-card .card-header h1 {
@@ -211,11 +187,7 @@
   margin-bottom: var(--space-2);
   border-bottom: none;
   font-size: 1.3em;
-  color: #808080;
-}
-
-[data-theme="light"] .hero-card .md-card-content h2 {
-  color: #424242;
+  color: var(--color-text-secondary);
 }
 
 .hero-card .md-card-content p {
@@ -230,14 +202,10 @@ md-card {
 
 /* Category Section Styling */
 .category-section {
-  background-color: rgba(255, 255, 255, 0.03);
+  background-color: var(--color-surface-variant);
   border-radius: var(--radius-medium);
   padding: var(--space-4);
   margin-bottom: var(--space-6);
-}
-
-[data-theme="light"] .category-section {
-  background-color: rgba(0, 0, 0, 0.03);
 }
 
 .category-header {
@@ -246,30 +214,22 @@ md-card {
   gap: var(--space-3);
   margin-bottom: var(--space-4);
   padding-bottom: var(--space-2);
-  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 2px solid var(--color-surface-variant);
+}
+
+[data-theme="light"] .category-header {
+  border-bottom-color: rgba(0, 0, 0, 0.1);
 }
 
 .category-header h2 {
   margin: 0;
   font-size: 1.3em;
-  color: #9e9e9e;
-}
-
-[data-theme="light"] .category-header h2 {
-  color: #616161;
+  color: var(--color-text-secondary);
 }
 
 .category-header .material-icons {
   font-size: 28px;
-  color: #9e9e9e;
-}
-
-[data-theme="light"] .category-header .material-icons {
-  color: #757575;
-}
-
-[data-theme="light"] .category-header {
-  border-bottom-color: rgba(0, 0, 0, 0.1);
+  color: var(--color-text-secondary);
 }
 
 .category-grid {

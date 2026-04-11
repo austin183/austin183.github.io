@@ -1,102 +1,31 @@
-/* Midiestro Theme - Teal/Coral Palette */
+/* Midiestro Theme - Teal/Purple Palette */
 :root {
-  /* Primary and Accent Colors (Light Mode: Coral primary, Teal accent) */
-  --midi-primary: rgb(237, 106, 88);
-  --midi-primary-hover: rgb(213, 95, 79);
-  --midi-primary-pressed: rgb(189, 84, 70);
-  --midi-accent: rgb(0, 185, 149);
-  --midi-accent-hover: rgb(0, 205, 168);
-  --midi-accent-pressed: rgb(0, 165, 132);
+  /* Primary and Accent Colors (Light Mode: Teal primary, Purple accent) */
+  --midi-primary: rgb(4, 120, 87);
+  --midi-primary-hover: rgb(6, 95, 70);
+  --midi-primary-pressed: rgb(5, 74, 54);
+  --midi-accent: rgb(124, 58, 237);
+  --midi-accent-hover: rgb(147, 51, 234);
+  --midi-accent-pressed: rgb(107, 33, 168);
 }
 
-/* Dark Mode: Teal primary, Coral accent (swapped) */
+/* Dark Mode - Teal stays primary (lighter variant), Purple accent */
 [data-theme="dark"] {
-  --midi-primary: rgb(0, 185, 149);
-  --midi-primary-hover: rgb(0, 205, 168);
-  --midi-primary-pressed: rgb(0, 165, 132);
-  --midi-accent: rgb(237, 106, 88);
-  --midi-accent-hover: rgb(213, 95, 79);
-  --midi-accent-pressed: rgb(189, 84, 70);
+  --midi-primary: rgb(0, 212, 170);
+  --midi-primary-hover: rgb(0, 194, 154);
+  --midi-primary-pressed: rgb(0, 180, 140);
+  --midi-accent: rgb(192, 132, 252);
+  --midi-accent-hover: rgb(205, 147, 255);
+  --midi-accent-pressed: rgb(180, 118, 252);
 }
 
-/* Theme Toggle Button */
-#themeToggle {
-  position: fixed;
-  top: var(--space-4);
-  right: var(--space-4);
-  z-index: 1000;
-  background-color: var(--color-surface);
-  color: var(--color-on-surface);
-  border: none;
-  box-shadow: var(--elevation-2);
-  border-radius: var(--radius-medium);
-  padding: var(--space-3);
-  min-width: 48px;
-  min-height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color var(--transition-fast), box-shadow var(--transition-fast);
-}
-
-#themeToggle:hover {
-  background-color: var(--color-surface-variant);
-  box-shadow: var(--elevation-3);
-}
-
-#themeToggle .material-icons {
-  font-size: 28px;
-  line-height: 1;
-}
-
-/* Collapsible Card Component (Synopsis Pattern) */
+/* Collapsible Card Overrides for Midiestro */
 .collapsible-card {
-  background-color: var(--color-surface);
-  box-shadow: var(--elevation-2);
-  border-radius: var(--radius-medium);
-  margin: var(--space-4) auto;
   max-width: 1200px;
-  overflow: hidden;
-}
-
-.collapsible-card .card-header {
-  display: flex;
-  align-items: center;
-  padding: var(--space-4) var(--space-6);
-  cursor: pointer;
-  background-color: var(--color-surface);
-  transition: background-color var(--transition-fast);
-  user-select: none;
-}
-
-.collapsible-card .card-header:hover {
-  background-color: var(--color-surface-variant);
 }
 
 .collapsible-card .card-header h3 {
-  margin: 0;
   font-size: var(--font-size-lg);
-  flex: 1;
-  color: var(--color-on-surface);
-}
-
-.collapsible-card .chevron {
-  font-size: 24px;
-  color: var(--color-on-surface);
-  transition: transform var(--transition-fast);
-}
-
-.collapsible-card.expanded .chevron {
-  transform: rotate(180deg);
-}
-
-.collapsible-card .card-content {
-  padding: var(--space-6);
-  border-top: 1px solid var(--color-surface-variant);
-}
-
-.collapsible-card .card-content.hidden {
-  display: none;
 }
 
 /* Play Progress Centered Layout */
