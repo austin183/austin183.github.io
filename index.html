@@ -7,9 +7,11 @@
     <title>Austin183's Page</title>
     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
     <link rel="stylesheet" href="./src/css/Style.css">
+    <link rel="stylesheet" href="./src/css/CardGrid.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <script type="module">
-      import '@material/web/icon/index.js';
-    </script>    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+      import '@material/web/card/index.js';
+    </script>
 </head>
 
 <body>
@@ -17,73 +19,161 @@
         <span id="theme-icon" class="material-icons">sunny</span>
     </button>
     <script src="./src/js/themeSwitcher.js"></script>
-    <h1>Things that Pop into Austin183's Head</h1>
 
-    <div>
-        <h2>About this website</h2>
-        <p>
-            This is a compilation of programming projects that can be run directly from the Web Browser. They are meant
-            to be educational for both the user and the me, the programmer.
-        </p>
-        <h2>Other Content from Austin183</h2>
-        <p>
-            Please enjoy the stuff I think about at <a href="https://youtube.com/@mindofafightinglionenthusiast?si=H4S8yrZ9IcAocw7e" target="_blank">on my Youtube Channel: Mind of a Fighting Lion Enthusiast</a>
-        </p>
-        <h2>About the Development Environment</h2>
-        <p>
-            If you are interested in what my current development environment looks like, I describe it here: <a
-                href="AboutThisDevelopmentEnvironmentMac.html">This Development Environment</a>
-        </p>
-        <p>
-            My previous environment is described <a href="AboutThisDevelopmentEnvironment.html">here</a>
-        </p>
+    <md-card class="hero-card" id="heroCard">
+        <div class="card-header" id="heroHeader">
+            <h1>Things that Pop into Austin183's Head</h1>
+            <span class="material-icons" id="heroChevron">expand_less</span>
+        </div>
+        <div class="md-card-content" id="heroContent">
+            <h2>About this website</h2>
+            <p>
+                This is a compilation of programming projects that can be run directly from the Web Browser. They are meant
+                to be educational for both the user and the me, the programmer.
+            </p>
+            <h2>About the Development Environment</h2>
+            <p>
+                If you are interested in what my current development environment looks like, I describe it here: <a
+                    href="AboutThisDevelopmentEnvironmentMac.html">This Development Environment</a>
+            </p>
+            <p>
+                My previous environment is described <a href="AboutThisDevelopmentEnvironment.html">here</a>
+            </p>
+        </div>
+    </md-card>
 
-        <h2>URL to QR Code Maker</h2>
-        <a href="UrlQRCodes/UrlQRCodeMaker.html">Turn a URL into a QR Code.</a>
-        <p>
-            There are other websites that do this, but this one is mine, and I will allow the javascript from this one on 
-            my phone.
-        </p>
+    <!-- About Me Section -->
+    <div class="category-section">
+        <div class="category-header">
+            <span class="material-icons">person</span>
+            <h2>About Me</h2>
+        </div>
+        <div class="category-grid">
+            <div class="project-card card-coral" id="youtubeCard">
+                <div class="card-icon">
+                    <span class="material-icons" style="color: #ef5350;">video_library</span>
+                </div>
+                <h2 class="card-title">YouTube Channel</h2>
+                <p class="card-description">
+                    Please enjoy the stuff I think about on my Youtube Channel: Mind of a Fighting Lion Enthusiast. 
+                    I share thoughts, tutorials, and project walkthroughs that complement the code you find on this site.
+                </p>
+                <a href="https://youtube.com/@mindofafightinglionenthusiast?si=H4S8yrZ9IcAocw7e" target="_blank" class="launch-button">Visit Channel</a>
+            </div>
 
-        <h2>Tax Bracket Visualizations</h2>
-        <a href="TaxBracketVisualizer/index.html">View a collection of interactive charts and graphs demonstrating how
-            Income Tax Brackets work</a>
-        <p>
-            Have you ever heard someone say a pay increase could actually result in a pay decrease because Tax Brackets?
-            This perception is the result of a misunderstanding of how taxes increase per bracket. I hope this project
-            makes it easier to understand how tax brackets really work to eliminate the perceived "pay decrease" windows
-            around the edge of brackets.
-        </p>
-
-        <h2>Midi Song Builder</h2>
-        <a href="MidiSongBuilder/Keybiano.html">Play A Keyboard Piano</a>
-        <p>
-            I hear I can power a midi synthesizer with javascript and modern web browsers. I don't have a real piano or
-            musical keyboard, but I have my laptop keyboard. This is my attempt to turn my web browser into a musical
-            instrument I can annoy my dog with.
-        </p>
-
-        <h2>Midiestro</h2>
-        <p>
-            <a href="MidiSongBuilder/Midiestro.html">Play a 2D rhythm typing game with MIDI files</a>
-        </p>
-        <p>
-            <a href="MidiSongBuilder/Midiestro3D.html">Play a 3D rhythm typing game with MIDI files</a>
-        </p>
-        <p>
-            This page lets you drag a midi file onto the page and play along with it by matching key presses as they
-            fall down the screen, like a rythm game. There are also several pre-loaded songs so you don't have to
-            download midi files.
-        </p>
-
-        <h2>Blog Posts</h2>
-        <a href="BlogPosts/index.html">Read about the Development History for various projects on the site</a>
-        <p>
-            This page has a collection of pages particular commits from the github repo for this website. These complete
-            the loop, bridging the code for the pages with the thoughts in my head. It's kind of like Inception for this
-            website.
-        </p>
+            <div class="project-card card-gray" id="blogCard">
+                <div class="card-icon">
+                    <span class="material-icons" style="color: #9e9e9e;">article</span>
+                </div>
+                <h2 class="card-title">Blog Posts</h2>
+                <p class="card-description">
+                    Read about the Development History for various projects on the site. This page has a collection of pages 
+                    documenting particular commits from the github repo for this website. These complete the loop, bridging 
+                    the code for the pages with the thoughts in my head. It's kind of like Inception for this website.
+                </p>
+                <a href="BlogPosts/index.html" class="launch-button">Read Posts</a>
+            </div>
+        </div>
     </div>
+
+    <!-- Music Apps Section -->
+    <div class="category-section">
+        <div class="category-header">
+            <span class="material-icons">music_note</span>
+            <h2>Music Apps</h2>
+        </div>
+        <div class="category-grid">
+            <div class="project-card card-purple" id="midiestro3dCard">
+                <div class="card-icon">
+                    <span class="material-icons" style="color: #ba68c8;">view_in_ar</span>
+                </div>
+                <h2 class="card-title">Midiestro 3D</h2>
+                <p class="card-description">
+                    Play a 3D rhythm typing game with MIDI files. Experience the same gameplay as Midiestro 2D but with 
+                    stunning 3D graphics powered by Three.js. Drag and drop midi files or use pre-loaded songs to start playing.
+                </p>
+                <a href="MidiSongBuilder/Midiestro3D.html" class="launch-button">Launch</a>
+            </div>
+
+            <div class="project-card card-coral-dark" id="midiestro2dCard">
+                <div class="card-icon">
+                    <span class="material-icons" style="color: #e64a19;">view_quilt</span>
+                </div>
+                <h2 class="card-title">Midiestro 2D</h2>
+                <p class="card-description">
+                    Play a 2D rhythm typing game with MIDI files. This page lets you drag a midi file onto the page and play along 
+                    with it by matching key presses as they fall down the screen, like a rhythm game. There are also several 
+                    pre-loaded songs so you don't have to download midi files.
+                </p>
+                <a href="MidiSongBuilder/Midiestro.html" class="launch-button">Launch</a>
+            </div>
+
+            <div class="project-card card-blue" id="keybianoCard">
+                <div class="card-icon">
+                    <span class="material-icons" style="color: #42a5f5;">piano</span>
+                </div>
+                <h2 class="card-title">Keybiano - Midi Song Builder</h2>
+                <p class="card-description">
+                    Play a keyboard piano using your laptop keyboard. I hear I can power a midi synthesizer with javascript 
+                    and modern web browsers. I don't have a real piano or musical keyboard, but I have my laptop keyboard. 
+                    This is my attempt to turn my web browser into a musical instrument I can annoy my dog with.
+                </p>
+                <a href="MidiSongBuilder/Keybiano.html" class="launch-button">Launch</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tools & Educational Section -->
+    <div class="category-section">
+        <div class="category-header">
+            <span class="material-icons">school</span>
+            <h2>Tools & Educational</h2>
+        </div>
+        <div class="category-grid">
+            <div class="project-card card-teal" id="taxCard">
+                <div class="card-icon">
+                    <span class="material-icons" style="color: #26a69a;">bar_chart</span>
+                </div>
+                <h2 class="card-title">Tax Bracket Visualizer</h2>
+                <p class="card-description">
+                    View a collection of interactive charts and graphs demonstrating how Income Tax Brackets work. 
+                    Have you ever heard someone say a pay increase could actually result in a pay decrease because of Tax Brackets? 
+                    This perception is the result of a misunderstanding of how taxes increase per bracket. I hope this project 
+                    makes it easier to understand how tax brackets really work to eliminate the perceived "pay decrease" windows 
+                    around the edge of brackets.
+                </p>
+                <a href="TaxBracketVisualizer/index.html" class="launch-button">Launch</a>
+            </div>
+
+            <div class="project-card card-orange" id="qrCard">
+                <div class="card-icon">
+                    <span class="material-icons" style="color: #ffb74d;">qr_code</span>
+                </div>
+                <h2 class="card-title">URL to QR Code Maker</h2>
+                <p class="card-description">
+                    Turn a URL into a QR Code. There are other websites that do this, but this one is mine, 
+                    and I will allow the javascript from this one on my phone. Simple, private, and runs entirely in your browser.
+                </p>
+                <a href="UrlQRCodes/UrlQRCodeMaker.html" class="launch-button">Launch</a>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+      import { createSynopsisToggle } from './src/js/synopsis.js';
+      
+      const toggleHero = createSynopsisToggle('heroCard', 'heroContent', 'heroChevron');
+      document.getElementById('heroHeader').addEventListener('click', toggleHero);
+    </script>
+    <script type="module">
+      import { initializeCardDescriptions } from './src/js/projectCards.js';
+      
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeCardDescriptions);
+      } else {
+        initializeCardDescriptions();
+      }
+    </script>
 </body>
 
 </html>

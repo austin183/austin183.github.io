@@ -28,9 +28,11 @@ export function createSynopsisToggle(cardId, contentId, chevronId) {
         if (isExpanded) {
             content.style.display = 'none';
             card.removeAttribute('expanded');
+            chevron.textContent = 'expand_more';
         } else {
             content.style.display = 'block';
             card.setAttribute('expanded', '');
+            chevron.textContent = 'expand_less';
         }
     };
 }

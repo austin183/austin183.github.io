@@ -1,0 +1,291 @@
+/* Card Grid Layout and Styling */
+
+/* Material Design Token Fallbacks */
+:root {
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+
+  --radius-small: 8px;
+  --radius-medium: 12px;
+
+  --elevation-2: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+  --elevation-3: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
+
+  --transition-fast: 200ms ease;
+}
+
+[data-theme="dark"] {
+  --card-bg: #2d2d2d;
+  --card-hover-bg: #383838;
+}
+
+[data-theme="light"] {
+  --card-bg: #ffffff;
+  --card-hover-bg: #f5f5f5;
+}
+
+/* Card Grid Layout */
+.card-grid {
+  display: grid;
+  gap: var(--space-6);
+  max-width: 1200px;
+  margin: var(--space-6) auto;
+  padding: 0 var(--space-4);
+  align-items: start;
+}
+
+@media (min-width: 768px) {
+  .card-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Card Component Styling */
+.project-card {
+  background-color: var(--card-bg);
+  border-radius: var(--radius-medium);
+  box-shadow: var(--elevation-2);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  transition: all var(--transition-fast);
+  border-width: 3px;
+  border-style: solid;
+  min-height: 280px;
+}
+
+.project-card:hover {
+  background-color: var(--card-hover-bg);
+  box-shadow: var(--elevation-3);
+  transform: translateY(-2px);
+}
+
+/* Theme-aware border colors */
+[data-theme="dark"] .card-blue { border-color: #42a5f5; }
+[data-theme="light"] .card-blue { border-color: #1e88e5; }
+
+[data-theme="dark"] .card-orange { border-color: #ffb74d; }
+[data-theme="light"] .card-orange { border-color: #f57c00; }
+
+[data-theme="dark"] .card-teal { border-color: #26a69a; }
+[data-theme="light"] .card-teal { border-color: #00897b; }
+
+[data-theme="dark"] .card-coral { border-color: #ef5350; }
+[data-theme="light"] .card-coral { border-color: #e53935; }
+
+[data-theme="dark"] .card-coral-dark { border-color: #e64a19; }
+[data-theme="light"] .card-coral-dark { border-color: #bf360c; }
+
+[data-theme="dark"] .card-purple { border-color: #ba68c8; }
+[data-theme="light"] .card-purple { border-color: #7b1fa2; }
+
+[data-theme="dark"] .card-gray { border-color: #9e9e9e; }
+[data-theme="light"] .card-gray { border-color: #616161; }
+
+/* Icon Styling (Square with Rounded Corners) */
+.card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-small);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-3);
+}
+
+[data-theme="dark"] .card-icon { background-color: rgba(255, 255, 255, 0.1); }
+[data-theme="light"] .card-icon { background-color: rgba(0, 0, 0, 0.05); }
+
+.card-icon .material-icons {
+  font-size: 28px;
+}
+
+/* Card Title */
+.card-title {
+  margin: 0 0 var(--space-2) 0;
+  font-size: 1.4em;
+  color: var(--primary-text);
+}
+
+/* Description Truncation Logic */
+.card-description {
+  flex-grow: 1;
+  margin-bottom: var(--space-4);
+  color: var(--primary-text);
+}
+
+.card-content-hidden {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.toggle-description-btn {
+  background: none;
+  border: none;
+  color: var(--link-color);
+  cursor: pointer;
+  font-weight: bold;
+  padding: var(--space-2) 0;
+  align-self: flex-start;
+  pointer-events: auto;
+}
+
+.toggle-description-btn:hover {
+  text-decoration: underline;
+}
+
+/* Launch Button */
+.launch-button {
+  display: inline-block;
+  background-color: var(--accent-color);
+  color: white;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-small);
+  text-decoration: none;
+  font-weight: bold;
+  align-self: flex-start;
+  transition: opacity var(--transition-fast);
+}
+
+.launch-button:hover {
+  opacity: 0.9;
+}
+
+/* Hero Card Styling */
+.hero-card {
+  max-width: 1000px;
+  margin: var(--space-4) auto var(--space-6);
+  border-radius: var(--radius-medium);
+  box-shadow: var(--elevation-3);
+  overflow: hidden;
+}
+
+[data-theme="dark"] .hero-card {
+  background-color: #2d2d2d;
+}
+
+[data-theme="light"] .hero-card {
+  background-color: #ffffff;
+}
+
+.hero-card .card-header {
+  background-color: #4a4a4a;
+  padding: var(--space-4);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+[data-theme="light"] .hero-card .card-header {
+  background-color: #616161;
+}
+
+.hero-card .card-header h1 {
+  margin: 0;
+  color: white;
+}
+
+.hero-card .card-header .material-icons {
+  color: white;
+  font-size: 28px;
+}
+
+.hero-card .md-card-content {
+  padding: var(--space-4);
+  color: var(--primary-text);
+}
+
+.hero-card .md-card-content h2 {
+  margin-top: var(--space-6);
+  margin-bottom: var(--space-2);
+  border-bottom: none;
+  font-size: 1.3em;
+  color: #808080;
+}
+
+[data-theme="light"] .hero-card .md-card-content h2 {
+  color: #424242;
+}
+
+.hero-card .md-card-content p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* Material Card Overrides */
+md-card {
+  width: 100%;
+}
+
+/* Category Section Styling */
+.category-section {
+  background-color: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-medium);
+  padding: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+[data-theme="light"] .category-section {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+
+.category-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-2);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.category-header h2 {
+  margin: 0;
+  font-size: 1.3em;
+  color: #9e9e9e;
+}
+
+[data-theme="light"] .category-header h2 {
+  color: #616161;
+}
+
+.category-header .material-icons {
+  font-size: 28px;
+  color: #9e9e9e;
+}
+
+[data-theme="light"] .category-header .material-icons {
+  color: #757575;
+}
+
+[data-theme="light"] .category-header {
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
+.category-grid {
+  display: grid;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+@media (min-width: 768px) {
+  .category-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .category-grid {
+    grid-template-columns: 1fr;
+  }
+}
