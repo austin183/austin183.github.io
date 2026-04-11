@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css" integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous">
     <link href="../Style.css" rel="stylesheet">
+    <link href="./Style.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/tone@14.9.17/build/Tone.js"></script>
     <script src="../src/js/themeSwitcher.js"></script>
@@ -28,7 +29,7 @@
     </p>
     <div id="app">
         <!-- Keyboard Layout Config Card -->
-        <div id="keyNoteMapWrapper" class="collapsible-card">
+        <div id="keyNoteMapWrapper" class="collapsible-card expanded">
             <div id="keyNoteMapHeader" class="card-header" onclick="toggleKeyNoteMapSection()">
                 <span id="keyNoteMapChevron" class="chevron material-icons">keyboard_arrow_down</span>
                 <h3>Keyboard Layout</h3>
@@ -43,7 +44,7 @@
         </div>
 
         <!-- Song Selection Card -->
-        <div id="songConfigWrapper" class="collapsible-card">
+        <div id="songConfigWrapper" class="collapsible-card expanded">
             <div id="songConfigHeader" class="card-header" onclick="toggleSongSection()">
                 <span id="songConfigChevron" class="chevron material-icons">keyboard_arrow_down</span>
                 <h3>Song Selection</h3>
@@ -66,7 +67,7 @@
         </div>
 
         <!-- Synth Config Card -->
-        <div id="synthConfigWrapper" class="collapsible-card">
+        <div id="synthConfigWrapper" class="collapsible-card expanded">
             <div id="synthConfigHeader" class="card-header" onclick="toggleSynthSection()">
                 <span id="synthConfigChevron" class="chevron material-icons">keyboard_arrow_down</span>
                 <h3>Instrument Configuration</h3>
