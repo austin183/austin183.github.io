@@ -22,6 +22,7 @@
 /* Collapsible Card Styles */
 .collapsible-card {
   max-width: 1200px;
+  margin: var(--space-4) auto;
   background-color: var(--color-surface);
   border-radius: var(--radius-medium);
   box-shadow: var(--elevation-2);
