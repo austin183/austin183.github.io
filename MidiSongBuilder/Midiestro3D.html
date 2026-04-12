@@ -8,6 +8,8 @@
 <head>    
     <title>Midiestro 3D - ES Modules</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css" integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous">
+    <link href="../src/css/variables.css" rel="stylesheet">
+    <link href="../src/css/CardGrid.css" rel="stylesheet">
     <link href="../Style.css" rel="stylesheet" />
     <link href="./Style.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -23,7 +25,7 @@
         <!-- BEGIN_SHARED_SECTION: instructions -->
         <div id="instructionsWrapper" class="collapsible-card">
             <div id="instructionsHeader" class="card-header" onclick="toggleInstructionsSection()">
-                <span id="instructionsChevron" class="chevron material-icons">keyboard_arrow_down</span>
+                <span id="instructionsChevron" class="chevron material-icons">expand_more</span>
                 <h3>Instructions & File Drop</h3>
             </div>
             <div id="Instructions" class="card-content hidden">
@@ -72,7 +74,7 @@
         <!-- BEGIN_SHARED_SECTION: game-config -->
         <div id="gameConfigWrapper" class="collapsible-card">
             <div id="gameConfigHeader" class="card-header" onclick="toggleGameConfigSection()">
-                <span id="gameConfigChevron" class="chevron material-icons">keyboard_arrow_down</span>
+                <span id="gameConfigChevron" class="chevron material-icons">expand_more</span>
                 <h3>Game Configurations</h3>
             </div>
             <div id="gameConfig" class="card-content hidden">
@@ -310,6 +312,7 @@
             highScoreTracker,
             keyNoteMapService,
             songNoteRenderer,
+            themeService,
             componentRegistry,
             synthKeyPlayer,
             keyRenderInfo,
@@ -624,7 +627,8 @@ if (debugPage && currentMidi && app.selectedTrack !== "") {
                 songNoteRenderer,
                 keyNoteMapService,
                 highScoreTracker,
-                challengeScoresObj
+                challengeScoresObj,
+                themeService
             });
 
             const servicesConfig = createGameServices({ 

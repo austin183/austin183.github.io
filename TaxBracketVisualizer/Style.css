@@ -79,42 +79,7 @@ md-card[expanded] .chevron {
   transform: rotate(180deg);
 }
 
-/* Theme Toggle Overrides for TaxBracketVisualizer */
-.theme-toggle {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  min-width: 48px;
-  min-height: 48px;
-  padding: 12px;
-  background-color: var(--color-primary);
-  border: none;
-  color: white;
-  cursor: pointer;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.theme-toggle .material-icons {
-  font-size: 24px;
-  color: white;
-}
-
-.theme-toggle:hover {
-  background-color: var(--color-primary-hover);
-}
-
-[data-theme="dark"] .theme-toggle {
-  background-color: var(--color-primary);
-}
-
-.theme-toggle md-icon {
-  fill: var(--color-on-primary);
-}
-
+/* TaxBracketVisualizer-specific overrides */
 .synopsis-card .card-header {
   justify-content: left;
 }

@@ -24,15 +24,13 @@ export function createSynopsisToggle(cardId, contentId, chevronId) {
         }
         
         const isExpanded = content.style.display !== 'none';
-        
+         
         if (isExpanded) {
             content.style.display = 'none';
             card.removeAttribute('expanded');
-            chevron.textContent = 'expand_more';
         } else {
             content.style.display = 'block';
             card.setAttribute('expanded', '');
-            chevron.textContent = 'expand_less';
         }
     };
 }

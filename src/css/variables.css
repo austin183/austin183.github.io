@@ -1,0 +1,84 @@
+/* Design Tokens - Authoritative Source */
+/* All other CSS files should reference this file for design tokens */
+
+:root {
+  /* Color System - Teal/Purple Palette (Light Mode Default) */
+  --color-primary: rgb(4, 120, 87);
+  --color-primary-hover: rgb(6, 95, 70);
+  --color-primary-pressed: rgb(5, 74, 54);
+  --color-secondary: rgb(124, 58, 237);
+  --color-accent: #d97706;
+  
+  /* Neutral Colors - Light Mode */
+  --color-surface: #ffffff;
+  --color-surface-variant: rgb(237, 234, 246);
+  --color-background: rgb(255, 253, 250);
+  --color-text-primary: rgb(34, 32, 42);
+  --color-text-secondary: #6b7280;
+  --color-on-surface: rgb(34, 32, 42);
+  --color-on-primary: #ffffff;
+  
+  /* Semantic Colors */
+  --color-error: rgb(186, 26, 26);
+  --color-success: rgb(0, 93, 51);
+  --link-color: #166534;
+  
+  /* Chart Colors (Semantic) */
+  --chart-tax: rgb(213, 94, 0);
+  --chart-net-income: rgb(0, 114, 178);
+  --chart-effective-rate: rgb(204, 121, 167);
+  --chart-tax-compare: rgb(86, 180, 233);
+  --chart-net-compare: rgb(230, 159, 0);
+  --chart-rate-compare: rgb(0, 158, 115);
+  
+  /* Spacing Scale (4dp base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  
+  /* Shape Scale - Resolved to match CardGrid (was conflicting with root Style.css) */
+  --radius-small: 8px;
+  --radius-medium: 12px;
+  --radius-large: 16px;
+  
+  /* Typography Scale */
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.5rem;
+  --font-size-2xl: 2rem;
+  
+  /* Elevation (Box Shadows) */
+  --elevation-1: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+  --elevation-2: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
+  --elevation-3: 0 10px 20px rgba(0,0,0,0.18), 0 6px 6px rgba(0,0,0,0.23);
+  
+  /* Transitions - Resolved to match CardGrid (was 150ms in root Style.css) */
+  --transition-fast: 200ms ease;
+  --transition-normal: 250ms ease;
+}
+
+/* Dark Theme */
+[data-theme="dark"] {
+  /* Color System - Teal/Purple Palette (Dark Mode) */
+  --color-primary: rgb(0, 212, 170);
+  --color-primary-hover: rgb(0, 194, 154);
+  --color-primary-pressed: rgb(0, 180, 140);
+  --color-secondary: rgb(192, 132, 252);
+  --color-accent: #fbbf24;
+  
+  /* Neutral Colors - Dark Mode */
+  --color-surface: rgb(27, 26, 31);
+  --color-surface-variant: rgb(49, 47, 58);
+  --color-background: rgb(20, 19, 24);
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #9e9e9e;
+  --color-on-surface: rgb(235, 234, 240);
+  --color-on-primary: #ffffff;
+  --link-color: #4ade80;
+}

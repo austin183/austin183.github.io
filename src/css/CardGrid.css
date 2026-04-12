@@ -1,20 +1,5 @@
 /* Card Grid Layout and Styling */
-
-/* Material Design Token Fallbacks */
-:root {
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-6: 24px;
-
-  --radius-small: 8px;
-  --radius-medium: 12px;
-
-  --elevation-2: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
-  --elevation-3: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
-
-  --transition-fast: 200ms ease;
-}
+/* Variables loaded from ./src/css/variables.css */
 
 [data-theme="dark"] {
   --card-bg: var(--color-surface);
@@ -132,10 +117,11 @@
 }
 
 /* Launch Button */
-.launch-button {
+a.launch-button,
+a.launch-button:visited {
   display: inline-block;
   background-color: var(--color-primary);
-  color: white !important;
+  color: var(--color-on-primary);
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-small);
   text-decoration: none;
@@ -144,7 +130,7 @@
   transition: background-color var(--transition-fast);
 }
 
-.launch-button:hover {
+a.launch-button:hover {
   background-color: var(--color-primary-hover);
 }
 

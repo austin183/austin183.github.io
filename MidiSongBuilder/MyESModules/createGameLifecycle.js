@@ -20,7 +20,7 @@ export function createGameLifecycle(mode, {
     keyNoteMapService,
     highScoreTracker,
     challengeScoresObj,
-    themeService,
+    themeService = null,
     
     // Mode-specific callbacks (optional)
     onMount2D = null,
@@ -40,7 +40,8 @@ export function createGameLifecycle(mode, {
                 this.vueCanvas = ctx;
                 this.vueCanvas.clearRect(0, 0, this.notesCanvas.width, this.notesCanvas.height);
                 this.vueCanvas.font = "18px Georgia";
-                this.vueCanvas.fillStyle = "black";
+                const currentTheme = themeService ? themeService.getCurrentTheme() : 'light';
+                this.vueCanvas.fillStyle = currentTheme === 'dark' ? "#ffffff" : "black";
                 this.vueCanvas.fillText("Watch for falling note keys!", 0, 50);
             }
             

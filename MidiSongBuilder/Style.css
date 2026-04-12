@@ -19,13 +19,52 @@
   --midi-accent-pressed: rgb(180, 118, 252);
 }
 
-/* Collapsible Card Overrides for Midiestro */
+/* Collapsible Card Styles */
 .collapsible-card {
   max-width: 1200px;
+  background-color: var(--color-surface);
+  border-radius: var(--radius-medium);
+  box-shadow: var(--elevation-2);
+  overflow: hidden;
+}
+
+.collapsible-card .card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-6);
+  cursor: pointer;
+  background-color: var(--color-surface);
+  transition: background-color var(--transition-fast);
+}
+
+.collapsible-card .card-header:hover {
+  background-color: var(--color-surface-variant);
 }
 
 .collapsible-card .card-header h3 {
+  margin: 0;
   font-size: var(--font-size-lg);
+  font-weight: 500;
+}
+
+.collapsible-card .chevron {
+  font-size: 24px;
+  transition: transform var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.collapsible-card.expanded .chevron {
+  transform: rotate(180deg);
+}
+
+.collapsible-card .card-content {
+  padding: var(--space-6);
+  border-top: 1px solid var(--color-surface-variant);
+}
+
+.collapsible-card .card-content.hidden {
+  display: none;
 }
 
 /* Play Progress Centered Layout */
