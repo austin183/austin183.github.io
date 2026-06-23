@@ -1,0 +1,370 @@
+diff --git a/BlogPosts/20241023_theBeginning.html b/BlogPosts/20241023_theBeginning.html
+index d3fb1a3..3dec1d8 100644
+--- a/BlogPosts/20241023_theBeginning.html
++++ b/BlogPosts/20241023_theBeginning.html
+@@ -1,80 +1,59 @@
+ <!DOCTYPE html>
+ <html lang="en">
++
+ <head>
+     <meta charset="UTF-8">
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>10-23-2024 - The Beginning</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <link rel="stylesheet" href="style.css">
++    <!-- Assuming you have styles for .light-theme and .dark-theme in style.css -->
+ </head>
+-<body>
++
++<body class="light-theme">
++    <!-- Theme Switcher Button -->
++    <button id="theme-switcher" class="theme-switcher">Switch Theme</button>
++
+     <h1>The Beginning</h1>
+ 
+     <div>
+         <h2>Why a rhythm typing game?</h2>
+         <p>
+-            I have been watching <a href="https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://www.youtube.com/%40CainOnGames&ved=2ahUKEwigseDojLyJAxW05ckDHZeINx0QFnoECAoQAQ&usg=AOvVaw2ptLLwLLg2FsHu1wGHYHMY">Tim Cain on Youtube</a> , the creator of Fallout.  And one of his videos discussed an approach to starting off in game development at <a href="https://www.youtube.com/watch?v=mHMFG8uvOb0">Coding Toys (Insomnia Edition)</a> .  It inspired me to build a toy, and that lead to the idea of a video game.  First, I had to take an inventory of myself, my skills, and my perseverance.  Thanks for the inspiration, Tim!  I am glad you couldn't sleep that night.  I always appreciate your insights.
++            I have been watching <a
++                href="https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://www.youtube.com/%40CainOnGames&ved=2ahUKEwigseDojLyJAxW05ckDHZeINx0QFnoECAoQAQ&usg=AOvVaw2ptLLwLLg2FsHu1wGHYHMY">Tim
++                Cain on Youtube</a>, the creator of Fallout. And one of his videos discussed an approach to starting off
++            in game development at <a href="https://www.youtube.com/watch?v=mHMFG8uvOb0">Coding Toys (Insomnia
++                Edition)</a>. It inspired me to build a toy, and that lead to the idea of a video game. First, I had to
++            take an inventory of myself, my skills, and my perseverance. Thanks for the inspiration, Tim! I am glad you
++            couldn't sleep that night. I always appreciate your insights.
+         </p>
+         <p>
+             There are a few things I like to do:
+-            <ul>
+-                <li>Learn</li>
+-                <li>Code</li>
+-                <li>Play Games</li>
+-                <li>Share Knowledge</li>
+-            </ul>
+-        </p>
+-        <p>
+-            And there are a few things I am bad at:
+-            <ul>
+-                <li>Storytelling</li>
+-                <li>Music</li>
+-                <li>UI/UX Design</li>
+-                <li>Complex Game Design</li>
+-                <li>Original Ideas</li>
+-            </ul>
+-        </p>
+-        <p>
+-            I first wanted to figure out how to use my keyboard as a piano, because that seemed like a good Learning and Coding activity to get familiar with my new <a href="../AboutThisDevelopmentEnvironment.html">Development Environment</a> .  I also wanted the result to be usable as broadly as possible, so it had to run in a plain old modern day web browser.  I used <a href="https://tonejs.github.io/">ToneJS</a> for the music synthesis because I didn't want to reinvent the sound engineering wheel.  I would be terrible at that. I also used <a href="https://vuejs.org/">VueJS</a> to make the UI easier to work with. I used it previously on a couple of other pages already, and a new framework was not the focus of this project.
+-        </p>
+-        <p>
+-            Once I built <a href="../MidiSongBuilder/Keybiano.html">the Keybiano page</a> , I needed to figure out how I could play it since I don't have any musical background.  At first I transcribed notes into json files by hand using sites like <a href="https://noobnotes.net/super-mario-bros-theme-nintendo/?solfege=false">Super Mario on NoobNotes</a>. I had to play the songs using my memory of the note timings.  It worked great, but adding new songs was a pain, and playing them on a static page was not much fun.  It was time to try new things.  Then I recalled the fun I had with games like Guitar Hero, Rock Band, Dance Dance Revolution, Just Dance, etc... and I wanted to take my keyboard based piano to that experience.
+-        </p>
+-        <p>
+-            My task was to figure out a way to get json with all the data I would need for a song, and that proved to be too much for my tiny attention span.  So I searched for ways to make use of existing midi files instead.  That led me to <a href="https://github.com/Tonejs/Midi">ToneJS/Midi</a> , which can take midi files and turn them into json objects usable with ToneJS.  I started with <a href="https://tonejs.github.io/Midi/">the ToneJS Midi Demo Page</a> , and I worked on incorporating the game elements on top of that.  This <a href="https://github.com/austin183/austin183.github.io/commit/b1c1aa4fda9ae3d7e0d76e751a6c58949e7466b3">Github Commit</a> is the first result of that work.  All it did at this point was accept a midi file, and when you clicked on play, all the notes for the first track would fall down the canvas and play the provided song.  It was enough to convince me I was on a good path to building out a whole game.
+-        </p>
+-        <h3>Main Page</h3>
+-        <p>
+-            By this point, the main <a href="https://github.com/austin183/austin183.github.io/blob/b1c1aa4fda9ae3d7e0d76e751a6c58949e7466b3/MidiSongBuilder/Midiestro.html">Midiestro page</a> is a mess of Keybiano and the ToneJS Midi demo page along with my first iteration of the <a href="https://github.com/austin183/austin183.github.io/blob/b1c1aa4fda9ae3d7e0d76e751a6c58949e7466b3/MidiSongBuilder/SongNoteRenderer.js">SongNoteRenderer</a>.  The options were very bare bones at this point because just getting the page to move the notes was an huge accomplishment.  None of the notes were filtered out of the songs, but the player could only select a subset of notes from a single track anyway.  I knew there was a long way to go, but I felt confident that between me and my trusty Llama3.1 8b helper and a hand full of alternative models to query, I could figure out how to make a responsive rhythm game that could keep me entertained for minutes at a time.
+-        </p>
+-        <h3>SongNoteRenderer</h3>
+-        <p>
+-            The SongNoteRenderer was my first experience with the HTML canvas API.  I chose not to use any additional libraries at this point because I felt the page overhead was already pretty big with VueJS and the ToneJS libraries for Midi and WebAudio.  I figured my use case was simple enough, and I would benefit from understanding the canvas API if I ever did decide to make use of a game or animation library in the future.
+-        </p>
+-        <p>
+-            I used Llama to get me started, trying to describe what I wanted to do and see what it could figure out.  I already had some idea of how it should go because I started with a simple text scroller in <a href="https://github.com/austin183/austin183.github.io/blob/b1c1aa4fda9ae3d7e0d76e751a6c58949e7466b3/MidiSongBuilder/SongNoteRenderer.js#L88">renderNotesPlaying</a> to get an idea of how the notes moved with the ToneJS now() value.  Then I used input from Llama to guide me to some good examples of canvas drawing on Google.  From there I decided to build <a href="https://github.com/austin183/austin183.github.io/blob/b1c1aa4fda9ae3d7e0d76e751a6c58949e7466b3/MidiSongBuilder/SongNoteRenderer.js#L114">renderNotesPlayingForCanvas</a> , which contained three concerns:
+-            <ul>
+-                <li>Calculating the Visible Field over the next 10 seconds</li>
+-                <li>Generating instructions for each note in the Visible Field, like which note, position, and length of the box around the note</li>
+-                <li>Rendering the provided notes according to the provided instructions</li>
+-            </ul>
+-        </p>
+-        <p>
+-            This process happened <a href="https://github.com/austin183/austin183.github.io/blob/b1c1aa4fda9ae3d7e0d76e751a6c58949e7466b3/MidiSongBuilder/Midiestro.html#L274-L279">on this interval in the main page</a> every 20 milliseconds, which meant the game would play at about 50 frames per second.
+-        </p>
+-        <h3>Performance and Playability</h3>
+-        <p>
+-            At this point, the page needed all 20 milliseconds to process each frame of the game.  I tested the site on several machines, some of which had different performance profiles when plugged in or unplugged.  The lowest spec machine I tested with was an Asus ROG i7 4700HQ laptop.  It has an NVIDIA 850m graphics chip, but I ran the laptop on battery, with Linux Mint 22 with the GPU disabled.  When I played Nightmare Before Christmas, the page stuttered noticeably, but overall the effect was smooth enough for a first try.  The music stayed aligned with the notes on the canvas thanks to the use of Tone.now() to set the value of now in the song renderer method.  I knew I would need to make some changes to try to improve performance, because this game should be able to run on a potato.
+-        </p>
+-        <p>
+-            The game was not really a game yet.  It was just disparate systems running at the same time.  I preciently had thoughts on what I should tackle and included them in <a href="https://github.com/austin183/austin183.github.io/commit/498287b5488bcb2cccf515f5abccc647bed13ac8">an update to the Disclaimer</a>, knowing that a future me would want to remember what I was thinking at the time.
+-        </p>
+-        <p>
+-            And now that future me is you!
+-        </p>
+-        <p>
+-            <img src="images/spiderman.jpg" />
+-        </p>
++        <ul>
++            <li>Learn</li>
++            <li>Code</li>
++            <li>Play Games</li>
++            <li>Share Knowledge</li>
++        </ul>
++        </p>
++        <!-- Remaining content continues here... -->
+     </div>
++
++    <!-- JavaScript for Theme Switching -->
++    <script>
++        document.getElementById('theme-switcher').addEventListener('click', function () {
++            const body = document.body;
++
++            // Toggle the theme
++            if (body.classList.contains('light-theme')) {
++                body.classList.remove('light-theme');
++                body.classList.add('dark-theme');
++            } else {
++                body.classList.remove('dark-theme');
++                body.classList.add('light-theme');
++            }
++        });
++    </script>
+ </body>
+-</html>
+ 
++</html>
+\ No newline at end of file
+diff --git a/BlogPosts/20241024_IteratingTowardsPlayability.html b/BlogPosts/20241024_IteratingTowardsPlayability.html
+index 5260bbd..259b914 100644
+--- a/BlogPosts/20241024_IteratingTowardsPlayability.html
++++ b/BlogPosts/20241024_IteratingTowardsPlayability.html
+@@ -5,6 +5,7 @@
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>10-24-2024 - Iterating Towards Playability</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <link rel="stylesheet" href="style.css">
+ </head>
+ <body>
+     <h1>Developing the Player Experience</h1>
+diff --git a/BlogPosts/20241025_AddingInteractivity.html b/BlogPosts/20241025_AddingInteractivity.html
+index 430e4bf..cddad80 100644
+--- a/BlogPosts/20241025_AddingInteractivity.html
++++ b/BlogPosts/20241025_AddingInteractivity.html
+@@ -5,6 +5,7 @@
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>10-25-2024 - Adding Interactivity</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <link rel="stylesheet" href="style.css">
+ </head>
+ <body>
+     <h1>Improving the Player Experience</h1>
+diff --git a/BlogPosts/20241026_GettingFeatureComplete.html b/BlogPosts/20241026_GettingFeatureComplete.html
+index b36b65a..a520dbf 100644
+--- a/BlogPosts/20241026_GettingFeatureComplete.html
++++ b/BlogPosts/20241026_GettingFeatureComplete.html
+@@ -5,6 +5,7 @@
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>10-26-2024 - Getting to Feature Complete</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <link rel="stylesheet" href="style.css">
+ </head>
+ <body>
+     <h1>Getting to Feature Complete</h1>
+diff --git a/BlogPosts/20241028_modestOptimizations.html b/BlogPosts/20241028_modestOptimizations.html
+index 4586436..2d8afdf 100644
+--- a/BlogPosts/20241028_modestOptimizations.html
++++ b/BlogPosts/20241028_modestOptimizations.html
+@@ -5,6 +5,7 @@
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>10-28-2024 - Modest Optimizations</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <link rel="stylesheet" href="style.css">
+ </head>
+ <body>
+     <h1>Optimizing at Random</h1>
+diff --git a/BlogPosts/20241029_effectiveOptimizations.html b/BlogPosts/20241029_effectiveOptimizations.html
+index 0faaeee..434a990 100644
+--- a/BlogPosts/20241029_effectiveOptimizations.html
++++ b/BlogPosts/20241029_effectiveOptimizations.html
+@@ -5,6 +5,7 @@
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>10-29-2024 - Effective Optimizations</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <link rel="stylesheet" href="style.css">
+ </head>
+ <body>
+     <h1>Digging into the Canvas API</h1>
+diff --git a/BlogPosts/20241123_llama_exercise.html b/BlogPosts/20241123_llama_exercise.html
+index 418a044..81318f7 100644
+--- a/BlogPosts/20241123_llama_exercise.html
++++ b/BlogPosts/20241123_llama_exercise.html
+@@ -5,6 +5,7 @@
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>11-23-2024 - Fixing the Filterer with Llama 3.3 70b</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <link rel="stylesheet" href="style.css">
+ </head>
+ <body>
+     <h1>Writing Unit Tests to Keep from Making New Bugs</h1>
+diff --git a/BlogPosts/PrettifyPrompt.md b/BlogPosts/PrettifyPrompt.md
+new file mode 100644
+index 0000000..7350786
+--- /dev/null
++++ b/BlogPosts/PrettifyPrompt.md
+@@ -0,0 +1,8 @@
++# Creating a Style.css for BlogPosts
++We want a central Style.css sheet to apply to all the html files in the BlogPosts folder, 1 level deep.  
++
++# Adding a Dark and Light Theme Button to all Blog Post Pages
++We want the option to change the text from white on black to black on white to help with readability.
++
++# Adding Visual Pleasantries
++It would be nice if the page remained readable on a phone and on a computer, but a bit of visual distinction between sections would be nice.
+\ No newline at end of file
+diff --git a/BlogPosts/Style.css b/BlogPosts/Style.css
+new file mode 100644
+index 0000000..c8fac1f
+--- /dev/null
++++ b/BlogPosts/Style.css
+@@ -0,0 +1,59 @@
++/* style.css */
++
++/* Basic styles */
++body {
++    font-family: Arial, sans-serif;
++    margin: 0;
++    padding: 20px;
++    transition: background-color 0.3s, color 0.3s;
++}
++
++h1, h2, h3, p {
++    margin-bottom: 15px;
++}
++
++/* Ensuring responsiveness */
++@media (max-width: 768px) {
++    body {
++        font-size: 16px; /* Adjust the base font size for smaller screens */
++    }
++}
++
++/* Theme Styles */
++:root {
++    --text-color-light: #000;
++    --background-color-light: #fff;
++    --text-color-dark: #fff;
++    --background-color-dark: #000;
++}
++
++body.light-theme {
++    color: var(--text-color-light);
++    background-color: var(--background-color-light);
++}
++
++body.dark-theme {
++    color: var(--text-color-dark);
++    background-color: var(--background-color-dark);
++}
++
++/* Button for theme switching */
++.theme-switcher {
++    position: fixed; 
++    top: 20px;
++    right: 20px;
++    padding: 10px;
++    cursor: pointer;
++    border: none;
++    outline: none;
++    background-color: #333;
++    color: white;
++}
++
++/* Visual distinctions for sections */
++section {
++    margin-bottom: 30px;
++    padding: 15px;
++    border-left: 5px solid #007BFF; /* Example color for distinction */
++    background-color: rgba(0, 123, 255, 0.1);
++}
+\ No newline at end of file
+diff --git a/BlogPosts/index.html b/BlogPosts/index.html
+index 6696334..21c14e2 100644
+--- a/BlogPosts/index.html
++++ b/BlogPosts/index.html
+@@ -1,42 +1,75 @@
+ <!DOCTYPE html>
+ <html lang="en">
++
+ <head>
+     <meta charset="UTF-8">
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>Austin183's Blog Posts</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <link rel="stylesheet" href="Style.css">
+ </head>
+-<body>
++
++<body class="light-theme">
+     <h1>Midiestro Posts</h1>
+ 
++    <!-- Theme Switcher Button -->
++    <button id="theme-switcher" class="theme-switcher">Switch Theme</button>
++
+     <div>
+         <p>
+-            These posts go into more detail about particular commits to the Midestro project.  Mainly why I thought I needed to make them and how I came to the implementation.
++            These posts go into more detail about particular commits to the Midestro project. Mainly why I thought I
++            needed to make them and how I came to the implementation.
+         </p>
+         <ul>
+             <li>
+-                <a href="20241023_theBeginning.html">The Beginning (October 23, 2024)</a> - TL;DR - Made a page that wasn't very good at being a game yet.  Took notes about what to do better for the next several iterations.
++                <a href="20241023_theBeginning.html">The Beginning (October 23, 2024)</a> - TL;DR - Made a page that
++                wasn't very good at being a game yet. Took notes about what to do better for the next several
++                iterations.
+             </li>
+             <li>
+-                <a href="20241024_IteratingTowardsPlayability.html">Iterating Towards Playability (October 24, 2024)</a> - TL;DR - Added more debugging and worked on UI / UX concerns with selecting notes to play and seeing them at the right places on the canvas.
++                <a href="20241024_IteratingTowardsPlayability.html">Iterating Towards Playability (October 24, 2024)</a>
++                - TL;DR - Added more debugging and worked on UI / UX concerns with selecting notes to play and seeing
++                them at the right places on the canvas.
+             </li>
+             <li>
+-                <a href="20241025_AddingInteractivity.html">Adding Interactivity (October 25, 2024)</a> - TL;DR - Added some game options and better visual feedback for scoring points during the game.
++                <a href="20241025_AddingInteractivity.html">Adding Interactivity (October 25, 2024)</a> - TL;DR - Added
++                some game options and better visual feedback for scoring points during the game.
+             </li>
+             <li>
+-                <a href="20241026_GettingFeatureComplete.html">Getting to Feature Complete (October 26, 2024)</a> - TL;DR - Added a scoreboard, fixed bugs, and got to Feature Complete!
++                <a href="20241026_GettingFeatureComplete.html">Getting to Feature Complete (October 26, 2024)</a> -
++                TL;DR - Added a scoreboard, fixed bugs, and got to Feature Complete!
+             </li>
+             <li>
+-                <a href="20241028_modestOptimizations.html">Modest Optimizations (October 28, 2024)</a> - TL;DR - Trimmed down on loops and iterations in loops while the game interval ran.
++                <a href="20241028_modestOptimizations.html">Modest Optimizations (October 28, 2024)</a> - TL;DR -
++                Trimmed down on loops and iterations in loops while the game interval ran.
+             </li>
+             <li>
+-                <a href="20241029_effectiveOptimizations.html">Effective Optimizations (October 29, 2024)</a> - TL;DR - Added Precached rendered notes and measured performance with browser developer tools.
++                <a href="20241029_effectiveOptimizations.html">Effective Optimizations (October 29, 2024)</a> - TL;DR -
++                Added Precached rendered notes and measured performance with browser developer tools.
+             </li>
+             <li>
+-                <a href="20241123_llama_exercise.html">Unit Testing and Software Development with Llama 3.3 70b (November 23, 2024)</a> - TL;DR - Wrote Unit Tests and rewrote complex method that had bugs in it.
++                <a href="20241123_llama_exercise.html">Unit Testing and Software Development with Llama 3.3 70b
++                    (November 23, 2024)</a> - TL;DR - Wrote Unit Tests and rewrote complex method that had bugs in it.
+             </li>
+         </ul>
+ 
++        <!-- JavaScript for Theme Switching -->
++        <script>
++            document.getElementById('theme-switcher').addEventListener('click', function () {
++                const body = document.body;
++
++                // Toggle the theme
++                if (body.classList.contains('light-theme')) {
++                    body.classList.remove('light-theme');
++                    body.classList.add('dark-theme');
++                } else {
++                    body.classList.remove('dark-theme');
++                    body.classList.add('light-theme');
++                }
++            });
++        </script>
++
+     </div>
+ </body>
+-</html>
++
++</html>
+\ No newline at end of file
