@@ -1,4 +1,4 @@
-.DS_Store
+**/.DS_Store
 MidiSongBuilder/MyComponents/difficultySettingsCalculator.js
 node_modules/
 MidiSongBuilder/.claude/agents/hl-*
@@ -11,3 +11,7 @@ MidiSongBuilder/agent_docs/**/*
 MidiSongBuilder/MyESModules/Libraries/*
 package-lock.json
 
+.DS_Store
+CollageMaker/_agent_docs/**
+TaxBracketVisualizer/.opencode/**
+**/.claude/**
