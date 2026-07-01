@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>CollageMaker</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css" integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous">
+    <link href="../src/css/variables.css" rel="stylesheet">
+    <link href="../src/css/Style.css" rel="stylesheet">
+    <link href="./Style.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+
+<body>
+    <button id="themeToggle" onclick="toggleTheme()" title="Toggle theme">
+        <span id="theme-icon" class="material-icons">bedtime</span>
+    </button>
+
+    <div id="app">
+        <!-- Toolbar -->
+        <div id="toolbar" class="collage-toolbar">
+            <h2 class="app-title">CollageMaker</h2>
+            <div class="toolbar-actions">
+                <button id="addImagesBtn" class="pure-button pure-button-primary" @click="triggerFilePicker">
+                    <span class="material-icons" style="vertical-align: middle; margin-right: 4px;">add_photo_alternate</span>
+                    Add Images
+                </button>
+                <input type="file" id="fileInput" ref="fileInput" multiple accept="image/*" style="display: none;" @change="handleFileInputChange">
+                <button id="clearAllBtn" class="pure-button" @click="clearAllImages" :disabled="images.length === 0">
+                    Clear All
+                </button>
+            </div>
+        </div>
+
+        <!-- Three-Panel Layout -->
+        <div id="mainLayout" class="main-layout">
+            <!-- Left Sidebar: Image Library -->
+            <div id="sidebar-left" class="sidebar sidebar-left">
+                <h3>Image Library ({{ images.length }})</h3>
+                <div id="librarySearch" class="library-search">
+                    <input type="text" v-model="searchQuery" placeholder="Search by filename..." class="pure-input-rounded">
+                </div>
+                <div id="imageLibrary" class="image-library">
+                    <div v-if="filteredImages.length === 0" class="empty-library">
+                        <span class="material-icons" style="font-size: 48px; opacity: 0.4;">image</span>
+                        <p>No images yet</p>
+                        <p class="hint">Drag &amp; drop images here or click "Add Images"</p>
+                    </div>
+                    <div v-for="(image, index) in filteredImages" :key="image.id"
+                         class="image-item"
+                         :class="{ selected: selectedImageId === image.id }"
+                         @click="selectImage(index)">
+                        <div class="image-number">{{ index + 1 }}</div>
+                        <img :src="image.thumbnail" :alt="image.filename" class="image-thumb">
+                        <div class="image-name" :title="image.filename">{{ truncateFilename(image.filename) }}</div>
+                        <button class="remove-btn" @click.stop="removeImage(index)" title="Remove">
+                            <span class="material-icons">close</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Center: Canvas Area -->
+            <div id="canvas-area" class="canvas-area">
+                <div id="canvasContainer" class="canvas-container">
+                    <div v-if="images.length === 0" class="canvas-placeholder">
+                        <span class="material-icons" style="font-size: 64px; opacity: 0.3;">photo_library</span>
+                        <h3>No Images Loaded</h3>
+                        <p>Drag &amp; drop images onto this area, or use the "Add Images" button above.</p>
+                    </div>
+                    <canvas id="previewCanvas" v-show="images.length > 0"></canvas>
+                </div>
+            </div>
+
+            <!-- Right Sidebar: Detail / Editor Panel -->
+            <div id="sidebar-right" class="sidebar sidebar-right">
+                <h3>Layout</h3>
+                <div class="detail-section">
+                    <label for="layoutStyleSelect">Layout Style</label>
+                    <select id="layoutStyleSelect" v-model="layoutStyle" class="pure-input-rounded" @change="onLayoutStyleChange">
+                        <option v-for="style in layoutStyles" :key="style.value" :value="style.value">{{ style.label }}</option>
+                    </select>
+                </div>
+                <div class="detail-section">
+                    <label for="gutterSlider">Gutter: {{ gutter }}px</label>
+                    <input type="range" id="gutterSlider" v-model.number="gutter" min="0" max="20" step="1" class="fullRange" @input="onGutterChange">
+                </div>
+                <div class="detail-section" v-if="layoutStyle === 'diagonalSlices'">
+                    <label for="sliceAngleSlider">Slice Angle: {{ sliceAngle }}&deg;</label>
+                    <input type="range" id="sliceAngleSlider" v-model.number="sliceAngle" min="0" max="75" step="1" class="fullRange" @input="onSliceAngleChange">
+                </div>
+                <div class="detail-section" v-if="layoutStyle === 'hexagonal'">
+                    <label for="hexSpacingSlider">Hex Spacing: {{ hexSpacing }}px</label>
+                    <input type="range" id="hexSpacingSlider" v-model.number="hexSpacing" min="0" max="30" step="1" class="fullRange" @input="onHexSpacingChange">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../src/js/themeSwitcher.js"></script>
+    <script type="module">
+        import { createApp } from 'https://unpkg.com/vue@3.5.30/dist/vue.esm-browser.js';
+        import { initializeCollageBase } from './MyESModules/App/CollageBase.js';
+        import { createCollageApp } from './MyESModules/App/createCollageApp.js';
+        import { createCollageData } from './MyESModules/App/createCollageData.js';
+        import { createCollageMethods } from './MyESModules/App/createCollageMethods.js';
+        import { createCollageLifecycle } from './MyESModules/App/createCollageLifecycle.js';
+        import { createCollageServices } from './MyESModules/App/createCollageServices.js';
+
+        const base = initializeCollageBase();
+
+        const dataConfig = createCollageData(base);
+        const methodsConfig = createCollageMethods(base);
+        const lifecycleConfig = createCollageLifecycle(base);
+        const servicesConfig = createCollageServices(base);
+
+        const app = createCollageApp({
+            createApp,
+            dataConfig,
+            methodsConfig,
+            lifecycleConfig,
+            servicesConfig
+        }).mount('#app');
+    </script>
+</body>
+
+</html>
