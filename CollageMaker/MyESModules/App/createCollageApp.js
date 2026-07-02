@@ -24,6 +24,11 @@ export function createCollageApp({
                 return this.images.filter(img =>
                     img.filename.toLowerCase().includes(query)
                 );
+            },
+
+            selectedCropInfo() {
+                if (!this.selectedPanelId) return null;
+                return this.crops.get(this.selectedPanelId) || null;
             }
         },
 

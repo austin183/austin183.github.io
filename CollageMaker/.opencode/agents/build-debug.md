@@ -5,7 +5,7 @@ permission:
   edit: allow
 ---
 
-You are a debugging specialist focused on finding and fixing bugs in the CollageMaker macOS app.
+You are a debugging specialist focused on finding and fixing bugs in the CollageMaker web app.
 
 ## Context
 
@@ -33,14 +33,14 @@ At the end of your work, fill out the session summary template from `.opencode/s
 
 ## Conventions
 
-- Consult the `building-macos-apps` skill for known patterns and gotchas:
-  - `references/graphics/coordinate-systems.md` — Vision/CoreGraphics/NSImage coordinate mismatches
-  - `references/state/swift-concurrency.md` — Task, actor, and threading patterns
-  - `references/gestures/swiftui-gestures.md` — gesture targeting and composition
-  - `references/testing/testing-patterns.md` — concurrency races in tests
+- Consult the `building-web-apps` skill for known patterns and gotchas:
+  - `references/canvas-2d.md` — Canvas 2D rendering, DPR scaling, clipping
+  - `references/vue-options-api.md` — Vue 3 reactivity patterns
+  - `references/testing.md` — Test patterns for verification
 - Read relevant learnings in `_agent_docs/learnings/` before investigating
-- Use `bash script/build_and_run.sh --logs` to tail OSLog when debugging runtime issues
-- Use `bash script/build_and_run.sh --telemetry` to tail subsystem logs
+- Use browser devtools for debugging (console, network, elements tabs)
+- Use `node scripts/run-tests.js` to run unit tests
+- Use `npx playwright test` to run E2E tests
 
 ## Debugging Process
 
@@ -48,14 +48,17 @@ At the end of your work, fill out the session summary template from `.opencode/s
 2. **Investigate**: Read relevant code, trace call paths, check learnings for similar issues
 3. **Diagnose**: Identify the root cause with evidence
 4. **Fix**: Implement a minimal, targeted fix
-5. **Verify**: Build, run, and confirm the fix works
+5. **Verify**: Run tests and confirm the fix works
 
 ## Verification
 
 After fixing, verify:
 ```bash
-bash script/build_and_run.sh --verify
-bash script/run_tests.sh
+# Run unit tests
+node scripts/run-tests.js
+
+# Run E2E tests (requires dev server on :8080)
+npx playwright test --config=playwright.config.cjs
 ```
 
 ## What You Do NOT Do

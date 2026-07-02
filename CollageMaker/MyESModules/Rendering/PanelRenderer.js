@@ -88,6 +88,27 @@ export function createPanelRenderer() {
             ctx.restore();
         },
 
+        /**
+         * Draws a hover highlight border on a panel.
+         * @param {CanvasRenderingContext2D} ctx
+         * @param {Object} panel - ImagePanel
+         */
+        drawHoverBorder(ctx, panel) {
+            const bounds = geometryBoundingRect(panel.geometry);
+            ctx.save();
+            ctx.strokeStyle = 'rgba(100, 160, 255, 0.7)';
+            ctx.lineWidth = 2;
+
+            if (isRectGeometry(panel.geometry)) {
+                ctx.strokeRect(bounds.x + 1, bounds.y + 1, bounds.width - 2, bounds.height - 2);
+            } else {
+                this._drawPath(ctx, panel.geometry.points);
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        },
+
         // Private methods
 
         _applyClip(ctx, geometry) {

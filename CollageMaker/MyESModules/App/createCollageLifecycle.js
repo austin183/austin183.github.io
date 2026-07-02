@@ -6,6 +6,10 @@
 import { createCanvasRenderer } from '../Rendering/CanvasRenderer.js';
 import { createLayoutManager } from '../State/LayoutManager.js';
 import { createImageLibrary } from '../State/ImageLibrary.js';
+import { createCropManager } from '../State/CropManager.js';
+import { createUndoManager } from '../State/UndoManager.js';
+import { createGestureHandler } from '../Interaction/GestureHandler.js';
+import { createCropInteraction } from '../Interaction/CropInteraction.js';
 import { SIZE_CONSTANTS } from '../Models/SizeConstants.js';
 
 export function createCollageLifecycle(base) {
@@ -23,10 +27,20 @@ export function createCollageLifecycle(base) {
             // Store assembler reference for render function
             this._assembler = base.assembler;
 
+            // Initialize undo manager
+            this.undoManager = createUndoManager();
+
             // Initialize layout manager
             const layoutManager = createLayoutManager(this, base.assembler);
             base.setLayoutManager(layoutManager);
             this.layoutManager = layoutManager;
+
+            // Initialize crop manager
+            const onCropChanged = () => {
+                this._scheduleRender();
+                this._scheduleCropPreviewRender();
+            };
+            this.cropManager = createCropManager(this, onCropChanged);
 
             // Initialize image library
             const onImagesChanged = () => {
@@ -36,6 +50,66 @@ export function createCollageLifecycle(base) {
             base.setImageLibrary(imageLibrary);
             this.imageLibrary = imageLibrary;
 
+            // Initialize gesture handler (panel selection on main canvas)
+            this._gestureHandler = createGestureHandler({
+                canvasId: 'previewCanvas',
+                state: this,
+                onPanelSelected: (panelId) => {
+                    this.selectPanel(panelId);
+                },
+                onHoverChanged: (panelId) => {
+                    this.hoveredPanelId = panelId;
+                },
+                onRenderScheduled: () => {
+                    this._scheduleRender();
+                }
+            });
+            this._gestureHandler.attach();
+
+            // Initialize crop interaction handler
+            let cropUndoSnapshot = null;
+            this._cropInteraction = createCropInteraction({
+                canvasId: 'cropPreviewCanvas',
+                cropManager: this.cropManager,
+                panelId: null,
+                onRenderScheduled: () => {
+                    this._scheduleRender();
+                },
+                onCropPreviewRender: () => {
+                    this._scheduleCropPreviewRender();
+                },
+                onDragStart: () => {
+                    // Capture pre-drag crop state for undo
+                    const crop = this.cropManager.getCrop(this.selectedPanelId);
+                    if (crop) {
+                        cropUndoSnapshot = { ...crop.sourceRect };
+                    }
+                },
+                onDragEnd: () => {
+                    // Push undo command for the entire drag session
+                    if (cropUndoSnapshot && this.selectedPanelId && this.undoManager) {
+                        const panelId = this.selectedPanelId;
+                        const preState = { ...cropUndoSnapshot };
+                        const crop = this.cropManager.getCrop(panelId);
+                        const postState = crop ? { ...crop.sourceRect } : null;
+
+                        if (postState) {
+                            this.undoManager.push({
+                                label: 'Adjust Crop',
+                                undo: () => {
+                                    this.cropManager.setSourceRect(panelId, preState);
+                                },
+                                redo: () => {
+                                    this.cropManager.setSourceRect(panelId, postState);
+                                }
+                            });
+                            this._updateUndoState();
+                        }
+                    }
+                    cropUndoSnapshot = null;
+                }
+            });
+
             // Set up global file drop handler for drops outside Vue-managed elements
             // (the element-level @drop handlers in the template handle drops on canvas/library)
             base.dropHandler.setupGlobalDrop(async (files) => {
@@ -44,24 +118,57 @@ export function createCollageLifecycle(base) {
                 this._scheduleRender();
             });
 
+            // Set up keyboard shortcuts
+            this._keyboardHandler = (e) => this._handleKeyboard(e);
+            document.addEventListener('keydown', this._keyboardHandler);
+
             // Handle window resize
+            this._handleResize = () => {
+                this._scheduleCropPreviewRender();
+            };
             window.addEventListener('resize', this._handleResize);
         },
 
         beforeUnmount() {
             window.removeEventListener('resize', this._handleResize);
+            document.removeEventListener('keydown', this._keyboardHandler);
+            if (this._gestureHandler) {
+                this._gestureHandler.detach();
+            }
+            if (this._cropInteraction) {
+                this._cropInteraction.detach();
+            }
             if (this.canvasRenderer) {
                 this.canvasRenderer.dispose();
             }
         },
 
         /**
-         * Handles window resize.
+         * Handles keyboard shortcuts.
          * @private
          */
-        _handleResize() {
-            // In the future, we might want to resize the preview canvas
-            // For now, the fixed preview size works
+        _handleKeyboard(e) {
+            // Cmd+Z / Ctrl+Z: Undo
+            if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'z') {
+                e.preventDefault();
+                this.undo();
+                return;
+            }
+
+            // Cmd+Shift+Z / Ctrl+Shift+Z: Redo
+            if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'z') {
+                e.preventDefault();
+                this.redo();
+                return;
+            }
+
+            // Escape: Deselect panel
+            if (e.key === 'Escape' && this.selectedPanelId) {
+                e.preventDefault();
+                this.selectPanel(null);
+                this._scheduleRender();
+                return;
+            }
         }
     };
 }

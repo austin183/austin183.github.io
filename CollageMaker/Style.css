@@ -360,3 +360,119 @@ body.drag-over .canvas-container {
 .sidebar::-webkit-scrollbar-thumb:hover {
     background-color: var(--color-text-secondary);
 }
+
+/* Toolbar icon buttons and divider */
+.toolbar-divider {
+    width: 1px;
+    height: 24px;
+    background-color: var(--color-surface-variant);
+    margin: 0 var(--space-2);
+}
+
+.toolbar-icon-btn {
+    padding: var(--space-2);
+    min-width: 32px;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    border-radius: var(--radius-small);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+}
+
+.toolbar-icon-btn:hover:not(:disabled) {
+    background-color: var(--color-surface-variant);
+}
+
+.toolbar-icon-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.toolbar-icon-btn .material-icons {
+    font-size: 20px;
+}
+
+/* Crop Preview Section */
+.crop-preview-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-surface-variant);
+}
+
+.crop-preview-canvas {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    max-height: 180px;
+    background-color: #000000;
+    border-radius: var(--radius-small);
+    cursor: grab;
+    box-shadow: var(--elevation-1);
+}
+
+.crop-preview-canvas:active {
+    cursor: grabbing;
+}
+
+.crop-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    font-family: var(--font-mono, 'SF Mono', 'Consolas', monospace);
+}
+
+.crop-info-item {
+    background-color: var(--color-background);
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.reset-crop-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-sm);
+    padding: var(--space-2) var(--space-3);
+    background-color: var(--color-background);
+    border: 1px solid var(--color-surface-variant);
+    border-radius: var(--radius-small);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+}
+
+.reset-crop-btn:hover {
+    background-color: var(--color-surface-variant);
+}
+
+/* Crop Placeholder Section */
+.crop-placeholder-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-6) var(--space-4);
+    text-align: center;
+    color: var(--color-text-secondary);
+    border-bottom: 1px solid var(--color-surface-variant);
+}
+
+.crop-placeholder-icon {
+    font-size: 40px;
+    opacity: 0.3;
+    margin-bottom: var(--space-2);
+}
+
+.crop-placeholder-section p {
+    font-size: var(--font-size-sm);
+    margin: 0;
+    line-height: 1.4;
+}

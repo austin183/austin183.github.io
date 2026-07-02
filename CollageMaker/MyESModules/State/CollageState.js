@@ -29,6 +29,7 @@ export function createCollageState() {
 
         // Selection
         selectedPanelId: null,
+        hoveredPanelId: null,
         selectedImageId: null,
 
         // Background
@@ -37,9 +38,8 @@ export function createCollageState() {
         // Search
         searchQuery: '',
 
-        // Computed (not reactive, derived)
-        get filteredImages() {
-            return this.images;
-        }
+        // Undo/Redo
+        canUndo: false,
+        canRedo: false
     };
 }

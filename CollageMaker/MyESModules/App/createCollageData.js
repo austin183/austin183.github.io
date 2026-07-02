@@ -25,6 +25,7 @@ export function createCollageData(base) {
 
             // Selection
             selectedPanelId: null,
+            hoveredPanelId: null,
             selectedImageId: null,
 
             // Background
@@ -32,6 +33,10 @@ export function createCollageData(base) {
 
             // Search
             searchQuery: '',
+
+            // Undo/Redo state
+            canUndo: false,
+            canRedo: false,
 
             // Layout style options (from base)
             layoutStyles: base.layoutStyleOptions

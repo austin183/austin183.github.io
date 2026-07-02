@@ -25,6 +25,14 @@
                     Add Images
                 </button>
                 <input type="file" id="fileInput" ref="fileInput" multiple accept="image/*" style="display: none;" @change="handleFileInputChange">
+                <div class="toolbar-divider"></div>
+                <button id="undoBtn" class="pure-button toolbar-icon-btn" @click="undo" :disabled="!canUndo" title="Undo (Cmd+Z)">
+                    <span class="material-icons">undo</span>
+                </button>
+                <button id="redoBtn" class="pure-button toolbar-icon-btn" @click="redo" :disabled="!canRedo" title="Redo (Cmd+Shift+Z)">
+                    <span class="material-icons">redo</span>
+                </button>
+                <div class="toolbar-divider"></div>
                 <button id="clearAllBtn" class="pure-button" @click="clearAllImages" :disabled="images.length === 0">
                     Clear All
                 </button>
@@ -92,6 +100,33 @@
                     <label for="hexSpacingSlider">Hex Spacing: {{ hexSpacing }}px</label>
                     <input type="range" id="hexSpacingSlider" v-model.number="hexSpacing" min="0" max="30" step="1" class="fullRange" @input="onHexSpacingChange">
                 </div>
+
+                <!-- Crop Preview (shown when a panel is selected) -->
+                <template v-if="selectedPanelId && selectedCropInfo">
+                    <h3>Crop</h3>
+                    <div class="detail-section crop-preview-section">
+                        <canvas id="cropPreviewCanvas" class="crop-preview-canvas"></canvas>
+                        <div class="crop-info">
+                            <span class="crop-info-item">X: {{ Math.round(selectedCropInfo.sourceRect.x) }}</span>
+                            <span class="crop-info-item">Y: {{ Math.round(selectedCropInfo.sourceRect.y) }}</span>
+                            <span class="crop-info-item">W: {{ Math.round(selectedCropInfo.sourceRect.width) }}</span>
+                            <span class="crop-info-item">H: {{ Math.round(selectedCropInfo.sourceRect.height) }}</span>
+                        </div>
+                        <button class="pure-button reset-crop-btn" @click="resetSelectedCrop">
+                            <span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 4px;">restart_alt</span>
+                            Reset Crop
+                        </button>
+                    </div>
+                </template>
+
+                <!-- Crop placeholder (shown when images exist but no panel is selected) -->
+                <template v-else-if="images.length > 0">
+                    <h3>Crop</h3>
+                    <div class="detail-section crop-placeholder-section">
+                        <span class="material-icons crop-placeholder-icon">crop_free</span>
+                        <p>Select a panel on the canvas to edit its crop.</p>
+                    </div>
+                </template>
             </div>
         </div>
     </div>

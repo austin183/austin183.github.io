@@ -103,6 +103,88 @@ export function createCollageMethods(base) {
         },
 
         /**
+         * Selects a panel on the canvas.
+         * @param {string|null} panelId
+         */
+        selectPanel(panelId) {
+            this.selectedPanelId = panelId;
+            // Update crop interaction for the selected panel
+            if (this._cropInteraction) {
+                this._cropInteraction.setPanelId(panelId);
+            }
+            this._scheduleCropPreviewRender();
+        },
+
+        /**
+         * Resets the crop of the currently selected panel.
+         */
+        resetSelectedCrop() {
+            if (!this.selectedPanelId || !this.cropManager) return;
+
+            // Save state for undo
+            const prevCrop = this.crops.get(this.selectedPanelId);
+            const panelId = this.selectedPanelId;
+
+            if (prevCrop) {
+                this.undoManager.push({
+                    label: 'Reset Crop',
+                    undo: () => {
+                        this.crops.set(panelId, {
+                            sourceRect: { ...prevCrop.sourceRect },
+                            destination: { ...prevCrop.destination }
+                        });
+                    },
+                    redo: () => {
+                        this.cropManager.resetCrop(panelId);
+                    }
+                });
+                this._updateUndoState();
+            }
+
+            this.cropManager.resetCrop(this.selectedPanelId);
+            this._scheduleRender();
+            this._scheduleCropPreviewRender();
+        },
+
+        /**
+         * Performs an undo operation.
+         */
+        undo() {
+            if (!this.undoManager || !this.undoManager.canUndo()) return;
+
+            const hadUndo = this.undoManager.undo();
+            if (!hadUndo) return;
+
+            this._updateUndoState();
+            this._scheduleRender();
+            this._scheduleCropPreviewRender();
+        },
+
+        /**
+         * Performs a redo operation.
+         */
+        redo() {
+            if (!this.undoManager || !this.undoManager.canRedo()) return;
+
+            const hadRedo = this.undoManager.redo();
+            if (!hadRedo) return;
+
+            this._updateUndoState();
+            this._scheduleRender();
+            this._scheduleCropPreviewRender();
+        },
+
+        /**
+         * Updates the canUndo/canRedo reactive state.
+         * @private
+         */
+        _updateUndoState() {
+            if (!this.undoManager) return;
+            this.canUndo = this.undoManager.canUndo();
+            this.canRedo = this.undoManager.canRedo();
+        },
+
+        /**
          * Regenerates layout and triggers a render.
          * @private
          */
@@ -142,11 +224,102 @@ export function createCollageMethods(base) {
                         width: 1920,
                         height: 1080
                     },
-                    selectedPanelId: vm.selectedPanelId
+                    selectedPanelId: vm.selectedPanelId,
+                    hoveredPanelId: vm.hoveredPanelId
                 });
 
                 ctx.restore();
             });
+        },
+
+        /**
+         * Schedules a crop preview canvas render.
+         * @private
+         */
+        _scheduleCropPreviewRender() {
+            if (!this.selectedPanelId || !this.cropManager) return;
+
+            const crop = this.cropManager.getCrop(this.selectedPanelId);
+            const image = this.cropManager.getPanelImage(this.selectedPanelId);
+            if (!crop || !image) return;
+
+            const canvas = document.getElementById('cropPreviewCanvas');
+            if (!canvas) return;
+
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            // Size canvas to fit in the sidebar
+            const container = canvas.parentElement;
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            const cssW = rect.width || 200;
+            const cssH = rect.height || 150;
+
+            canvas.width = cssW * dpr;
+            canvas.height = cssH * dpr;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            // Clear
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, cssW, cssH);
+
+            // Calculate image draw size (contain)
+            const imageAspect = image.width / image.height;
+            const canvasAspect = cssW / cssH;
+
+            let drawW, drawH, offsetX, offsetY;
+            if (imageAspect > canvasAspect) {
+                drawW = cssW;
+                drawH = cssW / imageAspect;
+                offsetX = 0;
+                offsetY = (cssH - drawH) / 2;
+            } else {
+                drawH = cssH;
+                drawW = cssH * imageAspect;
+                offsetX = (cssW - drawW) / 2;
+                offsetY = 0;
+            }
+
+            const scale = drawW / image.width;
+
+            // Draw the full image
+            ctx.drawImage(image.image, offsetX, offsetY, drawW, drawH);
+
+            // Draw dark overlay outside the crop region
+            const sr = crop.sourceRect;
+            const cropScreenX = offsetX + sr.x * scale;
+            const cropScreenY = offsetY + sr.y * scale;
+            const cropScreenW = sr.width * scale;
+            const cropScreenH = sr.height * scale;
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+            // Top
+            ctx.fillRect(0, 0, cssW, cropScreenY);
+            // Bottom
+            ctx.fillRect(0, cropScreenY + cropScreenH, cssW, cssH - cropScreenY - cropScreenH);
+            // Left
+            ctx.fillRect(0, cropScreenY, cropScreenX, cropScreenH);
+            // Right
+            ctx.fillRect(cropScreenX + cropScreenW, cropScreenY, cssW - cropScreenX - cropScreenW, cropScreenH);
+
+            // Draw crop border
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(cropScreenX, cropScreenY, cropScreenW, cropScreenH);
+
+            // Draw corner handles (size matches CORNER_HANDLE_SIZE in CropInteraction.js)
+            const handleSize = 12;
+            ctx.fillStyle = '#ffffff';
+            const corners = [
+                [cropScreenX, cropScreenY],
+                [cropScreenX + cropScreenW, cropScreenY],
+                [cropScreenX, cropScreenY + cropScreenH],
+                [cropScreenX + cropScreenW, cropScreenY + cropScreenH]
+            ];
+            for (const [cx, cy] of corners) {
+                ctx.fillRect(cx - handleSize / 2, cy - handleSize / 2, handleSize, handleSize);
+            }
         }
     };
 }

@@ -34,12 +34,12 @@ You will be provided with a set of requirements and optionally a perspective on 
    - Use Bash ONLY for read-only operations (ls, git status, git log, git diff)
    - NEVER use Bash for: mkdir, touch, rm, cp, mv, git add, git commit, or any file creation/modification
 
-3. **Consult Skills**: When planning work related to SwiftUI, state management, gestures, graphics, Vision, concurrency, or macOS conventions, consult the `building-macos-apps` skill and its reference files. These documents capture verified behavior, patterns, and hard-won learnings for this project — don't rely on model assumptions alone. Key references include:
-   - `references/state/observable-bindable.md` — @Observable and @Bindable rules
-   - `references/state/swift-concurrency.md` — Task, actor, and threading patterns
-   - `references/graphics/coordinate-systems.md` — Vision/CoreGraphics/NSImage coordinate mismatches
-   - `references/gestures/swiftui-gestures.md` — gesture targeting and composition
-   - `references/testing/testing-patterns.md` — test fixtures and mocking
+3. **Consult Skills**: When planning work related to Vue 3, Canvas 2D, ES modules, or testing, consult the `building-web-apps` skill and its reference files. These documents capture verified behavior, patterns, and hard-won learnings for this project — don't rely on model assumptions alone. Key references include:
+   - `references/vue-options-api.md` — Vue 3 Options API factory decomposition
+   - `references/canvas-2d.md` — Canvas 2D rendering, DPR scaling, clipping
+   - `references/es-modules.md` — ES module conventions and barrel exports
+   - `references/testing.md` — Mocha/Chai and Playwright patterns
+   - `references/midiestro-pattern.md` — The proven Midiestro3D pattern
 
 4. **Design Solution**:
    - Create implementation approach based on your assigned perspective
@@ -50,7 +50,7 @@ You will be provided with a set of requirements and optionally a perspective on 
 5. **Detail the Plan**:
    - Provide step-by-step implementation strategy
    - Identify dependencies and sequencing
-   - Anticipate potential challenges, especially coordinate system traps, concurrency issues, and @Observable gotchas
+   - Anticipate potential challenges, especially Canvas 2D clipping traps, Vue reactivity gotchas, and ES module import issues
 
 ## Required Output
 
@@ -58,12 +58,12 @@ End your response with:
 
 ### Critical Files for Implementation
 List 3-5 files most critical for implementing this plan:
-- path/to/file.swift - [Brief reason: e.g., "Core logic to modify"]
-- path/to/file.swift - [Brief reason: e.g., "Interfaces to implement"]
-- path/to/file.swift - [Brief reason: e.g., "Pattern to follow"]
+- path/to/file.js - [Brief reason: e.g., "Core logic to modify"]
+- path/to/file.js - [Brief reason: e.g., "Interfaces to implement"]
+- path/to/file.js - [Brief reason: e.g., "Pattern to follow"]
 
 ### Relevant Skill References
-List any `building-macos-apps` skill reference files that contain patterns or gotchas relevant to this plan:
+List any `building-web-apps` skill reference files that contain patterns or gotchas relevant to this plan:
 - references/path/to/file.md - [Brief reason]
 
 REMEMBER: You can ONLY explore and plan. You CANNOT and MUST NOT write, edit, or modify any files.

@@ -10,7 +10,7 @@ permission:
 Look for problems that exist in the introduced code. This could be security issues, incorrect logic, etc. Only look for issues that fall within the changed code.
 
 **CRITICAL: We only want HIGH SIGNAL issues.** Flag issues where:
-- The code will fail to compile or parse (syntax errors, type errors, missing imports, unresolved references)
+- The code will fail to parse or throw at runtime (syntax errors, missing imports, unresolved references, unhandled Promise rejections)
 - The code will definitely produce wrong results regardless of inputs (clear logic errors)
 - Clear, unambiguous AGENTS.md violations where you can quote the exact rule being broken
 
@@ -18,17 +18,17 @@ Do NOT flag:
 - Code style or quality concerns
 - Potential issues that depend on specific inputs or state
 - Subjective suggestions or improvements
-- Issues based on assumptions about language runtime behavior (e.g., "this won't fire didSet", "this won't trigger observation") — these are the most common source of false positives. If you're unsure how a language feature behaves, read the relevant source file to verify before flagging.
+- Issues based on assumptions about JavaScript runtime behavior (e.g., "this won't trigger reactivity", "this won't update the DOM") — these are the most common source of false positives. If you're unsure how a language feature behaves, read the relevant source file to verify before flagging.
 
 If you are not certain an issue is real, do not flag it. False positives erode trust and waste reviewer time.
 
-Many times a diff will include changes in the _agent_docs folder.  These often include context about intention behind the code diffs.
+Many times a diff will include changes in the _agent_docs folder. These often include context about intention behind the code diffs.
 
-2. For each issue found in step 1, read the relevant source files to validate the issue with high confidence. For example, if "variable is not defined" was flagged, verify it's actually undefined in scope. If a AGENTS.md violation was flagged, verify the rule applies to this file.
+2. For each issue found in step 1, read the relevant source files to validate the issue with high confidence. For example, if "variable is not defined" was flagged, verify it's actually undefined in scope. If an AGENTS.md violation was flagged, verify the rule applies to this file.
 
-   When validating issues involving language runtime behavior (e.g., `didSet` firing, `@Observable` tracking, value vs reference type semantics), also consult the `building-macos-apps` skill and its `references/state/` files. These documents capture verified Swift behavior for this project — don't rely on model assumptions alone.
+   When validating issues involving Vue 3 reactivity, consult the `building-web-apps` skill and its `references/vue-options-api.md`. These documents capture verified Vue behavior for this project — don't rely on model assumptions alone.
 
-   When validating issues about threading, actor isolation, or concurrency, trace the actual call sites — don't assume where code runs based on the caller's actor annotation alone (e.g., `Task.detached` strips actor context). Consult the skill's `references/state/swift-concurrency.md` for the patterns this project uses.
+   When validating issues about Canvas 2D rendering, consult the skill's `references/canvas-2d.md` for DPR scaling, clipping, and rendering pipeline patterns.
 
    Do not skip this step — unvalidated assumptions are the primary source of false positives.
 

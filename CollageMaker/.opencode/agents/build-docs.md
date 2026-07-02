@@ -18,7 +18,7 @@ Your sole responsibility is documentation artifacts in `_agent_docs/` and `.open
 ## What You Must Produce
 
 - Learnings in `_agent_docs/learnings/` — hard-won knowledge from sessions
-- Plans in `_agent_docs/project-timeline/llm-usage/plans/` — implementation plans
+- Plans in `_agent_docs/plans/` — implementation plans
 - Skills in `.opencode/skills/` — specialized agent instructions
 - Reviews and other documentation as requested
 

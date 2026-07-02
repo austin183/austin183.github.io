@@ -7,7 +7,7 @@ description: Reviews AGENTS.md files for best practices: conciseness, universal 
 
 ## Core principles
 
-Claude Code uses AGENTS.md to onboard Claude into your codebase for every session. It's the only place where project-specific context automatically goes into every conversation.
+opencode uses AGENTS.md to onboard agents into your codebase for every session. It's the only place where project-specific context automatically goes into every conversation.
 
 **Three key questions AGENTS.md should answer:**
 1. **WHAT** - Tech stack, project structure, apps, shared packages, what everything is
@@ -19,23 +19,22 @@ Claude Code uses AGENTS.md to onboard Claude into your codebase for every sessio
 ### Less (instructions) is more
 
 - Keep AGENTS.md concise and universally applicable
-- Avoid stuffing every command Claude might need
+- Avoid stuffing every command an agent might need
 - Focus on high-leverage, always-relevant information
 - Aim for < 300 lines if possible
 
 ### Progressive disclosure
 
-Instead of bundling everything in AGENTS.md:
+Instead of bundling everything in AGENTS.md, point to separate files in `_agent_docs/`:
 ```
-agent_docs/
-  ├─ building_the_project.md
-  ├─ running_tests.md
-  ├─ code_conventions.md
-  ├─ service_architecture.md
-  └─ database_schema.md
+_agent_docs/
+  ├─ plans/                # Implementation and test plans
+  ├─ learnings/            # Hard-won knowledge from sessions
+  ├─ research/             # Platform and library research
+  └─ specifications/       # Feature specifications
 ```
 
-Point to these files and let Claude decide which are relevant.
+Point to these files and let agents decide which are relevant.
 
 ### What to include
 
@@ -52,9 +51,9 @@ Point to these files and let Claude decide which are relevant.
 - Configuration snippets that become outdated
 - Project-specific quirks that don't apply broadly
 
-### Claude is not a linter
+### Agents are not linters
 
-Use deterministic tools (Biome, ESLint, Prettier, etc.) for code style. Don't make Claude do a linter's job—this adds irrelevant instructions and hurts performance.
+Use deterministic tools (ESLint, Prettier, Biome, etc.) for code style. Don't make agents do a linter's job—this adds irrelevant instructions and hurts performance.
 
 ## Review checklist
 

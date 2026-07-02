@@ -14,9 +14,9 @@ Review for adherence to SOLID design principles:
 
 | Principle | Question to Ask |
 |-----------|-----------------|
-| **Single Responsibility** | Does each class/module have one clear reason to change? |
+| **Single Responsibility** | Does each module/factory have one clear reason to change? |
 | **Open/Closed** | Is the code open for extension but closed for modification? |
-| **Liskov Substitution** | Can subclasses be used wherever their base class is expected? |
+| **Liskov Substitution** | Can implementations be used wherever their interface is expected? |
 | **Interface Segregation** | Are interfaces focused and clients not forced to depend on unused methods? |
 | **Dependency Inversion** | Do high-level modules depend on abstractions, not concretions? |
 
@@ -31,7 +31,7 @@ Review for adherence to SOLID design principles:
 
 ### Architecture & Design
 
-- [ ] Classes have single, well-defined responsibilities
+- [ ] Modules have single, well-defined responsibilities
 - [ ] Dependencies are injected rather than hardcoded
 - [ ] Business logic is separated from infrastructure concerns
 - [ ] New code follows existing architectural patterns
@@ -74,7 +74,7 @@ Focus on architecture and SOLID principles:
 
 1. **Check module boundaries** - Are responsibilities properly separated?
 2. **Trace data flow** - How does information move through the system?
-3. **Identify tight coupling** - Are classes/modules too interdependent?
+3. **Identify tight coupling** - Are modules too interdependent?
 4. **Evaluate extensibility** - Can new features be added without modification?
 
 ### 3. Detailed Code Review
@@ -92,7 +92,7 @@ Focus on architecture and SOLID principles:
 
 3. **Check dependencies**
    - Are dependencies injected or created internally?
-   - Are concrete classes depended on instead of interfaces?
+   - Are concrete modules depended on instead of interfaces?
    - Are circular dependencies present?
 
 4. **Verify error handling**
@@ -105,16 +105,16 @@ Focus on architecture and SOLID principles:
 Calibrate severity by **real-world impact**, not principle purity. A SOLID violation is only "Critical" if it will cause concrete problems.
 
 | Severity | Criteria | Examples |
-|----------|----------|----------|
-| **Critical** | Will cause bugs, data loss, crashes, or security issues | Division by zero, unsynchronized mutable state, force unwraps on user input, missing error handling |
-| **Warning** | Will impede future changes, create maintenance burden, or hide bugs | God class, tight coupling, duplicated logic >50 lines, missing abstraction where mocking is needed |
-| **Suggestion** | Improves code quality but no urgency | Protocol width, naming, dead `@Observable`, style consistency, documentation gaps |
+|----------|----------|-------
+| **Critical** | Will cause bugs, data loss, crashes, or security issues | Division by zero, race conditions in async callbacks, unhandled Promise rejections, missing error handling |
+| **Warning** | Will impede future changes, create maintenance burden, or hide bugs | God module, tight coupling, duplicated logic >50 lines, missing abstraction where mocking is needed |
+| **Suggestion** | Improves code quality but no urgency | Module width, naming, dead Vue watchers, style consistency, documentation gaps |
 
 **Common mis-calibrations to avoid:**
-- Protocol width (ISP): wide protocols are a testing inconvenience, not a runtime risk → **Suggestion**
+- Interface width (ISP): wide interfaces are a testing inconvenience, not a runtime risk → **Suggestion**
 - Code duplication: only critical when the copies diverge or exceed ~50 lines → **Warning** if significant, **Suggestion** if cosmetic
 - Switch on enum (OCP): only a warning if new cases are realistically expected → **Warning**
-- God class: warn based on change-risk, not line count alone → **Warning** unless it blocks testing
+- God module: warn based on change-risk, not line count alone → **Warning** unless it blocks testing
 
 ### 5. Scope Beyond SOLID
 
@@ -124,9 +124,9 @@ SOLID principles are necessary but not sufficient. Also look for:
 |------|--------------|
 | **Resource management** | Memory retention, lazy loading, file handle leaks |
 | **Persistence consistency** | Single source of truth for saved state, no bypass paths |
-| **Concurrency** | Thread safety, actor isolation, main actor compliance |
+| **Concurrency** | Race conditions in async callbacks, Promise handling |
 | **Numeric safety** | Division by zero, overflow, NaN propagation |
-| **Logging/telemetry** | Consistent subsystems, no duplicated loggers |
+| **Logging/telemetry** | Consistent console usage, no duplicated loggers |
 | **Dead code** | No-op expressions, unused properties, leftover debug code |
 
 ### 6. Provide Feedback
@@ -139,7 +139,7 @@ Format findings as: `ID: Severity — Title`, with file:line reference, code sni
 
 | Pattern | Problem | Typical Severity |
 |---------|---------|------------------|
-| God class | Violates SRP | Warning (assess change-risk) |
+| God module | Violates SRP | Warning (assess change-risk) |
 | Tight coupling | Violates DIP | Warning |
 | Switch on enum | Violates OCP | Warning (if extensibility expected) |
 | Interface with many methods | Violates ISP | Suggestion |
@@ -154,9 +154,8 @@ Format findings as: `ID: Severity — Title`, with file:line reference, code sni
 ### Runtime Risks (Critical)
 
 - Division by zero on unvalidated input
-- Force unwrap on optional that can realistically be nil
+- Unhandled Promise rejections
+- Race conditions in async callbacks
 - Mutable shared state without synchronization
 - Error swallowing in persistence paths
-- Main actor violations with UI mutations
-
-
+- Vue reactivity traps (mutating reactive data outside Vue's tracking)

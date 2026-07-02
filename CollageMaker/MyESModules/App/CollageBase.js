@@ -4,11 +4,7 @@
  * Ported concept from Midiestro MidiestroBase.js
  */
 
-import { createCollageState } from '../State/CollageState.js';
-import { createLayoutManager } from '../State/LayoutManager.js';
-import { createImageLibrary } from '../State/ImageLibrary.js';
 import { createCollageAssembler } from '../Rendering/CollageAssembler.js';
-import { createCanvasRenderer } from '../Rendering/CanvasRenderer.js';
 import { createFileDropHandler } from '../Interaction/FileDropHandler.js';
 import { getComponentRegistry } from '../Utils/ComponentRegistry.js';
 import { LAYOUT_STYLE_OPTIONS } from '../Models/LayoutStyle.js';
@@ -24,7 +20,7 @@ export function initializeCollageBase() {
     const assembler = createCollageAssembler();
     const dropHandler = createFileDropHandler();
 
-    // Placeholder for canvas renderer (initialized in lifecycle)
+    // Placeholder for services that need state (initialized in lifecycle)
     let canvasRenderer = null;
     let layoutManager = null;
     let imageLibrary = null;

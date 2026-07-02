@@ -27,15 +27,24 @@ export function createCollageAssembler() {
          * @param {Object} options.backgroundColor - { r, g, b } or hex string
          * @param {Object} options.canvasSize - { width, height }
          * @param {string} [options.selectedPanelId] - Panel ID to highlight
+         * @param {string} [options.hoveredPanelId] - Panel ID to show hover border
          */
-        render(ctx, { panels, images, crops, panelAssignments, backgroundColor, canvasSize, selectedPanelId }) {
+        render(ctx, { panels, images, crops, panelAssignments, backgroundColor, canvasSize, selectedPanelId, hoveredPanelId }) {
             // 1. Background
             this._drawBackground(ctx, canvasSize, backgroundColor);
 
             // 2. Panels
             panelRenderer.drawPanels(ctx, panels, images, crops, panelAssignments);
 
-            // 3. Selection highlight
+            // 3. Hover highlight (drawn before selection so selection is on top)
+            if (hoveredPanelId && panels && hoveredPanelId !== selectedPanelId) {
+                const hoveredPanel = panels.find(p => p.id === hoveredPanelId);
+                if (hoveredPanel) {
+                    panelRenderer.drawHoverBorder(ctx, hoveredPanel);
+                }
+            }
+
+            // 4. Selection highlight
             if (selectedPanelId && panels) {
                 const selectedPanel = panels.find(p => p.id === selectedPanelId);
                 if (selectedPanel) {
