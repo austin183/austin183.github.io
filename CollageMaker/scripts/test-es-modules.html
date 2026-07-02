@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ES Module CDN Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .success { color: green; }
+        .error { color: red; }
+        pre { background: #f4f4f4; padding: 10px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>ES Module CDN URL Test</h1>
+    
+    <button id="testVue">Test Vue 3 ES Modules</button>
+    <pre id="vueResults"></pre>
+    
+    <script type="module">
+        const vueResults = document.getElementById('vueResults');
+        
+        // Test Vue 3 from unpkg
+        document.getElementById('testVue').addEventListener('click', async () => {
+            try {
+                const vueModule = await import('https://unpkg.com/vue@3.5.30/dist/vue.esm-browser.js');
+                
+                vueResults.innerHTML = '<span class="success">✓ Vue 3 ES Module loaded successfully!</span>\n\n';
+                vueResults.innerHTML += 'Version: ' + (vueModule.version || 'unknown') + '\n\n';
+                vueResults.innerHTML += 'Available exports:\n' + Object.keys(vueModule).slice(0, 30).join(', ') + '...\n\n';
+                
+                // Test basic Vue functionality
+                const { createApp, ref, reactive } = vueModule;
+                vueResults.innerHTML += 'createApp available: ' + typeof createApp === 'function' + '\n';
+                vueResults.innerHTML += 'ref available: ' + typeof ref === 'function' + '\n';
+                vueResults.innerHTML += 'reactive available: ' + typeof reactive === 'function' + '\n';
+                
+                // Test reactivity
+                const count = ref(0);
+                count.value++;
+                vueResults.innerHTML += 'Reactivity test (ref): ' + (count.value === 1 ? 'PASS' : 'FAIL') + '\n';
+                
+                const state = reactive({ items: [] });
+                state.items.push('test');
+                vueResults.innerHTML += 'Reactivity test (reactive): ' + (state.items.length === 1 ? 'PASS' : 'FAIL');
+                
+            } catch (error) {
+                vueResults.innerHTML = '<span class="error">✗ Vue 3 failed:</span>\n' + error.message;
+            }
+        });
+    </script>
+    
+    <p><strong>Instructions:</strong> Click each button to test CDN imports. Check console for errors.</p>
+    <p><strong>If pass:</strong> Vue 3 ES module imports from CDN are working correctly.</p>
+</body>
+</html>
