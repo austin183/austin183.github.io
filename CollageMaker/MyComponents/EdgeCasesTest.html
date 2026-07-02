@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edge Cases Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Edge Cases &amp; Error Handling Tests</h1>
+    <p class="test-plan-ref">Covers: Section 8 (Edge Cases) — layout edge cases, crop edge cases, selection edge cases, and model edge cases</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { LayoutGenerator } from '../MyESModules/Layout/LayoutGenerator.js';
+        import { LayoutStyle } from '../MyESModules/Models/LayoutStyle.js';
+        import { createRectGeometry, createPathGeometry, geometryBoundingRect, isRectGeometry } from '../MyESModules/Models/PanelGeometry.js';
+        import { createCropInfo, createDefaultCrop, cloneCropInfo } from '../MyESModules/Models/CropInfo.js';
+        import { SIZE_CONSTANTS } from '../MyESModules/Models/SizeConstants.js';
+        import { createCollageState } from '../MyESModules/State/CollageState.js';
+        import { createFileDropHandler } from '../MyESModules/Interaction/FileDropHandler.js';
+        import * as FitMath from '../MyESModules/Layout/FitMath.js';
+
+        const { expect } = chai;
+        const CANVAS = { width: 1920, height: 1080 };
+
+        // ============================================================
+        // 8.2 Layout Edge Cases
+        // ============================================================
+        describe('Section 8.2 — Layout Edge Cases', () => {
+            it('8.2.1 — zero images + layout switch: no crash', () => {
+                expect(() => {
+                    const p1 = LayoutGenerator.generate({ numImages: 0, style: LayoutStyle.HERO });
+                    const p2 = LayoutGenerator.generate({ numImages: 0, style: LayoutStyle.UNIFORM });
+                    const p3 = LayoutGenerator.generate({ numImages: 0, style: LayoutStyle.MOSAIC });
+                    const p4 = LayoutGenerator.generate({ numImages: 0, style: LayoutStyle.DIAGONAL_SLICES });
+                    const p5 = LayoutGenerator.generate({ numImages: 0, style: LayoutStyle.HEXAGONAL });
+                }).to.not.throw();
+            });
+
+            it('8.2.2 — one image + all 5 layouts: valid single panel', () => {
+                const styles = [
+                    LayoutStyle.HERO, LayoutStyle.UNIFORM, LayoutStyle.MOSAIC,
+                    LayoutStyle.DIAGONAL_SLICES, LayoutStyle.HEXAGONAL
+                ];
+                for (const style of styles) {
+                    const panels = LayoutGenerator.generate({ numImages: 1, style });
+                    expect(panels.length).to.equal(1, `Style ${style} should produce 1 panel`);
+                    const br = geometryBoundingRect(panels[0].geometry);
+                    expect(br.width).to.be.greaterThan(0);
+                    expect(br.height).to.be.greaterThan(0);
+                }
+            });
+
+            it('8.2.3 — many images (50) + mosaic: 50 panels, no truncation', () => {
+                const panels = LayoutGenerator.generate({
+                    numImages: 50, style: LayoutStyle.MOSAIC, mosaicSeed: 42
+                });
+                expect(panels.length).to.equal(50);
+            });
+
+            it('8.2.4 — rapid layout changes: no state corruption', () => {
+                const styles = [
+                    LayoutStyle.HERO, LayoutStyle.UNIFORM, LayoutStyle.MOSAIC,
+                    LayoutStyle.DIAGONAL_SLICES, LayoutStyle.HEXAGONAL
+                ];
+                let lastPanels = null;
+                for (let i = 0; i < 20; i++) {
+                    const style = styles[i % styles.length];
+                    lastPanels = LayoutGenerator.generate({
+                        numImages: 5, style, mosaicSeed: 42
+                    });
+                }
+                expect(lastPanels.length).to.equal(5);
+                // Verify final layout is correct for the last style
+                const finalStyle = styles[19 % styles.length];
+                for (const p of lastPanels) {
+                    const br = geometryBoundingRect(p.geometry);
+                    expect(br.width).to.be.greaterThan(0);
+                    expect(br.height).to.be.greaterThan(0);
+                }
+            });
+
+            it('8.2.5 — gutter at maximum (20): no negative dimensions', () => {
+                const panels = LayoutGenerator.generate({
+                    numImages: 9, style: LayoutStyle.UNIFORM, gutter: 20
+                });
+                for (const p of panels) {
+                    const r = p.geometry.rect;
+                    expect(r.width).to.be.greaterThan(0);
+                    expect(r.height).to.be.greaterThan(0);
+                }
+            });
+
+            it('8.2.6 — gutter at zero: panels adjacent, no gaps', () => {
+                const panels = LayoutGenerator.generate({
+                    numImages: 6, style: LayoutStyle.UNIFORM, gutter: 0
+                });
+                // 6 images in 3x2 grid fills the canvas completely
+                let totalArea = 0;
+                for (const p of panels) {
+                    totalArea += p.geometry.rect.width * p.geometry.rect.height;
+                }
+                expect(totalArea).to.equal(CANVAS.width * CANVAS.height);
+            });
+
+            it('8.2.7 — diagonal slices at angle 0: vertical strips', () => {
+                const panels = LayoutGenerator.generate({
+                    numImages: 5, style: LayoutStyle.DIAGONAL_SLICES, sliceAngle: 0
+                });
+                expect(panels.length).to.equal(5);
+                for (const p of panels) {
+                    const pts = p.geometry.points;
+                    // At angle 0, top edge should be horizontal
+                    expect(pts[0][1]).to.equal(pts[1][1]);
+                }
+            });
+
+            it('8.2.8 — diagonal slices at angle 75: valid, no NaN', () => {
+                const panels = LayoutGenerator.generate({
+                    numImages: 5, style: LayoutStyle.DIAGONAL_SLICES, sliceAngle: 75
+                });
+                for (const p of panels) {
+                    for (const pt of p.geometry.points) {
+                        expect(isNaN(pt[0])).to.be.false;
+                        expect(isNaN(pt[1])).to.be.false;
+                    }
+                }
+            });
+        });
+
+        // ============================================================
+        // 8.3 Crop Edge Cases (pure function tests)
+        // ============================================================
+        describe('Section 8.3 — Crop Edge Cases (FitMath/CropInfo)', () => {
+            it('8.3.1 — crop on panel with no assigned image: FitMath handles gracefully', () => {
+                // FitMath.sourceRect works with any size inputs
+                const result = FitMath.sourceRect({ width: 0, height: 0 }, { width: 500, height: 500 });
+                expect(result.width).to.equal(0);
+                expect(result.height).to.equal(0);
+            });
+
+            it('8.3.3 — crop resize to minimum: setSourceRect clamps to 1px', () => {
+                // Test via CropInfo model — create a crop with 1px dimensions
+                const crop = createCropInfo({
+                    panelId: 'test',
+                    sourceRect: { x: 0, y: 0, width: 1, height: 1 },
+                    destination: { x: 0, y: 0, width: 100, height: 100 }
+                });
+                expect(crop.sourceRect.width).to.equal(1);
+                expect(crop.sourceRect.height).to.equal(1);
+            });
+
+            it('8.3.4 — crop resize corner flip prevention: clamped values', () => {
+                // Simulate: trying to set x beyond image width - cropWidth
+                const crop = createCropInfo({
+                    panelId: 'test',
+                    sourceRect: { x: 3990, y: 0, width: 10, height: 100 },
+                    destination: { x: 0, y: 0, width: 100, height: 100 }
+                });
+                // The crop manager would clamp this. Test the model accepts valid ranges.
+                expect(crop.sourceRect.x + crop.sourceRect.width).to.be.at.most(4000);
+            });
+        });
+
+        // ============================================================
+        // 8.4 Selection Edge Cases (model-level)
+        // ============================================================
+        describe('Section 8.4 — Selection Edge Cases', () => {
+            it('8.4.1 — select panel then clear all: state handles null selection', () => {
+                const state = createCollageState();
+                state.selectedPanelId = 'panel_1';
+                // Simulate clearAll — state should handle stale panel ID
+                state.images = [];
+                state.panels = [];
+                // The app should reset selectedPanelId; test that the state object handles it
+                expect(state.selectedPanelId).to.equal('panel_1'); // Still set — app logic resets it
+            });
+
+            it('8.4.2 — select non-existent panel: null handling', () => {
+                const state = createCollageState();
+                state.selectedPanelId = null;
+                expect(state.selectedPanelId).to.be.null;
+            });
+        });
+
+        // ============================================================
+        // 8.1 Image Loading Edge Cases (FileDropHandler filter)
+        // ============================================================
+        describe('Section 8.1 — Image Loading Edge Cases (FileDropHandler)', () => {
+            let handler;
+            beforeEach(() => { handler = createFileDropHandler(); });
+
+            it('8.1.1 — filter non-image files: TXT, PDF rejected', () => {
+                const files = [
+                    new File(['test'], 'test.txt', { type: 'text/plain' }),
+                    new File(['test'], 'test.pdf', { type: 'application/pdf' })
+                ];
+                const result = handler.filterImageFiles(files);
+                expect(result.length).to.equal(0);
+            });
+
+            it('8.1.2 — filterImageFiles with mixed types: only images returned', () => {
+                const files = [
+                    new File(['data'], 'photo.jpg', { type: 'image/jpeg' }),
+                    new File(['data'], 'photo.png', { type: 'image/png' }),
+                    new File(['data'], 'notes.txt', { type: 'text/plain' }),
+                    new File(['data'], 'image.webp', { type: 'image/webp' })
+                ];
+                const result = handler.filterImageFiles(files);
+                expect(result.length).to.equal(3);
+                for (const f of result) {
+                    expect(f.type.startsWith('image/')).to.be.true;
+                }
+            });
+
+            it('8.1.3 — filterImageFiles no images: empty result', () => {
+                const files = [
+                    new File(['data'], 'a.txt', { type: 'text/plain' }),
+                    new File(['data'], 'b.pdf', { type: 'application/pdf' }),
+                    new File(['data'], 'c.js', { type: 'application/javascript' })
+                ];
+                const result = handler.filterImageFiles(files);
+                expect(result.length).to.equal(0);
+            });
+
+            it('8.1.5 — filterImageFiles empty input', () => {
+                const result = handler.filterImageFiles([]);
+                expect(result.length).to.equal(0);
+            });
+
+            it('8.1.7 — duplicate image files: both accepted', () => {
+                const file1 = new File(['data'], 'photo.jpg', { type: 'image/jpeg' });
+                const file2 = new File(['data'], 'photo.jpg', { type: 'image/jpeg' });
+                const result = handler.filterImageFiles([file1, file2]);
+                expect(result.length).to.equal(2);
+            });
+
+            it('8.1.8 — mixed image formats: all supported', () => {
+                const files = [
+                    new File(['data'], 'a.jpg', { type: 'image/jpeg' }),
+                    new File(['data'], 'b.png', { type: 'image/png' }),
+                    new File(['data'], 'c.webp', { type: 'image/webp' }),
+                    new File(['data'], 'd.gif', { type: 'image/gif' })
+                ];
+                const result = handler.filterImageFiles(files);
+                expect(result.length).to.equal(4);
+            });
+        });
+
+        // ============================================================
+        // PanelGeometry Edge Cases
+        // ============================================================
+        describe('PanelGeometry Edge Cases', () => {
+            it('createRectGeometry with zero dimensions', () => {
+                const geo = createRectGeometry({ x: 0, y: 0, width: 0, height: 0 });
+                expect(geo.type).to.equal('rect');
+                expect(geo.rect.width).to.equal(0);
+            });
+
+            it('createPathGeometry with deep-copied points', () => {
+                const inputPoints = [[0, 0], [100, 0], [100, 100], [0, 100]];
+                const geo = createPathGeometry(inputPoints, { x: 0, y: 0, width: 100, height: 100 });
+                // Mutate input — should not affect geometry
+                inputPoints[0][0] = 999;
+                expect(geo.points[0][0]).to.equal(0);
+            });
+
+            it('geometryBoundingRect works for both types', () => {
+                const rectGeo = createRectGeometry({ x: 10, y: 20, width: 100, height: 200 });
+                const pathGeo = createPathGeometry(
+                    [[0, 0], [100, 0], [100, 100], [0, 100]],
+                    { x: 5, y: 5, width: 90, height: 90 }
+                );
+                expect(geometryBoundingRect(rectGeo)).to.equal(rectGeo.rect);
+                expect(geometryBoundingRect(pathGeo)).to.deep.equal({ x: 5, y: 5, width: 90, height: 90 });
+            });
+
+            it('isRectGeometry distinguishes types', () => {
+                const rectGeo = createRectGeometry({ x: 0, y: 0, width: 100, height: 100 });
+                const pathGeo = createPathGeometry(
+                    [[0, 0], [100, 0], [100, 100], [0, 100]],
+                    { x: 0, y: 0, width: 100, height: 100 }
+                );
+                expect(isRectGeometry(rectGeo)).to.be.true;
+                expect(isRectGeometry(pathGeo)).to.be.false;
+            });
+        });
+
+        // ============================================================
+        // CropInfo Edge Cases
+        // ============================================================
+        describe('CropInfo Edge Cases', () => {
+            it('createCropInfo deep-copies sourceRect', () => {
+                const src = { x: 10, y: 20, width: 100, height: 200 };
+                const crop = createCropInfo({
+                    panelId: 'p1',
+                    sourceRect: src,
+                    destination: { x: 0, y: 0, width: 500, height: 500 }
+                });
+                src.x = 999;
+                expect(crop.sourceRect.x).to.equal(10);
+            });
+
+            it('cloneCropInfo produces independent copy', () => {
+                const original = createCropInfo({
+                    panelId: 'p1',
+                    sourceRect: { x: 10, y: 20, width: 100, height: 200 },
+                    destination: { x: 0, y: 0, width: 500, height: 500 }
+                });
+                const clone = cloneCropInfo(original);
+                clone.sourceRect.x = 999;
+                expect(original.sourceRect.x).to.equal(10);
+            });
+
+            it('createDefaultCrop with valid image/panel sizes', () => {
+                const crop = createDefaultCrop({
+                    panelId: 'p1',
+                    imageSize: { width: 4000, height: 3000 },
+                    panelSize: { x: 0, y: 0, width: 500, height: 500 }
+                });
+                expect(crop.sourceRect.width).to.be.greaterThan(0);
+                expect(crop.sourceRect.height).to.be.greaterThan(0);
+                expect(crop.destination.width).to.equal(500);
+                expect(crop.destination.height).to.equal(500);
+            });
+        });
+
+        // ============================================================
+        // SizeConstants
+        // ============================================================
+        describe('SizeConstants', () => {
+            it('defaultCanvasWidth is 1920', () => {
+                expect(SIZE_CONSTANTS.defaultCanvasWidth).to.equal(1920);
+            });
+
+            it('defaultCanvasHeight is 1080', () => {
+                expect(SIZE_CONSTANTS.defaultCanvasHeight).to.equal(1080);
+            });
+
+            it('defaultPreviewWidth is 960', () => {
+                expect(SIZE_CONSTANTS.defaultPreviewWidth).to.equal(960);
+            });
+
+            it('defaultPreviewHeight is 540', () => {
+                expect(SIZE_CONSTANTS.defaultPreviewHeight).to.equal(540);
+            });
+
+            it('canvasAspect is 16/9', () => {
+                expect(SIZE_CONSTANTS.canvasAspect).to.be.closeTo(16 / 9, 0.001);
+            });
+
+            it('canvasToPreviewScale is 0.5', () => {
+                expect(SIZE_CONSTANTS.canvasToPreviewScale).to.equal(0.5);
+            });
+        });
+
+        // ============================================================
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

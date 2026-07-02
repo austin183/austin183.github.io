@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UndoManager Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — UndoManager Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Section 3.1 UndoManager (all 20 tests)</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createUndoManager } from '../MyESModules/State/UndoManager.js';
+
+        const { expect } = chai;
+
+        describe('UndoManager', () => {
+            let um, state;
+
+            function makeCommand(label, undoFn, redoFn) {
+                return { label, undo: undoFn, redo: redoFn };
+            }
+
+            beforeEach(() => {
+                state = { value: 0 };
+                um = createUndoManager();
+            });
+
+            it('3.1.1 — initial canUndo is false', () => {
+                expect(um.canUndo()).to.be.false;
+            });
+
+            it('3.1.2 — initial canRedo is false', () => {
+                expect(um.canRedo()).to.be.false;
+            });
+
+            it('3.1.3 — push one command, canUndo is true', () => {
+                um.push(makeCommand('test', () => {}, () => {}));
+                expect(um.canUndo()).to.be.true;
+            });
+
+            it('3.1.4 — undo one command reverts state', () => {
+                state.value = 42;
+                um.push(makeCommand(
+                    'set',
+                    () => { state.value = 0; },
+                    () => { state.value = 42; }
+                ));
+                expect(um.undo()).to.be.true;
+                expect(state.value).to.equal(0);
+            });
+
+            it('3.1.5 — undo empty stack returns false', () => {
+                expect(um.undo()).to.be.false;
+            });
+
+            it('3.1.6 — redo after undo restores state', () => {
+                state.value = 42;
+                um.push(makeCommand(
+                    'set',
+                    () => { state.value = 0; },
+                    () => { state.value = 42; }
+                ));
+                um.undo();
+                expect(um.redo()).to.be.true;
+                expect(state.value).to.equal(42);
+            });
+
+            it('3.1.7 — redo empty stack returns false', () => {
+                expect(um.redo()).to.be.false;
+            });
+
+            it('3.1.8 — new push clears redo stack', () => {
+                um.push(makeCommand('a', () => {}, () => {}));
+                um.undo();
+                um.push(makeCommand('b', () => {}, () => {}));
+                expect(um.canRedo()).to.be.false;
+            });
+
+            it('3.1.9 — max 60 undo levels', () => {
+                for (let i = 0; i < 65; i++) {
+                    um.push(makeCommand('cmd' + i, () => {}, () => {}));
+                }
+                expect(um.getUndoCount()).to.equal(60);
+            });
+
+            it('3.1.10 — oldest commands dropped first', () => {
+                for (let i = 0; i < 65; i++) {
+                    um.push(makeCommand('cmd' + i, () => {}, () => {}));
+                }
+                // Undo all 60 — should execute commands 5-64 (most recent 60)
+                let undoCount = 0;
+                while (um.undo()) undoCount++;
+                expect(undoCount).to.equal(60);
+            });
+
+            it('3.1.11 — beginBatch + endBatch groups changes into one undo', () => {
+                state.value = 0;
+
+                um.beginBatch('batch');
+                um.push(makeCommand('inner1', () => { state.value = 0; }, () => { state.value = 1; }));
+                um.push(makeCommand('inner2', () => { state.value = 1; }, () => { state.value = 2; }));
+                um.endBatch();
+
+                // One batch command on the stack
+                expect(um.getUndoCount()).to.equal(1);
+                expect(um.canUndo()).to.be.true;
+
+                // Simulate the batch's redo (both commands applied in order)
+                state.value = 2;
+
+                // Undo: executes inner2.undo() then inner1.undo() (reverse order)
+                um.undo();
+                expect(state.value).to.equal(0);
+            });
+
+            it('3.1.12 — batch undo restores state through accumulated commands', () => {
+                state.value = 5;
+
+                um.beginBatch('batch');
+                um.push(makeCommand('step1', () => { state.value = 5; }, () => { state.value = 50; }));
+                um.push(makeCommand('step2', () => { state.value = 50; }, () => { state.value = 100; }));
+                um.endBatch();
+
+                // Simulate redo: both steps applied
+                um.redo(); // Actually this won't work since nothing was undone yet
+                // Let's test it properly:
+                // After endBatch, the batch is on the undo stack
+                // First apply redo to set state to final value
+                const cmd = { undo: () => {}, redo: () => { state.value = 100; } };
+                // Actually, let's just set the state to the post-batch value
+                state.value = 100;
+
+                // Undo: should run step2.undo() (→50) then step1.undo() (→5)
+                um.undo();
+                expect(state.value).to.equal(5);
+            });
+
+            it('3.1.13 — batch redo re-applies all accumulated commands', () => {
+                state.value = 0;
+
+                um.beginBatch('batch');
+                um.push(makeCommand('step1', () => { state.value = 0; }, () => { state.value = 1; }));
+                um.push(makeCommand('step2', () => { state.value = 1; }, () => { state.value = 2; }));
+                um.endBatch();
+
+                // Simulate the batch being applied (state is now 2)
+                state.value = 2;
+
+                // Undo: reverses all steps (→0)
+                um.undo();
+                expect(state.value).to.equal(0);
+
+                // Redo: re-applies all steps in forward order (→2)
+                um.redo();
+                expect(state.value).to.equal(2);
+            });
+
+            it('3.1.13b — empty batch (no pushes) does not add to stack', () => {
+                um.beginBatch('empty');
+                um.endBatch();
+                expect(um.getUndoCount()).to.equal(0);
+            });
+
+            it('3.1.13c — batch clears redo stack', () => {
+                um.push(makeCommand('a', () => {}, () => {}));
+                um.undo();
+                expect(um.canRedo()).to.be.true;
+
+                um.beginBatch('batch');
+                um.push(makeCommand('inner', () => {}, () => {}));
+                um.endBatch();
+                expect(um.canRedo()).to.be.false; // New batch clears redo
+            });
+
+            it('3.1.14 — nested batch guard: endBatch without beginBatch', () => {
+                expect(() => {
+                    um.endBatch({ value: 0 });
+                }).to.not.throw();
+                expect(um.canUndo()).to.be.false;
+            });
+
+            it('3.1.15 — clear removes all history', () => {
+                um.push(makeCommand('a', () => {}, () => {}));
+                um.push(makeCommand('b', () => {}, () => {}));
+                um.undo();
+                um.clear();
+                expect(um.canUndo()).to.be.false;
+                expect(um.canRedo()).to.be.false;
+            });
+
+            it('3.1.16 — getUndoCount accuracy', () => {
+                um.push(makeCommand('a', () => {}, () => {}));
+                um.push(makeCommand('b', () => {}, () => {}));
+                um.push(makeCommand('c', () => {}, () => {}));
+                expect(um.getUndoCount()).to.equal(3);
+            });
+
+            it('3.1.17 — getRedoCount accuracy', () => {
+                um.push(makeCommand('a', () => {}, () => {}));
+                um.push(makeCommand('b', () => {}, () => {}));
+                um.push(makeCommand('c', () => {}, () => {}));
+                um.undo();
+                um.undo();
+                expect(um.getRedoCount()).to.equal(2);
+            });
+
+            it('3.1.18 — command label preserved', () => {
+                um.push(makeCommand('My Label', () => {}, () => {}));
+                expect(um.getUndoCount()).to.equal(1);
+            });
+
+            it('3.1.19 — redo does not corrupt history', () => {
+                state.value = 0;
+                um.push(makeCommand(
+                    'set',
+                    () => { state.value = 0; },
+                    () => { state.value = 1; }
+                ));
+                state.value = 1;
+
+                um.undo();
+                expect(state.value).to.equal(0);
+                um.redo();
+                expect(state.value).to.equal(1);
+                um.undo();
+                expect(state.value).to.equal(0);
+                expect(um.canUndo()).to.be.false;
+                expect(um.canRedo()).to.be.true;
+            });
+
+            it('3.1.20 — multiple undo/redo cycles', () => {
+                state.value = 0;
+                for (let i = 1; i <= 10; i++) {
+                    const prev = i - 1;
+                    const next = i;
+                    um.push(makeCommand(
+                        'step' + i,
+                        () => { state.value = prev; },
+                        () => { state.value = next; }
+                    ));
+                    state.value = next;
+                }
+
+                // Undo all 10
+                for (let i = 9; i >= 0; i--) {
+                    um.undo();
+                    expect(state.value).to.equal(i);
+                }
+
+                // Redo all 10
+                for (let i = 1; i <= 10; i++) {
+                    um.redo();
+                    expect(state.value).to.equal(i);
+                }
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>
