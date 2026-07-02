@@ -74,3 +74,4 @@ npx playwright test --config=playwright.config.cjs
 - Capture learnings in `_agent_docs/learnings/` after significant discoveries
 - Consult the `building-web-apps` skill for Vue 3, Canvas 2D, and ES module patterns
 - Git commits must include `Co-Authored-By: LittleLight <noreply@traveler.dstny>`
+- Commit all project files — source code, tests (`MyComponents/`, `scripts/`), configs (`playwright.config.cjs`), and skills (`.opencode/skills/`)
