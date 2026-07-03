@@ -262,6 +262,11 @@ BUILD_PRODUCTIVITY_JSON=$(query "
   WHERE directory LIKE '%${PROJECT_ESCAPED}%' AND agent = 'build'
 ")
 
+# ── 9. Prefix cache approximation ────────────────────────────────────────────
+echo "  Estimating cache impact..." >&2
+SCRIPT_DIR_ABS="$(cd "$(dirname "$0")" && pwd)"
+CACHE_JSON=$(python3 "$SCRIPT_DIR_ABS/estimate_cache.py" --project "$PROJECT" 2>/dev/null || echo '{}')
+
 # ── Merge all data into single JSON ──────────────────────────────────────────
 echo "  Merging data..." >&2
 python3 -c "
@@ -276,6 +281,7 @@ swift_commits = json.loads(sys.argv[5]) if sys.argv[5] else []
 daily_git = json.loads(sys.argv[6]) if sys.argv[6] else []
 productivity = json.loads(sys.argv[7])[0] if sys.argv[7] else {}
 build_prod = json.loads(sys.argv[8])[0] if sys.argv[8] else {}
+cache_estimate = json.loads(sys.argv[9]) if sys.argv[9] and sys.argv[9] != '{}' else {}
 
 # Build daily token map for merging with git data
 token_map = {}
@@ -449,6 +455,35 @@ cost_summary = {
     'note': 'Input-only pricing recommended (output excluded) due to unknown local LM Studio caching.'
 }
 
+# Cache-adjusted cost estimates
+cache_agg = cache_estimate.get('aggregate', {}) if cache_estimate else {}
+uncached_input = cache_agg.get('estimated_uncached_input', 0) or 0
+cached_input = cache_agg.get('estimated_cached_input', 0) or 0
+cache_hit_pct = cache_agg.get('cache_hit_pct', 0) or 0
+
+# Assume cached tokens cost 10% of full price (typical cache read discount)
+CACHE_DISCOUNT = 0.10
+
+cache_cost_summary = {
+    'uncached_input': uncached_input,
+    'cached_input': cached_input,
+    'cache_hit_pct': cache_hit_pct,
+    'total_cheap': round(
+        (uncached_input + cached_input * CACHE_DISCOUNT) * CHEAP_INPUT +
+        total_output * CHEAP_OUTPUT, 2
+    ),
+    'total_expensive': round(
+        (uncached_input + cached_input * CACHE_DISCOUNT) * EXP_INPUT +
+        total_output * EXP_OUTPUT, 2
+    ),
+    'cheap_input_per_m': 0.05,
+    'cheap_output_per_m': 0.15,
+    'expensive_input_per_m': 0.50,
+    'expensive_output_per_m': 1.50,
+    'cache_discount': CACHE_DISCOUNT,
+    'note': 'Cache-adjusted: cached tokens estimated at 10% of full input price.'
+}
+
 for p in phases:
     phase_inp = sum(r.get('input_tokens', 0) for r in merged_daily if p['start'] <= r['date'] <= p['end'])
     phase_out = sum(r.get('output_tokens', 0) for r in merged_daily if p['start'] <= r['date'] <= p['end'])
@@ -458,6 +493,8 @@ for p in phases:
 output = {
     'summary': summary,
     'cost_summary': cost_summary,
+    'cache_cost_summary': cache_cost_summary,
+    'cache_estimate': cache_estimate,
     'productivity': productivity,
     'build_productivity': build_prod,
     'phases': phases,
@@ -477,6 +514,7 @@ print(json.dumps(output, indent=2))
   "$SWIFT_GIT_JSON" \
   "$DAILY_GIT_JSON" \
   "$PRODUCTIVITY_JSON" \
-  "$BUILD_PRODUCTIVITY_JSON" > "$OUTPUT"
+  "$BUILD_PRODUCTIVITY_JSON" \
+  "$CACHE_JSON" > "$OUTPUT"
 
 echo "Data written: ${OUTPUT} ($(wc -c < "$OUTPUT") bytes)" >&2

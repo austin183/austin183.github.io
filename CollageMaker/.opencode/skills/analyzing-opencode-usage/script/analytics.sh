@@ -87,6 +87,7 @@ SHOW_PROJECTS=false
 SHOW_TOP_SESSIONS=false
 TOP_N=20
 SHOW_IMPACT=false
+SHOW_CACHE=false
 JSON_OUTPUT=false
 
 # Track if any section flag was explicitly set
@@ -173,6 +174,11 @@ while (( $# > 0 )); do
       ANY_SECTION=true
       shift
       ;;
+    --cache)
+      SHOW_CACHE=true
+      ANY_SECTION=true
+      shift
+      ;;
     --summary)
       EXPLICIT_SUMMARY=true
       shift
@@ -203,6 +209,7 @@ while (( $# > 0 )); do
       echo "  --projects            Token usage by project/directory"
       echo "  --top-sessions <N>    Top N sessions by token count (default 20)"
       echo "  --impact              Sessions with file changes"
+      echo "  --cache               Prefix cache approximation (from per-message data)"
       echo "  --summary             High-level overview (default if no flags given)"
       echo "  --json                Output raw JSON instead of formatted text"
       echo "  --help                Show this help"
@@ -212,6 +219,7 @@ while (( $# > 0 )); do
       echo "  ./script/opencode-analytics.sh --week --models           # last 7 days by model"
       echo "  ./script/opencode-analytics.sh --project CollageMaker    # CollageMaker only"
       echo "  ./script/opencode-analytics.sh --summary --models --json # JSON output"
+      echo "  ./script/opencode-analytics.sh --project CollageMaker --cache # cache estimates"
       exit 0
       ;;
     *)
@@ -439,6 +447,18 @@ if $JSON_OUTPUT; then
         ORDER BY total_files DESC
       ")
       result="$result \"impact\": $impact,"
+    fi
+
+    if $SHOW_CACHE; then
+      local cache_data
+      local cache_args=()
+      [[ -n "$PROJECT_FILTER" ]] && cache_args+=("--project" "$PROJECT_FILTER")
+      [[ -n "$SINCE" ]] && cache_args+=("--since" "$SINCE")
+      [[ -n "$UNTIL" ]] && cache_args+=("--until" "$UNTIL")
+      SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+      # No --by flag = compute all breakdowns (model, agent, day)
+      cache_data=$(python3 "$SCRIPT_DIR/estimate_cache.py" "${cache_args[@]}" 2>/dev/null || echo '{}')
+      result="$result \"cache_estimate\": $cache_data,"
     fi
 
     # Remove trailing comma and close
@@ -812,6 +832,17 @@ if $SHOW_IMPACT; then
     printf "  %-50s %-18s %5s %8s %10s %10s\n" \
       "$dir" "$agent" "$sessions" "$(fmt_num "$files")" "$(fmt_num "$additions")" "$(fmt_num "$deletions")"
   done
+fi
+
+# ── Cache Approximation ──────────────────────────────────────────────────────
+
+if $SHOW_CACHE; then
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+  CACHE_ARGS=()
+  [[ -n "$PROJECT_FILTER" ]] && CACHE_ARGS+=("--project" "$PROJECT_FILTER")
+  [[ -n "$SINCE" ]] && CACHE_ARGS+=("--since" "$SINCE")
+  [[ -n "$UNTIL" ]] && CACHE_ARGS+=("--until" "$UNTIL")
+  python3 "$SCRIPT_DIR/estimate_cache.py" "${CACHE_ARGS[@]}" --text
 fi
 
 echo ""

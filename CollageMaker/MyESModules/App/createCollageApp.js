@@ -10,6 +10,12 @@ export function createCollageApp({
     lifecycleConfig,
     servicesConfig
 }) {
+    // Merge methods from lifecycleConfig if it has a methods property
+    const allMethods = {
+        ...methodsConfig,
+        ...(lifecycleConfig.methods || {})
+    };
+
     return createApp({
         // Data: reactive state properties (factory function required by Vue)
         data: dataConfig,
@@ -33,10 +39,11 @@ export function createCollageApp({
         },
 
         // Methods: all instance methods with access to this (Vue context)
-        methods: methodsConfig,
+        methods: allMethods,
 
         // Lifecycle hooks
-        ...lifecycleConfig,
+        mounted: lifecycleConfig.mounted,
+        beforeUnmount: lifecycleConfig.beforeUnmount,
 
         // Services: provide/inject for dependency injection
         ...servicesConfig

@@ -24,6 +24,9 @@ bash .opencode/skills/analyzing-opencode-usage/script/analytics.sh --project Col
 
 # JSON output for programmatic use
 bash .opencode/skills/analyzing-opencode-usage/script/analytics.sh --summary --models --json
+
+# Cache-approximated token usage
+bash .opencode/skills/analyzing-opencode-usage/script/analytics.sh --project CollageMaker --cache
 ```
 
 ## Workflows
@@ -115,6 +118,7 @@ Run `bash .opencode/skills/analyzing-opencode-usage/script/analytics.sh [FLAGS]`
 | `--projects` | Token usage by project directory |
 | `--top-sessions <N>` | Top N sessions by token count |
 | `--impact` | File change statistics |
+| `--cache` | Prefix cache approximation (from per-message data) |
 
 **Filters:**
 
@@ -128,6 +132,57 @@ Run `bash .opencode/skills/analyzing-opencode-usage/script/analytics.sh [FLAGS]`
 | `--month` | Last 30 days |
 | `--all` | No date filter |
 | `--json` | Machine-readable JSON output |
+
+### Cache Estimation Script
+
+The `estimate_cache.py` script analyzes per-message token data from the `message` table to estimate prefix caching impact:
+
+```bash
+# Aggregate summary (JSON)
+python3 .opencode/skills/analyzing-opencode-usage/script/estimate_cache.py --project CollageMaker --since 2026-07-01
+
+# Human-readable text
+python3 .opencode/skills/analyzing-opencode-usage/script/estimate_cache.py --project CollageMaker --since 2026-07-01 --text
+
+# Breakdown by model/agent/day
+python3 .opencode/skills/analyzing-opencode-usage/script/estimate_cache.py --project CollageMaker --since 2026-07-01 --by model
+
+# Per-session detail
+python3 .opencode/skills/analyzing-opencode-usage/script/estimate_cache.py --project CollageMaker --since 2026-07-01 --sessions
+```
+
+**How it works:** Each multi-turn session re-sends growing context. By comparing each turn's input tokens against the previous turn (via `LAG()` window function), the shared prefix is estimated as cached. Only the delta is truly new. Typical cache hit rates: 70–95%.
+
+**Options:**
+
+| Flag | Effect |
+|------|--------|
+| `--by model` | Breakdown by model |
+| `--by agent` | Breakdown by agent role |
+| `--by day` | Breakdown by date (timeseries) |
+| `--sessions` | Per-session detail |
+| `--text` | Human-readable output (default: JSON) |
+
+**JSON output structure:**
+
+```json
+{
+  "aggregate": {
+    "sessions": 36,
+    "total_turns": 857,
+    "total_input_raw": 55000000,
+    "estimated_uncached_input": 4300000,
+    "estimated_cached_input": 50700000,
+    "cache_hit_pct": 92.1,
+    "effective_total": 4900000,
+    "raw_total": 55600000
+  },
+  "by_model": [...],
+  "by_agent": [...],
+  "by_day": [...],
+  "sessions": [...]
+}
+```
 
 ## Direct SQL Queries
 
@@ -213,6 +268,7 @@ ORDER BY total DESC;
 - **Legacy sessions** — 307+ sessions have `NULL` model and agent (pre-schema); handle with `COALESCE` or `WHERE model IS NOT NULL`
 - **No user prompts stored** — the `session_input` table is empty; only session titles are available for context
 - **`opencode stats` is all-time only** — use `opencode db` for any filtered analysis
+- **`tokens_cache_read`/`tokens_cache_write` are always 0** — the DB columns exist but LM Studio doesn't populate them. Use `estimate_cache.py` for prefix cache approximation from per-message data
 
 ## Shell/JQ Gotchas
 
@@ -303,8 +359,8 @@ This is more reliable than jq for multi-line output with dotted field names.
 
 ## Templates
 
-**`references/report.html`** — Self-contained HTML report template with charts, tables, and code impact metrics. Filled by `generate_llm_report.sh`.
+**`./references/report.html`** — Self-contained HTML report template with charts, tables, and code impact metrics. Filled by `generate_llm_report.sh`.
 
-**`references/activity-template.md`** — Structure for daily activity summaries from `daily-data.json`: overview paragraph, token breakdowns, session counts, and commit SHAs per day.
+**`./references/activity-template.md`** — Structure for daily activity summaries from `daily-data.json`: overview paragraph, token breakdowns, session counts, and commit SHAs per day.
 
-**`references/session-summary.json`** — JSON template for session summary files. Used by `validate_summaries.sh` to check structural validity. Agents should copy this template at the end of each session and fill in all fields before writing to `_agent_docs/project-timeline/sessions/`.
+**`./references/session-summary.json`** — JSON template for session summary files. Used by `validate_summaries.sh` to check structural validity. Agents should copy this template at the end of each session and fill in all fields before writing to `_agent_docs/project-timeline/sessions/`.

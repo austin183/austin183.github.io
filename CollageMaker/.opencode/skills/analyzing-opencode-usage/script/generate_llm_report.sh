@@ -210,6 +210,12 @@ main() {
   top_sessions_json=$(query_top_sessions)
   cross_tab_json=$(query_model_agent)
   git_stats_json=$(extract_git_stats || echo "")
+
+  # Estimate prefix caching impact from per-message data
+  echo "  Estimating cache impact..." >&2
+  local cache_json
+  cache_json=$(python3 "$(dirname "$0")/estimate_cache.py" \
+    --since "${SINCE}" --until "${UNTIL}" 2>/dev/null || echo '{}')
   
   gen_ts=$(date '+%Y-%m-%d %H:%M %Z')
   
@@ -244,6 +250,9 @@ if sys.argv[7]:
             # Filter by report period
             if earliest <= date <= latest:
                 git_map[date] = (commits, adds, dels)
+
+# Parse cache estimate data
+cache_estimate = json.loads(sys.argv[9]) if sys.argv[9] and sys.argv[9] != '{}' else {}
 
 # Build token_map from timeseries data
 token_map = {}
@@ -280,6 +289,7 @@ output = {
     'cross_tab': cross_tab_data,
     'token_map': token_map,
     'git_map': git_map,
+    'cache_estimate': cache_estimate,
     'daily_activity_link': ''  # Will be filled by caller if --activity is used
 }
 
@@ -291,7 +301,8 @@ print(json.dumps(output))
   "${top_sessions_json:-[]}" \
   "${cross_tab_json:-[]}" \
   "${git_stats_json:-}" \
-  "$gen_ts" > "$TEMP_DATA"
+  "$gen_ts" \
+  "$cache_json" > "$TEMP_DATA"
   
   # Render HTML from combined JSON
   python3 "$(dirname "$0")/render_report.py" < "$TEMP_DATA" > "$OUTPUT"

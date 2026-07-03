@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>$TITLE</title>
+<style>
+  :root {
+    --bg: #1a1a2e; --card-bg: #16213e; --border: #0f3460;
+    --text: #e0e0e0; --muted: #8892a4; --accent: #4fc3f7;
+    --input-color: #4fc3f7; --output-color: #4db6ac; --reasoning-color: #ba68c8;
+    --bar-bg: rgba(255,255,255,0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'SF Mono', Menlo, monospace; line-height: 1.5; padding: 2rem; max-width: 1200px; margin: 0 auto; }
+
+  h1 { font-size: 1.8rem; color: var(--accent); margin-bottom: 0.3rem; letter-spacing: -0.5px; }
+  h2 { font-size: 1.2rem; color: var(--muted); margin-top: 2rem; margin-bottom: 1rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 0.95rem; color: var(--muted); margin-top: 1.5rem; margin-bottom: 0.8rem; padding-bottom: 0.3rem; border-bottom: 1px solid rgba(15,52,96,0.5); }
+  .subtitle { color: var(--muted); font-size: 0.85rem; margin-bottom: 2rem; }
+
+  .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+  .metric-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 1.2rem; text-align: center; }
+  .metric-value { font-size: 1.6rem; font-weight: 700; color: var(--accent); letter-spacing: -1px; }
+  .metric-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; margin-top: 0.3rem; letter-spacing: 0.5px; }
+
+  .impact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+  .impact-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 1.2rem; text-align: center; }
+  .impact-value { font-size: 1.8rem; font-weight: 700; color: #4db6ac; letter-spacing: -1px; }
+  .impact-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; margin-top: 0.3rem; letter-spacing: 0.5px; }
+  .impact-card.ratio { border-color: #4db6ac; background: rgba(77,182,172,0.06); }
+  .impact-card.ratio .impact-value { color: #4db6ac; font-size: 2rem; }
+
+  table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; font-size: 0.82rem; }
+  th { text-align: left; color: var(--muted); padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border); font-weight: 500; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.5px; }
+  td { padding: 0.5rem 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+  tr:hover td { background: rgba(79,195,247,0.06); }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* Stacked bar chart (models) */
+  .bar-row { display: flex; align-items: center; margin-bottom: 0.5rem; }
+  .bar-label { width: 180px; font-size: 0.8rem; color: var(--text); text-align: right; padding-right: 1rem; flex-shrink: 0; }
+  .bar-track { flex: 1; height: 28px; background: var(--bar-bg); border-radius: 4px; overflow: hidden; display: flex; min-width: 40px; }
+  .bar-segment { height: 100%; transition: opacity 0.15s; }
+  .bar-segment:hover { opacity: 0.8; }
+  .bar-value { width: 80px; font-size: 0.8rem; color: var(--muted); text-align: right; padding-left: 0.8rem; flex-shrink: 0; }
+
+  /* Horizontal bar (agents) */
+  .h-bar-row { display: flex; align-items: center; margin-bottom: 0.4rem; }
+  .h-bar-label { width: 140px; font-size: 0.8rem; color: var(--text); text-align: right; padding-right: 1rem; flex-shrink: 0; }
+  .h-bar-track { flex: 1; height: 20px; background: var(--bar-bg); border-radius: 4px; overflow: hidden; min-width: 40px; }
+  .h-bar-fill { height: 100%; background: var(--accent); border-radius: 4px; }
+  .h-bar-value { width: 100px; font-size: 0.78rem; color: var(--muted); text-align: right; padding-left: 0.8rem; flex-shrink: 0; }
+
+  .chart-title { font-size: 0.95rem; color: var(--muted); margin-top: 2rem; margin-bottom: 0.8rem; padding-bottom: 0.3rem; border-bottom: 1px solid rgba(15,52,96,0.5); }
+
+  .chart-svg { width: 100%; height: auto; margin-bottom: 1rem; }
+  .chart-point { cursor: crosshair; transition: r 0.15s; }
+  .chart-point:hover { r: 6; }
+
+  #svg-tooltip { position: fixed; display: none; background: #16213e; border: 1px solid #4fc3f7; border-radius: 6px; padding: 8px 12px; font-size: 12px; color: #e0e0e0; pointer-events: none; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.3); line-height: 1.6; }
+
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.72rem; color: var(--muted); text-align: center; }
+  code { background: rgba(79,195,247,0.1); padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.8rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<h1>$TITLE</h1>
+<p class="subtitle">Period: $PERIOD &middot; Generated: $GENERATED</p>
+
+<!-- Summary Metrics -->
+$SUMMARY_METRICS
+
+<!-- Models -->
+<h2 id="models">Token Usage by Model</h2>
+$MODELS_SECTION
+
+<!-- Agents -->
+<h2 id="agents">Token Usage by Agent</h2>
+$AGENTS_SECTION
+
+<!-- Cross-tab -->
+<h2 id="cross-tab">Model &times; Agent Breakdown</h2>
+$CROSSTAB_SECTION
+
+<!-- Timeseries -->
+<h2 id="timeseries">Daily Token Trend</h2>
+$TIMESERIES_SECTION
+
+<!-- Top Sessions -->
+<h2 id="top-sessions">Top Sessions by Token Count</h2>
+$TOP_SESSIONS_SECTION
+
+<!-- Code Impact (charts + table) -->
+<h2 id="code-impact">Code Impact</h2>
+$CODE_IMPACT_SECTION
+
+<!-- Cache Estimates -->
+$CACHE_SECTION
+
+<!-- Daily Activity Link -->
+$DAILY_ACTIVITY_LINK
+
+<footer>
+  <p>Data sources: opencode SQLite DB (<code>session</code> + <code>message</code> tables) + git log</p>
+  <p>LM Studio cache columns (<code>tokens_cache_read</code>/<code>tokens_cache_write</code>) exist but are all 0 &mdash; input token counts may be overstated for cached sessions.</p>
+</footer>
+
+<div id="svg-tooltip"></div>
+
+<script>
+// Tooltip for chart points
+const tooltip = document.getElementById('svg-tooltip');
+document.querySelectorAll('.chart-point').forEach(pt => {
+  pt.addEventListener('mouseenter', e => {
+    if (!tooltip) return;
+    tooltip.style.display = 'block';
+    let html = '';
+    const date = pt.getAttribute('data-date');
+    if (date) html += `<strong>$${date}</strong><br>`;
+    const attrs = pt.attributes;
+    for (let i = 0; i < attrs.length; i++) {
+      const attr = attrs[i];
+      if (attr.name.startsWith('data-') && attr.name !== 'data-date' && attr.name !== 'data-chart-type') {
+        const label = attr.name.replace('data-', '').replace(/-([a-z])/g, g => g[1].toUpperCase());
+        const num = parseFloat(attr.value);
+        html += `$${label}: $${isNaN(num) ? attr.value : num.toLocaleString()}<br>`;
+      }
+    }
+    tooltip.innerHTML = html;
+  });
+  pt.addEventListener('mousemove', e => {
+    if (!tooltip) return;
+    tooltip.style.left = (e.clientX + 15) + 'px';
+    tooltip.style.top = (e.clientY + 15) + 'px';
+  });
+  pt.addEventListener('mouseleave', () => { if (tooltip) tooltip.style.display = 'none'; });
+});
+</script>
+</body>
+</html>

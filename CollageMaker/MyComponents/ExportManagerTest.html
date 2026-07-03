@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ExportManager Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — ExportManager Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Section 5 (ExportManager) — all P0 tests</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { exportToJpeg } from '../MyESModules/Export/ExportManager.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // Mock assembler for testing
+        // ============================================================
+        function createMockAssembler() {
+            const calls = [];
+            return {
+                render(ctx, renderData) {
+                    calls.push({ ctx, renderData });
+                    // Simulate drawing something on the canvas
+                    ctx.fillStyle = '#FF0000';
+                    ctx.fillRect(0, 0, 1920, 1080);
+                },
+                getCalls() {
+                    return calls;
+                },
+                reset() {
+                    calls.length = 0;
+                }
+            };
+        }
+
+        // ============================================================
+        // Section 5.1: Canvas Generation
+        // ============================================================
+        describe('Section 5.1 — Canvas Generation', () => {
+            let assembler, state;
+
+            beforeEach(() => {
+                assembler = createMockAssembler();
+                state = {
+                    panels: [],
+                    images: [],
+                    crops: [],
+                    panelAssignments: {},
+                    backgroundColor: '#ffffff',
+                    backgroundState: null,
+                    overlayState: null,
+                    titleStyle: null,
+                    titleRuns: []
+                };
+            });
+
+            it('5.1.1 — offscreen canvas size is 1920x1080', async () => {
+                // Intercept canvas creation to verify dimensions
+                const originalCreateElement = document.createElement.bind(document);
+                let capturedCanvas = null;
+                document.createElement = function(tag) {
+                    const el = originalCreateElement(tag);
+                    if (tag === 'canvas') {
+                        capturedCanvas = el;
+                    }
+                    return el;
+                };
+
+                try {
+                    await exportToJpeg(assembler, state);
+                    expect(capturedCanvas).to.not.be.null;
+                    expect(capturedCanvas.width).to.equal(1920);
+                    expect(capturedCanvas.height).to.equal(1080);
+                } finally {
+                    document.createElement = originalCreateElement;
+                }
+            });
+
+            it('5.1.2 — no DOM leak: canvas not appended to document.body', async () => {
+                const canvasesBefore = document.querySelectorAll('canvas').length;
+                await exportToJpeg(assembler, state);
+                // After export completes, no new canvas elements should remain
+                const canvasesAfter = document.querySelectorAll('canvas').length;
+                expect(canvasesAfter).to.equal(canvasesBefore);
+                // Also verify no <a> download links remain
+                const downloadLinks = document.querySelectorAll('a[download]');
+                expect(downloadLinks.length).to.equal(0);
+            });
+
+            it('5.1.3 — full render pipeline: assembler.render called with offscreen context', async () => {
+                await exportToJpeg(assembler, state);
+                const calls = assembler.getCalls();
+                expect(calls.length).to.equal(1);
+                const call = calls[0];
+                expect(call.ctx).to.be.instanceof(CanvasRenderingContext2D);
+                expect(call.renderData).to.not.be.null;
+                expect(call.renderData.canvasSize.width).to.equal(1920);
+                expect(call.renderData.canvasSize.height).to.equal(1080);
+            });
+
+            it('5.1.4 — render data includes all state fields', async () => {
+                state.panels = [{ id: 'p1' }];
+                state.images = [{ id: 'img1' }];
+                state.crops = [{ panelId: 'p1' }];
+                state.panelAssignments = { p1: 'img1' };
+                state.titleRuns = [{ text: 'Test', bold: false, italic: false, underline: false }];
+                state.titleStyle = { fontFamily: 'Arial', fontSize: 36 };
+
+                await exportToJpeg(assembler, state);
+                const call = assembler.getCalls()[0];
+                expect(call.renderData.panels).to.deep.equal(state.panels);
+                expect(call.renderData.images).to.deep.equal(state.images);
+                expect(call.renderData.crops).to.deep.equal(state.crops);
+                expect(call.renderData.panelAssignments).to.deep.equal(state.panelAssignments);
+                expect(call.renderData.titleRuns).to.deep.equal(state.titleRuns);
+                expect(call.renderData.titleStyle).to.deep.equal(state.titleStyle);
+            });
+
+            it('5.1.5 — export hides selection and hover indicators', async () => {
+                await exportToJpeg(assembler, state);
+                const call = assembler.getCalls()[0];
+                expect(call.renderData.selectedPanelId).to.be.null;
+                expect(call.renderData.hoveredPanelId).to.be.null;
+            });
+        });
+
+        // ============================================================
+        // Section 5.2: Blob & Download
+        // ============================================================
+        describe('Section 5.2 — Blob & Download', () => {
+            let assembler, state;
+
+            beforeEach(() => {
+                assembler = createMockAssembler();
+                state = {
+                    panels: [],
+                    images: [],
+                    crops: [],
+                    panelAssignments: {},
+                    backgroundColor: '#ffffff',
+                    backgroundState: null,
+                    overlayState: null,
+                    titleStyle: null,
+                    titleRuns: []
+                };
+            });
+
+            it('5.2.1 — toBlob called with JPEG format', async () => {
+                const originalCreateElement = document.createElement.bind(document);
+                let capturedBlobFormat = null;
+                let capturedBlobQuality = null;
+
+                document.createElement = function(tag) {
+                    const el = originalCreateElement(tag);
+                    if (tag === 'canvas') {
+                        el.toBlob = function(callback, type, quality) {
+                            capturedBlobFormat = type;
+                            capturedBlobQuality = quality;
+                            callback(new Blob(['fake'], { type: 'image/jpeg' }));
+                        };
+                    }
+                    return el;
+                };
+
+                try {
+                    await exportToJpeg(assembler, state);
+                    expect(capturedBlobFormat).to.equal('image/jpeg');
+                } finally {
+                    document.createElement = originalCreateElement;
+                }
+            });
+
+            it('5.2.2 — quality 100% passed to toBlob', async () => {
+                const originalCreateElement = document.createElement.bind(document);
+                let capturedQuality = null;
+
+                document.createElement = function(tag) {
+                    const el = originalCreateElement(tag);
+                    if (tag === 'canvas') {
+                        el.toBlob = function(callback, type, quality) {
+                            capturedQuality = quality;
+                            callback(new Blob(['fake'], { type: 'image/jpeg' }));
+                        };
+                    }
+                    return el;
+                };
+
+                try {
+                    await exportToJpeg(assembler, state, 1.0);
+                    expect(capturedQuality).to.equal(1.0);
+                } finally {
+                    document.createElement = originalCreateElement;
+                }
+            });
+
+            it('5.2.3 — quality 50% passed to toBlob', async () => {
+                const originalCreateElement = document.createElement.bind(document);
+                let capturedQuality = null;
+
+                document.createElement = function(tag) {
+                    const el = originalCreateElement(tag);
+                    if (tag === 'canvas') {
+                        el.toBlob = function(callback, type, quality) {
+                            capturedQuality = quality;
+                            callback(new Blob(['fake'], { type: 'image/jpeg' }));
+                        };
+                    }
+                    return el;
+                };
+
+                try {
+                    await exportToJpeg(assembler, state, 0.5);
+                    expect(capturedQuality).to.equal(0.5);
+                } finally {
+                    document.createElement = originalCreateElement;
+                }
+            });
+
+            it('5.2.4 — default quality is 0.92', async () => {
+                const originalCreateElement = document.createElement.bind(document);
+                let capturedQuality = null;
+
+                document.createElement = function(tag) {
+                    const el = originalCreateElement(tag);
+                    if (tag === 'canvas') {
+                        el.toBlob = function(callback, type, quality) {
+                            capturedQuality = quality;
+                            callback(new Blob(['fake'], { type: 'image/jpeg' }));
+                        };
+                    }
+                    return el;
+                };
+
+                try {
+                    await exportToJpeg(assembler, state);
+                    expect(capturedQuality).to.equal(0.92);
+                } finally {
+                    document.createElement = originalCreateElement;
+                }
+            });
+
+            it('5.2.5 — download link created with correct attributes', async () => {
+                const originalCreateElement = document.createElement.bind(document);
+                let capturedLink = null;
+
+                document.createElement = function(tag) {
+                    const el = originalCreateElement(tag);
+                    if (tag === 'a') {
+                        capturedLink = el;
+                    }
+                    return el;
+                };
+
+                try {
+                    await exportToJpeg(assembler, state);
+                    expect(capturedLink).to.not.be.null;
+                    expect(capturedLink.download).to.equal('collage.jpg');
+                    expect(capturedLink.href).to.match(/^blob:/);
+                } finally {
+                    document.createElement = originalCreateElement;
+                }
+            });
+
+            it('5.2.6 — cleanup: link removed from DOM after click', async () => {
+                const originalCreateElement = document.createElement.bind(document);
+                let capturedLink = null;
+
+                document.createElement = function(tag) {
+                    const el = originalCreateElement(tag);
+                    if (tag === 'a') {
+                        capturedLink = el;
+                    }
+                    return el;
+                };
+
+                try {
+                    await exportToJpeg(assembler, state);
+                    expect(document.body.contains(capturedLink)).to.be.false;
+                } finally {
+                    document.createElement = originalCreateElement;
+                }
+            });
+
+            it('5.2.7 — resolves with success', async () => {
+                const result = await exportToJpeg(assembler, state);
+                expect(result).to.equal('success');
+            });
+        });
+
+        // ============================================================
+        // Section 5.3: Error Handling
+        // ============================================================
+        describe('Section 5.3 — Error Handling', () => {
+            let assembler, state;
+
+            beforeEach(() => {
+                assembler = createMockAssembler();
+                state = {
+                    panels: [],
+                    images: [],
+                    crops: [],
+                    panelAssignments: {},
+                    backgroundColor: '#ffffff',
+                    backgroundState: null,
+                    overlayState: null,
+                    titleStyle: null,
+                    titleRuns: []
+                };
+            });
+
+            it('5.3.1 — toBlob failure rejects with error', async () => {
+                const originalCreateElement = document.createElement.bind(document);
+
+                document.createElement = function(tag) {
+                    const el = originalCreateElement(tag);
+                    if (tag === 'canvas') {
+                        el.toBlob = function(callback) {
+                            callback(null); // Simulate failure
+                        };
+                    }
+                    return el;
+                };
+
+                try {
+                    let errorThrown = null;
+                    try {
+                        await exportToJpeg(assembler, state);
+                    } catch (e) {
+                        errorThrown = e;
+                    }
+                    expect(errorThrown).to.not.be.null;
+                } finally {
+                    document.createElement = originalCreateElement;
+                }
+            });
+
+            it('5.3.2 — toBlob failure error message', async () => {
+                const originalCreateElement = document.createElement.bind(document);
+
+                document.createElement = function(tag) {
+                    const el = originalCreateElement(tag);
+                    if (tag === 'canvas') {
+                        el.toBlob = function(callback) {
+                            callback(null);
+                        };
+                    }
+                    return el;
+                };
+
+                try {
+                    let errorThrown = null;
+                    try {
+                        await exportToJpeg(assembler, state);
+                    } catch (e) {
+                        errorThrown = e;
+                    }
+                    expect(errorThrown).to.not.be.null;
+                    expect(errorThrown).to.include('blob');
+                } finally {
+                    document.createElement = originalCreateElement;
+                }
+            });
+
+            it('5.3.3 — assembler render throws: caught and rejected', async () => {
+                const badAssembler = {
+                    render() {
+                        throw new Error('Render crashed');
+                    }
+                };
+
+                let errorThrown = null;
+                try {
+                    await exportToJpeg(badAssembler, state);
+                } catch (e) {
+                    errorThrown = e;
+                }
+                expect(errorThrown).to.not.be.null;
+                expect(errorThrown).to.include('Render crashed');
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

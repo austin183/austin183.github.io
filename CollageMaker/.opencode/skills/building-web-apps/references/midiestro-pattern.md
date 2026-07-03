@@ -35,7 +35,7 @@ The Midiestro3D project (`MidiSongBuilder/`) established the pattern for static 
 
 ## Reusable Components
 
-| From Midiestro | In CollageMaker | Notes |
+| From Midiestro3D | In CollageMaker | Notes |
 |---------------|-----------------|-------|
 | `FileDropHandler.js` | `FileDropHandler.js` | Adapted for multi-file |
 | `ComponentRegistry.js` | `ComponentRegistry.js` | Reused as-is |

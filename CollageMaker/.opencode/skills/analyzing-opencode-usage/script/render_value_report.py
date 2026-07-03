@@ -44,18 +44,42 @@ def build_summary_metrics(data):
     cheap = cs.get('total_cheap', 0) or 0
     expensive = cs.get('total_expensive', 0) or 0
 
-    return f'''<div class="metrics-grid" id="summary">
+    # Cache-adjusted costs
+    ccs = data.get('cache_cost_summary', {})
+    cache_cheap = ccs.get('total_cheap', 0) or 0
+    cache_expensive = ccs.get('total_expensive', 0) or 0
+    cache_hit = ccs.get('cache_hit_pct', 0) or 0
+    has_cache = cache_hit > 0
+
+    cards = f'''<div class="metrics-grid" id="summary">
   <div class="metric-card"><div class="metric-value">{fmt(total)}</div><div class="metric-label">Total Tokens</div></div>
   <div class="metric-card"><div class="metric-value">{sessions}</div><div class="metric-label">Sessions</div></div>
   <div class="metric-card"><div class="metric-value">{fmt(avg_tok)}</div><div class="metric-label">Avg / Session</div></div>
   <div class="metric-card"><div class="metric-value">{total_commits}</div><div class="metric-label">Commits</div></div>
   <div class="metric-card"><div class="metric-value">{fmt(total_adds)}</div><div class="metric-label">Swift Lines Added</div></div>
   <div class="metric-card"><div class="metric-value">{fmt(total_test_adds)}</div><div class="metric-label">Test Lines Added</div></div>
-  <div class="metric-card cost"><div class="metric-value">${cheap:,.2f}</div><div class="metric-label">Est. Cost (Low)</div></div>
-  <div class="metric-card cost"><div class="metric-value">${expensive:,.2f}</div><div class="metric-label">Est. Cost (High)</div></div>
-</div>
-<p class="subtitle">Period: {earliest} to {latest} &middot; {model_count} models &middot; {agent_count} agent roles &middot; Generated: {data.get('generated', '')}</p>
-<p class="subtitle" style="margin-top:0.3rem;">Cost estimates: ${cs.get('cheap_input_per_m', 0)}/M input + ${cs.get('cheap_output_per_m', 0)}/M output (low) vs ${cs.get('expensive_input_per_m', 0)}/M + ${cs.get('expensive_output_per_m', 1.50)}/M (high). {cs.get('note', '')}</p>'''
+  <div class="metric-card cost"><div class="metric-value">${cheap:,.2f}</div><div class="metric-label">Est. Cost (Low, raw)</div></div>
+  <div class="metric-card cost"><div class="metric-value">${expensive:,.2f}</div><div class="metric-label">Est. Cost (High, raw)</div></div>'''
+
+    if has_cache:
+        cards += f'''
+  <div class="metric-card cost" style="border-color:#4db6ac;background:rgba(77,182,172,0.06);"><div class="metric-value" style="color:#4db6ac;">${cache_cheap:,.2f}</div><div class="metric-label">Est. Cost (Low, w/cache)</div></div>
+  <div class="metric-card cost" style="border-color:#4db6ac;background:rgba(77,182,172,0.06);"><div class="metric-value" style="color:#4db6ac;">${cache_expensive:,.2f}</div><div class="metric-label">Est. Cost (High, w/cache)</div></div>
+  <div class="metric-card"><div class="metric-value">{cache_hit}%</div><div class="metric-label">Est. Cache Hit Rate</div></div>'''
+
+    cards += '</div>'
+    cards += f'<p class="subtitle">Period: {earliest} to {latest} &middot; {model_count} models &middot; {agent_count} agent roles &middot; Generated: {data.get("generated", "")}</p>'
+    cards += f'<p class="subtitle" style="margin-top:0.3rem;">Cost estimates: ${cs.get("cheap_input_per_m", 0)}/M input + ${cs.get("cheap_output_per_m", 0)}/M output (low) vs ${cs.get("expensive_input_per_m", 0)}/M + ${cs.get("expensive_output_per_m", 1.50)}/M (high). {cs.get("note", "")}</p>'
+
+    if has_cache:
+        discount = ccs.get('cache_discount', 0.10)
+        savings_low = round(cheap - cache_cheap, 2)
+        savings_high = round(expensive - cache_expensive, 2)
+        pct_low = round(100.0 * savings_low / cheap, 1) if cheap > 0 else 0
+        pct_high = round(100.0 * savings_high / expensive, 1) if expensive > 0 else 0
+        cards += f'<p class="subtitle" style="margin-top:0.3rem; color:#4db6ac;">Cache-adjusted: cached tokens at {discount*100:.0f}% of full price. Savings: ${savings_low:,.2f} ({pct_low}%, low) / ${savings_high:,.2f} ({pct_high}%, high). {ccs.get("note", "")}</p>'
+
+    return cards
 
 
 def build_phase_table(phases):
@@ -268,6 +292,75 @@ def main():
     # Chart 3: Cumulative cost over time
     html_parts.append('<h2 id="cost">Cumulative Estimated Cost</h2>')
     html_parts.append(render_cumulative_cost(merged_daily))
+
+    # Cache approximation section
+    cache_estimate = data.get('cache_estimate', {})
+    cache_cost = data.get('cache_cost_summary', {})
+    if cache_estimate or cache_cost:
+        html_parts.append('<h2 id="cache-estimates">Prefix Cache Approximation</h2>')
+        html_parts.append('<p style="color:#8892a4; font-size:0.85rem; margin-bottom:1rem;">')
+        html_parts.append('Estimated impact if the LLM provider supported prefix caching. ')
+        html_parts.append('Computed from per-message token data: each turn re-sends prior context, ')
+        html_parts.append('but only the delta vs. the previous turn is truly new.')
+        html_parts.append('</p>')
+
+        # Cache metrics
+        agg = cache_estimate.get('aggregate', {})
+        if agg:
+            raw_input = agg.get('total_input_raw', 0) or 0
+            cached = agg.get('estimated_cached_input', 0) or 0
+            uncached = agg.get('estimated_uncached_input', 0) or 0
+            hit_pct = agg.get('cache_hit_pct', 0) or 0
+            raw_total = agg.get('raw_total', 0) or 0
+            effective_total = agg.get('effective_total', 0) or 0
+            savings = raw_total - effective_total
+            savings_pct = round(100.0 * savings / raw_total, 1) if raw_total > 0 else 0
+            turns = agg.get('total_turns', 0) or 0
+            sessions = agg.get('sessions', 0) or 0
+
+            html_parts.append('<div class="impact-grid">')
+            html_parts.append(f'<div class="impact-card"><div class="impact-value">{fmt(raw_input)}</div><div class="impact-label">Raw Input Tokens</div></div>')
+            html_parts.append(f'<div class="impact-card"><div class="impact-value">{fmt(cached)}</div><div class="impact-label">Est. Cached</div></div>')
+            html_parts.append(f'<div class="impact-card"><div class="impact-value">{fmt(uncached)}</div><div class="impact-label">Est. Uncached</div></div>')
+            html_parts.append(f'<div class="impact-card ratio"><div class="impact-value">{hit_pct}%</div><div class="impact-label">Cache Hit Rate</div></div>')
+            html_parts.append(f'<div class="impact-card"><div class="impact-value">{fmt(effective_total)}</div><div class="impact-label">Effective Total (w/cache)</div></div>')
+            html_parts.append(f'<div class="impact-card"><div class="impact-value">{savings_pct}%</div><div class="impact-label">Tokens Saved</div></div>')
+            html_parts.append('</div>')
+            html_parts.append(f'<p style="color:#8892a4; font-size:0.82rem; margin-bottom:1rem;">Analyzed {sessions} sessions across {turns} turns.</p>')
+
+        # By model table
+        by_model = cache_estimate.get('by_model', [])
+        if by_model:
+            html_parts.append('<h3 class="chart-title">Cache Impact by Model</h3>')
+            html_parts.append('<table><thead><tr><th>Model</th><th class="num">Sessions</th><th class="num">Raw Input</th><th class="num">Uncached</th><th class="num">Cached</th><th class="num">Hit %</th></tr></thead><tbody>')
+            for r in by_model:
+                model = (r.get('model') or 'unknown').replace('_', '-').replace('-', '-')[:30]
+                html_parts.append(
+                    f'<tr><td>{model}</td>'
+                    f'<td class="num">{r.get("sessions", 0)}</td>'
+                    f'<td class="num">{fmt(r.get("total_input_raw", 0))}</td>'
+                    f'<td class="num">{fmt(r.get("estimated_uncached_input", 0))}</td>'
+                    f'<td class="num">{fmt(r.get("estimated_cached_input", 0))}</td>'
+                    f'<td class="num">{r.get("cache_hit_pct", 0)}%</td></tr>'
+                )
+            html_parts.append('</tbody></table>')
+
+        # By agent table
+        by_agent = cache_estimate.get('by_agent', [])
+        if by_agent:
+            html_parts.append('<h3 class="chart-title">Cache Impact by Agent</h3>')
+            html_parts.append('<table><thead><tr><th>Agent</th><th class="num">Sessions</th><th class="num">Raw Input</th><th class="num">Uncached</th><th class="num">Cached</th><th class="num">Hit %</th></tr></thead><tbody>')
+            for r in by_agent:
+                agent = (r.get('agent') or 'unknown').replace('_', '-').replace('-', '-')[:20]
+                html_parts.append(
+                    f'<tr><td>{agent}</td>'
+                    f'<td class="num">{r.get("sessions", 0)}</td>'
+                    f'<td class="num">{fmt(r.get("total_input_raw", 0))}</td>'
+                    f'<td class="num">{fmt(r.get("estimated_uncached_input", 0))}</td>'
+                    f'<td class="num">{fmt(r.get("estimated_cached_input", 0))}</td>'
+                    f'<td class="num">{r.get("cache_hit_pct", 0)}%</td></tr>'
+                )
+            html_parts.append('</tbody></table>')
 
     # Chart 4: Daily tokens stacked by agent
     html_parts.append('<h2 id="agent-breakdown">Daily Token Breakdown by Agent</h2>')

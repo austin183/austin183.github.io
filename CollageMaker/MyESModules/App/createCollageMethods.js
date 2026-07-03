@@ -2,6 +2,9 @@
  * createCollageMethods - Vue methods factory for CollageMaker.
  */
 
+import { exportToJpeg } from '../Export/ExportManager.js';
+import { save as saveSettings } from '../Persistence/SettingsPersistence.js';
+
 export function createCollageMethods(base) {
     return {
         /**
@@ -225,11 +228,42 @@ export function createCollageMethods(base) {
                         height: 1080
                     },
                     selectedPanelId: vm.selectedPanelId,
-                    hoveredPanelId: vm.hoveredPanelId
+                    hoveredPanelId: vm.hoveredPanelId,
+                    backgroundState: vm._buildBackgroundState(),
+                    overlayState: vm._buildOverlayState(),
+                    titleStyle: vm.titleStyle,
+                    titleRuns: vm.titleRuns
                 });
 
                 ctx.restore();
             });
+        },
+
+        /**
+         * Builds the background state object for the assembler.
+         * @private
+         */
+        _buildBackgroundState() {
+            return {
+                type: this.backgroundStyle,
+                color1: this.backgroundColor,
+                color2: this.gradientColors ? this.gradientColors[1] || this.backgroundColor : this.backgroundColor,
+                angle: this.gradientAngle,
+                image: this.backgroundImage,
+                opacity: this.backgroundOpacity
+            };
+        },
+
+        /**
+         * Builds the overlay state object for the assembler.
+         * @private
+         */
+        _buildOverlayState() {
+            return {
+                image: this.overlayImage,
+                mode: this.overlayMode,
+                opacity: this.overlayOpacity
+            };
         },
 
         /**
@@ -320,6 +354,415 @@ export function createCollageMethods(base) {
             for (const [cx, cy] of corners) {
                 ctx.fillRect(cx - handleSize / 2, cy - handleSize / 2, handleSize, handleSize);
             }
+        },
+
+        // ========================
+        // Background Methods
+        // ========================
+
+        /**
+         * Handles background style change.
+         */
+        onBackgroundStyleChange() {
+            const newStyle = this.backgroundStyle;
+            const oldStyle = this.backgroundStyle;
+            if (this.backgroundManager) {
+                this.backgroundManager.updateStyle(newStyle);
+            }
+            this._scheduleRender();
+            this._saveSettings();
+        },
+
+        /**
+         * Handles background color change.
+         */
+        onBackgroundColorChange() {
+            const color = this.backgroundColor;
+            if (this.backgroundManager) {
+                this.backgroundManager.setColor(color);
+            }
+            this._scheduleRender();
+            this._saveSettings();
+        },
+
+        /**
+         * Handles gradient color 1 change.
+         */
+        onGradientColor1Change() {
+            const c1 = this.backgroundColor;
+            const c2 = this.gradientColors ? this.gradientColors[1] : '#333333';
+            this.gradientColors = [c1, c2];
+            if (this.backgroundManager) {
+                this.backgroundManager.setGradientColors(c1, c2);
+            }
+            this._scheduleRender();
+            this._saveSettings();
+        },
+
+        /**
+         * Handles gradient color 2 input event.
+         * @param {Event} event
+         */
+        onGradientColor2Input(event) {
+            const c1 = this.backgroundColor;
+            const c2 = event.target.value;
+            this.gradientColors = [c1, c2];
+            if (this.backgroundManager) {
+                this.backgroundManager.setGradientColors(c1, c2);
+            }
+            this._scheduleRender();
+            this._saveSettings();
+        },
+
+        /**
+         * Handles gradient color 2 change.
+         */
+        onGradientColor2Change() {
+            const c1 = this.backgroundColor;
+            const c2 = this.gradientColors ? this.gradientColors[1] : '#333333';
+            this.gradientColors = [c1, c2];
+            if (this.backgroundManager) {
+                this.backgroundManager.setGradientColors(c1, c2);
+            }
+            this._scheduleRender();
+            this._saveSettings();
+        },
+
+        /**
+         * Handles gradient angle change.
+         */
+        onGradientAngleChange() {
+            if (this.backgroundManager) {
+                this.backgroundManager.setAngle(this.gradientAngle);
+            }
+            this._scheduleRender();
+            this._saveSettings();
+        },
+
+        /**
+         * Handles background image file input.
+         * @param {Event} event
+         */
+        async handleBackgroundImageChange(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const img = await this._loadImageFromFile(file);
+            if (img) {
+                this.backgroundImage = img;
+                this.backgroundStyle = 'image';
+                if (this.backgroundManager) {
+                    this.backgroundManager.setImage(img);
+                }
+                this._scheduleRender();
+            }
+            // Reset file input so re-selecting the same file triggers @change
+            event.target.value = '';
+        },
+
+        /**
+         * Handles background opacity change.
+         */
+        onBackgroundOpacityChange() {
+            if (this.backgroundManager) {
+                this.backgroundManager.setOpacity(this.backgroundOpacity);
+            }
+            this._scheduleRender();
+        },
+
+        /**
+         * Removes the background image.
+         */
+        removeBackgroundImage() {
+            this.backgroundImage = null;
+            this.backgroundStyle = 'solid';
+            if (this.backgroundManager) {
+                this.backgroundManager.setImage(null);
+            }
+            this._scheduleRender();
+        },
+
+        // ========================
+        // Title Methods
+        // ========================
+
+        /**
+         * Handles title text change.
+         */
+        onTitleTextChange() {
+            if (this.titleManager) {
+                this.titleManager.setText(this.titleText);
+            }
+            this._scheduleRender();
+        },
+
+        /**
+         * Handles title text input selection change.
+         * @param {Event} event
+         */
+        onTitleSelectionChange(event) {
+            this.titleSelectionStart = event.target.selectionStart;
+            this.titleSelectionEnd = event.target.selectionEnd;
+        },
+
+        /**
+         * Toggles bold on selected title text.
+         */
+        toggleTitleBold() {
+            const start = Math.min(this.titleSelectionStart, this.titleSelectionEnd);
+            const end = Math.max(this.titleSelectionStart, this.titleSelectionEnd);
+            if (this.titleManager && start < end) {
+                this.titleManager.toggleBold(start, end);
+                this.titleText = this.titleManager.getFullText();
+                this._scheduleRender();
+            }
+        },
+
+        /**
+         * Toggles italic on selected title text.
+         */
+        toggleTitleItalic() {
+            const start = Math.min(this.titleSelectionStart, this.titleSelectionEnd);
+            const end = Math.max(this.titleSelectionStart, this.titleSelectionEnd);
+            if (this.titleManager && start < end) {
+                this.titleManager.toggleItalic(start, end);
+                this.titleText = this.titleManager.getFullText();
+                this._scheduleRender();
+            }
+        },
+
+        /**
+         * Toggles underline on selected title text.
+         */
+        toggleTitleUnderline() {
+            const start = Math.min(this.titleSelectionStart, this.titleSelectionEnd);
+            const end = Math.max(this.titleSelectionStart, this.titleSelectionEnd);
+            if (this.titleManager && start < end) {
+                this.titleManager.toggleUnderline(start, end);
+                this.titleText = this.titleManager.getFullText();
+                this._scheduleRender();
+            }
+        },
+
+        /**
+         * Checks if any formatting is active for the current selection.
+         * @param {string} prop - 'bold', 'italic', or 'underline'
+         * @returns {boolean}
+         */
+        isTitleFormatActive(prop) {
+            const start = Math.min(this.titleSelectionStart, this.titleSelectionEnd);
+            const end = Math.max(this.titleSelectionStart, this.titleSelectionEnd);
+            if (start === end || !this.titleRuns || this.titleRuns.length === 0) return false;
+
+            let offset = 0;
+            for (const run of this.titleRuns) {
+                const runStart = offset;
+                const runEnd = offset + run.text.length;
+                if (runEnd > start && runStart < end) {
+                    if (run[prop]) return true;
+                }
+                offset = runEnd;
+            }
+            return false;
+        },
+
+        /**
+         * Handles title font family change.
+         */
+        onTitleFontFamilyChange() {
+            this._scheduleRender();
+            this._saveSettings();
+        },
+
+        /**
+         * Handles title font size change.
+         */
+        onTitleFontSizeChange() {
+            this._scheduleRender();
+            this._saveSettings();
+        },
+
+        /**
+         * Handles title font color change.
+         */
+        onTitleFontColorChange() {
+            this._scheduleRender();
+            this._saveSettings();
+        },
+
+        /**
+         * Handles title background color change.
+         */
+        onTitleBackgroundColorChange() {
+            this._scheduleRender();
+            this._saveSettings();
+        },
+
+        /**
+         * Handles title alignment change.
+         */
+        onTitleAlignmentChange() {
+            this._scheduleRender();
+            this._saveSettings();
+        },
+
+        /**
+         * Toggles title background visibility.
+         */
+        onTitleShowBackgroundChange() {
+            this._scheduleRender();
+            this._saveSettings();
+        },
+
+        // ========================
+        // Overlay Methods
+        // ========================
+
+        /**
+         * Handles overlay image file input.
+         * @param {Event} event
+         */
+        async handleOverlayImageChange(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const img = await this._loadImageFromFile(file);
+            if (img) {
+                this.overlayImage = img;
+                this._scheduleRender();
+            }
+        },
+
+        /**
+         * Handles overlay mode change.
+         */
+        onOverlayModeChange() {
+            this._scheduleRender();
+        },
+
+        /**
+         * Handles overlay opacity change.
+         */
+        onOverlayOpacityChange() {
+            this._scheduleRender();
+        },
+
+        /**
+         * Removes the overlay image.
+         */
+        removeOverlay() {
+            this.overlayImage = null;
+            this._scheduleRender();
+        },
+
+        // ========================
+        // Export Methods
+        // ========================
+
+        /**
+         * Triggers collage export as JPEG.
+         */
+        async exportCollage() {
+            if (this.isExporting) return;
+            this.isExporting = true;
+            this.exportStatus = 'Exporting...';
+
+            try {
+                const state = {
+                    panels: this.panels,
+                    images: this.images,
+                    crops: this.crops,
+                    panelAssignments: this.panelAssignments,
+                    backgroundColor: this.backgroundColor,
+                    backgroundState: this._buildBackgroundState(),
+                    overlayState: this._buildOverlayState(),
+                    titleStyle: this.titleStyle,
+                    titleRuns: this.titleRuns
+                };
+
+                await exportToJpeg(this._assembler, state, this.exportQuality);
+                this.exportStatus = 'Exported successfully!';
+                setTimeout(() => { this.exportStatus = ''; }, 3000);
+            } catch (e) {
+                console.error('Export failed:', e);
+                this.exportStatus = 'Export failed: ' + e;
+                // Error messages stay longer so users can read them
+                setTimeout(() => { this.exportStatus = ''; }, 6000);
+            } finally {
+                this.isExporting = false;
+            }
+        },
+
+        /**
+         * Handles export quality change.
+         */
+        onExportQualityChange() {
+            this._saveSettings();
+        },
+
+        // ========================
+        // Sidebar Methods
+        // ========================
+
+        /**
+         * Toggles the right sidebar visibility.
+         */
+        toggleRightSidebar() {
+            this.rightSidebarOpen = !this.rightSidebarOpen;
+        },
+
+        // ========================
+        // Settings Persistence
+        // ========================
+
+        /**
+         * Saves current settings to localStorage.
+         * @private
+         */
+        _saveSettings() {
+            try {
+                saveSettings({
+                    layoutStyle: this.layoutStyle,
+                    gutter: this.gutter,
+                    sliceAngle: this.sliceAngle,
+                    hexSpacing: this.hexSpacing,
+                    backgroundStyle: this.backgroundStyle,
+                    backgroundColor: this.backgroundColor,
+                    gradientColors: this.gradientColors,
+                    gradientAngle: this.gradientAngle,
+                    titleFontFamily: this.titleStyle.fontFamily,
+                    titleFontSize: this.titleStyle.fontSize,
+                    titleFontColor: this.titleStyle.fontColor,
+                    titleAlignment: this.titleStyle.alignment,
+                    exportQuality: this.exportQuality
+                });
+            } catch (e) {
+                console.warn('Failed to save settings:', e);
+            }
+        },
+
+        // ========================
+        // Private Utilities
+        // ========================
+
+        /**
+         * Loads an image from a File object.
+         * @param {File} file
+         * @returns {Promise<HTMLImageElement>}
+         * @private
+         */
+        _loadImageFromFile(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.onerror = () => resolve(null);
+                    img.src = e.target.result;
+                };
+                reader.onerror = () => resolve(null);
+                reader.readAsDataURL(file);
+            });
         }
     };
 }

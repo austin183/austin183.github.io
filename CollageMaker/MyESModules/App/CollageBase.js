@@ -24,6 +24,8 @@ export function initializeCollageBase() {
     let canvasRenderer = null;
     let layoutManager = null;
     let imageLibrary = null;
+    let backgroundManager = null;
+    let titleManager = null;
 
     return {
         componentRegistry,
@@ -50,6 +52,20 @@ export function initializeCollageBase() {
         },
         setImageLibrary(library) {
             imageLibrary = library;
+        },
+
+        getBackgroundManager() {
+            return backgroundManager;
+        },
+        setBackgroundManager(manager) {
+            backgroundManager = manager;
+        },
+
+        getTitleManager() {
+            return titleManager;
+        },
+        setTitleManager(manager) {
+            titleManager = manager;
         },
 
         // Static data

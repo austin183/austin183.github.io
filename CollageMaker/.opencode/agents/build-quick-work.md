@@ -35,6 +35,7 @@ At the end of your work, fill out the session summary template from `.opencode/s
 - Inspect `git status`, `git diff`, and `git log --oneline -10` before committing
 - Write concise commit messages that match the repo style
 - Only commit intended files — never commit secrets
+- Intended files are code, tests, and .opencode skills, agents, and other agent related documentation
 - Do not amend, force-push, or skip hooks unless explicitly requested
 - If a commit fails, fix the issue and create a new commit (do not amend the failed one)
 

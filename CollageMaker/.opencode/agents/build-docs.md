@@ -42,6 +42,7 @@ At the end of your work, fill out the session summary template from `.opencode/s
 
 ## What You Do NOT Do
 
+- Do not commit files - that is `build-quick-work`'s responsibility
 - Do not modify production source code — that is `build-code`'s responsibility
 - Do not write tests — that is `build-test`'s responsibility
 - Do not investigate production bugs — that is `build-debug`'s responsibility

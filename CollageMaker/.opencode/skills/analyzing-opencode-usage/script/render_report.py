@@ -158,6 +158,101 @@ def build_top_sessions(top_sessions_data):
     return html
 
 
+def build_cache_section(cache_estimate):
+    """Render cache approximation section with metrics and breakdown tables.
+
+    Shows estimated prefix caching impact: how much of the raw input tokens
+    would be served from cache vs charged at full price.
+    """
+    if not cache_estimate:
+        return ''
+
+    agg = cache_estimate.get('aggregate', {})
+    if not agg:
+        return ''
+
+    raw_total = agg.get('raw_total', 0) or 0
+    effective_total = agg.get('effective_total', 0) or 0
+    cached = agg.get('estimated_cached_input', 0) or 0
+    uncached = agg.get('estimated_uncached_input', 0) or 0
+    hit_pct = agg.get('cache_hit_pct', 0) or 0
+    sessions = agg.get('sessions', 0) or 0
+    turns = agg.get('total_turns', 0) or 0
+    savings = raw_total - effective_total
+    savings_pct = round(100.0 * savings / raw_total, 1) if raw_total > 0 else 0
+
+    html_parts = []
+    html_parts.append('<h2 id="cache-estimates">Prefix Cache Approximation</h2>')
+    html_parts.append('<p style="color:#8892a4; font-size:0.85rem; margin-bottom:1rem;">')
+    html_parts.append('Estimated impact if the LLM provider supported prefix caching. ')
+    html_parts.append('Computed from per-message token data: each turn re-sends prior context, ')
+    html_parts.append('but only the delta vs. the previous turn is truly new. ')
+    html_parts.append(f'Analyzed {sessions} sessions across {turns} turns.')
+    html_parts.append('</p>')
+
+    # Metric cards
+    html_parts.append('<div class="impact-grid">')
+    html_parts.append(f'  <div class="impact-card"><div class="impact-value">{fmt(raw_total)}</div><div class="impact-label">Raw Input Tokens</div></div>')
+    html_parts.append(f'  <div class="impact-card"><div class="impact-value">{fmt(cached)}</div><div class="impact-label">Est. Cached</div></div>')
+    html_parts.append(f'  <div class="impact-card"><div class="impact-value">{fmt(uncached)}</div><div class="impact-label">Est. Uncached</div></div>')
+    html_parts.append(f'  <div class="impact-card ratio"><div class="impact-value">{hit_pct}%</div><div class="impact-label">Cache Hit Rate</div></div>')
+    html_parts.append(f'  <div class="impact-card"><div class="impact-value">{fmt(effective_total)}</div><div class="impact-label">Effective Total (w/cache)</div></div>')
+    html_parts.append(f'  <div class="impact-card"><div class="impact-value">{savings_pct}%</div><div class="impact-label">Tokens Saved</div></div>')
+    html_parts.append('</div>')
+
+    # By model table
+    by_model = cache_estimate.get('by_model', [])
+    if by_model:
+        html_parts.append('<h3 class="chart-title">Cache Impact by Model</h3>')
+        html_parts.append('<table><thead><tr><th>Model</th><th class="num">Sessions</th><th class="num">Raw Input</th><th class="num">Uncached</th><th class="num">Cached</th><th class="num">Hit %</th></tr></thead><tbody>')
+        for r in by_model:
+            model = (r.get('model') or 'unknown').replace('_', '-').replace('-', '-')[:30]
+            html_parts.append(
+                f'<tr><td>{model}</td>'
+                f'<td class="num">{r.get("sessions", 0)}</td>'
+                f'<td class="num">{fmt(r.get("total_input_raw", 0))}</td>'
+                f'<td class="num">{fmt(r.get("estimated_uncached_input", 0))}</td>'
+                f'<td class="num">{fmt(r.get("estimated_cached_input", 0))}</td>'
+                f'<td class="num">{r.get("cache_hit_pct", 0)}%</td></tr>'
+            )
+        html_parts.append('</tbody></table>')
+
+    # By agent table
+    by_agent = cache_estimate.get('by_agent', [])
+    if by_agent:
+        html_parts.append('<h3 class="chart-title">Cache Impact by Agent</h3>')
+        html_parts.append('<table><thead><tr><th>Agent</th><th class="num">Sessions</th><th class="num">Raw Input</th><th class="num">Uncached</th><th class="num">Cached</th><th class="num">Hit %</th></tr></thead><tbody>')
+        for r in by_agent:
+            agent = (r.get('agent') or 'unknown').replace('_', '-').replace('-', '-')[:20]
+            html_parts.append(
+                f'<tr><td>{agent}</td>'
+                f'<td class="num">{r.get("sessions", 0)}</td>'
+                f'<td class="num">{fmt(r.get("total_input_raw", 0))}</td>'
+                f'<td class="num">{fmt(r.get("estimated_uncached_input", 0))}</td>'
+                f'<td class="num">{fmt(r.get("estimated_cached_input", 0))}</td>'
+                f'<td class="num">{r.get("cache_hit_pct", 0)}%</td></tr>'
+            )
+        html_parts.append('</tbody></table>')
+
+    # By day table
+    by_day = cache_estimate.get('by_day', [])
+    if by_day:
+        html_parts.append('<h3 class="chart-title">Cache Impact by Day</h3>')
+        html_parts.append('<table><thead><tr><th>Date</th><th class="num">Sessions</th><th class="num">Raw Input</th><th class="num">Uncached</th><th class="num">Cached</th><th class="num">Hit %</th></tr></thead><tbody>')
+        for r in by_day:
+            html_parts.append(
+                f'<tr><td>{r.get("day", "")}</td>'
+                f'<td class="num">{r.get("sessions", 0)}</td>'
+                f'<td class="num">{fmt(r.get("total_input_raw", 0))}</td>'
+                f'<td class="num">{fmt(r.get("estimated_uncached_input", 0))}</td>'
+                f'<td class="num">{fmt(r.get("estimated_cached_input", 0))}</td>'
+                f'<td class="num">{r.get("cache_hit_pct", 0)}%</td></tr>'
+            )
+        html_parts.append('</tbody></table>')
+
+    return '\n'.join(html_parts)
+
+
 def build_code_impact(token_map, git_map):
     """Render code impact section with charts and tables.
     
@@ -282,6 +377,7 @@ def main():
         'CROSSTAB_SECTION': build_cross_tab(data.get('cross_tab', [])),
         'TIMESERIES_SECTION': build_timeseries(data.get('timeseries', [])),
         'TOP_SESSIONS_SECTION': build_top_sessions(data.get('top_sessions', [])),
+        'CACHE_SECTION': build_cache_section(data.get('cache_estimate', {})),
         'CODE_IMPACT_SECTION': build_code_impact(
             data.get('token_map', {}),
             data.get('git_map', {})

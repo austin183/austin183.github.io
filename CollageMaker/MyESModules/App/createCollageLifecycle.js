@@ -8,13 +8,21 @@ import { createLayoutManager } from '../State/LayoutManager.js';
 import { createImageLibrary } from '../State/ImageLibrary.js';
 import { createCropManager } from '../State/CropManager.js';
 import { createUndoManager } from '../State/UndoManager.js';
+import { createBackgroundManager } from '../State/BackgroundManager.js';
+import { createTitleManager } from '../State/TitleManager.js';
 import { createGestureHandler } from '../Interaction/GestureHandler.js';
 import { createCropInteraction } from '../Interaction/CropInteraction.js';
+import { load as loadSettings } from '../Persistence/SettingsPersistence.js';
 import { SIZE_CONSTANTS } from '../Models/SizeConstants.js';
+import { createTitleStyle } from '../Models/TitleStyle.js';
 
 export function createCollageLifecycle(base) {
     return {
         mounted() {
+            // Load persisted settings
+            const savedSettings = loadSettings();
+            this._applySavedSettings(savedSettings);
+
             // Initialize canvas renderer
             const renderer = createCanvasRenderer('previewCanvas');
             renderer.init({
@@ -49,6 +57,20 @@ export function createCollageLifecycle(base) {
             const imageLibrary = createImageLibrary(this, onImagesChanged);
             base.setImageLibrary(imageLibrary);
             this.imageLibrary = imageLibrary;
+
+            // Initialize background manager
+            const onBackgroundChanged = () => {
+                this._scheduleRender();
+            };
+            this.backgroundManager = createBackgroundManager(this, onBackgroundChanged);
+            base.setBackgroundManager(this.backgroundManager);
+
+            // Initialize title manager
+            const onTitleChanged = () => {
+                this._scheduleRender();
+            };
+            this.titleManager = createTitleManager(this, onTitleChanged);
+            base.setTitleManager(this.titleManager);
 
             // Initialize gesture handler (panel selection on main canvas)
             this._gestureHandler = createGestureHandler({
@@ -141,33 +163,66 @@ export function createCollageLifecycle(base) {
             if (this.canvasRenderer) {
                 this.canvasRenderer.dispose();
             }
+            // Dispose image references
+            this.backgroundImage = null;
+            this.overlayImage = null;
         },
 
-        /**
-         * Handles keyboard shortcuts.
-         * @private
-         */
-        _handleKeyboard(e) {
-            // Cmd+Z / Ctrl+Z: Undo
-            if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'z') {
-                e.preventDefault();
-                this.undo();
-                return;
-            }
+        methods: {
+            /**
+             * Applies saved settings from localStorage to reactive state.
+             * @param {Object} settings
+             */
+            _applySavedSettings(settings) {
+                if (!settings) return;
 
-            // Cmd+Shift+Z / Ctrl+Shift+Z: Redo
-            if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'z') {
-                e.preventDefault();
-                this.redo();
-                return;
-            }
+                // Layout settings
+                if (settings.layoutStyle) this.layoutStyle = settings.layoutStyle;
+                if (settings.gutter !== undefined) this.gutter = settings.gutter;
+                if (settings.sliceAngle !== undefined) this.sliceAngle = settings.sliceAngle;
+                if (settings.hexSpacing !== undefined) this.hexSpacing = settings.hexSpacing;
 
-            // Escape: Deselect panel
-            if (e.key === 'Escape' && this.selectedPanelId) {
-                e.preventDefault();
-                this.selectPanel(null);
-                this._scheduleRender();
-                return;
+                // Background settings
+                if (settings.backgroundStyle) this.backgroundStyle = settings.backgroundStyle;
+                if (settings.backgroundColor) this.backgroundColor = settings.backgroundColor;
+                if (settings.gradientColors) this.gradientColors = settings.gradientColors;
+                if (settings.gradientAngle !== undefined) this.gradientAngle = settings.gradientAngle;
+
+                // Title settings
+                if (settings.titleFontFamily) this.titleStyle.fontFamily = settings.titleFontFamily;
+                if (settings.titleFontSize !== undefined) this.titleStyle.fontSize = settings.titleFontSize;
+                if (settings.titleFontColor) this.titleStyle.fontColor = settings.titleFontColor;
+                if (settings.titleAlignment) this.titleStyle.alignment = settings.titleAlignment;
+
+                // Export settings
+                if (settings.exportQuality !== undefined) this.exportQuality = settings.exportQuality;
+            },
+
+            /**
+             * Handles keyboard shortcuts.
+             */
+            _handleKeyboard(e) {
+                // Cmd+Z / Ctrl+Z: Undo
+                if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'z') {
+                    e.preventDefault();
+                    this.undo();
+                    return;
+                }
+
+                // Cmd+Shift+Z / Ctrl+Shift+Z: Redo
+                if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'z') {
+                    e.preventDefault();
+                    this.redo();
+                    return;
+                }
+
+                // Escape: Deselect panel
+                if (e.key === 'Escape' && this.selectedPanelId) {
+                    e.preventDefault();
+                    this.selectPanel(null);
+                    this._scheduleRender();
+                    return;
+                }
             }
         }
     };
