@@ -41,3 +41,32 @@ body (height: 100vh, flex column)
 | `.image-name` | 207 | Text ellipsis on flex row item |
 | `.canvas-area` | 252 | Prevents horizontal overflow |
 | `.sidebar-collapsed` | 504 | Force-collapse override |
+
+## Responsive Sidebar Config
+
+In stacked mobile layouts, `SIDEBAR_CONFIG.MOBILE.width = 0` means **"sidebar is not inline"** — not "sidebar is invisible." The actual sidebar width is determined by CSS (full viewport width minus padding).
+
+Always document the semantics of `width: 0`:
+
+```javascript
+// Note: MOBILE width=0 means sidebar is not inline; in stacked mode,
+// sidebars render as full-width sections below the canvas (CSS-driven).
+export const SIDEBAR_CONFIG = {
+    MOBILE: { width: 0, min: 0, max: 0, mode: 'stacked' },
+};
+```
+
+## CSS Computed Value Naming
+
+When returning computed values consumed as CSS properties, name them explicitly to prevent implementation bugs.
+
+```javascript
+// BAD — "padding" is ambiguous (per-side? total?)
+return { padding: 12, finalWidth: 44, finalHeight: 44 };
+
+// GOOD — explicit about what the value represents
+return { totalPaddingIncrease: 12, finalWidth: 44, finalHeight: 44 };
+// Comment: To apply as CSS padding, use totalPaddingIncrease / 2 on each side.
+```
+
+An implementer seeing `padding: 12` may apply `padding: 12px` on each side (left/right), effectively doubling the intended size.

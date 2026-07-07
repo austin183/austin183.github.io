@@ -418,6 +418,77 @@
         });
 
         // ============================================================
+        // Title Style Setters (new methods from Phase 2 refactoring)
+        // ============================================================
+        describe('Title Style Setters', () => {
+            let tm, state;
+
+            beforeEach(() => {
+                state = makeState();
+                // Ensure titleStyle exists
+                if (!state.titleStyle) {
+                    state.titleStyle = {
+                        fontFamily: 'Arial',
+                        fontSize: 36,
+                        fontColor: '#FFFFFF',
+                        backgroundColor: '#000000',
+                        alignment: 'center',
+                        showBackground: false
+                    };
+                }
+                tm = createTitleManager(state);
+            });
+
+            it('setFontFamily updates titleStyle.fontFamily', () => {
+                tm.setFontFamily('Helvetica');
+                expect(state.titleStyle.fontFamily).to.equal('Helvetica');
+            });
+
+            it('setFontSize updates titleStyle.fontSize', () => {
+                tm.setFontSize(48);
+                expect(state.titleStyle.fontSize).to.equal(48);
+            });
+
+            it('setFontColor updates titleStyle.fontColor', () => {
+                tm.setFontColor('#FF0000');
+                expect(state.titleStyle.fontColor).to.equal('#FF0000');
+            });
+
+            it('setBackgroundColor updates titleStyle.backgroundColor', () => {
+                tm.setBackgroundColor('#00FF00');
+                expect(state.titleStyle.backgroundColor).to.equal('#00FF00');
+            });
+
+            it('setAlignment updates titleStyle.alignment', () => {
+                tm.setAlignment('left');
+                expect(state.titleStyle.alignment).to.equal('left');
+            });
+
+            it('showBackground updates titleStyle.showBackground', () => {
+                tm.showBackground(true);
+                expect(state.titleStyle.showBackground).to.be.true;
+                tm.showBackground(false);
+                expect(state.titleStyle.showBackground).to.be.false;
+            });
+
+            it('all setters trigger notify callback', () => {
+                let notified = false;
+                const tmWithCallback = createTitleManager(state, () => { notified = true; });
+
+                tmWithCallback.setFontFamily('Verdana');
+                expect(notified).to.be.true;
+
+                notified = false;
+                tmWithCallback.setFontSize(24);
+                expect(notified).to.be.true;
+
+                notified = false;
+                tmWithCallback.setAlignment('right');
+                expect(notified).to.be.true;
+            });
+        });
+
+        // ============================================================
         // TitleRun model tests (used by TitleManager)
         // ============================================================
         describe('TitleRun model functions', () => {

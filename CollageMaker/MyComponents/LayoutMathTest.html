@@ -30,7 +30,7 @@
         import { generateDiagonalSlicesLayout } from '../MyESModules/Layout/DiagonalSlicesLayout.js';
         import { generateHexagonalLayout } from '../MyESModules/Layout/HexagonalLayout.js';
         import { LayoutGenerator } from '../MyESModules/Layout/LayoutGenerator.js';
-        import { LayoutStyle, LAYOUT_STYLE_OPTIONS, migrateLayoutStyle } from '../MyESModules/Models/LayoutStyle.js';
+        import { LayoutStyle, LAYOUT_STYLE_OPTIONS } from '../MyESModules/Models/LayoutStyle.js';
         import { createRectGeometry, createPathGeometry, geometryBoundingRect, isRectGeometry } from '../MyESModules/Models/PanelGeometry.js';
 
         const { expect } = chai;
@@ -781,22 +781,6 @@
         // 1.10 LayoutStyle Model
         // ============================================================
         describe('LayoutStyle', () => {
-            it('1.10.1 — migrateLayoutStyle valid value', () => {
-                expect(migrateLayoutStyle('hero')).to.equal('hero');
-            });
-
-            it('1.10.2 — migrateLayoutStyle null', () => {
-                expect(migrateLayoutStyle(null)).to.equal('hero');
-            });
-
-            it('1.10.3 — migrateLayoutStyle legacy doubleExposure', () => {
-                expect(migrateLayoutStyle('doubleExposure')).to.equal('uniform');
-            });
-
-            it('1.10.4 — migrateLayoutStyle invalid string', () => {
-                expect(migrateLayoutStyle('stars')).to.equal('hero');
-            });
-
             it('1.10.5 — LAYOUT_STYLE_OPTIONS length is 5', () => {
                 expect(LAYOUT_STYLE_OPTIONS.length).to.equal(5);
             });

@@ -26,12 +26,35 @@
         import { createRectGeometry, createPathGeometry, geometryBoundingRect, isRectGeometry } from '../MyESModules/Models/PanelGeometry.js';
         import { createCropInfo, createDefaultCrop, cloneCropInfo } from '../MyESModules/Models/CropInfo.js';
         import { SIZE_CONSTANTS } from '../MyESModules/Models/SizeConstants.js';
-        import { createCollageState } from '../MyESModules/State/CollageState.js';
         import { createFileDropHandler } from '../MyESModules/Interaction/FileDropHandler.js';
         import * as FitMath from '../MyESModules/Layout/FitMath.js';
 
         const { expect } = chai;
         const CANVAS = { width: 1920, height: 1080 };
+
+        // Minimal test state factory (replaces createCollageState)
+        function createTestState() {
+            return {
+                images: [],
+                panels: [],
+                layoutStyle: LayoutStyle.HERO,
+                gutter: 0,
+                sliceAngle: 45,
+                hexSpacing: 8,
+                panelAssignments: new Map(),
+                layoutVersion: 0,
+                crops: new Map(),
+                selectedPanelId: null,
+                hoveredPanelId: null,
+                selectedImageId: null,
+                backgroundColor: '#ffffff',
+                searchQuery: '',
+                canUndo: false,
+                canRedo: false,
+                showDebugOverlay: false,
+                focusPoints: null
+            };
+        }
 
         // ============================================================
         // 8.2 Layout Edge Cases
@@ -177,7 +200,7 @@
         // ============================================================
         describe('Section 8.4 — Selection Edge Cases', () => {
             it('8.4.1 — select panel then clear all: state handles null selection', () => {
-                const state = createCollageState();
+                const state = createTestState();
                 state.selectedPanelId = 'panel_1';
                 // Simulate clearAll — state should handle stale panel ID
                 state.images = [];
@@ -187,7 +210,7 @@
             });
 
             it('8.4.2 — select non-existent panel: null handling', () => {
-                const state = createCollageState();
+                const state = createTestState();
                 state.selectedPanelId = null;
                 expect(state.selectedPanelId).to.be.null;
             });

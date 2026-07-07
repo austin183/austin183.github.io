@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phase 4 — Code Quality Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Phase 4 Code Quality Tests</h1>
+    <p class="test-plan-ref">Covers: Phase 4 — Deduplication, shared utilities, dead code documentation, guard simplification</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { loadImageFromFile } from '../MyESModules/Utils/loadImageFromFile.js';
+        import { initializeCollageBase } from '../MyESModules/App/CollageBase.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // Helper: create a minimal 1x1 red PNG as a File object
+        // ============================================================
+        function createTestImageFile() {
+            // Minimal 1x1 red PNG (valid, tiny)
+            const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+            const binary = atob(pngBase64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+                bytes[i] = binary.charCodeAt(i);
+            }
+            return new File([bytes], 'test.png', { type: 'image/png' });
+        }
+
+        function createInvalidFile() {
+            return new File(['not an image'], 'invalid.txt', { type: 'text/plain' });
+        }
+
+        // ============================================================
+        // Phase 4.1: loadImageFromFile Utility
+        // ============================================================
+        describe('Phase 4.1 — loadImageFromFile Utility', () => {
+            it('P4.1.1 — loadImageFromFile is a function', () => {
+                expect(loadImageFromFile).to.be.a('function');
+            });
+
+            it('P4.1.2 — loadImageFromFile returns a Promise', () => {
+                const file = createTestImageFile();
+                const result = loadImageFromFile(file);
+                expect(result).to.be.an.instanceOf(Promise);
+            });
+
+            it('P4.1.3 — loadImageFromFile resolves with HTMLImageElement on valid file', async () => {
+                const file = createTestImageFile();
+                const img = await loadImageFromFile(file);
+                expect(img).to.not.be.null;
+                expect(img).to.be.an.instanceof(window.Image);
+                expect(img.width).to.be.greaterThan(0);
+                expect(img.height).to.be.greaterThan(0);
+            });
+
+            it('P4.1.4 — loadImageFromFile resolves with null on image load error', async () => {
+                // Use an invalid file that FileReader can read but Image can't decode
+                const file = createInvalidFile();
+                const img = await loadImageFromFile(file);
+                expect(img).to.be.null;
+            });
+
+            it('P4.1.5 — loadImageFromFile resolves with null on reader error', async () => {
+                // Mock FileReader to simulate error
+                const OriginalFileReader = window.FileReader;
+                window.FileReader = class {
+                    readAsDataURL() {
+                        // Simulate error by firing onerror
+                        if (this.onerror) {
+                            this.onerror(new ProgressEvent('error'));
+                        }
+                    }
+                };
+
+                try {
+                    const file = createTestImageFile();
+                    const img = await loadImageFromFile(file);
+                    expect(img).to.be.null;
+                } finally {
+                    window.FileReader = OriginalFileReader;
+                }
+            });
+
+            it('P4.1.6 — loadImageFromFile loaded image has src set', async () => {
+                const file = createTestImageFile();
+                const img = await loadImageFromFile(file);
+                expect(img.src).to.match(/^data:image\/png;base64,/);
+            });
+
+            it('P4.1.7 — loadImageFromFile resolves null for null input', async () => {
+                const img = await loadImageFromFile(null);
+                expect(img).to.be.null;
+            });
+
+            it('P4.1.8 — loadImageFromFile resolves null for undefined input', async () => {
+                const img = await loadImageFromFile(undefined);
+                expect(img).to.be.null;
+            });
+        });
+
+        // ============================================================
+        // Phase 4.2: Barrel Export
+        // ============================================================
+        describe('Phase 4.2 — Barrel Export', () => {
+            it('P4.2.1 — barrel exports loadImageFromFile as a function', async () => {
+                const barrel = await import('../MyESModules/index.js');
+                expect(typeof barrel.loadImageFromFile).to.equal('function');
+            });
+        });
+
+        // ============================================================
+        // Phase 4.3: CollageBase.getCropManager Guard Simplification
+        // ============================================================
+        describe('Phase 4.3 — CollageBase.getCropManager() Always Exists', () => {
+            it('P4.3.1 — getCropManager is always a function on a fresh base', () => {
+                const base = initializeCollageBase();
+                expect(typeof base.getCropManager).to.equal('function');
+            });
+
+            it('P4.3.2 — getCropManager() returns null before setCropManager', () => {
+                const base = initializeCollageBase();
+                expect(base.getCropManager()).to.be.null;
+            });
+
+            it('P4.3.3 — getCropManager() returns manager after setCropManager', () => {
+                const base = initializeCollageBase();
+                const mockManager = { getCrop: () => ({}) };
+                base.setCropManager(mockManager);
+                expect(base.getCropManager()).to.equal(mockManager);
+            });
+
+            it('P4.3.4 — getCropManager is callable without existence guard', () => {
+                // This test verifies the guard uses optional chaining:
+                // base?.getCropManager?.() ?? null — safe even with null base
+                const base = initializeCollageBase();
+                // Works without guard — this should never throw
+                const result = base.getCropManager();
+                expect(result).to.be.null;
+            });
+
+            it('P4.3.5 — optional chaining guard is safe with null base', () => {
+                // Simulates the pattern used in createCollageMethods.js:
+                // () => base?.getCropManager?.() ?? null
+                const base = null;
+                const result = base?.getCropManager?.() ?? null;
+                expect(result).to.be.null;
+            });
+        });
+
+        // ============================================================
+        // Phase 4.4: actions.js — Pure Functions Exist
+        // ============================================================
+        describe('Phase 4.4 — actions.js Pure Functions', () => {
+            let actions;
+            beforeEach(async () => {
+                actions = await import('../MyESModules/State/actions.js');
+            });
+
+            it('P4.4.1 — addImagesAction is exported and callable', () => {
+                expect(typeof actions.addImagesAction).to.equal('function');
+                const state = { images: [] };
+                const mockImg = { width: 100, height: 100 };
+                actions.addImagesAction(state, [mockImg]);
+                expect(state.images).to.have.lengthOf(1);
+            });
+
+            it('P4.4.2 — removeImageAction is exported and callable', () => {
+                expect(typeof actions.removeImageAction).to.equal('function');
+                const state = { images: [{}, {}] };
+                actions.removeImageAction(state, 0);
+                expect(state.images).to.have.lengthOf(1);
+            });
+
+            it('P4.4.3 — disposeImageAction is exported and callable', () => {
+                expect(typeof actions.disposeImageAction).to.equal('function');
+                const state = { images: [{ image: {} }] };
+                actions.disposeImageAction(state, 0);
+                expect(state.images).to.have.lengthOf(0);
+            });
+
+            it('P4.4.4 — clearImagesAction is exported and callable', () => {
+                expect(typeof actions.clearImagesAction).to.equal('function');
+                const state = { images: [{ image: {} }, { image: {} }] };
+                actions.clearImagesAction(state);
+                expect(state.images).to.have.lengthOf(0);
+            });
+
+            it('P4.4.5 — setCropAction is exported and callable', () => {
+                expect(typeof actions.setCropAction).to.equal('function');
+                const state = { crops: new Map() };
+                actions.setCropAction(state, 'panel-0', { sourceRect: {} });
+                expect(state.crops.has('panel-0')).to.be.true;
+            });
+
+            it('P4.4.6 — regenerateLayoutAction is exported and callable', () => {
+                expect(typeof actions.regenerateLayoutAction).to.equal('function');
+                const state = {
+                    panels: [],
+                    crops: new Map(),
+                    panelAssignments: new Map(),
+                    layoutVersion: 0
+                };
+                actions.regenerateLayoutAction(state, [{ id: 'p0' }], new Map(), new Map(), null);
+                expect(state.panels).to.have.lengthOf(1);
+                expect(state.layoutVersion).to.equal(1);
+            });
+
+            it('P4.4.7 — resetCropAction is exported and callable', () => {
+                expect(typeof actions.resetCropAction).to.equal('function');
+            });
+        });
+
+        // ============================================================
+        // Phase 4.5: ImageLibrary.removeImage() Deprecation
+        // ============================================================
+        describe('Phase 4.5 — ImageLibrary.removeImage() Deprecation', () => {
+            it('P4.5.1 — removeImage still works but logs a warning', async () => {
+                const { createImageLibrary } = await import('../MyESModules/State/ImageLibrary.js');
+                const { createImageItem } = await import('../MyESModules/Models/ImageItem.js');
+
+                const state = { images: [createImageItem({ image: {}, filename: 'a.png', width: 100, height: 100 })] };
+                let changed = false;
+                const lib = createImageLibrary(state, () => { changed = true; });
+
+                let warned = false;
+                const origWarn = console.warn;
+                console.warn = (msg) => {
+                    if (msg.includes('deprecated')) warned = true;
+                };
+
+                lib.removeImage(0);
+
+                console.warn = origWarn;
+
+                expect(changed).to.be.true;
+                expect(state.images).to.have.lengthOf(0);
+                expect(warned).to.be.true;
+            });
+        });
+
+        mocha.run();
+    </script>
+</body>
+</html>

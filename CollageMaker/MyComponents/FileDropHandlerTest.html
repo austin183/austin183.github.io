@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FileDropHandler Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — FileDropHandler Tests</h1>
+    <p class="test-plan-ref">Covers: Phase 2 - Memory &amp; Lifecycle Cleanup (drop handler cleanup)</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createFileDropHandler } from '../MyESModules/Interaction/FileDropHandler.js';
+        import { createFileHandlers } from '../MyESModules/App/createFileHandlers.js';
+
+        const { expect } = chai;
+
+        // Helper: creates a handler, sets up drop, and returns { handler, cleanup }
+        // Each test is responsible for calling cleanup() when done
+        function setupDropHandler(createFn) {
+            const handler = createFn();
+            let dropCalled = false;
+            const cb = () => { dropCalled = true; };
+            const cleanup = handler.setupGlobalDrop(cb);
+            return { handler, cleanup, dropCalled };
+        }
+
+        // ============================================================
+        // Phase 2: FileDropHandler — Cleanup Function
+        // ============================================================
+        describe('Phase 2 — FileDropHandler.setupGlobalDrop() Cleanup', () => {
+            let cleanup;
+
+            afterEach(() => {
+                // Always clean up to prevent test pollution
+                if (cleanup) {
+                    cleanup();
+                    cleanup = null;
+                }
+                document.body.classList.remove('drag-over');
+            });
+
+            it('P2.6 — setupGlobalDrop() returns a cleanup function', () => {
+                const { cleanup: c } = setupDropHandler(createFileDropHandler);
+                expect(c).to.be.a('function');
+                cleanup = c;
+            });
+
+            it('P2.7 — After cleanup, dispatching dragover no longer prevents default', () => {
+                const { cleanup: c } = setupDropHandler(createFileDropHandler);
+
+                // Verify handler is active before cleanup
+                const evt1 = new DragEvent('dragover', { bubbles: true, cancelable: true });
+                let prevented = false;
+                evt1.preventDefault = () => { prevented = true; };
+                document.dispatchEvent(evt1);
+                expect(prevented).to.be.true;
+
+                // Clean up
+                c();
+
+                // After cleanup, dragover should not be handled
+                const evt2 = new DragEvent('dragover', { bubbles: true, cancelable: true });
+                prevented = false;
+                evt2.preventDefault = () => { prevented = true; };
+                document.dispatchEvent(evt2);
+                expect(prevented).to.be.false;
+            });
+
+            it('P2.8 — After cleanup, dispatching drop no longer prevents default', () => {
+                const { cleanup: c } = setupDropHandler(createFileDropHandler);
+
+                // Verify drop handler prevents default before cleanup
+                const evt1 = new DragEvent('drop', { bubbles: true, cancelable: true });
+                let prevented = false;
+                evt1.preventDefault = () => { prevented = true; };
+                document.dispatchEvent(evt1);
+                expect(prevented).to.be.true;
+
+                // Clean up
+                c();
+
+                // After cleanup, drop should not prevent default
+                const evt2 = new DragEvent('drop', { bubbles: true, cancelable: true });
+                prevented = false;
+                evt2.preventDefault = () => { prevented = true; };
+                document.dispatchEvent(evt2);
+                expect(prevented).to.be.false;
+            });
+
+            it('P2.9 — Double cleanup is safe (no exception)', () => {
+                const { cleanup: c } = setupDropHandler(createFileDropHandler);
+                c();
+                // Should not throw on second call
+                expect(() => c()).to.not.throw();
+            });
+
+            it('P2.10 — Cleanup removes dragenter listener', () => {
+                const { cleanup: c } = setupDropHandler(createFileDropHandler);
+
+                // Verify dragenter is handled before cleanup
+                const evt1 = new DragEvent('dragenter', { bubbles: true, cancelable: true });
+                let prevented = false;
+                evt1.preventDefault = () => { prevented = true; };
+                document.dispatchEvent(evt1);
+                expect(prevented).to.be.true;
+                expect(document.body.classList.contains('drag-over')).to.be.true;
+
+                c();
+                document.body.classList.remove('drag-over');
+
+                // After cleanup, dragenter should not be handled
+                const evt2 = new DragEvent('dragenter', { bubbles: true, cancelable: true });
+                prevented = false;
+                evt2.preventDefault = () => { prevented = true; };
+                document.dispatchEvent(evt2);
+                expect(prevented).to.be.false;
+            });
+
+            it('P2.11 — Cleanup removes dragleave listener', () => {
+                const { cleanup: c } = setupDropHandler(createFileDropHandler);
+
+                // First trigger dragenter to set up counter
+                const dragEnter = new DragEvent('dragenter', { bubbles: true, cancelable: true });
+                document.dispatchEvent(dragEnter);
+                expect(document.body.classList.contains('drag-over')).to.be.true;
+
+                // Then trigger dragleave
+                const dragLeave = new DragEvent('dragleave', { bubbles: true, cancelable: true });
+                document.dispatchEvent(dragLeave);
+                expect(document.body.classList.contains('drag-over')).to.be.false;
+
+                c();
+
+                // After cleanup, dragleave should not prevent default
+                const evt2 = new DragEvent('dragleave', { bubbles: true, cancelable: true });
+                let prevented = false;
+                evt2.preventDefault = () => { prevented = true; };
+                document.dispatchEvent(evt2);
+                expect(prevented).to.be.false;
+            });
+        });
+
+        // ============================================================
+        // Phase 2: createFileHandlers — Cleanup Function
+        // ============================================================
+        describe('Phase 2 — createFileHandlers.setupGlobalDrop() Cleanup', () => {
+            let cleanup;
+
+            afterEach(() => {
+                if (cleanup) {
+                    cleanup();
+                    cleanup = null;
+                }
+            });
+
+            it('P2.12 — setupGlobalDrop() returns a cleanup function', () => {
+                const { cleanup: c } = setupDropHandler(() => createFileHandlers(() => ({}), () => {}));
+                expect(c).to.be.a('function');
+                cleanup = c;
+            });
+
+            it('P2.13 — After cleanup, dispatching dragover no longer prevents default', () => {
+                const { cleanup: c } = setupDropHandler(() => createFileHandlers(() => ({}), () => {}));
+
+                // Verify handler is active before cleanup
+                const evt1 = new DragEvent('dragover', { bubbles: true, cancelable: true });
+                let prevented = false;
+                evt1.preventDefault = () => { prevented = true; };
+                document.dispatchEvent(evt1);
+                expect(prevented).to.be.true;
+
+                // Clean up
+                c();
+
+                // After cleanup, dragover should not be handled
+                const evt2 = new DragEvent('dragover', { bubbles: true, cancelable: true });
+                prevented = false;
+                evt2.preventDefault = () => { prevented = true; };
+                document.dispatchEvent(evt2);
+                expect(prevented).to.be.false;
+            });
+
+            it('P2.14 — After cleanup, dispatching drop no longer prevents default', () => {
+                const { cleanup: c } = setupDropHandler(() => createFileHandlers(() => ({}), () => {}));
+
+                // Verify drop handler prevents default before cleanup
+                const evt1 = new DragEvent('drop', { bubbles: true, cancelable: true });
+                let prevented = false;
+                evt1.preventDefault = () => { prevented = true; };
+                document.dispatchEvent(evt1);
+                expect(prevented).to.be.true;
+
+                // Clean up
+                c();
+
+                // After cleanup, drop should not prevent default
+                const evt2 = new DragEvent('drop', { bubbles: true, cancelable: true });
+                prevented = false;
+                evt2.preventDefault = () => { prevented = true; };
+                document.dispatchEvent(evt2);
+                expect(prevented).to.be.false;
+            });
+
+            it('P2.15 — Double cleanup is safe (no exception)', () => {
+                const { cleanup: c } = setupDropHandler(() => createFileHandlers(() => ({}), () => {}));
+                c();
+                // Should not throw on second call
+                expect(() => c()).to.not.throw();
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

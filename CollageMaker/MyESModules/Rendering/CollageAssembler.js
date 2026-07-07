@@ -8,6 +8,7 @@ import { createPanelRenderer } from './PanelRenderer.js';
 import { render as renderBackground } from './BackgroundRenderer.js';
 import { render as renderOverlay } from './OverlayRenderer.js';
 import { render as renderTitle } from './TitleRenderer.js';
+import { render as renderDebugOverlay } from './SaliencyDebugOverlay.js';
 import { geometryBoundingRect } from '../Models/PanelGeometry.js';
 import { sourceRect as fitSourceRect } from '../Layout/FitMath.js';
 
@@ -35,19 +36,21 @@ export function createCollageAssembler() {
          * @param {Object} [options.overlayState] - Overlay state for OverlayRenderer
          * @param {Object} [options.titleStyle] - Title style for TitleRenderer
          * @param {Array} [options.titleRuns] - Title runs for TitleRenderer
+         * @param {boolean} [options.showDebugOverlay] - Show saliency debug markers
+         * @param {Map} [options.focusPoints] - Map of imageIndex -> focusPoint { x, y }
          */
-        render(ctx, { panels, images, crops, panelAssignments, backgroundColor, canvasSize, selectedPanelId, hoveredPanelId, backgroundState, overlayState, titleStyle, titleRuns }) {
+        render(ctx, { panels, images, crops, panelAssignments, backgroundColor, canvasSize, selectedPanelId, hoveredPanelId, backgroundState, overlayState, titleStyle, titleRuns, showDebugOverlay, focusPoints }) {
             const w = canvasSize.width;
             const h = canvasSize.height;
 
-            // 1. Clear
-            ctx.clearRect(0, 0, w, h);
-
-            // 2. Background (use BackgroundRenderer if backgroundState provided, else legacy fallback)
+            // NOTE: Canvas should be cleared by the renderer before calling this method
+            // If backgroundState is provided, render it; otherwise use legacy fallback
             if (backgroundState) {
                 renderBackground(ctx, w, h, backgroundState);
             } else {
-                this._drawBackground(ctx, canvasSize, backgroundColor);
+                // Only render background color if no backgroundState provided
+                // but canvas is already cleared
+                this._drawBackgroundOnly(ctx, canvasSize, backgroundColor);
             }
 
             // 3. Panels
@@ -69,12 +72,17 @@ export function createCollageAssembler() {
                 }
             }
 
-            // 6. Overlay
+            // 6. Debug overlay (between selection and blend-mode overlay)
+            if (showDebugOverlay && panels && images && crops && panelAssignments) {
+                renderDebugOverlay(ctx, panels, images, crops, panelAssignments, focusPoints || new Map(), canvasSize);
+            }
+
+            // 7. Overlay
             if (overlayState) {
                 renderOverlay(ctx, w, h, overlayState);
             }
 
-            // 7. Title
+            // 8. Title
             if (titleStyle && titleRuns) {
                 renderTitle(ctx, w, h, titleStyle, titleRuns);
             }
@@ -117,7 +125,7 @@ export function createCollageAssembler() {
             return crops;
         },
 
-        _drawBackground(ctx, canvasSize, color) {
+        _drawBackgroundOnly(ctx, canvasSize, color) {
             if (typeof color === 'string') {
                 ctx.fillStyle = color;
             } else if (color && color.r !== undefined) {

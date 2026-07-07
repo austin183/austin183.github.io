@@ -19,14 +19,3 @@ export const LAYOUT_STYLE_OPTIONS = [
     { value: LayoutStyle.HEXAGONAL, label: 'Hexagonal' }
 ];
 
-/**
- * Migrates legacy raw values to current layout style cases.
- * @param {string|null} rawValue
- * @returns {string}
- */
-export function migrateLayoutStyle(rawValue) {
-    if (!rawValue) return LayoutStyle.HERO;
-    if (rawValue === 'doubleExposure') return LayoutStyle.UNIFORM;
-    const validStyles = Object.values(LayoutStyle);
-    return validStyles.includes(rawValue) ? rawValue : LayoutStyle.HERO;
-}

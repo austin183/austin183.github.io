@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crop Preview Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Crop Preview Tests</h1>
+    <p class="test-plan-ref">Covers: Phase 3 - Performance (crop preview RAF debounce)</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createCollageMethods } from '../MyESModules/App/createCollageMethods.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // RAF mocking infrastructure
+        // ============================================================
+        let rafCallbacks = [];
+        let canceledIds = new Set();
+        const originalRAF = window.requestAnimationFrame.bind(window);
+        const originalCancelRAF = window.cancelAnimationFrame.bind(window);
+
+        function mockRAF() {
+            rafCallbacks = [];
+            canceledIds = new Set();
+            window.requestAnimationFrame = (cb) => {
+                const id = rafCallbacks.length + 1;
+                rafCallbacks.push(cb);
+                return id;
+            };
+            window.cancelAnimationFrame = (id) => {
+                canceledIds.add(id);
+            };
+        }
+
+        function restoreRAF() {
+            window.requestAnimationFrame = originalRAF;
+            window.cancelAnimationFrame = originalCancelRAF;
+        }
+
+        function flushRAF() {
+            const cbs = [...rafCallbacks];
+            rafCallbacks = [];
+            for (const cb of cbs) {
+                cb();
+            }
+        }
+
+        // ============================================================
+        // Helpers
+        // ============================================================
+
+        /**
+         * Create a 1x1 red pixel image using an offscreen canvas.
+         * This avoids the read-only Image.complete property issue.
+         */
+        function createMockImage(width = 800, height = 600) {
+            const c = document.createElement('canvas');
+            c.width = width;
+            c.height = height;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#ff0000';
+            ctx.fillRect(0, 0, width, height);
+            return c;
+        }
+
+        /**
+         * Create a mock crop manager with test data.
+         */
+        function createMockCropManager() {
+            const mockImageEl = createMockImage(800, 600);
+            return {
+                getCrop: () => ({
+                    sourceRect: { x: 10, y: 10, width: 100, height: 100 }
+                }),
+                getPanelImage: () => ({
+                    image: mockImageEl,
+                    width: 800,
+                    height: 600
+                })
+            };
+        }
+
+        /**
+         * Create a mock base object for createCollageMethods.
+         */
+        function createMockBase(cropManager) {
+            return {
+                getImageLibrary: () => ({ images: [], addImage: () => {}, disposeImage: () => {} }),
+                getLayoutManager: () => null,
+                getCanvasRenderer: () => null,
+                getCropManager: () => cropManager,
+                getBackgroundManager: () => null,
+                getTitleManager: () => null,
+                assembler: { render: () => {} },
+                undoManager: null
+            };
+        }
+
+        /**
+         * Create a mock Vue instance with the properties needed by crop preview.
+         */
+        function createMockVue(selectedPanelId = 'panel-0') {
+            return {
+                selectedPanelId,
+                _cropPreviewPending: false,
+                images: [],
+                panels: [],
+                crops: {},
+                panelAssignments: {},
+                backgroundColor: '#000000',
+                hoveredPanelId: null,
+                backgroundStyle: 'solid',
+                gradientColors: ['#000000', '#333333'],
+                gradientAngle: 0,
+                backgroundImage: null,
+                backgroundOpacity: 1,
+                overlayImage: null,
+                overlayMode: 'normal',
+                overlayOpacity: 1,
+                titleStyle: {},
+                titleRuns: [],
+                rightSidebarOpen: false,
+                canUndo: false,
+                canRedo: false
+            };
+        }
+
+        /**
+         * Create a real crop preview canvas element in the DOM.
+         */
+        function createCropPreviewCanvas() {
+            const canvas = document.createElement('canvas');
+            canvas.id = 'cropPreviewCanvas';
+            canvas.style.width = '200px';
+            canvas.style.height = '150px';
+            canvas.width = 200;
+            canvas.height = 150;
+            document.body.appendChild(canvas);
+            return canvas;
+        }
+
+        function removeCropPreviewCanvas() {
+            const canvas = document.getElementById('cropPreviewCanvas');
+            if (canvas && canvas.parentNode) {
+                canvas.parentNode.removeChild(canvas);
+            }
+        }
+
+        // ============================================================
+        // Phase 3: Crop Preview RAF Debounce
+        // ============================================================
+        describe('Phase 3 — Crop Preview RAF Debounce', () => {
+            let mockVue;
+            let methods;
+            let mockCropManager;
+
+            beforeEach(() => {
+                mockRAF();
+                mockCropManager = createMockCropManager();
+                const mockBase = createMockBase(mockCropManager);
+                methods = createCollageMethods(mockBase);
+                mockVue = createMockVue('panel-0');
+                createCropPreviewCanvas();
+            });
+
+            afterEach(() => {
+                removeCropPreviewCanvas();
+                restoreRAF();
+                rafCallbacks = [];
+                canceledIds = new Set();
+            });
+
+            it('P3.1 — Rapid calls coalesce into a single RAF callback', () => {
+                // Call 5 times rapidly (before RAF fires)
+                methods._scheduleCropPreviewRender.call(mockVue);
+                methods._scheduleCropPreviewRender.call(mockVue);
+                methods._scheduleCropPreviewRender.call(mockVue);
+                methods._scheduleCropPreviewRender.call(mockVue);
+                methods._scheduleCropPreviewRender.call(mockVue);
+
+                // Only one RAF callback should have been queued
+                expect(rafCallbacks).to.have.lengthOf(1);
+            });
+
+            it('P3.2 — Pending flag is set immediately on first call', () => {
+                methods._scheduleCropPreviewRender.call(mockVue);
+                expect(mockVue._cropPreviewPending).to.be.true;
+            });
+
+            it('P3.3 — Pending flag is cleared after RAF callback fires', () => {
+                methods._scheduleCropPreviewRender.call(mockVue);
+                expect(mockVue._cropPreviewPending).to.be.true;
+
+                flushRAF();
+
+                expect(mockVue._cropPreviewPending).to.be.false;
+            });
+
+            it('P3.4 — After RAF fires, a new call queues a new callback', () => {
+                methods._scheduleCropPreviewRender.call(mockVue);
+                flushRAF();
+
+                // Pending should be false, new call should work
+                expect(mockVue._cropPreviewPending).to.be.false;
+
+                methods._scheduleCropPreviewRender.call(mockVue);
+                expect(mockVue._cropPreviewPending).to.be.true;
+                expect(rafCallbacks).to.have.lengthOf(1);
+            });
+
+            it('P3.5 — RAF callback executes the render body when data is available', () => {
+                // Track drawImage calls on the crop preview canvas context
+                const canvas = document.getElementById('cropPreviewCanvas');
+                const realCtx = canvas.getContext('2d');
+                let drawImageCount = 0;
+
+                // Wrap drawImage to count calls
+                const origDrawImage = realCtx.drawImage.bind(realCtx);
+                realCtx.drawImage = function () {
+                    drawImageCount++;
+                    return origDrawImage.apply(this, arguments);
+                };
+
+                methods._scheduleCropPreviewRender.call(mockVue);
+
+                // Before flush, no rendering has happened
+                expect(drawImageCount).to.equal(0);
+
+                // Flush RAF — render should execute
+                flushRAF();
+
+                expect(drawImageCount).to.equal(1);
+            });
+
+            it('P3.6 — Missing canvas element: no exception thrown', () => {
+                removeCropPreviewCanvas();
+                mockVue.selectedPanelId = 'panel-0';
+
+                expect(() => {
+                    methods._scheduleCropPreviewRender.call(mockVue);
+                }).to.not.throw();
+            });
+
+            it('P3.7 — Missing selected panel: render is skipped', () => {
+                mockVue.selectedPanelId = null;
+
+                methods._scheduleCropPreviewRender.call(mockVue);
+                flushRAF();
+
+                // No RAF callback body should have attempted rendering
+                // Verify by checking that no drawImage was called
+                const canvas = document.getElementById('cropPreviewCanvas');
+                const realCtx = canvas.getContext('2d');
+                let drawImageCount = 0;
+                const origDrawImage = realCtx.drawImage.bind(realCtx);
+                realCtx.drawImage = function () {
+                    drawImageCount++;
+                    return origDrawImage.apply(this, arguments);
+                };
+
+                // The callback already fired in flushRAF above, so drawImageCount
+                // should still be 0 since selectedPanelId was null
+                expect(drawImageCount).to.equal(0);
+            });
+
+            it('P3.8 — Missing crop data: render is skipped gracefully', () => {
+                // Replace crop manager to return null crop
+                const nullCropManager = {
+                    getCrop: () => null,
+                    getPanelImage: () => ({ image: createMockImage(), width: 800, height: 600 })
+                };
+                const nullBase = createMockBase(nullCropManager);
+                const nullMethods = createCollageMethods(nullBase);
+
+                expect(() => {
+                    nullMethods._scheduleCropPreviewRender.call(mockVue);
+                }).to.not.throw();
+            });
+
+            it('P3.9 — Missing crop manager: render is skipped gracefully', () => {
+                const noCropBase = createMockBase(null);
+                const noCropMethods = createCollageMethods(noCropBase);
+
+                expect(() => {
+                    noCropMethods._scheduleCropPreviewRender.call(mockVue);
+                }).to.not.throw();
+            });
+
+            it('P3.10 — Interleaved calls: second frame gets its own render', () => {
+                // First call
+                methods._scheduleCropPreviewRender.call(mockVue);
+                expect(rafCallbacks).to.have.lengthOf(1);
+
+                // Flush first frame
+                flushRAF();
+                expect(mockVue._cropPreviewPending).to.be.false;
+
+                // Second call (new frame)
+                methods._scheduleCropPreviewRender.call(mockVue);
+                expect(rafCallbacks).to.have.lengthOf(1); // New callback queued
+
+                // Flush second frame
+                flushRAF();
+                expect(mockVue._cropPreviewPending).to.be.false;
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

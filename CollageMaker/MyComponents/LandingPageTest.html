@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Landing Page Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Landing Page DOM Structure Tests</h1>
+    <p class="test-plan-ref">Covers: Section 3.2.1 (all 18 tests)</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        const { expect } = chai;
+
+        // Fetch and parse the root index.html (landing page)
+        // This test file lives at CollageMaker/MyComponents/LandingPageTest.html
+        // The root index.html is two directories up from here
+        let landingDoc = null;
+
+        async function loadLandingPage() {
+            if (landingDoc) return landingDoc;
+            const response = await fetch('../../index.html');
+            const html = await response.text();
+            const parser = new DOMParser();
+            landingDoc = parser.parseFromString(html, 'text/html');
+            return landingDoc;
+        }
+
+        // ============================================================
+        // 3.2.1.1 — 3.2.1.18: DOM Structure Validation
+        // ============================================================
+        describe('Landing Page — CollageMaker Card DOM Structure', async () => {
+            let doc;
+
+            before(async () => {
+                doc = await loadLandingPage();
+            });
+
+            it('3.2.1.1 — Card element exists (#collageMakerCard)', () => {
+                const card = doc.getElementById('collageMakerCard');
+                expect(card).to.not.be.null;
+            });
+
+            it('3.2.1.2 — Card has project-card class', () => {
+                const card = doc.getElementById('collageMakerCard');
+                expect(card.classList.contains('project-card')).to.be.true;
+            });
+
+            it('3.2.1.3 — Card has a visual variant class', () => {
+                const card = doc.getElementById('collageMakerCard');
+                const variants = ['card-primary', 'card-secondary', 'card-accent', 'card-neutral'];
+                const hasVariant = variants.some(v => card.classList.contains(v));
+                expect(hasVariant).to.be.true;
+            });
+
+            it('3.2.1.4 — Card icon container exists (.card-icon)', () => {
+                const card = doc.getElementById('collageMakerCard');
+                const iconContainer = card.querySelector('.card-icon');
+                expect(iconContainer).to.not.be.null;
+            });
+
+            it('3.2.1.5 — Card icon uses Material Icons', () => {
+                const card = doc.getElementById('collageMakerCard');
+                const materialIcon = card.querySelector('.card-icon .material-icons');
+                expect(materialIcon).to.not.be.null;
+                expect(materialIcon.textContent.trim()).to.have.lengthOf.greaterThan(0);
+            });
+
+            it('3.2.1.6 — Card title element exists (.card-title)', () => {
+                const card = doc.getElementById('collageMakerCard');
+                const title = card.querySelector('.card-title');
+                expect(title).to.not.be.null;
+                expect(title.tagName).to.equal('H2');
+            });
+
+            it('3.2.1.7 — Card title text is "CollageMaker"', () => {
+                const card = doc.getElementById('collageMakerCard');
+                const title = card.querySelector('.card-title');
+                expect(title.textContent.trim()).to.equal('CollageMaker');
+            });
+
+            it('3.2.1.8 — Card description element exists (.card-description)', () => {
+                const card = doc.getElementById('collageMakerCard');
+                const desc = card.querySelector('.card-description');
+                expect(desc).to.not.be.null;
+                expect(desc.tagName).to.equal('P');
+            });
+
+            it('3.2.1.9 — Card description is non-empty', () => {
+                const card = doc.getElementById('collageMakerCard');
+                const desc = card.querySelector('.card-description');
+                expect(desc.textContent.trim()).to.have.lengthOf.greaterThan(0);
+            });
+
+            it('3.2.1.10 — Card description mentions collage', () => {
+                const card = doc.getElementById('collageMakerCard');
+                const desc = card.querySelector('.card-description');
+                expect(desc.textContent.toLowerCase()).to.include('collage');
+            });
+
+            it('3.2.1.11 — Launch button is an anchor tag (.launch-button)', () => {
+                const card = doc.getElementById('collageMakerCard');
+                const launchBtn = card.querySelector('.launch-button');
+                expect(launchBtn).to.not.be.null;
+                expect(launchBtn.tagName).to.equal('A');
+            });
+
+            it('3.2.1.12 — Launch button text is "Launch"', () => {
+                const card = doc.getElementById('collageMakerCard');
+                const launchBtn = card.querySelector('.launch-button');
+                expect(launchBtn.textContent.trim()).to.equal('Launch');
+            });
+
+            it('3.2.1.13 — Launch href is correct relative path', () => {
+                const card = doc.getElementById('collageMakerCard');
+                const launchBtn = card.querySelector('.launch-button');
+                expect(launchBtn.getAttribute('href')).to.equal('CollageMaker/index.html');
+            });
+
+            it('3.2.1.14 — Launch does not open new tab (no target="_blank")', () => {
+                const card = doc.getElementById('collageMakerCard');
+                const launchBtn = card.querySelector('.launch-button');
+                expect(launchBtn.hasAttribute('target')).to.be.false;
+            });
+
+            it('3.2.1.15 — Card is within a category section', () => {
+                const card = doc.getElementById('collageMakerCard');
+                const section = card.closest('.category-section');
+                expect(section).to.not.be.null;
+            });
+
+            it('3.2.1.16 — Card is within a category grid', () => {
+                const card = doc.getElementById('collageMakerCard');
+                const grid = card.closest('.category-grid');
+                expect(grid).to.not.be.null;
+            });
+
+            it('3.2.1.17 — Card structure matches existing cards (compared with #taxCard)', () => {
+                const collageCard = doc.getElementById('collageMakerCard');
+                const taxCard = doc.getElementById('taxCard');
+
+                // Both should have the same child element classes
+                const collageClasses = Array.from(collageCard.children).map(
+                    child => child.className
+                );
+                const taxClasses = Array.from(taxCard.children).map(
+                    child => child.className
+                );
+
+                expect(collageClasses).to.deep.equal(taxClasses);
+            });
+
+            it('3.2.1.18 — No duplicate card IDs on page', () => {
+                const duplicates = doc.querySelectorAll('[id="collageMakerCard"]');
+                expect(duplicates).to.have.lengthOf(1);
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

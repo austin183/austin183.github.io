@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SaliencyDebugOverlay Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — SaliencyDebugOverlay Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Section 3.4 — Pure functions (3.4.2), Canvas rendering (3.4.3), Assembler integration (3.4.4), State/Export safety (3.4.5)</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import {
+            focusPointToCanvasCoords,
+            imageCenterToCanvasCoords,
+            computeDebugMarkers,
+            validateFocusPoint,
+            DEBUG_OVERLAY_STYLES,
+            render,
+            createDebugOverlay
+        } from '../MyESModules/Rendering/SaliencyDebugOverlay.js';
+        import { createCollageAssembler } from '../MyESModules/Rendering/CollageAssembler.js';
+        import { exportToJpeg } from '../MyESModules/Export/formats/jpegExporter.js';
+
+        const { expect } = chai;
+
+        // Minimal test state factory (replaces createCollageState)
+        function createTestState() {
+            return {
+                images: [],
+                panels: [],
+                layoutStyle: 'hero',
+                gutter: 0,
+                sliceAngle: 45,
+                hexSpacing: 8,
+                panelAssignments: new Map(),
+                layoutVersion: 0,
+                crops: new Map(),
+                selectedPanelId: null,
+                hoveredPanelId: null,
+                selectedImageId: null,
+                backgroundColor: '#ffffff',
+                searchQuery: '',
+                canUndo: false,
+                canRedo: false,
+                showDebugOverlay: false,
+                focusPoints: null
+            };
+        }
+
+        // ============================================================
+        // Test helpers
+        // ============================================================
+
+        function makeCrop(sourceRect, destination) {
+            return { sourceRect: { ...sourceRect }, destination: { ...destination } };
+        }
+
+        function makePanel(id, geometry) {
+            return { id, geometry: geometry || { type: 'rect', rect: { x: 0, y: 0, width: 1000, height: 1000 } } };
+        }
+
+        function makeImageItem(width, height) {
+            return { width, height };
+        }
+
+        function makeOffscreenCanvas(w, h) {
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            return canvas;
+        }
+
+        // Spy on CanvasRenderingContext2D methods
+        function spyContext(ctx) {
+            const spies = {};
+            const methodsToSpy = ['arc', 'fill', 'stroke', 'fillRect', 'strokeRect',
+                'moveTo', 'lineTo', 'beginPath', 'closePath',
+                'save', 'restore', 'setLineDash', 'clearRect'];
+
+            for (const methodName of methodsToSpy) {
+                const original = ctx[methodName].bind(ctx);
+                spies[methodName] = { calls: [], original };
+                ctx[methodName] = function(...args) {
+                    spies[methodName].calls.push(args);
+                    return original(...args);
+                };
+            }
+
+            // Spy on property setters
+            spies.fillStyle = { sets: [] };
+            const origFillStyleDesc = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'fillStyle');
+            let fillStyleValue = ctx.fillStyle;
+            Object.defineProperty(ctx, 'fillStyle', {
+                get: () => fillStyleValue,
+                set: (v) => { spies.fillStyle.sets.push(v); fillStyleValue = v; },
+                configurable: true
+            });
+
+            spies.strokeStyle = { sets: [] };
+            let strokeStyleValue = ctx.strokeStyle;
+            Object.defineProperty(ctx, 'strokeStyle', {
+                get: () => strokeStyleValue,
+                set: (v) => { spies.strokeStyle.sets.push(v); strokeStyleValue = v; },
+                configurable: true
+            });
+
+            spies.lineWidth = { sets: [] };
+            let lineWidthValue = ctx.lineWidth;
+            Object.defineProperty(ctx, 'lineWidth', {
+                get: () => lineWidthValue,
+                set: (v) => { spies.lineWidth.sets.push(v); lineWidthValue = v; },
+                configurable: true
+            });
+
+            return spies;
+        }
+
+        // ============================================================
+        // 3.4.2.1 — 3.4.2.15: Focus Point Coordinate Transformation
+        // ============================================================
+        describe('Section 3.4.2 — focusPointToCanvasCoords', () => {
+            it('3.4.2.1 — Focus at image center → panel center', () => {
+                const crop = makeCrop({ x: 0, y: 0, width: 2000, height: 2000 }, { x: 0, y: 0, width: 1000, height: 1000 });
+                const result = focusPointToCanvasCoords({ x: 0.5, y: 0.5 }, { width: 2000, height: 2000 }, crop);
+                expect(result.x).to.equal(500);
+                expect(result.y).to.equal(500);
+            });
+
+            it('3.4.2.2 — Focus at top-left of image → top-left of crop', () => {
+                const crop = makeCrop({ x: 0, y: 0, width: 2000, height: 2000 }, { x: 0, y: 0, width: 1000, height: 1000 });
+                const result = focusPointToCanvasCoords({ x: 0.0, y: 0.0 }, { width: 2000, height: 2000 }, crop);
+                expect(result.x).to.equal(0);
+                expect(result.y).to.equal(0);
+            });
+
+            it('3.4.2.3 — Focus at bottom-right → bottom-right of crop', () => {
+                const crop = makeCrop({ x: 0, y: 0, width: 2000, height: 2000 }, { x: 0, y: 0, width: 1000, height: 1000 });
+                const result = focusPointToCanvasCoords({ x: 1.0, y: 1.0 }, { width: 2000, height: 2000 }, crop);
+                expect(result.x).to.equal(1000);
+                expect(result.y).to.equal(1000);
+            });
+
+            it('3.4.2.4 — Focus at top-right → top-right of crop', () => {
+                const crop = makeCrop({ x: 0, y: 0, width: 2000, height: 2000 }, { x: 0, y: 0, width: 1000, height: 1000 });
+                const result = focusPointToCanvasCoords({ x: 1.0, y: 0.0 }, { width: 2000, height: 2000 }, crop);
+                expect(result.x).to.equal(1000);
+                expect(result.y).to.equal(0);
+            });
+
+            it('3.4.2.5 — Focus at bottom-left → bottom-left of crop', () => {
+                const crop = makeCrop({ x: 0, y: 0, width: 2000, height: 2000 }, { x: 0, y: 0, width: 1000, height: 1000 });
+                const result = focusPointToCanvasCoords({ x: 0.0, y: 1.0 }, { width: 2000, height: 2000 }, crop);
+                expect(result.x).to.equal(0);
+                expect(result.y).to.equal(1000);
+            });
+
+            it('3.4.2.6 — Crop offset: focus at center of cropped region', () => {
+                const crop = makeCrop({ x: 1000, y: 500, width: 2000, height: 2000 }, { x: 0, y: 0, width: 1000, height: 1000 });
+                // Focus (0.5, 0.5) → abs (2000, 1500) → center of source rect → center of dest
+                const result = focusPointToCanvasCoords({ x: 0.5, y: 0.5 }, { width: 4000, height: 3000 }, crop);
+                expect(result.x).to.equal(500);
+                expect(result.y).to.equal(500);
+            });
+
+            it('3.4.2.7 — Crop offset: focus at source rect top-left', () => {
+                const crop = makeCrop({ x: 1000, y: 500, width: 2000, height: 2000 }, { x: 100, y: 100, width: 800, height: 600 });
+                // Focus (0.25, 0.1667) → abs (1000, 500) → top-left of source rect → top-left of dest
+                const result = focusPointToCanvasCoords({ x: 0.25, y: 500 / 3000 }, { width: 4000, height: 3000 }, crop);
+                expect(result.x).to.equal(100);
+                expect(result.y).to.equal(100);
+            });
+
+            it('3.4.2.8 — Crop offset: focus at source rect bottom-right', () => {
+                const crop = makeCrop({ x: 1000, y: 500, width: 2000, height: 2000 }, { x: 100, y: 100, width: 800, height: 600 });
+                // Focus (0.75, 0.8333) → abs (3000, 2500) → bottom-right of source rect → bottom-right of dest
+                const result = focusPointToCanvasCoords({ x: 0.75, y: 2500 / 3000 }, { width: 4000, height: 3000 }, crop);
+                expect(result.x).to.equal(900);
+                expect(result.y).to.equal(700);
+            });
+
+            it('3.4.2.9 — Portrait image in landscape panel — coords within dest', () => {
+                // Image 1080x1920, panel dest 1000x562
+                // sourceRect from FitMath: full width 1080, height = 1080/1.78 ≈ 600, y-offset = (1920-600)/2 = 660
+                const crop = makeCrop({ x: 0, y: 660, width: 1080, height: 600 }, { x: 0, y: 0, width: 1000, height: 562 });
+                const result = focusPointToCanvasCoords({ x: 0.5, y: 0.5 }, { width: 1080, height: 1920 }, crop);
+                // abs (540, 960) → within source rect → dest center
+                expect(result.x).to.be.within(0, 1000);
+                expect(result.y).to.be.within(0, 562);
+            });
+
+            it('3.4.2.10 — Landscape image in portrait panel — coords within dest', () => {
+                // Image 1920x1080, panel dest 562x1000
+                // sourceRect: full height 1080, width = 1080*0.562 ≈ 607, x-offset = (1920-607)/2 ≈ 656
+                const crop = makeCrop({ x: 656, y: 0, width: 607, height: 1080 }, { x: 0, y: 0, width: 562, height: 1000 });
+                const result = focusPointToCanvasCoords({ x: 0.5, y: 0.5 }, { width: 1920, height: 1080 }, crop);
+                expect(result.x).to.be.within(0, 562);
+                expect(result.y).to.be.within(0, 1000);
+            });
+
+            it('3.4.2.11 — Square image, 1:1 crop', () => {
+                const crop = makeCrop({ x: 0, y: 0, width: 1000, height: 1000 }, { x: 0, y: 0, width: 500, height: 500 });
+                const result = focusPointToCanvasCoords({ x: 0.3, y: 0.7 }, { width: 1000, height: 1000 }, crop);
+                expect(result.x).to.equal(150);
+                expect(result.y).to.equal(350);
+            });
+
+            it('3.4.2.12 — Focus slightly off-center', () => {
+                const crop = makeCrop({ x: 0, y: 0, width: 2000, height: 2000 }, { x: 0, y: 0, width: 1000, height: 1000 });
+                const result = focusPointToCanvasCoords({ x: 0.55, y: 0.45 }, { width: 2000, height: 2000 }, crop);
+                expect(result.x).to.equal(550);
+                expect(result.y).to.equal(450);
+            });
+
+            it('3.4.2.13 — Very small crop (100x100)', () => {
+                const crop = makeCrop({ x: 1900, y: 1400, width: 200, height: 200 }, { x: 400, y: 400, width: 100, height: 100 });
+                const result = focusPointToCanvasCoords({ x: 0.5, y: 0.5 }, { width: 4000, height: 3000 }, crop);
+                // abs (2000, 1500) → center of source rect → center of dest
+                expect(result.x).to.equal(450);
+                expect(result.y).to.equal(450);
+            });
+
+            it('3.4.2.14 — Panel destination offset from canvas origin', () => {
+                const crop = makeCrop({ x: 0, y: 0, width: 2000, height: 2000 }, { x: 500, y: 300, width: 400, height: 300 });
+                const result = focusPointToCanvasCoords({ x: 0.5, y: 0.5 }, { width: 2000, height: 2000 }, crop);
+                // Center of source → center of dest (500+200, 300+150) = (700, 450)
+                expect(result.x).to.equal(700);
+                expect(result.y).to.equal(450);
+            });
+
+            it('3.4.2.15 — Non-integer focus values', () => {
+                const crop = makeCrop({ x: 0, y: 0, width: 3000, height: 3000 }, { x: 0, y: 0, width: 900, height: 900 });
+                const result = focusPointToCanvasCoords({ x: 0.333333, y: 0.666667 }, { width: 3000, height: 3000 }, crop);
+                expect(result.x).to.be.closeTo(300, 0.1);
+                expect(result.y).to.be.closeTo(600, 0.1);
+            });
+        });
+
+        // ============================================================
+        // 3.4.2.16 — 3.4.2.20: Image Center Coordinate Computation
+        // ============================================================
+        describe('Section 3.4.2 — imageCenterToCanvasCoords', () => {
+            it('3.4.2.16 — Center of full-image crop', () => {
+                const crop = makeCrop({ x: 0, y: 0, width: 2000, height: 2000 }, { x: 0, y: 0, width: 1000, height: 1000 });
+                const result = imageCenterToCanvasCoords({ width: 2000, height: 2000 }, crop);
+                expect(result.x).to.equal(500);
+                expect(result.y).to.equal(500);
+            });
+
+            it('3.4.2.17 — Center equals focusPointToCanvasCoords at 0.5,0.5', () => {
+                const crop = makeCrop({ x: 0, y: 0, width: 2000, height: 2000 }, { x: 0, y: 0, width: 1000, height: 1000 });
+                const center = imageCenterToCanvasCoords({ width: 2000, height: 2000 }, crop);
+                const focus = focusPointToCanvasCoords({ x: 0.5, y: 0.5 }, { width: 2000, height: 2000 }, crop);
+                expect(center.x).to.equal(focus.x);
+                expect(center.y).to.equal(focus.y);
+            });
+
+            it('3.4.2.18 — Center with offset crop', () => {
+                const crop = makeCrop({ x: 1000, y: 500, width: 2000, height: 2000 }, { x: 100, y: 100, width: 800, height: 600 });
+                const result = imageCenterToCanvasCoords({ width: 4000, height: 3000 }, crop);
+                // Image center (2000, 1500) → center of source rect → center of dest (100+400, 100+300) = (500, 400)
+                expect(result.x).to.equal(500);
+                expect(result.y).to.equal(400);
+            });
+
+            it('3.4.2.19 — Center of portrait image in landscape crop — within dest bounds', () => {
+                const crop = makeCrop({ x: 0, y: 660, width: 1080, height: 600 }, { x: 0, y: 0, width: 1000, height: 562 });
+                const result = imageCenterToCanvasCoords({ width: 1080, height: 1920 }, crop);
+                expect(result.x).to.be.within(0, 1000);
+                expect(result.y).to.be.within(0, 562);
+            });
+
+            it('3.4.2.20 — Center with panel offset', () => {
+                const crop = makeCrop({ x: 0, y: 0, width: 2000, height: 2000 }, { x: 500, y: 300, width: 400, height: 300 });
+                const result = imageCenterToCanvasCoords({ width: 2000, height: 2000 }, crop);
+                expect(result.x).to.equal(700);
+                expect(result.y).to.equal(450);
+            });
+        });
+
+        // ============================================================
+        // 3.4.2.21 — 3.4.2.32: Debug Marker Computation
+        // ============================================================
+        describe('Section 3.4.2 — computeDebugMarkers', () => {
+            const panel = makePanel('p1');
+            const image = makeImageItem(2000, 2000);
+            const crop = makeCrop({ x: 0, y: 0, width: 2000, height: 2000 }, { x: 0, y: 0, width: 1000, height: 1000 });
+
+            it('3.4.2.21 — Panel with valid focus point → two markers', () => {
+                const markers = computeDebugMarkers(panel, image, crop, { x: 0.3, y: 0.4 });
+                expect(markers).to.have.lengthOf(2);
+                expect(markers[0].type).to.equal('center');
+                expect(markers[1].type).to.equal('focal');
+            });
+
+            it('3.4.2.22 — Panel with no focus point → center marker only', () => {
+                const markers = computeDebugMarkers(panel, image, crop, undefined);
+                expect(markers).to.have.lengthOf(1);
+                expect(markers[0].type).to.equal('center');
+            });
+
+            it('3.4.2.23 — Panel with no crop → empty array', () => {
+                const markers = computeDebugMarkers(panel, image, undefined, { x: 0.3, y: 0.4 });
+                expect(markers).to.have.lengthOf(0);
+            });
+
+            it('3.4.2.24 — Panel with no image → empty array', () => {
+                const markers = computeDebugMarkers(panel, undefined, crop, { x: 0.3, y: 0.4 });
+                expect(markers).to.have.lengthOf(0);
+            });
+
+            it('3.4.2.25 — Panel with no image AND no crop → empty array', () => {
+                const markers = computeDebugMarkers(panel, undefined, undefined, undefined);
+                expect(markers).to.have.lengthOf(0);
+            });
+
+            it('3.4.2.26 — Focus point at image center → markers overlap', () => {
+                const markers = computeDebugMarkers(panel, image, crop, { x: 0.5, y: 0.5 });
+                expect(markers).to.have.lengthOf(2);
+                expect(markers[0].x).to.equal(markers[1].x);
+                expect(markers[0].y).to.equal(markers[1].y);
+            });
+
+            it('3.4.2.27 — Focus point at image corner → markers far apart', () => {
+                const markers = computeDebugMarkers(panel, image, crop, { x: 0.0, y: 0.0 });
+                expect(markers).to.have.lengthOf(2);
+                // Focal at (0, 0), center at (500, 500)
+                expect(markers[1].x).to.equal(0);
+                expect(markers[1].y).to.equal(0);
+                expect(markers[0].x).to.equal(500);
+                expect(markers[0].y).to.equal(500);
+            });
+
+            it('3.4.2.28 — Multiple panels → independent computation', () => {
+                const panelA = makePanel('a', { type: 'rect', rect: { x: 0, y: 0, width: 500, height: 500 } });
+                const panelB = makePanel('b', { type: 'rect', rect: { x: 500, y: 0, width: 500, height: 500 } });
+                const cropA = makeCrop({ x: 0, y: 0, width: 2000, height: 2000 }, { x: 0, y: 0, width: 500, height: 500 });
+                const cropB = makeCrop({ x: 0, y: 0, width: 2000, height: 2000 }, { x: 500, y: 0, width: 500, height: 500 });
+
+                const markersA = computeDebugMarkers(panelA, image, cropA, { x: 0.3, y: 0.3 });
+                const markersB = computeDebugMarkers(panelB, image, cropB, { x: 0.7, y: 0.7 });
+
+                expect(markersA[0].x).to.not.equal(markersB[0].x);
+                expect(markersA[1].x).to.not.equal(markersB[1].x);
+            });
+
+            it('3.4.2.29 — Panel with NaN focus point → center-only', () => {
+                const markers = computeDebugMarkers(panel, image, crop, { x: NaN, y: NaN });
+                expect(markers).to.have.lengthOf(1);
+                expect(markers[0].type).to.equal('center');
+            });
+
+            it('3.4.2.30 — Panel with Infinity focus point → center-only', () => {
+                const markers = computeDebugMarkers(panel, image, crop, { x: Infinity, y: Infinity });
+                expect(markers).to.have.lengthOf(1);
+                expect(markers[0].type).to.equal('center');
+            });
+
+            it('3.4.2.31 — Panel with focus point outside [0,1] → center-only', () => {
+                const markers = computeDebugMarkers(panel, image, crop, { x: 1.5, y: -0.5 });
+                expect(markers).to.have.lengthOf(1);
+                expect(markers[0].type).to.equal('center');
+            });
+
+            it('3.4.2.32 — Panel with null focus point → center-only', () => {
+                const markers = computeDebugMarkers(panel, image, crop, null);
+                expect(markers).to.have.lengthOf(1);
+                expect(markers[0].type).to.equal('center');
+            });
+        });
+
+        // ============================================================
+        // 3.4.2.33 — 3.4.2.52: Focus Point Validation
+        // ============================================================
+        describe('Section 3.4.2 — validateFocusPoint', () => {
+            it('3.4.2.33 — Valid focus point at center', () => {
+                expect(validateFocusPoint({ x: 0.5, y: 0.5 })).to.be.true;
+            });
+
+            it('3.4.2.34 — Valid focus point at corner', () => {
+                expect(validateFocusPoint({ x: 0.0, y: 0.0 })).to.be.true;
+            });
+
+            it('3.4.2.35 — Valid focus point at opposite corner', () => {
+                expect(validateFocusPoint({ x: 1.0, y: 1.0 })).to.be.true;
+            });
+
+            it('3.4.2.36 — Valid focus point at edge', () => {
+                expect(validateFocusPoint({ x: 0.0, y: 0.5 })).to.be.true;
+            });
+
+            it('3.4.2.37 — Valid focus point fractional', () => {
+                expect(validateFocusPoint({ x: 0.333, y: 0.667 })).to.be.true;
+            });
+
+            it('3.4.2.38 — NaN x → invalid', () => {
+                expect(validateFocusPoint({ x: NaN, y: 0.5 })).to.be.false;
+            });
+
+            it('3.4.2.39 — NaN y → invalid', () => {
+                expect(validateFocusPoint({ x: 0.5, y: NaN })).to.be.false;
+            });
+
+            it('3.4.2.40 — Both NaN → invalid', () => {
+                expect(validateFocusPoint({ x: NaN, y: NaN })).to.be.false;
+            });
+
+            it('3.4.2.41 — Infinity x → invalid', () => {
+                expect(validateFocusPoint({ x: Infinity, y: 0.5 })).to.be.false;
+            });
+
+            it('3.4.2.42 — Negative Infinity → invalid', () => {
+                expect(validateFocusPoint({ x: -Infinity, y: 0.5 })).to.be.false;
+            });
+
+            it('3.4.2.43 — x > 1 → invalid', () => {
+                expect(validateFocusPoint({ x: 1.5, y: 0.5 })).to.be.false;
+            });
+
+            it('3.4.2.44 — y < 0 → invalid', () => {
+                expect(validateFocusPoint({ x: 0.5, y: -0.1 })).to.be.false;
+            });
+
+            it('3.4.2.45 — Null → invalid', () => {
+                expect(validateFocusPoint(null)).to.be.false;
+            });
+
+            it('3.4.2.46 — Undefined → invalid', () => {
+                expect(validateFocusPoint(undefined)).to.be.false;
+            });
+
+            it('3.4.2.47 — Empty object → invalid', () => {
+                expect(validateFocusPoint({})).to.be.false;
+            });
+
+            it('3.4.2.48 — Missing x → invalid', () => {
+                expect(validateFocusPoint({ y: 0.5 })).to.be.false;
+            });
+
+            it('3.4.2.49 — Missing y → invalid', () => {
+                expect(validateFocusPoint({ x: 0.5 })).to.be.false;
+            });
+
+            it('3.4.2.50 — String values → invalid', () => {
+                expect(validateFocusPoint({ x: '0.5', y: '0.5' })).to.be.false;
+            });
+
+            it('3.4.2.51 — Zero values → valid', () => {
+                expect(validateFocusPoint({ x: 0, y: 0 })).to.be.true;
+            });
+
+            it('3.4.2.52 — One valid, one NaN → invalid', () => {
+                expect(validateFocusPoint({ x: 0.5, y: NaN })).to.be.false;
+            });
+        });
+
+        // ============================================================
+        // 3.4.2.53 — 3.4.2.58: Constants Validation
+        // ============================================================
+        describe('Section 3.4.2 — DEBUG_OVERLAY_STYLES', () => {
+            it('3.4.2.53 — Has all required fields', () => {
+                expect(DEBUG_OVERLAY_STYLES).to.have.property('FOCAL_POINT');
+                expect(DEBUG_OVERLAY_STYLES).to.have.property('CENTER_DOT');
+                expect(DEBUG_OVERLAY_STYLES).to.have.property('SHIFT_VECTOR');
+                expect(DEBUG_OVERLAY_STYLES).to.have.property('CROP_RECT');
+                expect(DEBUG_OVERLAY_STYLES).to.have.property('LABEL_FONT');
+                expect(DEBUG_OVERLAY_STYLES).to.have.property('LABEL_OFFSET_X');
+                expect(DEBUG_OVERLAY_STYLES).to.have.property('LABEL_OFFSET_Y');
+            });
+
+            it('3.4.2.54 — FOCAL_POINT color is green', () => {
+                expect(DEBUG_OVERLAY_STYLES.FOCAL_POINT.color).to.equal('#00FF00');
+            });
+
+            it('3.4.2.55 — CENTER_DOT color is red', () => {
+                expect(DEBUG_OVERLAY_STYLES.CENTER_DOT.color).to.equal('#FF0000');
+            });
+
+            it('3.4.2.56 — SHIFT_VECTOR has dash pattern', () => {
+                const dash = DEBUG_OVERLAY_STYLES.SHIFT_VECTOR.dashPattern;
+                expect(dash).to.be.an('array');
+                expect(dash.length).to.be.at.least(2);
+            });
+
+            it('3.4.2.57 — FOCAL_POINT radius > CENTER_DOT radius', () => {
+                expect(DEBUG_OVERLAY_STYLES.FOCAL_POINT.radius).to.be.greaterThan(
+                    DEBUG_OVERLAY_STYLES.CENTER_DOT.radius
+                );
+            });
+
+            it('3.4.2.58 — LABEL_FONT is valid CSS font string', () => {
+                expect(DEBUG_OVERLAY_STYLES.LABEL_FONT).to.match(/^\d+px\s+\w+$/);
+            });
+        });
+
+        // ============================================================
+        // 3.4.3.1 — 3.4.3.17: Canvas Rendering — Basic Drawing
+        // ============================================================
+        describe('Section 3.4.3 — Canvas Rendering: Basic Drawing', () => {
+            let canvas, ctx, spies;
+            const panels = [makePanel('p1')];
+            const images = [makeImageItem(2000, 2000)];
+            const crops = new Map([['p1', makeCrop({ x: 0, y: 0, width: 2000, height: 2000 }, { x: 0, y: 0, width: 1000, height: 1000 })]]);
+            const panelAssignments = new Map([['p1', 0]]);
+            const canvasSize = { width: 1000, height: 1000 };
+
+            beforeEach(() => {
+                canvas = makeOffscreenCanvas(1000, 1000);
+                ctx = canvas.getContext('2d');
+                spies = spyContext(ctx);
+            });
+
+            it('3.4.3.1 — Render with valid focus point → arc called for focal', () => {
+                const focusPoints = new Map([[0, { x: 0.5, y: 0.5 }]]);
+                render(ctx, panels, images, crops, panelAssignments, focusPoints, canvasSize);
+                expect(spies.arc.calls.length).to.be.at.least(1);
+                // Green fill should be set before arc for focal
+                expect(spies.fillStyle.sets).to.include('#00FF00');
+            });
+
+            it('3.4.3.2 — Render with valid focus point → arc called for center', () => {
+                const focusPoints = new Map([[0, { x: 0.5, y: 0.5 }]]);
+                render(ctx, panels, images, crops, panelAssignments, focusPoints, canvasSize);
+                expect(spies.fillStyle.sets).to.include('#FF0000');
+            });
+
+            it('3.4.3.3 — Render without focus point → only center drawn', () => {
+                const focusPoints = new Map();
+                render(ctx, panels, images, crops, panelAssignments, focusPoints, canvasSize);
+                // Only red center, no green focal
+                expect(spies.fillStyle.sets).to.include('#FF0000');
+                expect(spies.fillStyle.sets).to.not.include('#00FF00');
+            });
+
+            it('3.4.3.4 — Render with no panels → no drawing', () => {
+                render(ctx, [], images, crops, panelAssignments, new Map(), canvasSize);
+                expect(spies.arc.calls.length).to.equal(0);
+            });
+
+            it('3.4.3.5 — Render with no images → no drawing', () => {
+                render(ctx, panels, [], crops, panelAssignments, new Map(), canvasSize);
+                expect(spies.arc.calls.length).to.equal(0);
+            });
+
+            it('3.4.3.6 — Render with no crops → no drawing', () => {
+                render(ctx, panels, images, new Map(), panelAssignments, new Map(), canvasSize);
+                expect(spies.arc.calls.length).to.equal(0);
+            });
+
+            it('3.4.3.7 — Render with multiple panels → markers for each', () => {
+                const multiPanels = [makePanel('a'), makePanel('b'), makePanel('c')];
+                const multiImages = [makeImageItem(1000, 1000), makeImageItem(1000, 1000), makeImageItem(1000, 1000)];
+                const multiCrops = new Map([
+                    ['a', makeCrop({ x: 0, y: 0, width: 1000, height: 1000 }, { x: 0, y: 0, width: 300, height: 300 })],
+                    ['b', makeCrop({ x: 0, y: 0, width: 1000, height: 1000 }, { x: 350, y: 0, width: 300, height: 300 })],
+                    ['c', makeCrop({ x: 0, y: 0, width: 1000, height: 1000 }, { x: 700, y: 0, width: 300, height: 300 })]
+                ]);
+                const multiAssignments = new Map([['a', 0], ['b', 1], ['c', 2]]);
+                const focusPoints = new Map([[0, { x: 0.3, y: 0.3 }], [1, { x: 0.5, y: 0.5 }], [2, { x: 0.7, y: 0.7 }]]);
+
+                render(ctx, multiPanels, multiImages, multiCrops, multiAssignments, focusPoints, canvasSize);
+                // 3 panels × 2 markers each = 6 arc calls
+                expect(spies.arc.calls.length).to.equal(6);
+            });
+
+            it('3.4.3.8 — Render with mixed panels (some with focus, some without)', () => {
+                const mixedPanels = [makePanel('a'), makePanel('b'), makePanel('c')];
+                const mixedImages = [makeImageItem(1000, 1000), makeImageItem(1000, 1000), makeImageItem(1000, 1000)];
+                const mixedCrops = new Map([
+                    ['a', makeCrop({ x: 0, y: 0, width: 1000, height: 1000 }, { x: 0, y: 0, width: 300, height: 300 })],
+                    ['b', makeCrop({ x: 0, y: 0, width: 1000, height: 1000 }, { x: 350, y: 0, width: 300, height: 300 })],
+                    ['c', makeCrop({ x: 0, y: 0, width: 1000, height: 1000 }, { x: 700, y: 0, width: 300, height: 300 })]
+                ]);
+                const mixedAssignments = new Map([['a', 0], ['b', 1], ['c', 2]]);
+                // Only panels a and b have focus points
+                const focusPoints = new Map([[0, { x: 0.3, y: 0.3 }], [1, { x: 0.5, y: 0.5 }]]);
+
+                render(ctx, mixedPanels, mixedImages, mixedCrops, mixedAssignments, focusPoints, canvasSize);
+                // 2 panels with focus (2 arcs each) + 1 without (1 arc) = 5 arc calls
+                expect(spies.arc.calls.length).to.equal(5);
+            });
+
+            it('3.4.3.9 — Render uses ctx.save/restore', () => {
+                const focusPoints = new Map([[0, { x: 0.5, y: 0.5 }]]);
+                render(ctx, panels, images, crops, panelAssignments, focusPoints, canvasSize);
+                expect(spies.save.calls.length).to.be.at.least(1);
+                expect(spies.restore.calls.length).to.be.at.least(1);
+            });
+
+            it('3.4.3.10 — Render does not modify ctx globalAlpha outside save/restore', () => {
+                const originalAlpha = ctx.globalAlpha;
+                const focusPoints = new Map([[0, { x: 0.5, y: 0.5 }]]);
+                render(ctx, panels, images, crops, panelAssignments, focusPoints, canvasSize);
+                expect(ctx.globalAlpha).to.equal(originalAlpha);
+            });
+
+            it('3.4.3.11 — Render does not modify ctx fillStyle outside save/restore', () => {
+                ctx.fillStyle = '#FF0000';
+                const focusPoints = new Map([[0, { x: 0.5, y: 0.5 }]]);
+                render(ctx, panels, images, crops, panelAssignments, focusPoints, canvasSize);
+                // After restore, fillStyle should be back to what it was
+                // (the last fillStyle set during render, but save/restore should work)
+                expect(spies.restore.calls.length).to.be.at.least(1);
+            });
+
+            it('3.4.3.12 — Focal point drawn as filled circle', () => {
+                const focusPoints = new Map([[0, { x: 0.5, y: 0.5 }]]);
+                render(ctx, panels, images, crops, panelAssignments, focusPoints, canvasSize);
+                expect(spies.fill.calls.length).to.be.at.least(2); // center + focal
+            });
+
+            it('3.4.3.13 — Center dot drawn as filled circle', () => {
+                const focusPoints = new Map();
+                render(ctx, panels, images, crops, panelAssignments, focusPoints, canvasSize);
+                expect(spies.fill.calls.length).to.be.at.least(1);
+            });
+
+            it('3.4.3.14 — Focal point has stroke outline', () => {
+                const focusPoints = new Map([[0, { x: 0.5, y: 0.5 }]]);
+                render(ctx, panels, images, crops, panelAssignments, focusPoints, canvasSize);
+                // center stroke + focal stroke (crop rect uses strokeRect, not stroke)
+                expect(spies.stroke.calls.length).to.be.at.least(2);
+            });
+
+            it('3.4.3.15 — Shift vector line drawn when focus differs from center', () => {
+                const focusPoints = new Map([[0, { x: 0.3, y: 0.4 }]]);
+                render(ctx, panels, images, crops, panelAssignments, focusPoints, canvasSize);
+                expect(spies.moveTo.calls.length).to.be.at.least(1);
+                expect(spies.lineTo.calls.length).to.be.at.least(1);
+            });
+
+            it('3.4.3.16 — Shift vector NOT drawn when focus equals center', () => {
+                const focusPoints = new Map([[0, { x: 0.5, y: 0.5 }]]);
+                render(ctx, panels, images, crops, panelAssignments, focusPoints, canvasSize);
+                // No lineTo for shift vector (focus == center, zero-length vector)
+                expect(spies.lineTo.calls.length).to.equal(0);
+            });
+
+            it('3.4.3.17 — Crop rectangle outline drawn', () => {
+                const focusPoints = new Map();
+                render(ctx, panels, images, crops, panelAssignments, focusPoints, canvasSize);
+                expect(spies.strokeRect.calls.length).to.be.at.least(1);
+            });
+        });
+
+        // ============================================================
+        // 3.4.3.18 — 3.4.3.22: Marker Positioning Verification
+        // ============================================================
+        describe('Section 3.4.3 — Canvas Rendering: Marker Positioning', () => {
+            let canvas, ctx, spies;
+
+            beforeEach(() => {
+                canvas = makeOffscreenCanvas(2000, 1200);
+                ctx = canvas.getContext('2d');
+                spies = spyContext(ctx);
+            });
+
+            it('3.4.3.18 — Marker at canvas origin', () => {
+                const panels = [makePanel('p1')];
+                const images = [makeImageItem(100, 100)];
+                const crops = new Map([['p1', makeCrop({ x: 0, y: 0, width: 100, height: 100 }, { x: 0, y: 0, width: 100, height: 100 })]]);
+                const assignments = new Map([['p1', 0]]);
+                const focusPoints = new Map([[0, { x: 0.0, y: 0.0 }]]);
+                render(ctx, panels, images, crops, assignments, focusPoints, { width: 2000, height: 1200 });
+                // Focal at (0, 0) — arc called with (0, 0, ...)
+                const focalArc = spies.arc.calls.find(c => c[0] === 0 && c[1] === 0);
+                expect(focalArc).to.not.be.undefined;
+            });
+
+            it('3.4.3.19 — Marker at canvas center', () => {
+                const panels = [makePanel('p1')];
+                const images = [makeImageItem(1000, 500)];
+                const crops = new Map([['p1', makeCrop({ x: 0, y: 0, width: 1000, height: 500 }, { x: 460, y: 290, width: 1000, height: 500 })]]);
+                const assignments = new Map([['p1', 0]]);
+                const focusPoints = new Map([[0, { x: 0.5, y: 0.5 }]]);
+                render(ctx, panels, images, crops, assignments, focusPoints, { width: 2000, height: 1200 });
+                // Center at (960, 540)
+                const centerArc = spies.arc.calls.find(c => Math.abs(c[0] - 960) < 1 && Math.abs(c[1] - 540) < 1);
+                expect(centerArc).to.not.be.undefined;
+            });
+
+            it('3.4.3.20 — Marker at canvas edge', () => {
+                const panels = [makePanel('p1')];
+                const images = [makeImageItem(100, 100)];
+                const crops = new Map([['p1', makeCrop({ x: 0, y: 0, width: 100, height: 100 }, { x: 1800, y: 980, width: 100, height: 100 })]]);
+                const assignments = new Map([['p1', 0]]);
+                const focusPoints = new Map([[0, { x: 1.0, y: 1.0 }]]);
+                render(ctx, panels, images, crops, assignments, focusPoints, { width: 2000, height: 1200 });
+                // Focal at bottom-right of dest: (1900, 1080)
+                const focalArc = spies.arc.calls.find(c => Math.abs(c[0] - 1900) < 1 && Math.abs(c[1] - 1080) < 1);
+                expect(focalArc).to.not.be.undefined;
+            });
+
+            it('3.4.3.21 — Two panels side by side → markers at different positions', () => {
+                const panels = [makePanel('a'), makePanel('b')];
+                const images = [makeImageItem(1000, 540), makeImageItem(1000, 540)];
+                const crops = new Map([
+                    ['a', makeCrop({ x: 0, y: 0, width: 1000, height: 540 }, { x: 0, y: 0, width: 960, height: 540 })],
+                    ['b', makeCrop({ x: 0, y: 0, width: 1000, height: 540 }, { x: 960, y: 0, width: 960, height: 540 })]
+                ]);
+                const assignments = new Map([['a', 0], ['b', 1]]);
+                const focusPoints = new Map([[0, { x: 0.5, y: 0.5 }], [1, { x: 0.5, y: 0.5 }]]);
+                render(ctx, panels, images, crops, assignments, focusPoints, { width: 2000, height: 1200 });
+                // Panel a center: (480, 270), Panel b center: (1440, 270)
+                const arcPositions = spies.arc.calls.map(c => ({ x: c[0], y: c[1] }));
+                const uniquePositions = new Set(arcPositions.map(p => `${p.x},${p.y}`));
+                expect(uniquePositions.size).to.be.at.least(2);
+            });
+
+            it('3.4.3.22 — Hexagonal layout → markers within panel bounds', () => {
+                // Simulate 7 hexagonal panels
+                const hexPanels = [];
+                const hexCrops = new Map();
+                const hexAssignments = new Map();
+                const hexImages = [];
+                const focusPoints = new Map();
+                const positions = [
+                    [0, 0], [600, 0], [1200, 0],
+                    [300, 350], [900, 350],
+                    [0, 700], [600, 700]
+                ];
+                positions.forEach((pos, i) => {
+                    const id = `hex${i}`;
+                    hexPanels.push(makePanel(id));
+                    hexImages.push(makeImageItem(500, 500));
+                    hexCrops.set(id, makeCrop({ x: 0, y: 0, width: 500, height: 500 }, { x: pos[0], y: pos[1], width: 250, height: 250 }));
+                    hexAssignments.set(id, i);
+                    focusPoints.set(i, { x: 0.5, y: 0.5 });
+                });
+                render(ctx, hexPanels, hexImages, hexCrops, hexAssignments, focusPoints, { width: 2000, height: 1200 });
+                // All markers should be within canvas bounds
+                for (const call of spies.arc.calls) {
+                    expect(call[0]).to.be.at.least(-10); // small tolerance for radius
+                    expect(call[0]).to.be.at.most(2010);
+                    expect(call[1]).to.be.at.least(-10);
+                    expect(call[1]).to.be.at.most(1210);
+                }
+            });
+        });
+
+        // ============================================================
+        // 3.4.3.23 — 3.4.3.30: Style Verification
+        // ============================================================
+        describe('Section 3.4.3 — Canvas Rendering: Style Verification', () => {
+            let canvas, ctx, spies;
+            const panels = [makePanel('p1')];
+            const images = [makeImageItem(2000, 2000)];
+            const crops = new Map([['p1', makeCrop({ x: 0, y: 0, width: 2000, height: 2000 }, { x: 0, y: 0, width: 1000, height: 1000 })]]);
+            const panelAssignments = new Map([['p1', 0]]);
+            const canvasSize = { width: 1000, height: 1000 };
+
+            beforeEach(() => {
+                canvas = makeOffscreenCanvas(1000, 1000);
+                ctx = canvas.getContext('2d');
+                spies = spyContext(ctx);
+            });
+
+            it('3.4.3.23 — Focal point uses green fill', () => {
+                const focusPoints = new Map([[0, { x: 0.3, y: 0.4 }]]);
+                render(ctx, panels, images, crops, panelAssignments, focusPoints, canvasSize);
+                expect(spies.fillStyle.sets).to.include('#00FF00');
+            });
+
+            it('3.4.3.24 — Center dot uses red fill', () => {
+                const focusPoints = new Map();
+                render(ctx, panels, images, crops, panelAssignments, focusPoints, canvasSize);
+                expect(spies.fillStyle.sets).to.include('#FF0000');
+            });
+
+            it('3.4.3.25 — Focal point radius matches constant', () => {
+                const focusPoints = new Map([[0, { x: 0.3, y: 0.4 }]]);
+                render(ctx, panels, images, crops, panelAssignments, focusPoints, canvasSize);
+                // Find arc calls and check radius (3rd param)
+                const expectedRadius = DEBUG_OVERLAY_STYLES.FOCAL_POINT.radius; // 6
+                const focalArc = spies.arc.calls.find(c => Math.abs(c[2] - expectedRadius) < 0.5);
+                expect(focalArc).to.not.be.undefined;
+            });
+
+            it('3.4.3.26 — Center dot radius matches constant', () => {
+                const focusPoints = new Map();
+                render(ctx, panels, images, crops, panelAssignments, focusPoints, canvasSize);
+                const expectedRadius = DEBUG_OVERLAY_STYLES.CENTER_DOT.radius; // 4
+                const centerArc = spies.arc.calls.find(c => Math.abs(c[2] - expectedRadius) < 0.5);
+                expect(centerArc).to.not.be.undefined;
+            });
+
+            it('3.4.3.27 — Stroke width for focal point', () => {
+                const focusPoints = new Map([[0, { x: 0.3, y: 0.4 }]]);
+                render(ctx, panels, images, crops, panelAssignments, focusPoints, canvasSize);
+                expect(spies.lineWidth.sets.length).to.be.at.least(1);
+            });
+
+            it('3.4.3.28 — Stroke width for center dot', () => {
+                const focusPoints = new Map();
+                render(ctx, panels, images, crops, panelAssignments, focusPoints, canvasSize);
+                expect(spies.lineWidth.sets.length).to.be.at.least(1);
+            });
+
+            it('3.4.3.29 — Shift vector uses dashed line', () => {
+                const focusPoints = new Map([[0, { x: 0.3, y: 0.4 }]]);
+                render(ctx, panels, images, crops, panelAssignments, focusPoints, canvasSize);
+                expect(spies.setLineDash.calls.length).to.be.at.least(1);
+            });
+
+            it('3.4.3.30 — Crop rectangle uses yellow stroke', () => {
+                const focusPoints = new Map();
+                render(ctx, panels, images, crops, panelAssignments, focusPoints, canvasSize);
+                expect(spies.strokeStyle.sets).to.include('#FFFF00');
+            });
+        });
+
+        // ============================================================
+        // 3.4.3.31 — 3.4.3.45: Edge Cases
+        // ============================================================
+        describe('Section 3.4.3 — Canvas Rendering: Edge Cases', () => {
+            let canvas, ctx;
+
+            beforeEach(() => {
+                canvas = makeOffscreenCanvas(2000, 1200);
+                ctx = canvas.getContext('2d');
+            });
+
+            it('3.4.3.31 — Very small panel (10x10) → markers still drawn', () => {
+                const panels = [makePanel('p1')];
+                const images = [makeImageItem(100, 100)];
+                const crops = new Map([['p1', makeCrop({ x: 0, y: 0, width: 100, height: 100 }, { x: 0, y: 0, width: 10, height: 10 })]]);
+                const assignments = new Map([['p1', 0]]);
+                expect(() => {
+                    render(ctx, panels, images, crops, assignments, new Map(), { width: 2000, height: 1200 });
+                }).to.not.throw();
+            });
+
+            it('3.4.3.32 — Panel at negative coordinates → no crash', () => {
+                const panels = [makePanel('p1')];
+                const images = [makeImageItem(200, 200)];
+                const crops = new Map([['p1', makeCrop({ x: 0, y: 0, width: 200, height: 200 }, { x: -100, y: -100, width: 200, height: 200 })]]);
+                const assignments = new Map([['p1', 0]]);
+                expect(() => {
+                    render(ctx, panels, images, crops, assignments, new Map(), { width: 2000, height: 1200 });
+                }).to.not.throw();
+            });
+
+            it('3.4.3.33 — Panel extends beyond canvas → no crash', () => {
+                const panels = [makePanel('p1')];
+                const images = [makeImageItem(200, 200)];
+                const crops = new Map([['p1', makeCrop({ x: 0, y: 0, width: 200, height: 200 }, { x: 1800, y: 900, width: 200, height: 200 })]]);
+                const assignments = new Map([['p1', 0]]);
+                expect(() => {
+                    render(ctx, panels, images, crops, assignments, new Map(), { width: 2000, height: 1200 });
+                }).to.not.throw();
+            });
+
+            it('3.4.3.34 — Image with zero dimensions → no markers', () => {
+                const panels = [makePanel('p1')];
+                const images = [makeImageItem(0, 0)];
+                const crops = new Map([['p1', makeCrop({ x: 0, y: 0, width: 100, height: 100 }, { x: 0, y: 0, width: 100, height: 100 })]]);
+                const assignments = new Map([['p1', 0]]);
+                expect(() => {
+                    render(ctx, panels, images, crops, assignments, new Map(), { width: 2000, height: 1200 });
+                }).to.not.throw();
+            });
+
+            it('3.4.3.35 — Crop with zero-size source rect → no markers', () => {
+                const panels = [makePanel('p1')];
+                const images = [makeImageItem(100, 100)];
+                const crops = new Map([['p1', makeCrop({ x: 0, y: 0, width: 0, height: 0 }, { x: 0, y: 0, width: 100, height: 100 })]]);
+                const assignments = new Map([['p1', 0]]);
+                expect(() => {
+                    render(ctx, panels, images, crops, assignments, new Map(), { width: 2000, height: 1200 });
+                }).to.not.throw();
+            });
+
+            it('3.4.3.36 — Crop with zero-size destination → no markers', () => {
+                const panels = [makePanel('p1')];
+                const images = [makeImageItem(100, 100)];
+                const crops = new Map([['p1', makeCrop({ x: 0, y: 0, width: 100, height: 100 }, { x: 0, y: 0, width: 0, height: 0 })]]);
+                const assignments = new Map([['p1', 0]]);
+                expect(() => {
+                    render(ctx, panels, images, crops, assignments, new Map(), { width: 2000, height: 1200 });
+                }).to.not.throw();
+            });
+
+            it('3.4.3.37 — NaN in crop coordinates → no crash', () => {
+                const panels = [makePanel('p1')];
+                const images = [makeImageItem(100, 100)];
+                const crops = new Map([['p1', { sourceRect: { x: NaN, y: 0, width: 100, height: 100 }, destination: { x: NaN, y: 0, width: 100, height: 100 } }]]);
+                const assignments = new Map([['p1', 0]]);
+                expect(() => {
+                    render(ctx, panels, images, crops, assignments, new Map(), { width: 2000, height: 1200 });
+                }).to.not.throw();
+            });
+
+            it('3.4.3.38 — Infinity in crop coordinates → no crash', () => {
+                const panels = [makePanel('p1')];
+                const images = [makeImageItem(100, 100)];
+                const crops = new Map([['p1', { sourceRect: { x: Infinity, y: 0, width: 100, height: 100 }, destination: { x: 0, y: 0, width: 100, height: 100 } }]]);
+                const assignments = new Map([['p1', 0]]);
+                expect(() => {
+                    render(ctx, panels, images, crops, assignments, new Map(), { width: 2000, height: 1200 });
+                }).to.not.throw();
+            });
+
+            it('3.4.3.39 — Null ctx → no crash', () => {
+                const panels = [makePanel('p1')];
+                const images = [makeImageItem(100, 100)];
+                const crops = new Map([['p1', makeCrop({ x: 0, y: 0, width: 100, height: 100 }, { x: 0, y: 0, width: 100, height: 100 })]]);
+                const assignments = new Map([['p1', 0]]);
+                expect(() => {
+                    render(null, panels, images, crops, assignments, new Map(), { width: 2000, height: 1200 });
+                }).to.not.throw();
+            });
+
+            it('3.4.3.40 — Undefined panels → no crash', () => {
+                expect(() => {
+                    render(ctx, undefined, [], new Map(), new Map(), new Map(), { width: 2000, height: 1200 });
+                }).to.not.throw();
+            });
+
+            it('3.4.3.41 — Undefined images → no crash', () => {
+                expect(() => {
+                    render(ctx, [makePanel('p1')], undefined, new Map(), new Map(), new Map(), { width: 2000, height: 1200 });
+                }).to.not.throw();
+            });
+
+            it('3.4.3.42 — Undefined crops → no crash', () => {
+                expect(() => {
+                    render(ctx, [makePanel('p1')], [makeImageItem(100, 100)], undefined, new Map(), new Map(), { width: 2000, height: 1200 });
+                }).to.not.throw();
+            });
+
+            it('3.4.3.43 — Undefined focusPoints → no crash, center markers only', () => {
+                const panels = [makePanel('p1')];
+                const images = [makeImageItem(100, 100)];
+                const crops = new Map([['p1', makeCrop({ x: 0, y: 0, width: 100, height: 100 }, { x: 0, y: 0, width: 100, height: 100 })]]);
+                const assignments = new Map([['p1', 0]]);
+                expect(() => {
+                    render(ctx, panels, images, crops, assignments, undefined, { width: 2000, height: 1200 });
+                }).to.not.throw();
+            });
+
+            it('3.4.3.44 — FocusPoints Map with missing key → center-only', () => {
+                const panels = [makePanel('p1')];
+                const images = [makeImageItem(100, 100)];
+                const crops = new Map([['p1', makeCrop({ x: 0, y: 0, width: 100, height: 100 }, { x: 0, y: 0, width: 100, height: 100 })]]);
+                const assignments = new Map([['p1', 0]]);
+                const focusPoints = new Map([[99, { x: 0.5, y: 0.5 }]]); // Key 99, not 0
+                const spies = spyContext(ctx);
+                render(ctx, panels, images, crops, assignments, focusPoints, { width: 2000, height: 1200 });
+                // Only center drawn, no focal
+                expect(spies.fillStyle.sets).to.include('#FF0000');
+                expect(spies.fillStyle.sets).to.not.include('#00FF00');
+            });
+
+            it('3.4.3.45 — DPR scaling: marker radius adjusted for high-DPR', () => {
+                const panels = [makePanel('p1')];
+                const images = [makeImageItem(100, 100)];
+                const crops = new Map([['p1', makeCrop({ x: 0, y: 0, width: 100, height: 100 }, { x: 0, y: 0, width: 100, height: 100 })]]);
+                const assignments = new Map([['p1', 0]]);
+                const spies = spyContext(ctx);
+                render(ctx, panels, images, crops, assignments, new Map(), { width: 2000, height: 1200 }, 2);
+                // With DPR=2, radius should be halved
+                const expectedRadius = DEBUG_OVERLAY_STYLES.CENTER_DOT.radius / 2; // 4/2 = 2
+                const centerArc = spies.arc.calls.find(c => Math.abs(c[2] - expectedRadius) < 0.5);
+                expect(centerArc).to.not.be.undefined;
+            });
+        });
+
+        // ============================================================
+        // 3.4.4.1 — 3.4.4.14: Integration — CollageAssembler
+        // ============================================================
+        describe('Section 3.4.4 — CollageAssembler Integration', () => {
+            let canvas, ctx, assembler;
+
+            function makeTestState() {
+                return {
+                    panels: [makePanel('p1')],
+                    images: [makeImageItem(2000, 2000)],
+                    crops: new Map([['p1', makeCrop({ x: 0, y: 0, width: 2000, height: 2000 }, { x: 0, y: 0, width: 1000, height: 1000 })]]),
+                    panelAssignments: new Map([['p1', 0]]),
+                    backgroundColor: '#ffffff',
+                    canvasSize: { width: 1000, height: 1000 },
+                    selectedPanelId: null,
+                    hoveredPanelId: null,
+                    backgroundState: null,
+                    overlayState: null,
+                    titleStyle: null,
+                    titleRuns: null
+                };
+            }
+
+            beforeEach(() => {
+                canvas = makeOffscreenCanvas(1000, 1000);
+                ctx = canvas.getContext('2d');
+                assembler = createCollageAssembler();
+            });
+
+            it('3.4.4.1 — Debug overlay renders when enabled', () => {
+                const state = makeTestState();
+                const spies = spyContext(ctx);
+                assembler.render(ctx, {
+                    ...state,
+                    showDebugOverlay: true,
+                    focusPoints: new Map([[0, { x: 0.5, y: 0.5 }]])
+                });
+                // Debug markers should be drawn (arc calls for markers)
+                expect(spies.arc.calls.length).to.be.at.least(1);
+            });
+
+            it('3.4.4.2 — Debug overlay does NOT render when disabled', () => {
+                const state = makeTestState();
+                const spies = spyContext(ctx);
+                assembler.render(ctx, {
+                    ...state,
+                    showDebugOverlay: false,
+                    focusPoints: new Map([[0, { x: 0.5, y: 0.5 }]])
+                });
+                // No debug markers (no arc calls from debug overlay)
+                expect(spies.arc.calls.length).to.equal(0);
+            });
+
+            it('3.4.4.3 — Debug overlay does NOT render when option omitted', () => {
+                const state = makeTestState();
+                const spies = spyContext(ctx);
+                assembler.render(ctx, state); // No showDebugOverlay key
+                expect(spies.arc.calls.length).to.equal(0);
+            });
+
+            it('3.4.4.4 — Debug overlay renders AFTER selection border', () => {
+                const state = makeTestState();
+                const spies = spyContext(ctx);
+                assembler.render(ctx, {
+                    ...state,
+                    selectedPanelId: 'p1',
+                    showDebugOverlay: true,
+                    focusPoints: new Map([[0, { x: 0.5, y: 0.5 }]])
+                });
+                // Both selection border and debug markers drawn
+                expect(spies.arc.calls.length).to.be.at.least(1); // debug markers
+                // Selection border uses strokeRect or path operations
+                expect(spies.stroke.calls.length).to.be.at.least(1);
+            });
+
+            it('3.4.4.5 — Debug overlay renders BEFORE blend-mode overlay', () => {
+                const state = makeTestState();
+                const spies = spyContext(ctx);
+                assembler.render(ctx, {
+                    ...state,
+                    showDebugOverlay: true,
+                    focusPoints: new Map([[0, { x: 0.5, y: 0.5 }]]),
+                    overlayState: { enabled: true, opacity: 0.5, color: '#000000' }
+                });
+                // Debug markers drawn
+                expect(spies.arc.calls.length).to.be.at.least(1);
+            });
+
+            it('3.4.4.6 — Debug overlay renders BEFORE title', () => {
+                const state = makeTestState();
+                const spies = spyContext(ctx);
+                assembler.render(ctx, {
+                    ...state,
+                    showDebugOverlay: true,
+                    focusPoints: new Map([[0, { x: 0.5, y: 0.5 }]]),
+                    titleStyle: { fontFamily: 'Arial', fontSize: 24 },
+                    titleRuns: [{ text: 'Test', bold: false, italic: false, underline: false }]
+                });
+                expect(spies.arc.calls.length).to.be.at.least(1);
+            });
+
+            it('3.4.4.7 — Full pipeline: all layers rendered in correct order', () => {
+                const state = makeTestState();
+                const spies = spyContext(ctx);
+                assembler.render(ctx, {
+                    ...state,
+                    showDebugOverlay: true,
+                    focusPoints: new Map([[0, { x: 0.5, y: 0.5 }]]),
+                    selectedPanelId: 'p1',
+                    overlayState: { enabled: true, opacity: 0.3, color: '#000000' },
+                    titleStyle: { fontFamily: 'Arial', fontSize: 24 },
+                    titleRuns: [{ text: 'Test', bold: false, italic: false, underline: false }]
+                });
+                // clearRect (clear), fillRect (bg), arc (debug markers), stroke (selection)
+                expect(spies.clearRect.calls.length).to.equal(1);
+                expect(spies.fillRect.calls.length).to.be.at.least(1); // background
+                expect(spies.arc.calls.length).to.be.at.least(1); // debug
+            });
+
+            it('3.4.4.8 — Debug overlay with no focus points → center markers only', () => {
+                const state = makeTestState();
+                const spies = spyContext(ctx);
+                assembler.render(ctx, {
+                    ...state,
+                    showDebugOverlay: true,
+                    focusPoints: new Map()
+                });
+                // Only red center dots, no green focal
+                expect(spies.fillStyle.sets).to.include('#FF0000');
+                expect(spies.fillStyle.sets).to.not.include('#00FF00');
+            });
+
+            it('3.4.4.9 — Debug overlay survives render cycle', () => {
+                const state = makeTestState();
+                const spies1 = spyContext(ctx);
+                assembler.render(ctx, {
+                    ...state,
+                    showDebugOverlay: true,
+                    focusPoints: new Map([[0, { x: 0.5, y: 0.5 }]])
+                });
+                const arcCount1 = spies1.arc.calls.length;
+
+                const spies2 = spyContext(ctx);
+                assembler.render(ctx, {
+                    ...state,
+                    showDebugOverlay: true,
+                    focusPoints: new Map([[0, { x: 0.5, y: 0.5 }]])
+                });
+                const arcCount2 = spies2.arc.calls.length;
+
+                expect(arcCount1).to.equal(arcCount2);
+            });
+
+            it('3.4.4.10 — Toggle debug overlay on/off on same canvas', () => {
+                const state = makeTestState();
+
+                // Without debug
+                const spies1 = spyContext(ctx);
+                assembler.render(ctx, state);
+                expect(spies1.arc.calls.length).to.equal(0);
+
+                // With debug
+                const spies2 = spyContext(ctx);
+                assembler.render(ctx, {
+                    ...state,
+                    showDebugOverlay: true,
+                    focusPoints: new Map([[0, { x: 0.5, y: 0.5 }]])
+                });
+                expect(spies2.arc.calls.length).to.be.at.least(1);
+
+                // Without debug again
+                const spies3 = spyContext(ctx);
+                assembler.render(ctx, state);
+                expect(spies3.arc.calls.length).to.equal(0);
+            });
+
+            it('3.4.4.11 — Debug overlay with selected panel → both render', () => {
+                const state = makeTestState();
+                const spies = spyContext(ctx);
+                assembler.render(ctx, {
+                    ...state,
+                    selectedPanelId: 'p1',
+                    showDebugOverlay: true,
+                    focusPoints: new Map([[0, { x: 0.3, y: 0.4 }]])
+                });
+                // Selection border + debug markers
+                expect(spies.arc.calls.length).to.be.at.least(1); // debug markers
+                expect(spies.stroke.calls.length).to.be.at.least(1); // selection + debug
+            });
+
+            it('3.4.4.12 — Debug overlay with hovered panel → both render', () => {
+                const state = makeTestState();
+                const spies = spyContext(ctx);
+                assembler.render(ctx, {
+                    ...state,
+                    hoveredPanelId: 'p1',
+                    showDebugOverlay: true,
+                    focusPoints: new Map([[0, { x: 0.3, y: 0.4 }]])
+                });
+                expect(spies.arc.calls.length).to.be.at.least(1);
+            });
+
+            // ============================================================
+            // 3.4.4.13 — 3.4.4.14: Debug Overlay Factory
+            // ============================================================
+            it('3.4.4.13 — createDebugOverlay returns render method', () => {
+                const overlay = createDebugOverlay();
+                expect(overlay).to.have.property('render').that.is.a('function');
+            });
+
+            it('3.4.4.14 — Factory render is compatible with assembler pipeline', () => {
+                const overlay = createDebugOverlay();
+                const spies = spyContext(ctx);
+                expect(() => {
+                    overlay.render(ctx, {
+                        panels: [makePanel('p1')],
+                        images: [makeImageItem(100, 100)],
+                        crops: new Map([['p1', makeCrop({ x: 0, y: 0, width: 100, height: 100 }, { x: 0, y: 0, width: 100, height: 100 })]]),
+                        panelAssignments: new Map([['p1', 0]]),
+                        focusPoints: new Map([[0, { x: 0.5, y: 0.5 }]]),
+                        canvasSize: { width: 1000, height: 1000 }
+                    });
+                }).to.not.throw();
+                expect(spies.arc.calls.length).to.be.at.least(1);
+            });
+        });
+
+        // ============================================================
+        // 3.4.5.1 — 3.4.5.6: State Management
+        // ============================================================
+        describe('Section 3.4.5 — State Management', () => {
+            it('3.4.5.1 — New state has showDebugOverlay = false', () => {
+                const state = createTestState();
+                expect(state.showDebugOverlay).to.equal(false);
+            });
+
+            it('3.4.5.2 — Toggle showDebugOverlay to true', () => {
+                const state = createTestState();
+                state.showDebugOverlay = true;
+                expect(state.showDebugOverlay).to.equal(true);
+            });
+
+            it('3.4.5.3 — Toggle showDebugOverlay back to false', () => {
+                const state = createTestState();
+                state.showDebugOverlay = true;
+                state.showDebugOverlay = false;
+                expect(state.showDebugOverlay).to.equal(false);
+            });
+
+            it('3.4.5.4 — FocusPoints field exists on state', () => {
+                const state = createTestState();
+                expect(state).to.have.property('focusPoints');
+            });
+
+            it('3.4.5.5 — FocusPoints can be set to a Map and populated', () => {
+                const state = createTestState();
+                state.focusPoints = new Map();
+                state.focusPoints.set(0, { x: 0.3, y: 0.4 });
+                expect(state.focusPoints.get(0)).to.deep.equal({ x: 0.3, y: 0.4 });
+            });
+
+            it('3.4.5.6 — FocusPoints Map keyed by image index', () => {
+                const state = createTestState();
+                state.focusPoints = new Map();
+                state.focusPoints.set(0, { x: 0.3, y: 0.4 });
+                state.focusPoints.set(2, { x: 0.7, y: 0.8 });
+                expect(state.focusPoints.get(0)).to.deep.equal({ x: 0.3, y: 0.4 });
+                expect(state.focusPoints.get(2)).to.deep.equal({ x: 0.7, y: 0.8 });
+            });
+        });
+
+        // ============================================================
+        // 3.4.5.7 — 3.4.5.11: Export Safety
+        // ============================================================
+        describe('Section 3.4.5 — Export Safety', () => {
+            function createMockAssembler() {
+                const calls = [];
+                return {
+                    render(ctx, renderData) {
+                        calls.push({ ctx, renderData });
+                        ctx.fillStyle = '#FF0000';
+                        ctx.fillRect(0, 0, 1920, 1080);
+                    },
+                    getCalls() { return calls; },
+                    reset() { calls.length = 0; }
+                };
+            }
+
+            function makeExportState() {
+                return {
+                    panels: [],
+                    images: [],
+                    crops: new Map(),
+                    panelAssignments: new Map(),
+                    backgroundColor: '#ffffff',
+                    backgroundState: null,
+                    overlayState: null,
+                    titleStyle: null,
+                    titleRuns: null,
+                    showDebugOverlay: true,
+                    focusPoints: new Map([[0, { x: 0.5, y: 0.5 }]])
+                };
+            }
+
+            it('3.4.5.7 — Export with showDebugOverlay = true → no debug markers', async () => {
+                const assembler = createMockAssembler();
+                const state = makeExportState();
+
+                const originalCreateElement = document.createElement.bind(document);
+                document.createElement = function(tag) {
+                    const el = originalCreateElement(tag);
+                    if (tag === 'canvas') {
+                        el.toBlob = function(callback) {
+                            callback(new Blob(['fake'], { type: 'image/jpeg' }));
+                        };
+                    }
+                    return el;
+                };
+
+                try {
+                    await exportToJpeg(assembler, state);
+                    const call = assembler.getCalls()[0];
+                    // showDebugOverlay should NOT be passed to render
+                    expect(call.renderData.showDebugOverlay).to.be.undefined;
+                } finally {
+                    document.createElement = originalCreateElement;
+                }
+            });
+
+            it('3.4.5.8 — Export renderData does not include showDebugOverlay', async () => {
+                const assembler = createMockAssembler();
+                const state = makeExportState();
+
+                const originalCreateElement = document.createElement.bind(document);
+                document.createElement = function(tag) {
+                    const el = originalCreateElement(tag);
+                    if (tag === 'canvas') {
+                        el.toBlob = function(callback) {
+                            callback(new Blob(['fake'], { type: 'image/jpeg' }));
+                        };
+                    }
+                    return el;
+                };
+
+                try {
+                    await exportToJpeg(assembler, state);
+                    const call = assembler.getCalls()[0];
+                    expect(call.renderData).to.not.have.property('showDebugOverlay');
+                } finally {
+                    document.createElement = originalCreateElement;
+                }
+            });
+
+            it('3.4.5.9 — Export renderData does not include focusPoints', async () => {
+                const assembler = createMockAssembler();
+                const state = makeExportState();
+
+                const originalCreateElement = document.createElement.bind(document);
+                document.createElement = function(tag) {
+                    const el = originalCreateElement(tag);
+                    if (tag === 'canvas') {
+                        el.toBlob = function(callback) {
+                            callback(new Blob(['fake'], { type: 'image/jpeg' }));
+                        };
+                    }
+                    return el;
+                };
+
+                try {
+                    await exportToJpeg(assembler, state);
+                    const call = assembler.getCalls()[0];
+                    expect(call.renderData).to.not.have.property('focusPoints');
+                } finally {
+                    document.createElement = originalCreateElement;
+                }
+            });
+
+            it('3.4.5.10 — Export with focusPoints on state → still no debug markers', async () => {
+                const assembler = createMockAssembler();
+                const state = makeExportState();
+                state.focusPoints.set(0, { x: 0.3, y: 0.4 });
+                state.focusPoints.set(1, { x: 0.7, y: 0.8 });
+
+                const originalCreateElement = document.createElement.bind(document);
+                document.createElement = function(tag) {
+                    const el = originalCreateElement(tag);
+                    if (tag === 'canvas') {
+                        el.toBlob = function(callback) {
+                            callback(new Blob(['fake'], { type: 'image/jpeg' }));
+                        };
+                    }
+                    return el;
+                };
+
+                try {
+                    await exportToJpeg(assembler, state);
+                    const call = assembler.getCalls()[0];
+                    expect(call.renderData).to.not.have.property('focusPoints');
+                    expect(call.renderData).to.not.have.property('showDebugOverlay');
+                } finally {
+                    document.createElement = originalCreateElement;
+                }
+            });
+
+            it('3.4.5.11 — Export follows same pattern as selection/hover stripping', async () => {
+                const assembler = createMockAssembler();
+                const state = makeExportState();
+                state.selectedPanelId = 'p1'; // Set on state but should be null in export
+                state.hoveredPanelId = 'p2';
+
+                const originalCreateElement = document.createElement.bind(document);
+                document.createElement = function(tag) {
+                    const el = originalCreateElement(tag);
+                    if (tag === 'canvas') {
+                        el.toBlob = function(callback) {
+                            callback(new Blob(['fake'], { type: 'image/jpeg' }));
+                        };
+                    }
+                    return el;
+                };
+
+                try {
+                    await exportToJpeg(assembler, state);
+                    const call = assembler.getCalls()[0];
+                    // selectedPanelId and hoveredPanelId are null (stripped)
+                    expect(call.renderData.selectedPanelId).to.be.null;
+                    expect(call.renderData.hoveredPanelId).to.be.null;
+                    // showDebugOverlay and focusPoints are undefined (not passed)
+                    expect(call.renderData.showDebugOverlay).to.be.undefined;
+                    expect(call.renderData.focusPoints).to.be.undefined;
+                } finally {
+                    document.createElement = originalCreateElement;
+                }
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

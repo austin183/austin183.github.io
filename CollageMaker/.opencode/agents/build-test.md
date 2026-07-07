@@ -20,6 +20,7 @@ Your sole responsibility is test code. Every `*.js` file in `MyESModules/` shoul
 - New test files or test functions that verify behavior
 - Test fixtures and helpers when needed
 - Tests that run and pass
+- Test scenario enumeration for planning
 
 ## What You Must Track
 
@@ -45,5 +46,5 @@ At the end of your work, fill out the session summary template from `.opencode/s
 
 - Do not commit files - that is `build-quick-work`'s responsibility
 - Do not modify production source code unless absolutely necessary to make something testable
-- Do not write learnings, plans, or skills — that is `build-docs`'s responsibility
+- Do not write skills — that is `build-docs`'s responsibility
 - Do not investigate production bugs — that is `build-debug`'s responsibility

@@ -43,6 +43,29 @@ export function createCollageApp({
 
 All reactive state lives in the Vue instance's `data()` return value. State managers (`LayoutManager`, `CropManager`, etc.) mutate these properties directly. No Pinia, no Vuex.
 
+## Array Mutation for Vue Reactivity
+
+Preserve array references to maintain predictable reactivity and avoid stale external observers:
+
+```javascript
+// WRONG — creates a new array reference
+state.titleRuns = [];
+
+// CORRECT — maintains the same array reference
+state.titleRuns.length = 0;
+// OR
+state.titleRuns.splice(0);
+```
+
+**Why it matters:** While Vue 3 detects reassignments, they create a new array reference. External code holding a reference to the original array will become stale, and reactivity tracking may behave inconsistently for observers outside Vue's track/trigger system.
+
+**When to use mutations over reassignment:**
+- Clearing arrays in state managers
+- Replacing all items in a reactive array
+- Any operation where external code might hold references to the array
+
+See `references/memory-management.md` for additional array mutation patterns.
+
 ## provide() Timing
 
 `provide()` is called during Vue component initialization, **before** `mounted()`. Services initialized in `mounted()` (like managers that need the reactive Vue instance) will be `null` when accessed via `provide()`.

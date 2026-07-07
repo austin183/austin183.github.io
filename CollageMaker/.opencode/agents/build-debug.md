@@ -66,4 +66,5 @@ npx playwright test --config=playwright.config.cjs
 - Do not commit files - that is `build-quick-work`'s responsibility
 - Do not implement new features — that is `build-code`'s responsibility
 - Do not write tests unless needed to verify a fix — that is `build-test`'s responsibility
+- Do not write plans or skills — that is `build-docs`'s responsibility
 - Do not write learnings or plans — that is `build-docs`'s responsibility

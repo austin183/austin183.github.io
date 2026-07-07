@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SaliencyAnalyzer Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — SaliencyAnalyzer Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Section 3.3.2 (all 72 tests) — Pure functions only, no TF.js or browser dependencies</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import {
+            computeFocusPoint,
+            filterDetections,
+            computeBboxCentroid,
+            saliencyCrop,
+            computeInferenceSize,
+            scaleDetectionUp,
+            SALIENCY_CONFIG,
+            WORKER_MSG,
+            createSaliencyAnalyzer
+        } from '../MyESModules/Saliency/SaliencyAnalyzer.js';
+
+        const { expect } = chai;
+
+        const defaultConfig = {
+            FACE_CONFIDENCE_THRESHOLD: 0.5,
+            OBJECT_CONFIDENCE_THRESHOLD: 0.3,
+            MIN_DETECTION_PIXEL_SIZE: 20
+        };
+
+        function face(bbox, conf = 0.9) {
+            return { bbox: { ...bbox }, confidence: conf };
+        }
+
+        function object(bbox, conf = 0.7) {
+            return { bbox: { ...bbox }, confidence: conf };
+        }
+
+        // ============================================================
+        // 3.3.2.1 — 3.3.2.24: Focus Point Computation
+        // ============================================================
+        describe('computeFocusPoint', () => {
+            it('3.3.2.1 — Single face detection → focus on face center', () => {
+                const result = computeFocusPoint(
+                    { faces: [face({ x: 400, y: 300, w: 200, h: 200 })] },
+                    { width: 1000, height: 1000 },
+                    defaultConfig
+                );
+                // Face center: (400+100, 300+100) = (500, 400) → normalized (0.5, 0.4)
+                expect(result.focusPoint.x).to.equal(0.5);
+                expect(result.focusPoint.y).to.equal(0.4);
+                expect(result.source).to.equal('face-detection');
+            });
+
+            it('3.3.2.2 — Single face at top-left → focus shifted to top-left', () => {
+                const result = computeFocusPoint(
+                    { faces: [face({ x: 50, y: 50, w: 100, h: 100 }, 0.8)] },
+                    { width: 1000, height: 1000 },
+                    defaultConfig
+                );
+                // Face center: (100, 100) → normalized (0.1, 0.1)
+                expect(result.focusPoint.x).to.equal(0.1);
+                expect(result.focusPoint.y).to.equal(0.1);
+                expect(result.source).to.equal('face-detection');
+            });
+
+            it('3.3.2.3 — Single face at bottom-right → focus shifted to bottom-right', () => {
+                const result = computeFocusPoint(
+                    { faces: [face({ x: 850, y: 850, w: 100, h: 100 }, 0.8)] },
+                    { width: 1000, height: 1000 },
+                    defaultConfig
+                );
+                // Face center: (900, 900) → normalized (0.9, 0.9)
+                expect(result.focusPoint.x).to.equal(0.9);
+                expect(result.focusPoint.y).to.equal(0.9);
+                expect(result.source).to.equal('face-detection');
+            });
+
+            it('3.3.2.4 — Multiple faces → centroid of all face centers', () => {
+                const result = computeFocusPoint(
+                    { faces: [
+                        face({ x: 50, y: 50, w: 100, h: 100 }),
+                        face({ x: 850, y: 850, w: 100, h: 100 })
+                    ] },
+                    { width: 1000, height: 1000 },
+                    defaultConfig
+                );
+                // Centers: (100, 100) and (900, 900) → avg (500, 500) → (0.5, 0.5)
+                expect(result.focusPoint.x).to.equal(0.5);
+                expect(result.focusPoint.y).to.equal(0.5);
+                expect(result.source).to.equal('face-detection');
+            });
+
+            it('3.3.2.5 — Three faces in triangle → centroid', () => {
+                const result = computeFocusPoint(
+                    { faces: [
+                        face({ x: 50, y: 50, w: 100, h: 100 }),    // center (100, 100)
+                        face({ x: 850, y: 50, w: 100, h: 100 }),   // center (900, 100)
+                        face({ x: 450, y: 850, w: 100, h: 100 })   // center (500, 900)
+                    ] },
+                    { width: 1000, height: 1000 },
+                    defaultConfig
+                );
+                // Centroid: ((100+900+500)/3, (100+100+900)/3) = (500, 366.67) → (0.5, 0.367)
+                expect(result.focusPoint.x).to.equal(0.5);
+                expect(result.focusPoint.y).to.be.closeTo(0.3667, 0.001);
+                expect(result.source).to.equal('face-detection');
+            });
+
+            it('3.3.2.6 — No detections → center of image', () => {
+                const result = computeFocusPoint(
+                    { faces: [], objects: [] },
+                    { width: 1000, height: 1000 },
+                    defaultConfig
+                );
+                expect(result.focusPoint.x).to.equal(0.5);
+                expect(result.focusPoint.y).to.equal(0.5);
+                expect(result.source).to.equal('center-fallback');
+            });
+
+            it('3.3.2.7 — No faces but objects → use object centroid', () => {
+                const result = computeFocusPoint(
+                    { faces: [], objects: [object({ x: 600, y: 400, w: 200, h: 200 })] },
+                    { width: 1000, height: 1000 },
+                    defaultConfig
+                );
+                // Object center: (700, 500) → normalized (0.7, 0.5)
+                expect(result.focusPoint.x).to.equal(0.7);
+                expect(result.focusPoint.y).to.equal(0.5);
+                expect(result.source).to.equal('coco-ssd');
+            });
+
+            it('3.3.2.8 — Face + object mix → prioritize faces over objects', () => {
+                const result = computeFocusPoint(
+                    {
+                        faces: [face({ x: 50, y: 50, w: 100, h: 100 })],
+                        objects: [object({ x: 800, y: 800, w: 100, h: 100 })]
+                    },
+                    { width: 1000, height: 1000 },
+                    defaultConfig
+                );
+                // Face center: (100, 100) → (0.1, 0.1)
+                expect(result.focusPoint.x).to.equal(0.1);
+                expect(result.focusPoint.y).to.equal(0.1);
+                expect(result.source).to.equal('face-detection');
+            });
+
+            it('3.3.2.9 — Detection at image boundary → clamp to valid range', () => {
+                const result = computeFocusPoint(
+                    { faces: [face({ x: 0, y: 0, w: 100, h: 100 })] },
+                    { width: 1000, height: 1000 },
+                    defaultConfig
+                );
+                // Face center: (50, 50) → (0.05, 0.05)
+                expect(result.focusPoint.x).to.equal(0.05);
+                expect(result.focusPoint.y).to.equal(0.05);
+                expect(result.focusPoint.x).to.be.at.least(0);
+                expect(result.focusPoint.y).to.be.at.least(0);
+            });
+
+            it('3.3.2.10 — Detection extending beyond image → clamp bbox', () => {
+                const result = computeFocusPoint(
+                    { faces: [face({ x: 950, y: 950, w: 100, h: 100 })] },
+                    { width: 1000, height: 1000 },
+                    defaultConfig
+                );
+                // Face center: (1000, 1000) → (1.0, 1.0) — clamped
+                expect(result.focusPoint.x).to.equal(1.0);
+                expect(result.focusPoint.y).to.equal(1.0);
+                expect(result.focusPoint.x).to.be.at.most(1);
+                expect(result.focusPoint.y).to.be.at.most(1);
+            });
+
+            it('3.3.2.11 — Very small detection below min size → ignored', () => {
+                const result = computeFocusPoint(
+                    { faces: [face({ x: 500, y: 500, w: 5, h: 5 })] },
+                    { width: 1000, height: 1000 },
+                    defaultConfig
+                );
+                // 5px < 20px min — filtered out, falls back to center
+                expect(result.focusPoint.x).to.equal(0.5);
+                expect(result.focusPoint.y).to.equal(0.5);
+                expect(result.source).to.equal('center-fallback');
+            });
+
+            it('3.3.2.12 — Detection exactly at min size threshold → included', () => {
+                const result = computeFocusPoint(
+                    { faces: [face({ x: 500, y: 500, w: 20, h: 20 })] },
+                    { width: 1000, height: 1000 },
+                    defaultConfig
+                );
+                // 20px >= 20px min — included
+                expect(result.source).to.equal('face-detection');
+                expect(result.focusPoint.x).to.be.a('number');
+                expect(result.focusPoint.y).to.be.a('number');
+            });
+
+            it('3.3.2.13 — Low confidence face below threshold → filtered', () => {
+                const result = computeFocusPoint(
+                    { faces: [face({ x: 400, y: 400, w: 200, h: 200 }, 0.3)] },
+                    { width: 1000, height: 1000 },
+                    defaultConfig
+                );
+                // conf 0.3 < 0.5 threshold — filtered out
+                expect(result.source).to.equal('center-fallback');
+            });
+
+            it('3.3.2.14 — Low confidence face at threshold → included', () => {
+                const result = computeFocusPoint(
+                    { faces: [face({ x: 400, y: 400, w: 200, h: 200 }, 0.5)] },
+                    { width: 1000, height: 1000 },
+                    defaultConfig
+                );
+                // conf 0.5 >= 0.5 threshold — included
+                expect(result.source).to.equal('face-detection');
+            });
+
+            it('3.3.2.15 — Low confidence object below threshold → filtered', () => {
+                const result = computeFocusPoint(
+                    { faces: [], objects: [object({ x: 400, y: 400, w: 200, h: 200 }, 0.2)] },
+                    { width: 1000, height: 1000 },
+                    defaultConfig
+                );
+                // conf 0.2 < 0.3 threshold — filtered out
+                expect(result.source).to.equal('center-fallback');
+            });
+
+            it('3.3.2.16 — Mixed confidence: one high, one low face → only high used', () => {
+                const result = computeFocusPoint(
+                    { faces: [
+                        face({ x: 50, y: 50, w: 100, h: 100 }, 0.9),
+                        face({ x: 850, y: 850, w: 100, h: 100 }, 0.3)
+                    ] },
+                    { width: 1000, height: 1000 },
+                    defaultConfig
+                );
+                // Only high-confidence face at (100, 100) → (0.1, 0.1)
+                expect(result.focusPoint.x).to.equal(0.1);
+                expect(result.focusPoint.y).to.equal(0.1);
+            });
+
+            it('3.3.2.17 — All faces low confidence, objects high → fall back to objects', () => {
+                const result = computeFocusPoint(
+                    {
+                        faces: [face({ x: 50, y: 50, w: 100, h: 100 }, 0.3)],
+                        objects: [object({ x: 800, y: 400, w: 100, h: 200 }, 0.7)]
+                    },
+                    { width: 1000, height: 1000 },
+                    defaultConfig
+                );
+                // All faces filtered, object at (850, 500) → (0.85, 0.5)
+                expect(result.source).to.equal('coco-ssd');
+                expect(result.focusPoint.x).to.equal(0.85);
+                expect(result.focusPoint.y).to.equal(0.5);
+            });
+
+            it('3.3.2.18 — Portrait image with face at center', () => {
+                const result = computeFocusPoint(
+                    { faces: [face({ x: 400, y: 400, w: 200, h: 200 })] },
+                    { width: 1080, height: 1920 },
+                    defaultConfig
+                );
+                // Face center: (500, 500) → (500/1080, 500/1920)
+                expect(result.focusPoint.x).to.be.closeTo(500 / 1080, 0.001);
+                expect(result.focusPoint.y).to.be.closeTo(500 / 1920, 0.001);
+                expect(result.source).to.equal('face-detection');
+            });
+
+            it('3.3.2.19 — Panoramic image (21:9) with face at left third', () => {
+                const result = computeFocusPoint(
+                    { faces: [face({ x: 300, y: 400, w: 100, h: 100 })] },
+                    { width: 3780, height: 1800 },
+                    defaultConfig
+                );
+                // Face center: (350, 450) → (350/3780, 450/1800)
+                expect(result.focusPoint.x).to.be.closeTo(350 / 3780, 0.001);
+                expect(result.focusPoint.y).to.be.closeTo(450 / 1800, 0.001);
+                expect(result.source).to.equal('face-detection');
+            });
+
+            it('3.3.2.20 — Empty detections object → center fallback', () => {
+                const result = computeFocusPoint(
+                    {},
+                    { width: 1000, height: 1000 },
+                    defaultConfig
+                );
+                expect(result.focusPoint.x).to.equal(0.5);
+                expect(result.focusPoint.y).to.equal(0.5);
+                expect(result.source).to.equal('center-fallback');
+            });
+
+            it('3.3.2.21 — Null/undefined faces array → center fallback', () => {
+                const result = computeFocusPoint(
+                    { objects: [] },
+                    { width: 1000, height: 1000 },
+                    defaultConfig
+                );
+                expect(result.focusPoint.x).to.equal(0.5);
+                expect(result.focusPoint.y).to.equal(0.5);
+                expect(result.source).to.equal('center-fallback');
+            });
+
+            it('3.3.2.22 — Null/undefined objects array → center fallback', () => {
+                const result = computeFocusPoint(
+                    { faces: [] },
+                    { width: 1000, height: 1000 },
+                    defaultConfig
+                );
+                expect(result.focusPoint.x).to.equal(0.5);
+                expect(result.focusPoint.y).to.equal(0.5);
+                expect(result.source).to.equal('center-fallback');
+            });
+
+            it('3.3.2.23 — Zero-size image → center fallback', () => {
+                const result = computeFocusPoint(
+                    { faces: [face({ x: 400, y: 400, w: 200, h: 200 })] },
+                    { width: 0, height: 0 },
+                    defaultConfig
+                );
+                expect(result.focusPoint.x).to.equal(0.5);
+                expect(result.focusPoint.y).to.equal(0.5);
+            });
+
+            it('3.3.2.24 — Very small image (50x50) with detection', () => {
+                const result = computeFocusPoint(
+                    { faces: [face({ x: 15, y: 15, w: 20, h: 20 })] },
+                    { width: 50, height: 50 },
+                    defaultConfig
+                );
+                // Face center: (25, 25) → (0.5, 0.5)
+                expect(result.focusPoint.x).to.equal(0.5);
+                expect(result.focusPoint.y).to.equal(0.5);
+                expect(result.source).to.equal('face-detection');
+            });
+        });
+
+        // ============================================================
+        // 3.3.2.25 — 3.3.2.45: Saliency Crop Shifting
+        // ============================================================
+        describe('saliencyCrop', () => {
+            const img1000 = { width: 1000, height: 1000 };
+
+            it('3.3.2.25 — Focus at center → same as center crop', () => {
+                const centerCrop = { x: 500, y: 0, width: 1000, height: 1000 };
+                const result = saliencyCrop(centerCrop, { x: 0.5, y: 0.5 }, img1000);
+                expect(result.x).to.equal(500);
+                expect(result.y).to.equal(0);
+                expect(result.width).to.equal(1000);
+                expect(result.height).to.equal(1000);
+            });
+
+            it('3.3.2.26 — Focus at top-left → crop shifts toward top-left', () => {
+                const centerCrop = { x: 250, y: 250, width: 500, height: 500 };
+                const result = saliencyCrop(centerCrop, { x: 0.0, y: 0.0 }, img1000);
+                // Crop center (500, 500) → focus (0, 0): shift by (-500, -500)
+                // newX = 250 - 500 = -250 → clamped to 0
+                // newY = 250 - 500 = -250 → clamped to 0
+                expect(result.x).to.equal(0);
+                expect(result.y).to.equal(0);
+                expect(result.x).to.be.lessThan(centerCrop.x);
+            });
+
+            it('3.3.2.27 — Focus at bottom-right → crop shifts toward bottom-right', () => {
+                const centerCrop = { x: 250, y: 250, width: 500, height: 500 };
+                const result = saliencyCrop(centerCrop, { x: 1.0, y: 1.0 }, img1000);
+                // Crop center (500, 500) → focus (1000, 1000): shift by (500, 500)
+                // newX = 250 + 500 = 750, clamped: min(750, 1000-500) = 500
+                // newY = 250 + 500 = 750, clamped: min(750, 1000-500) = 500
+                expect(result.x).to.equal(500);
+                expect(result.y).to.equal(500);
+                expect(result.x).to.be.greaterThan(centerCrop.x);
+            });
+
+            it('3.3.2.28 — Focus at top edge midpoint → crop shifts up', () => {
+                const centerCrop = { x: 250, y: 250, width: 500, height: 500 };
+                const result = saliencyCrop(centerCrop, { x: 0.5, y: 0.0 }, img1000);
+                // Crop center (500, 500) → focus (500, 0): shift by (0, -500)
+                // newY = 250 - 500 = -250 → clamped to 0
+                expect(result.y).to.equal(0);
+                expect(result.y).to.be.lessThan(centerCrop.y);
+            });
+
+            it('3.3.2.29 — Focus at bottom edge midpoint → crop shifts down', () => {
+                const centerCrop = { x: 250, y: 250, width: 500, height: 500 };
+                const result = saliencyCrop(centerCrop, { x: 0.5, y: 1.0 }, img1000);
+                // Crop center (500, 500) → focus (500, 1000): shift by (0, 500)
+                // newY = 250 + 500 = 750 → clamped to 500
+                expect(result.y).to.equal(500);
+                expect(result.y).to.be.greaterThan(centerCrop.y);
+            });
+
+            it('3.3.2.30 — Focus at left edge midpoint → crop shifts left', () => {
+                const centerCrop = { x: 250, y: 250, width: 500, height: 500 };
+                const result = saliencyCrop(centerCrop, { x: 0.0, y: 0.5 }, img1000);
+                // Crop center (500, 500) → focus (0, 500): shift by (-500, 0)
+                // newX = 250 - 500 = -250 → clamped to 0
+                expect(result.x).to.equal(0);
+                expect(result.x).to.be.lessThan(centerCrop.x);
+            });
+
+            it('3.3.2.31 — Focus at right edge midpoint → crop shifts right', () => {
+                const centerCrop = { x: 250, y: 250, width: 500, height: 500 };
+                const result = saliencyCrop(centerCrop, { x: 1.0, y: 0.5 }, img1000);
+                // Crop center (500, 500) → focus (1000, 500): shift by (500, 0)
+                // newX = 250 + 500 = 750 → clamped to 500
+                expect(result.x).to.equal(500);
+                expect(result.x).to.be.greaterThan(centerCrop.x);
+            });
+
+            it('3.3.2.32 — Crop clamping: shift does not exceed image bounds left', () => {
+                const centerCrop = { x: 100, y: 100, width: 200, height: 200 };
+                const result = saliencyCrop(centerCrop, { x: 0.0, y: 0.0 }, img1000);
+                expect(result.x).to.be.at.least(0);
+            });
+
+            it('3.3.2.33 — Crop clamping: shift does not exceed image bounds right', () => {
+                const centerCrop = { x: 700, y: 100, width: 200, height: 200 };
+                const result = saliencyCrop(centerCrop, { x: 1.0, y: 0.5 }, img1000);
+                expect(result.x + result.width).to.be.at.most(img1000.width);
+            });
+
+            it('3.3.2.34 — Crop clamping: shift does not exceed image bounds top', () => {
+                const centerCrop = { x: 100, y: 100, width: 200, height: 200 };
+                const result = saliencyCrop(centerCrop, { x: 0.5, y: 0.0 }, img1000);
+                expect(result.y).to.be.at.least(0);
+            });
+
+            it('3.3.2.35 — Crop clamping: shift does not exceed image bounds bottom', () => {
+                const centerCrop = { x: 100, y: 700, width: 200, height: 200 };
+                const result = saliencyCrop(centerCrop, { x: 0.5, y: 1.0 }, img1000);
+                expect(result.y + result.height).to.be.at.most(img1000.height);
+            });
+
+            it('3.3.2.36 — Crop preserves aspect ratio after shift', () => {
+                const centerCrop = { x: 250, y: 250, width: 500, height: 300 };
+                const result = saliencyCrop(centerCrop, { x: 0.0, y: 1.0 }, img1000);
+                expect(result.width / result.height).to.equal(centerCrop.width / centerCrop.height);
+            });
+
+            it('3.3.2.37 — Crop preserves dimensions after shift', () => {
+                const centerCrop = { x: 250, y: 250, width: 500, height: 300 };
+                const result = saliencyCrop(centerCrop, { x: 0.3, y: 0.7 }, img1000);
+                expect(result.width).to.equal(centerCrop.width);
+                expect(result.height).to.equal(centerCrop.height);
+            });
+
+            it('3.3.2.38 — Very wide panel crop (21:9) with focus at center', () => {
+                const centerCrop = { x: 0, y: 200, width: 1000, height: 428 };
+                const result = saliencyCrop(centerCrop, { x: 0.5, y: 0.5 }, img1000);
+                expect(result).to.deep.equal(centerCrop);
+            });
+
+            it('3.3.2.39 — Very tall panel crop (9:21) with focus at bottom', () => {
+                const centerCrop = { x: 286, y: 0, width: 428, height: 1000 };
+                const result = saliencyCrop(centerCrop, { x: 0.5, y: 1.0 }, img1000);
+                // Crop fills entire height — no room to shift
+                expect(result.y).to.equal(0);
+            });
+
+            it('3.3.2.40 — Square panel crop with focus slightly off-center', () => {
+                const centerCrop = { x: 250, y: 250, width: 500, height: 500 };
+                const result = saliencyCrop(centerCrop, { x: 0.6, y: 0.4 }, img1000);
+                // Crop center (500, 500) → focus (600, 400): shift by (100, -100)
+                expect(result.x).to.equal(350);
+                expect(result.y).to.equal(150);
+            });
+
+            it('3.3.2.41 — Crop with minimum size (1px) — shift still works', () => {
+                const centerCrop = { x: 500, y: 500, width: 1, height: 1 };
+                const result = saliencyCrop(centerCrop, { x: 0.0, y: 0.0 }, img1000);
+                // Crop center (500.5, 500.5) → focus (0, 0): shift by (-500.5, -500.5)
+                // Clamped to (0, 0)
+                expect(result.x).to.equal(0);
+                expect(result.y).to.equal(0);
+            });
+
+            it('3.3.2.42 — Crop fills entire image — no shift possible', () => {
+                const centerCrop = { x: 0, y: 0, width: 1000, height: 1000 };
+                const result = saliencyCrop(centerCrop, { x: 0.1, y: 0.1 }, img1000);
+                expect(result).to.deep.equal(centerCrop);
+            });
+
+            it('3.3.2.43 — Focus point outside [0,1] range → clamped', () => {
+                const centerCrop = { x: 250, y: 250, width: 500, height: 500 };
+                const result = saliencyCrop(centerCrop, { x: 1.5, y: -0.5 }, img1000);
+                // Clamped to (1.0, 0.0): crop center (500,500) → focus (1000,0): shift (500,-500)
+                // newX = 250+500=750, clamped to 500; newY = 250-500=-250, clamped to 0
+                expect(result.x).to.equal(500);
+                expect(result.y).to.equal(0);
+            });
+
+            it('3.3.2.44 — NaN focus point → treated as center', () => {
+                const centerCrop = { x: 250, y: 250, width: 500, height: 500 };
+                const result = saliencyCrop(centerCrop, { x: NaN, y: NaN }, img1000);
+                expect(result).to.deep.equal(centerCrop);
+            });
+
+            it('3.3.2.45 — Infinity focus point → clamped to edge', () => {
+                const centerCrop = { x: 250, y: 250, width: 500, height: 500 };
+                const result = saliencyCrop(centerCrop, { x: Infinity, y: -Infinity }, img1000);
+                // Clamped to (1.0, 0.0)
+                expect(result.x).to.be.at.least(0);
+                expect(result.x).to.be.at.most(img1000.width - centerCrop.width);
+                expect(result.y).to.equal(0);
+            });
+
+            it('3.3.2.45b — saliencyCrop with null focusPoint returns centerCrop unchanged', () => {
+                const centerCrop = { x: 250, y: 250, width: 500, height: 500 };
+                const result = saliencyCrop(centerCrop, null, img1000);
+                expect(result).to.deep.equal(centerCrop);
+            });
+
+            it('3.3.2.45c — saliencyCrop with null centerCrop returns safe default', () => {
+                const result = saliencyCrop(null, { x: 0.5, y: 0.5 }, img1000);
+                expect(result).to.deep.equal({ x: 0, y: 0, width: 0, height: 0 });
+            });
+
+            it('3.3.2.45d — saliencyCrop with null imageSize returns centerCrop unchanged', () => {
+                const centerCrop = { x: 250, y: 250, width: 500, height: 500 };
+                const result = saliencyCrop(centerCrop, { x: 0.3, y: 0.7 }, null);
+                expect(result).to.deep.equal(centerCrop);
+            });
+        });
+
+        // ============================================================
+        // 3.3.2.46 — 3.3.2.52: Detection Filtering
+        // ============================================================
+        describe('filterDetections', () => {
+            it('3.3.2.46 — All pass threshold', () => {
+                const detections = [
+                    { bbox: { x: 0, y: 0, w: 100, h: 100 }, confidence: 0.9 },
+                    { bbox: { x: 0, y: 0, w: 100, h: 100 }, confidence: 0.8 },
+                    { bbox: { x: 0, y: 0, w: 100, h: 100 }, confidence: 0.7 }
+                ];
+                const result = filterDetections(detections, 0.5, 20);
+                expect(result).to.have.lengthOf(3);
+            });
+
+            it('3.3.2.47 — All below threshold', () => {
+                const detections = [
+                    { bbox: { x: 0, y: 0, w: 100, h: 100 }, confidence: 0.2 },
+                    { bbox: { x: 0, y: 0, w: 100, h: 100 }, confidence: 0.1 },
+                    { bbox: { x: 0, y: 0, w: 100, h: 100 }, confidence: 0.05 }
+                ];
+                const result = filterDetections(detections, 0.5, 20);
+                expect(result).to.have.lengthOf(0);
+            });
+
+            it('3.3.2.48 — Mixed confidence', () => {
+                const detections = [
+                    { bbox: { x: 0, y: 0, w: 100, h: 100 }, confidence: 0.9 },
+                    { bbox: { x: 0, y: 0, w: 100, h: 100 }, confidence: 0.3 },
+                    { bbox: { x: 0, y: 0, w: 100, h: 100 }, confidence: 0.6 }
+                ];
+                const result = filterDetections(detections, 0.5, 20);
+                expect(result).to.have.lengthOf(2);
+            });
+
+            it('3.3.2.49 — Empty input', () => {
+                const result = filterDetections([], 0.5, 20);
+                expect(result).to.have.lengthOf(0);
+            });
+
+            it('3.3.2.50 — Size filtering active (too small)', () => {
+                const detections = [
+                    { bbox: { x: 0, y: 0, w: 5, h: 5 }, confidence: 0.9 }
+                ];
+                const result = filterDetections(detections, 0.5, 20);
+                expect(result).to.have.lengthOf(0);
+            });
+
+            it('3.3.2.51 — Size exactly at threshold → included', () => {
+                const detections = [
+                    { bbox: { x: 0, y: 0, w: 20, h: 20 }, confidence: 0.9 }
+                ];
+                const result = filterDetections(detections, 0.5, 20);
+                expect(result).to.have.lengthOf(1);
+            });
+
+            it('3.3.2.52 — Both confidence and size filtering', () => {
+                const detections = [
+                    { bbox: { x: 0, y: 0, w: 5, h: 5 }, confidence: 0.9 }
+                ];
+                const result = filterDetections(detections, 0.5, 20);
+                // High confidence but too small — filtered out
+                expect(result).to.have.lengthOf(0);
+            });
+
+            it('3.3.2.52b — Undefined thresholds default to 0 (no filtering)', () => {
+                const detections = [
+                    { bbox: { x: 0, y: 0, w: 5, h: 5 }, confidence: 0.1 }
+                ];
+                const result = filterDetections(detections);
+                expect(result).to.have.lengthOf(1);
+            });
+        });
+
+        // ============================================================
+        // 3.3.2.53 — 3.3.2.56: Bbox Centroid Computation
+        // ============================================================
+        describe('computeBboxCentroid', () => {
+            it('3.3.2.53 — Single bbox', () => {
+                const result = computeBboxCentroid(
+                    [{ x: 100, y: 100, w: 100, h: 100 }],
+                    { width: 1000, height: 1000 }
+                );
+                expect(result.x).to.equal(150);
+                expect(result.y).to.equal(150);
+            });
+
+            it('3.3.2.54 — Two bboxes', () => {
+                const result = computeBboxCentroid(
+                    [
+                        { x: 0, y: 0, w: 100, h: 100 },
+                        { x: 900, y: 900, w: 100, h: 100 }
+                    ],
+                    { width: 1000, height: 1000 }
+                );
+                // Centers: (50, 50) and (950, 950) → avg (500, 500)
+                expect(result.x).to.equal(500);
+                expect(result.y).to.equal(500);
+            });
+
+            it('3.3.2.55 — Empty array → image center', () => {
+                const result = computeBboxCentroid(
+                    [],
+                    { width: 1000, height: 1000 }
+                );
+                expect(result.x).to.equal(500);
+                expect(result.y).to.equal(500);
+            });
+
+            it('3.3.2.56 — Overlapping bboxes → centroid of centers', () => {
+                const result = computeBboxCentroid(
+                    [
+                        { x: 0, y: 0, w: 200, h: 200 },
+                        { x: 100, y: 100, w: 200, h: 200 }
+                    ],
+                    { width: 1000, height: 1000 }
+                );
+                // Centers: (100, 100) and (200, 200) → avg (150, 150)
+                expect(result.x).to.equal(150);
+                expect(result.y).to.equal(150);
+            });
+        });
+
+        // ============================================================
+        // 3.3.2.57 — 3.3.2.63: Inference Size Computation
+        // ============================================================
+        describe('computeInferenceSize', () => {
+            it('3.3.2.57 — Image below max dimension', () => {
+                const result = computeInferenceSize({ width: 400, height: 300 }, 512);
+                expect(result.width).to.equal(400);
+                expect(result.height).to.equal(300);
+                expect(result.scale).to.equal(1.0);
+            });
+
+            it('3.3.2.58 — Image above max (landscape)', () => {
+                const result = computeInferenceSize({ width: 1920, height: 1080 }, 512);
+                expect(result.width).to.equal(512);
+                expect(result.height).to.equal(288);
+                expect(result.scale).to.be.closeTo(512 / 1920, 0.001);
+            });
+
+            it('3.3.2.59 — Image above max (portrait)', () => {
+                const result = computeInferenceSize({ width: 1080, height: 1920 }, 512);
+                expect(result.height).to.equal(512);
+                expect(result.width).to.equal(288);
+                expect(result.scale).to.be.closeTo(512 / 1920, 0.001);
+            });
+
+            it('3.3.2.60 — Square image above max', () => {
+                const result = computeInferenceSize({ width: 2000, height: 2000 }, 512);
+                expect(result.width).to.equal(512);
+                expect(result.height).to.equal(512);
+                expect(result.scale).to.equal(512 / 2000);
+            });
+
+            it('3.3.2.61 — 4K image', () => {
+                const result = computeInferenceSize({ width: 3840, height: 2160 }, 512);
+                expect(result.width).to.equal(512);
+                expect(result.height).to.equal(288);
+                expect(result.scale).to.be.closeTo(512 / 3840, 0.001);
+            });
+
+            it('3.3.2.62 — 8K image', () => {
+                const result = computeInferenceSize({ width: 7680, height: 4320 }, 512);
+                expect(result.width).to.equal(512);
+                expect(result.height).to.equal(288);
+                expect(result.scale).to.be.closeTo(512 / 7680, 0.001);
+            });
+
+            it('3.3.2.63 — Zero-size image', () => {
+                const result = computeInferenceSize({ width: 0, height: 0 }, 512);
+                expect(result.width).to.equal(0);
+                expect(result.height).to.equal(0);
+                expect(result.scale).to.equal(1.0);
+            });
+
+            it('3.3.2.63b — Invalid maxDim (undefined) throws', () => {
+                expect(() => {
+                    computeInferenceSize({ width: 1000, height: 1000 }, undefined);
+                }).to.throw();
+            });
+
+            it('3.3.2.63c — Invalid maxDim (negative) throws', () => {
+                expect(() => {
+                    computeInferenceSize({ width: 1000, height: 1000 }, -512);
+                }).to.throw();
+            });
+
+            it('3.3.2.63d — Invalid maxDim (zero) throws', () => {
+                expect(() => {
+                    computeInferenceSize({ width: 1000, height: 1000 }, 0);
+                }).to.throw();
+            });
+        });
+
+        // ============================================================
+        // 3.3.2.64 — 3.3.2.68: Detection Scaling
+        // ============================================================
+        describe('scaleDetectionUp', () => {
+            it('3.3.2.64 — Scale factor 0.5', () => {
+                const result = scaleDetectionUp({ x: 100, y: 100, w: 50, h: 50 }, 0.5);
+                expect(result.x).to.equal(200);
+                expect(result.y).to.equal(200);
+                expect(result.w).to.equal(100);
+                expect(result.h).to.equal(100);
+            });
+
+            it('3.3.2.65 — Scale factor 1.0', () => {
+                const result = scaleDetectionUp({ x: 100, y: 100, w: 50, h: 50 }, 1.0);
+                expect(result).to.deep.equal({ x: 100, y: 100, w: 50, h: 50 });
+            });
+
+            it('3.3.2.66 — Scale factor 0.1', () => {
+                const result = scaleDetectionUp({ x: 50, y: 50, w: 20, h: 20 }, 0.1);
+                expect(result.x).to.equal(500);
+                expect(result.y).to.equal(500);
+                expect(result.w).to.equal(200);
+                expect(result.h).to.equal(200);
+            });
+
+            it('3.3.2.67 — Zero scale → no crash, returns original', () => {
+                const bbox = { x: 100, y: 100, w: 50, h: 50 };
+                const result = scaleDetectionUp(bbox, 0);
+                expect(result).to.deep.equal(bbox);
+            });
+
+            it('3.3.2.68 — Negative scale → no crash, returns original', () => {
+                const bbox = { x: 100, y: 100, w: 50, h: 50 };
+                const result = scaleDetectionUp(bbox, -0.5);
+                expect(result).to.deep.equal(bbox);
+            });
+        });
+
+        // ============================================================
+        // 3.3.2.69 — 3.3.2.72: Constants Validation
+        // ============================================================
+        describe('SALIENCY_CONFIG', () => {
+            it('3.3.2.69 — All required fields present', () => {
+                const requiredFields = [
+                    'MAX_INFERENCE_DIMENSION',
+                    'MIN_INFERENCE_DIMENSION',
+                    'FACE_CONFIDENCE_THRESHOLD',
+                    'OBJECT_CONFIDENCE_THRESHOLD',
+                    'MIN_DETECTION_PIXEL_SIZE',
+                    'MODEL_PRIORITY',
+                    'INFERENCE_TIMEOUT_MS',
+                    'WORKER_URL'
+                ];
+                for (const field of requiredFields) {
+                    expect(SALIENCY_CONFIG).to.have.property(field);
+                }
+            });
+
+            it('3.3.2.70 — MODEL_PRIORITY order', () => {
+                expect(SALIENCY_CONFIG.MODEL_PRIORITY).to.deep.equal(
+                    ['face-detection', 'coco-ssd', 'center-fallback']
+                );
+            });
+
+            it('3.3.2.71 — MAX_INFERENCE_DIMENSION is 512', () => {
+                expect(SALIENCY_CONFIG.MAX_INFERENCE_DIMENSION).to.equal(512);
+            });
+
+            it('3.3.2.72 — INFERENCE_TIMEOUT_MS is positive', () => {
+                expect(SALIENCY_CONFIG.INFERENCE_TIMEOUT_MS).to.be.greaterThan(0);
+            });
+        });
+
+        // ============================================================
+        // WORKER_MSG Constants (3.3.3.1 — 3.3.3.3)
+        // ============================================================
+        describe('WORKER_MSG', () => {
+            it('3.3.3.1 — All required message types present', () => {
+                const requiredTypes = [
+                    'INIT_MODELS', 'ANALYZE_IMAGE', 'DISPOSE',
+                    'MODELS_READY', 'MODELS_FAILED',
+                    'ANALYSIS_COMPLETE', 'ANALYSIS_ERROR', 'DISPOSED'
+                ];
+                for (const type of requiredTypes) {
+                    expect(WORKER_MSG).to.have.property(type);
+                }
+            });
+
+            it('3.3.3.2 — All message types are unique strings', () => {
+                const values = Object.values(WORKER_MSG);
+                const unique = new Set(values);
+                expect(unique.size).to.equal(values.length);
+                for (const v of values) {
+                    expect(v).to.be.a('string');
+                }
+            });
+
+            it('3.3.3.3 — All message types follow naming convention', () => {
+                for (const value of Object.values(WORKER_MSG)) {
+                    expect(value).to.match(/^saliency:/);
+                }
+            });
+        });
+
+        // ============================================================
+        // createSaliencyAnalyzer interface (3.3.4.1)
+        // ============================================================
+        describe('createSaliencyAnalyzer', () => {
+            it('3.3.4.1 — Returns correct interface', () => {
+                const analyzer = createSaliencyAnalyzer({});
+                expect(analyzer).to.have.property('initModels').that.is.a('function');
+                expect(analyzer).to.have.property('analyzeImage').that.is.a('function');
+                expect(analyzer).to.have.property('cancel').that.is.a('function');
+                expect(analyzer).to.have.property('dispose').that.is.a('function');
+                expect(analyzer).to.have.property('getState').that.is.a('function');
+            });
+
+            it('3.3.4.2 — Initial state is idle', () => {
+                const analyzer = createSaliencyAnalyzer({});
+                expect(analyzer.getState()).to.equal('idle');
+            });
+
+            it('3.3.4.9 — Double dispose is safe', () => {
+                const analyzer = createSaliencyAnalyzer({});
+                expect(() => {
+                    analyzer.dispose();
+                    analyzer.dispose();
+                }).to.not.throw();
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

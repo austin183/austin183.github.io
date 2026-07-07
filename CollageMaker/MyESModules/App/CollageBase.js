@@ -6,7 +6,6 @@
 
 import { createCollageAssembler } from '../Rendering/CollageAssembler.js';
 import { createFileDropHandler } from '../Interaction/FileDropHandler.js';
-import { getComponentRegistry } from '../Utils/ComponentRegistry.js';
 import { LAYOUT_STYLE_OPTIONS } from '../Models/LayoutStyle.js';
 
 /**
@@ -14,8 +13,6 @@ import { LAYOUT_STYLE_OPTIONS } from '../Models/LayoutStyle.js';
  * @returns {Object} Base services
  */
 export function initializeCollageBase() {
-    const componentRegistry = getComponentRegistry();
-
     // State is created here but will be made reactive by Vue
     const assembler = createCollageAssembler();
     const dropHandler = createFileDropHandler();
@@ -23,12 +20,12 @@ export function initializeCollageBase() {
     // Placeholder for services that need state (initialized in lifecycle)
     let canvasRenderer = null;
     let layoutManager = null;
+    let cropManager = null;
     let imageLibrary = null;
     let backgroundManager = null;
     let titleManager = null;
 
     return {
-        componentRegistry,
         assembler,
         dropHandler,
 
@@ -45,6 +42,13 @@ export function initializeCollageBase() {
         },
         setLayoutManager(manager) {
             layoutManager = manager;
+        },
+
+        getCropManager() {
+            return cropManager;
+        },
+        setCropManager(manager) {
+            cropManager = manager;
         },
 
         getImageLibrary() {

@@ -24,9 +24,17 @@ export { createCollageAssembler } from './Rendering/CollageAssembler.js';
 export * as BackgroundRenderer from './Rendering/BackgroundRenderer.js';
 export * as OverlayRenderer from './Rendering/OverlayRenderer.js';
 export * as TitleRenderer from './Rendering/TitleRenderer.js';
+export {
+    createDebugOverlay,
+    focusPointToCanvasCoords,
+    imageCenterToCanvasCoords,
+    computeDebugMarkers,
+    validateFocusPoint,
+    DEBUG_OVERLAY_STYLES,
+    render as renderDebugOverlay
+} from './Rendering/SaliencyDebugOverlay.js';
 
 // State
-export { createCollageState } from './State/CollageState.js';
 export { createLayoutManager } from './State/LayoutManager.js';
 export { createImageLibrary } from './State/ImageLibrary.js';
 export { createCropManager } from './State/CropManager.js';
@@ -35,19 +43,54 @@ export { createBackgroundManager } from './State/BackgroundManager.js';
 export { createTitleManager } from './State/TitleManager.js';
 
 // Export
-export { exportToJpeg } from './Export/ExportManager.js';
+export { exportToJpeg } from './Export/formats/jpegExporter.js';
+export { exportToPng } from './Export/formats/pngExporter.js';
 
 // Persistence
 export { save as saveSettings, load as loadSettings, clear as clearSettings } from './Persistence/SettingsPersistence.js';
 
 // Saliency
-export { defaultCenterCrop, saliencyCrop } from './Saliency/SaliencyFallback.js';
+export { defaultCenterCrop, saliencyCrop as fallbackSaliencyCrop } from './Saliency/SaliencyFallback.js';
+export {
+    computeFocusPoint,
+    filterDetections,
+    computeBboxCentroid,
+    saliencyCrop,
+    computeInferenceSize,
+    scaleDetectionUp,
+    SALIENCY_CONFIG,
+    WORKER_MSG,
+    createSaliencyAnalyzer
+} from './Saliency/SaliencyAnalyzer.js';
 
 // Interaction
 export { createFileDropHandler } from './Interaction/FileDropHandler.js';
 export { createGestureHandler } from './Interaction/GestureHandler.js';
 export { createCropInteraction } from './Interaction/CropInteraction.js';
+export { createKeyboardHandler, parseKeyShortcut, matchesShortcut, KEYBOARD_SHORTCUTS } from './Interaction/KeyboardHandler.js';
 
 // Utils
 export { getBrowserUtils } from './Utils/BrowserUtils.js';
-export { getComponentRegistry } from './Utils/ComponentRegistry.js';
+export { loadImageFromFile } from './Utils/loadImageFromFile.js';
+export {
+    getLayoutTier,
+    getSidebarConfig,
+    getCanvasMaxDimensions,
+    hasResponsiveClass,
+    computeTouchPadding,
+    isStackedLayout,
+    isOverlaySidebar,
+    BREAKPOINTS,
+    TOUCH_TARGET,
+    SIDEBAR_CONFIG
+} from './Utils/ResponsiveUtils.js';
+export {
+    CACHE_CONFIG,
+    isAppShellURL,
+    isImageURL,
+    routeRequest,
+    computeCacheKey,
+    getCacheName,
+    shouldCacheResponse,
+    validateManifest
+} from './Utils/PWACacheUtils.js';

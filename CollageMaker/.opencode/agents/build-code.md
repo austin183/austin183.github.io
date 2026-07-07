@@ -45,5 +45,5 @@ At the end of your work, fill out the session summary template from `.opencode/s
 
 - Do not commit files - that is `build-quick-work`'s responsibility
 - Do not write tests — that is `build-test`'s responsibility
-- Do not write learnings, plans, or skills — that is `build-docs`'s responsibility
+- Do not write plans, or skills — that is `build-docs`'s responsibility
 - Do not investigate bugs beyond what is needed to implement a feature — that is `build-debug`'s responsibility

@@ -12,6 +12,7 @@ import { createBackgroundManager } from '../State/BackgroundManager.js';
 import { createTitleManager } from '../State/TitleManager.js';
 import { createGestureHandler } from '../Interaction/GestureHandler.js';
 import { createCropInteraction } from '../Interaction/CropInteraction.js';
+import { createKeyboardHandler } from '../Interaction/KeyboardHandler.js';
 import { load as loadSettings } from '../Persistence/SettingsPersistence.js';
 import { SIZE_CONSTANTS } from '../Models/SizeConstants.js';
 import { createTitleStyle } from '../Models/TitleStyle.js';
@@ -49,6 +50,7 @@ export function createCollageLifecycle(base) {
                 this._scheduleCropPreviewRender();
             };
             this.cropManager = createCropManager(this, onCropChanged);
+            base.setCropManager(this.cropManager);
 
             // Initialize image library
             const onImagesChanged = () => {
@@ -134,15 +136,33 @@ export function createCollageLifecycle(base) {
 
             // Set up global file drop handler for drops outside Vue-managed elements
             // (the element-level @drop handlers in the template handle drops on canvas/library)
-            base.dropHandler.setupGlobalDrop(async (files) => {
+            this._dropCleanup = base.dropHandler.setupGlobalDrop(async (files) => {
                 await imageLibrary.addImages(files);
                 layoutManager.regenerate();
                 this._scheduleRender();
             });
 
-            // Set up keyboard shortcuts
-            this._keyboardHandler = (e) => this._handleKeyboard(e);
-            document.addEventListener('keydown', this._keyboardHandler);
+            // Set up keyboard shortcuts via centralized handler
+            this._keyboardHandler = createKeyboardHandler({
+                callbacks: {
+                    onOpenFilePicker: () => this.triggerFilePicker(),
+                    onExport: () => this.exportCollage(),
+                    onLayoutSwitch: (style) => {
+                        this.layoutStyle = style;
+                        this.onLayoutStyleChange();
+                    },
+                    onDeselect: () => {
+                        if (this.selectedPanelId) {
+                            this.selectPanel(null);
+                            this._scheduleRender();
+                        }
+                    },
+                    onRemoveSelected: () => this.removeSelectedImage(),
+                    onUndo: () => this.undo(),
+                    onRedo: () => this.redo()
+                }
+            });
+            this._keyboardHandler.attach();
 
             // Handle window resize
             this._handleResize = () => {
@@ -152,18 +172,39 @@ export function createCollageLifecycle(base) {
         },
 
         beforeUnmount() {
-            window.removeEventListener('resize', this._handleResize);
-            document.removeEventListener('keydown', this._keyboardHandler);
+            // 1. Stop new interactions first (prevents race conditions with async drop handlers)
+            if (this._dropCleanup) {
+                this._dropCleanup();
+            }
+            if (this._keyboardHandler) {
+                this._keyboardHandler.detach();
+            }
             if (this._gestureHandler) {
                 this._gestureHandler.detach();
             }
             if (this._cropInteraction) {
                 this._cropInteraction.detach();
             }
+
+            // 2. Remove window listeners
+            window.removeEventListener('resize', this._handleResize);
+
+            // 3. Dispose canvas renderer
             if (this.canvasRenderer) {
                 this.canvasRenderer.dispose();
             }
-            // Dispose image references
+
+            // 4. Dispose all images in library to prevent memory leaks
+            if (this.imageLibrary) {
+                this.imageLibrary.clearAll();
+            }
+
+            // 5. Dispose saliency analyzer if it was initialized
+            if (this._saliencyAnalyzer) {
+                this._saliencyAnalyzer.dispose();
+            }
+
+            // 6. Dispose background and overlay images
             this.backgroundImage = null;
             this.overlayImage = null;
         },
@@ -198,32 +239,6 @@ export function createCollageLifecycle(base) {
                 if (settings.exportQuality !== undefined) this.exportQuality = settings.exportQuality;
             },
 
-            /**
-             * Handles keyboard shortcuts.
-             */
-            _handleKeyboard(e) {
-                // Cmd+Z / Ctrl+Z: Undo
-                if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'z') {
-                    e.preventDefault();
-                    this.undo();
-                    return;
-                }
-
-                // Cmd+Shift+Z / Ctrl+Shift+Z: Redo
-                if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'z') {
-                    e.preventDefault();
-                    this.redo();
-                    return;
-                }
-
-                // Escape: Deselect panel
-                if (e.key === 'Escape' && this.selectedPanelId) {
-                    e.preventDefault();
-                    this.selectPanel(null);
-                    this._scheduleRender();
-                    return;
-                }
-            }
         }
     };
 }

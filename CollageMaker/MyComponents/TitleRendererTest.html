@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TitleRenderer Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — TitleRenderer Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Section 2 (TitleRenderer) — all P1 tests</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { render } from '../MyESModules/Rendering/TitleRenderer.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // Mock context factory — wraps a real canvas context and
+        // records every method call for inspection using Proxy.
+        // ============================================================
+        function createMockCtx(width = 1920, height = 1080) {
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const realCtx = canvas.getContext('2d');
+
+            const calls = {
+                font: [],
+                fillStyle: [],
+                fillText: [],
+                fillRect: [],
+                measureText: [],
+                textBaseline: []
+            };
+
+            // Create a proxy to intercept property assignments and method calls
+            const ctx = new Proxy(realCtx, {
+                set(target, prop, value) {
+                    if (prop === 'font') {
+                        calls.font.push(value);
+                    } else if (prop === 'fillStyle') {
+                        calls.fillStyle.push(value);
+                    } else if (prop === 'textBaseline') {
+                        calls.textBaseline.push(value);
+                    }
+                    target[prop] = value;
+                    return true;
+                },
+                get(target, prop) {
+                    // Intercept property access for font, fillStyle, and textBaseline
+                    if (prop === 'font') {
+                        return calls.font[calls.font.length - 1] || '36px Arial';
+                    }
+                    if (prop === 'fillStyle') {
+                        return calls.fillStyle[calls.fillStyle.length - 1] || '#FFFFFF';
+                    }
+                    if (prop === 'textBaseline') {
+                        return calls.textBaseline[calls.textBaseline.length - 1] || 'alphabetic';
+                    }
+                    // Intercept method calls
+                    if (prop === 'fillText') {
+                        return function(text, x, y) {
+                            calls.fillText.push({ text, x, y });
+                            return target.fillText.call(target, text, x, y);
+                        };
+                    }
+                    if (prop === 'fillRect') {
+                        return function(x, y, w, h) {
+                            calls.fillRect.push({ x, y, w, h });
+                            return target.fillRect.call(target, x, y, w, h);
+                        };
+                    }
+                    if (prop === 'measureText') {
+                        return function(text) {
+                            const metrics = target.measureText.call(target, text);
+                            calls.measureText.push({ text, width: metrics.width });
+                            return metrics;
+                        };
+                    }
+                    return target[prop];
+                }
+            });
+
+            return { ctx, calls };
+        }
+
+        // Helper: create a title style object
+        function makeTitleStyle({
+            fontSize = 36,
+            fontFamily = 'Arial',
+            fontColor = '#FFFFFF',
+            alignment = 'center',
+            showBackground = false,
+            backgroundColor = '#000000'
+        } = {}) {
+            return {
+                fontSize,
+                fontFamily,
+                fontColor,
+                alignment,
+                showBackground,
+                backgroundColor
+            };
+        }
+
+        // Helper: create a title run object
+        function makeTitleRun({ text = '', bold = false, italic = false, underline = false } = {}) {
+            return { text, bold, italic, underline };
+        }
+
+        // ============================================================
+        // Section 2.1: Basic Rendering & Formatting
+        // ============================================================
+        describe('Section 2.1 — Basic Rendering & Formatting', () => {
+            it('2.1.1 — Single Run (Plain) calls fillText once for text', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle();
+                const runs = [makeTitleRun({ text: 'Hello' })];
+                render(ctx, 1920, 1080, style, runs);
+
+                expect(calls.fillText.length).to.equal(1);
+                expect(calls.fillText[0].text).to.equal('Hello');
+            });
+
+            it('2.1.2 — Single Run (Bold) includes bold in ctx.font', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle();
+                const runs = [makeTitleRun({ text: 'Hello', bold: true })];
+                render(ctx, 1920, 1080, style, runs);
+
+                expect(calls.font.length).to.be.at.least(1);
+                expect(calls.font[0]).to.contain('bold');
+            });
+
+            it('2.1.3 — Single Run (Italic) includes italic in ctx.font', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle();
+                const runs = [makeTitleRun({ text: 'Hello', italic: true })];
+                render(ctx, 1920, 1080, style, runs);
+
+                expect(calls.font.length).to.be.at.least(1);
+                expect(calls.font[0]).to.contain('italic');
+            });
+
+            it('2.1.4 — Mixed Runs (Bold + Plain) makes two fillText calls with font changes', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle();
+                const runs = [
+                    makeTitleRun({ text: 'Hi', bold: true }),
+                    makeTitleRun({ text: ' there', bold: false })
+                ];
+                render(ctx, 1920, 1080, style, runs);
+
+                expect(calls.fillText.length).to.equal(2);
+                expect(calls.fillText[0].text).to.equal('Hi');
+                expect(calls.fillText[1].text).to.equal(' there');
+
+                // Font should change between runs
+                expect(calls.font.length).to.be.at.least(2);
+                expect(calls.font[0]).to.contain('bold');
+                expect(calls.font[1]).to.not.contain('bold');
+            });
+
+            it('2.1.5 — Mixed Runs (Bold + Italic) makes two fillText calls with font changes', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle();
+                const runs = [
+                    makeTitleRun({ text: 'Hi', bold: true }),
+                    makeTitleRun({ text: ' there', italic: true })
+                ];
+                render(ctx, 1920, 1080, style, runs);
+
+                expect(calls.fillText.length).to.equal(2);
+                expect(calls.font.length).to.be.at.least(2);
+                expect(calls.font[0]).to.contain('bold');
+                expect(calls.font[0]).to.not.contain('italic');
+                expect(calls.font[1]).to.not.contain('bold');
+                expect(calls.font[1]).to.contain('italic');
+            });
+
+            it('2.1.6 — Underline Rendering calls fillRect at baselineY + 2 for run width', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle();
+                const runs = [makeTitleRun({ text: 'Hi', underline: true })];
+                render(ctx, 1920, 1080, style, runs);
+
+                expect(calls.fillRect.length).to.equal(1);
+                // The fillRect for underline should have height=2 and y = baselineY + 2
+                // We don't know exact x and width without knowing the font metrics, but we can check y
+                const underline = calls.fillRect[0];
+                expect(underline.h).to.equal(2);
+                // y should be exactly height - MARGIN + 2 (MARGIN=40, fontSize=36 => y=1042)
+                expect(underline.y).to.equal(1080 - 40 + 2);
+                // Also verify that fillStyle was set to fontColor before underline draw
+                const fillStyleIndex = calls.fillStyle.length - 1;
+                expect(calls.fillStyle[fillStyleIndex]).to.equal('#FFFFFF');
+            });
+
+            it('2.1.7 — Multiple Underlines makes multiple fillRect calls for specific run segments', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle();
+                const runs = [
+                    makeTitleRun({ text: 'Hi', underline: true }),
+                    makeTitleRun({ text: ' there', underline: false }),
+                    makeTitleRun({ text: 'again', underline: true })
+                ];
+                render(ctx, 1920, 1080, style, runs);
+
+                expect(calls.fillRect.length).to.equal(2);
+                // Check that both underlines are drawn
+                const underlines = calls.fillRect.filter(r => r.h === 2);
+                expect(underlines.length).to.equal(2);
+            });
+
+            it('2.1.8 — Empty Title makes no fillText calls, no crash', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle();
+                const runs = [];
+
+                expect(() => {
+                    render(ctx, 1920, 1080, style, runs);
+                }).to.not.throw();
+
+                expect(calls.fillText.length).to.equal(0);
+            });
+
+            it('2.1.9 — Title With Spaces Only calls measureText and fillText', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle();
+                const runs = [makeTitleRun({ text: '   ' })];
+                render(ctx, 1920, 1080, style, runs);
+
+                expect(calls.fillText.length).to.equal(1);
+                expect(calls.fillText[0].text).to.equal('   ');
+                expect(calls.measureText.length).to.be.at.least(1);
+            });
+
+            it('2.1.10 — Combined Formatting (bold + italic + underline) includes all flags in font string', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle();
+                const runs = [makeTitleRun({ text: 'Hi', bold: true, italic: true, underline: true })];
+                render(ctx, 1920, 1080, style, runs);
+
+                expect(calls.font.length).to.be.at.least(1);
+                const fontStr = calls.font[0];
+                // Font string should include all three formatting flags and fontSize + fontFamily
+                expect(fontStr).to.contain('bold');
+                expect(fontStr).to.contain('italic');
+                expect(fontStr).to.contain('36px');
+                expect(fontStr).to.contain('Arial');
+                // Underline should be drawn (one fillRect with height=2)
+                const underlines = calls.fillRect.filter(r => r.h === 2);
+                expect(underlines.length).to.equal(1);
+            });
+
+            it('2.1.11 — Style Defaults: empty titleStyle object uses fallback values', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                // Pass an empty object instead of using makeTitleStyle()
+                const style = {};
+                const runs = [makeTitleRun({ text: 'Test' })];
+                render(ctx, 1920, 1080, style, runs);
+
+                expect(calls.fillText.length).to.equal(1);
+                // Verify default font string contains '36px Arial' and no bold/italic
+                expect(calls.font[0]).to.equal('36px Arial');
+                // Verify default fillStyle for text color is #FFFFFF
+                expect(calls.fillStyle[0]).to.equal('#FFFFFF');
+            });
+
+            it('2.1.12 — Sets textBaseline to alphabetic before rendering', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle();
+                const runs = [makeTitleRun({ text: 'Test' })];
+                render(ctx, 1920, 1080, style, runs);
+
+                // Verify that textBaseline is set to 'alphabetic' (at least once)
+                expect(calls.textBaseline.length).to.be.at.least(1);
+                expect(calls.textBaseline[0]).to.equal('alphabetic');
+            });
+        });
+
+        // ============================================================
+        // Section 2.2: Alignment & Positioning
+        // ============================================================
+        describe('Section 2.2 — Alignment & Positioning', () => {
+            it('2.2.1 — Left Alignment: startX = margin (40)', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({ alignment: 'left' });
+                const runs = [makeTitleRun({ text: 'Hello' })];
+                render(ctx, 1920, 1080, style, runs);
+
+                expect(calls.fillText.length).to.equal(1);
+                expect(calls.fillText[0].x).to.equal(40);
+            });
+
+            it('2.2.2 — Center Alignment: startX = (width - totalWidth) / 2', () => {
+                const { ctx, calls } = createMockCtx(800, 600);
+                const style = makeTitleStyle({ alignment: 'center' });
+                // Use short text to ensure it fits
+                const runs = [makeTitleRun({ text: 'Hi' })];
+                render(ctx, 800, 600, style, runs);
+
+                expect(calls.fillText.length).to.equal(1);
+                // The exact x depends on the measured width of 'Hi', but it should be around (800 - width)/2 + 40?
+                // Actually startX = (width - totalWidth) / 2, and we don't add margin for center
+                const expectedX = (800 - calls.measureText[0].width) / 2;
+                expect(calls.fillText[0].x).to.be.closeTo(expectedX, 0.5);
+            });
+
+            it('2.2.3 — Right Alignment: startX = width - margin - totalWidth', () => {
+                const { ctx, calls } = createMockCtx(800, 600);
+                const style = makeTitleStyle({ alignment: 'right' });
+                const runs = [makeTitleRun({ text: 'Hi' })];
+                render(ctx, 800, 600, style, runs);
+
+                expect(calls.fillText.length).to.equal(1);
+                const expectedX = 800 - 40 - calls.measureText[0].width;
+                expect(calls.fillText[0].x).to.be.closeTo(expectedX, 0.5);
+            });
+
+            it('2.2.4 — Alignment With Empty Title makes no render, bounds zero', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({ alignment: 'center' });
+                const runs = [];
+
+                expect(() => {
+                    render(ctx, 1920, 1080, style, runs);
+                }).to.not.throw();
+
+                expect(calls.fillText.length).to.equal(0);
+                expect(calls.fillRect.length).to.equal(0);
+            });
+
+            it('2.2.5 — Alignment With Long Title centers it, potentially overflows edges', () => {
+                const { ctx, calls } = createMockCtx(800, 600);
+                const style = makeTitleStyle({ alignment: 'center' });
+                // Use a long text (but not necessarily overflowing) to test centering formula
+                const runs = [makeTitleRun({ text: 'This is a very long title that tests centering behavior with substantial width' })];
+                render(ctx, 800, 600, style, runs);
+
+                expect(calls.fillText.length).to.equal(1);
+                // The x position should be (width - totalWidth) / 2
+                const textWidth = calls.measureText[0].width;
+                const expectedX = (800 - textWidth) / 2;
+                expect(calls.fillText[0].x).to.be.closeTo(expectedX, 0.5);
+            });
+        });
+
+        // ============================================================
+        // Section 2.3: Background Rect
+        // ============================================================
+        describe('Section 2.3 — Background Rect', () => {
+            it('2.3.1 — Background Enabled draws fillRect for bounds of all runs', () => {
+                const { ctx, calls } = createMockCtx(800, 600);
+                const style = makeTitleStyle({
+                    alignment: 'center',
+                    showBackground: true,
+                    backgroundColor: '#000000'
+                });
+                const runs = [makeTitleRun({ text: 'Hello' })];
+                render(ctx, 800, 600, style, runs);
+
+                expect(calls.fillRect.length).to.equal(1);
+                const bg = calls.fillRect[0];
+                // Get the text fill position and width
+                expect(calls.fillText.length).to.equal(1);
+                const textX = calls.fillText[0].x;
+                const textWidth = calls.measureText[0].width;
+
+                // Background should cover the text bounds plus padding on all sides
+                // Background x should be before text start
+                expect(bg.x).to.be.lessThanOrEqual(textX - 12);
+                // Background width should be at least textWidth + 2*padding
+                expect(bg.w).to.be.closeTo(textWidth + 24, 1);
+                // Background height should be fontSize + 2*padding
+                expect(bg.h).to.be.closeTo(36 + 24, 1);
+                // Verify that fillStyle was set to backgroundColor at some point (there are at least 2 fillStyle sets)
+                expect(calls.fillStyle.length).to.be.at.least(2);
+                expect(calls.fillStyle).to.include('#000000');
+                expect(calls.fillStyle).to.include('#FFFFFF');
+            });
+
+            it('2.3.2 — Background Disabled makes no fillRect for title background', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({ showBackground: false });
+                const runs = [makeTitleRun({ text: 'Hello' })];
+                render(ctx, 1920, 1080, style, runs);
+
+                // There should be no fillRect calls (unless underline draws one)
+                // Actually, if there's no underline, there should be 0 fillRect calls
+                expect(calls.fillRect.length).to.equal(0);
+            });
+
+            it('2.3.3 — Background Padding expands fillRect around text bounds', () => {
+                const { ctx, calls } = createMockCtx(800, 600);
+                const style = makeTitleStyle({
+                    showBackground: true,
+                    backgroundColor: '#000000'
+                });
+                // The actual PADDING constant in TitleRenderer.js is 12px.
+                // Test plan originally mentioned 10px, but we verify the actual implementation value.
+                const runs = [makeTitleRun({ text: 'Hi' })];
+                render(ctx, 800, 600, style, runs);
+
+                expect(calls.fillRect.length).to.equal(1);
+                const bg = calls.fillRect[0];
+                // Height should be fontSize + 2*padding = 36 + 24 = 60
+                expect(bg.h).to.be.closeTo(60, 1);
+                // Width should be text width + 2*padding
+                const textWidth = calls.measureText[0].width;
+                expect(bg.w).to.be.closeTo(textWidth + 24, 1);
+            });
+
+            it('2.3.4 — Background With Single Char matches single character bounds + padding', () => {
+                const { ctx, calls } = createMockCtx(800, 600);
+                const style = makeTitleStyle({ showBackground: true });
+                const runs = [makeTitleRun({ text: 'A' })];
+                render(ctx, 800, 600, style, runs);
+
+                expect(calls.fillRect.length).to.equal(1);
+                const bg = calls.fillRect[0];
+                // Height should be fontSize + 2*padding
+                expect(bg.h).to.be.closeTo(36 + 24, 1);
+                // Width should be 'A' width + 2*padding
+                const textWidth = calls.measureText[0].width;
+                expect(bg.w).to.be.closeTo(textWidth + 24, 1);
+            });
+        });
+    </script>
+
+    <script>
+        // Run tests when page loads
+        window.addEventListener('load', function() {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

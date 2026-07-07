@@ -2,6 +2,8 @@
 <html>
 
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CollageMaker</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css" integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous">
     <link href="../src/css/variables.css" rel="stylesheet">
@@ -298,7 +300,7 @@
                         <input type="range" id="exportQualitySlider" v-model.number="exportQuality" min="0.5" max="1" step="0.01" class="fullRange" @input="onExportQualityChange">
                     </div>
                     <div class="detail-section">
-                        <button id="exportBtn" class="pure-button pure-button-primary export-btn" @click="exportCollage" :disabled="isExporting || images.length === 0">
+                        <button id="exportBtn" class="pure-button pure-button-primary export-btn" @click="exportCollage" :disabled="isExporting || images.length === 0" title="Export as JPEG (Cmd+S)">
                             <span class="material-icons" style="vertical-align: middle; margin-right: 4px;">save</span>
                             {{ isExporting ? 'Exporting...' : 'Export JPEG' }}
                         </button>

@@ -46,6 +46,7 @@ You will be provided with a set of requirements and optionally a perspective on 
    - Consider trade-offs and architectural decisions
    - Follow existing patterns where appropriate
    - Reference specific skill files when your plan touches their domain
+   - Test Scenarios at the unit, integration, and end to end level
 
 5. **Detail the Plan**:
    - Provide step-by-step implementation strategy

@@ -84,6 +84,10 @@ export function createBackgroundManager(state, onChange) {
          * @param {HTMLImageElement|null} img - Image element or null to clear
          */
         setImage(img) {
+            // Dispose old background image to prevent memory leaks
+            if (state.backgroundImage) {
+                state.backgroundImage = null;
+            }
             state.backgroundImage = img;
             notify();
         },

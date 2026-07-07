@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PWACacheUtils Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — PWACacheUtils Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Section 3.6.2 (all 87 pure function tests)</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import {
+            CACHE_CONFIG,
+            isAppShellURL,
+            isImageURL,
+            routeRequest,
+            computeCacheKey,
+            getCacheName,
+            shouldCacheResponse,
+            validateManifest
+        } from '../MyESModules/Utils/PWACacheUtils.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // 3.6.2.1 — 3.6.2.9: Cache Configuration Constants
+        // ============================================================
+        describe('Section 3.6.2.1–9 — Cache Configuration Constants', () => {
+            it('3.6.2.1 — APP_SHELL_CACHE_NAME contains version', () => {
+                expect(CACHE_CONFIG.APP_SHELL_CACHE_NAME).to.match(/-v\d+/);
+            });
+
+            it('3.6.2.2 — IMAGE_CACHE_NAME contains version', () => {
+                expect(CACHE_CONFIG.IMAGE_CACHE_NAME).to.match(/-v\d+/);
+            });
+
+            it('3.6.2.3 — CACHE_VERSION is positive integer', () => {
+                expect(CACHE_CONFIG.CACHE_VERSION).to.be.a('number');
+                expect(CACHE_CONFIG.CACHE_VERSION).to.be.at.least(1);
+            });
+
+            it('3.6.2.4 — MAX_IMAGE_CACHE_SIZE is reasonable', () => {
+                expect(CACHE_CONFIG.MAX_IMAGE_CACHE_SIZE).to.be.at.least(10);
+                expect(CACHE_CONFIG.MAX_IMAGE_CACHE_SIZE).to.be.at.most(200);
+            });
+
+            it('3.6.2.5 — IMAGE_CACHE_TTL_MS is positive (7 days)', () => {
+                expect(CACHE_CONFIG.IMAGE_CACHE_TTL_MS).to.be.greaterThan(0);
+                expect(CACHE_CONFIG.IMAGE_CACHE_TTL_MS).to.equal(7 * 24 * 60 * 60 * 1000);
+            });
+
+            it('3.6.2.6 — APP_SHELL_URLS is non-empty', () => {
+                expect(CACHE_CONFIG.APP_SHELL_URLS).to.be.an('array');
+                expect(CACHE_CONFIG.APP_SHELL_URLS.length).to.be.greaterThan(0);
+            });
+
+            it('3.6.2.7 — APP_SHELL_URLS includes index.html', () => {
+                expect(CACHE_CONFIG.APP_SHELL_URLS).to.include('./index.html');
+            });
+
+            it('3.6.2.8 — Shell URLs include all JS modules', () => {
+                const urls = CACHE_CONFIG.APP_SHELL_URLS;
+                expect(urls).to.include('./MyESModules/index.js');
+                expect(urls).to.include('./MyESModules/Models/LayoutStyle.js');
+                expect(urls).to.include('./MyESModules/Layout/FitMath.js');
+                expect(urls).to.include('./MyESModules/Rendering/CanvasRenderer.js');
+                expect(urls).to.include('./MyESModules/Export/ExportManager.js');
+                expect(urls).to.include('./MyESModules/Interaction/KeyboardHandler.js');
+                expect(urls).to.include('./MyESModules/Utils/ResponsiveUtils.js');
+                expect(urls).to.include('./MyESModules/App/createCollageApp.js');
+            });
+
+            it('3.6.2.9 — Shell URLs are relative paths', () => {
+                CACHE_CONFIG.APP_SHELL_URLS.forEach(url => {
+                    expect(url.startsWith('./') || !url.includes('://')).to.be.true;
+                });
+            });
+        });
+
+        // ============================================================
+        // 3.6.2.10 — 3.6.2.19: isAppShellURL
+        // ============================================================
+        describe('Section 3.6.2.10–19 — isAppShellURL', () => {
+            it('3.6.2.10 — index.html is shell URL', () => {
+                expect(isAppShellURL('./index.html')).to.be.true;
+            });
+
+            it('3.6.2.11 — CSS file is shell URL', () => {
+                expect(isAppShellURL('./Style.css')).to.be.true;
+            });
+
+            it('3.6.2.12 — JS module is shell URL', () => {
+                expect(isAppShellURL('./MyESModules/index.js')).to.be.true;
+            });
+
+            it('3.6.2.13 — Nested JS module is shell URL', () => {
+                expect(isAppShellURL('./MyESModules/Rendering/CanvasRenderer.js')).to.be.true;
+            });
+
+            it('3.6.2.14 — Image file is NOT shell URL', () => {
+                expect(isAppShellURL('https://example.com/photo.jpg')).to.be.false;
+            });
+
+            it('3.6.2.15 — External CDN URL is NOT shell URL', () => {
+                expect(isAppShellURL('https://unpkg.com/vue@3/dist/vue.esm-browser.js')).to.be.false;
+            });
+
+            it('3.6.2.16 — Google Fonts URL is NOT shell URL', () => {
+                expect(isAppShellURL('https://fonts.googleapis.com/css2?family=Roboto')).to.be.false;
+            });
+
+            it('3.6.2.17 — Empty string is NOT shell URL', () => {
+                expect(isAppShellURL('')).to.be.false;
+            });
+
+            it('3.6.2.18 — Null input is NOT shell URL', () => {
+                expect(isAppShellURL(null)).to.be.false;
+            });
+
+            it('3.6.2.19 — URL with query params not in list', () => {
+                expect(isAppShellURL('./index.html?t=123')).to.be.false;
+            });
+        });
+
+        // ============================================================
+        // 3.6.2.20 — 3.6.2.34: isImageURL
+        // ============================================================
+        describe('Section 3.6.2.20–34 — isImageURL', () => {
+            it('3.6.2.20 — JPEG URL', () => {
+                expect(isImageURL('https://example.com/photo.jpg')).to.be.true;
+            });
+
+            it('3.6.2.21 — PNG URL', () => {
+                expect(isImageURL('https://example.com/icon.png')).to.be.true;
+            });
+
+            it('3.6.2.22 — WebP URL', () => {
+                expect(isImageURL('https://example.com/image.webp')).to.be.true;
+            });
+
+            it('3.6.2.23 — GIF URL', () => {
+                expect(isImageURL('https://example.com/anim.gif')).to.be.true;
+            });
+
+            it('3.6.2.24 — SVG URL', () => {
+                expect(isImageURL('https://example.com/logo.svg')).to.be.true;
+            });
+
+            it('3.6.2.25 — HTML file is NOT image', () => {
+                expect(isImageURL('./index.html')).to.be.false;
+            });
+
+            it('3.6.2.26 — CSS file is NOT image', () => {
+                expect(isImageURL('./Style.css')).to.be.false;
+            });
+
+            it('3.6.2.27 — JS file is NOT image', () => {
+                expect(isImageURL('./MyESModules/index.js')).to.be.false;
+            });
+
+            it('3.6.2.28 — JSON file is NOT image', () => {
+                expect(isImageURL('./manifest.json')).to.be.false;
+            });
+
+            it('3.6.2.29 — URL with query params is image (extension-based)', () => {
+                expect(isImageURL('https://example.com/photo.jpg?v=2')).to.be.true;
+            });
+
+            it('3.6.2.30 — URL without extension is NOT image', () => {
+                expect(isImageURL('https://example.com/image')).to.be.false;
+            });
+
+            it('3.6.2.31 — Data URL for image is NOT network image', () => {
+                expect(isImageURL('data:image/png;base64,iVBORw0KGgo=')).to.be.false;
+            });
+
+            it('3.6.2.32 — Blob URL is NOT network image', () => {
+                expect(isImageURL('blob:https://example.com/abc123')).to.be.false;
+            });
+
+            it('3.6.2.32.1 — File URL is NOT network image', () => {
+                expect(isImageURL('file:///Users/test/photo.jpg')).to.be.false;
+            });
+
+            it('3.6.2.33 — Empty string is NOT image', () => {
+                expect(isImageURL('')).to.be.false;
+            });
+
+            it('3.6.2.34 — Case-insensitive extension', () => {
+                expect(isImageURL('https://example.com/photo.JPG')).to.be.true;
+            });
+        });
+
+        // ============================================================
+        // 3.6.2.35 — 3.6.2.46: routeRequest
+        // ============================================================
+        describe('Section 3.6.2.35–46 — routeRequest', () => {
+            it('3.6.2.35 — Shell HTML', () => {
+                expect(routeRequest('./index.html')).to.equal('shell');
+            });
+
+            it('3.6.2.36 — Shell CSS', () => {
+                expect(routeRequest('./Style.css')).to.equal('shell');
+            });
+
+            it('3.6.2.37 — Shell JS', () => {
+                expect(routeRequest('./MyESModules/index.js')).to.equal('shell');
+            });
+
+            it('3.6.2.38 — Image JPEG', () => {
+                expect(routeRequest('https://example.com/photo.jpg')).to.equal('images');
+            });
+
+            it('3.6.2.39 — Image PNG', () => {
+                expect(routeRequest('https://example.com/icon.png')).to.equal('images');
+            });
+
+            it('3.6.2.40 — External CDN JS is passthrough', () => {
+                expect(routeRequest('https://unpkg.com/vue@3/dist/vue.esm-browser.js')).to.equal('passthrough');
+            });
+
+            it('3.6.2.41 — Google Fonts is passthrough', () => {
+                expect(routeRequest('https://fonts.googleapis.com/css2?family=Roboto')).to.equal('passthrough');
+            });
+
+            it('3.6.2.42 — API endpoint is passthrough', () => {
+                expect(routeRequest('https://api.example.com/data')).to.equal('passthrough');
+            });
+
+            it('3.6.2.43 — Unknown extension is passthrough', () => {
+                expect(routeRequest('https://example.com/file.xyz')).to.equal('passthrough');
+            });
+
+            it('3.6.2.44 — Empty URL is passthrough', () => {
+                expect(routeRequest('')).to.equal('passthrough');
+            });
+
+            it('3.6.2.45 — Manifest itself is passthrough or shell', () => {
+                // manifest.json is not in APP_SHELL_URLS and not an image
+                const result = routeRequest('./manifest.json');
+                expect(['passthrough', 'shell']).to.include(result);
+            });
+
+            it('3.6.2.46 — Service worker itself is shell', () => {
+                expect(routeRequest('./service-worker.js')).to.equal('shell');
+            });
+        });
+
+        // ============================================================
+        // 3.6.2.47 — 3.6.2.53: computeCacheKey
+        // ============================================================
+        describe('Section 3.6.2.47–53 — computeCacheKey', () => {
+            it('3.6.2.47 — Basic cache key contains url and version', () => {
+                const key = computeCacheKey('./index.html', 'shell-v1');
+                expect(key).to.include('./index.html');
+                expect(key).to.include('__v=');
+            });
+
+            it('3.6.2.48 — Same URL, different cache names produce different keys', () => {
+                const key1 = computeCacheKey('./index.html', 'shell-v1');
+                const key2 = computeCacheKey('./index.html', 'images-v1');
+                expect(key1).to.not.equal(key2);
+            });
+
+            it('3.6.2.49 — Different URLs produce different keys', () => {
+                const key1 = computeCacheKey('./index.html', 'shell-v1');
+                const key2 = computeCacheKey('./Style.css', 'shell-v1');
+                expect(key1).to.not.equal(key2);
+            });
+
+            it('3.6.2.50 — Key includes version number', () => {
+                const key = computeCacheKey('./index.html', 'shell-v1');
+                expect(key).to.include(`__v=${CACHE_CONFIG.CACHE_VERSION}`);
+            });
+
+            it('3.6.2.51 — Key is deterministic', () => {
+                const key1 = computeCacheKey('./index.html', 'shell-v1');
+                const key2 = computeCacheKey('./index.html', 'shell-v1');
+                expect(key1).to.equal(key2);
+            });
+
+            it('3.6.2.52 — URL with query params preserved', () => {
+                const key = computeCacheKey('./index.html?t=1', 'shell-v1');
+                expect(key).to.include('./index.html?t=1');
+            });
+
+            it('3.6.2.53 — URL with hash preserved', () => {
+                const key = computeCacheKey('./index.html#section', 'shell-v1');
+                expect(key).to.include('./index.html#section');
+            });
+        });
+
+        // ============================================================
+        // 3.6.2.54 — 3.6.2.63: shouldCacheResponse
+        // ============================================================
+        describe('Section 3.6.2.54–63 — shouldCacheResponse', () => {
+            function makeResponse(status, headers = {}) {
+                return {
+                    status,
+                    type: 'basic',
+                    headers: {
+                        get(key) { return headers[key]; },
+                        ...headers
+                    }
+                };
+            }
+
+            it('3.6.2.54 — 200 OK response is cacheable', () => {
+                const resp = makeResponse(200, { 'content-type': 'text/html' });
+                expect(shouldCacheResponse('./index.html', resp)).to.be.true;
+            });
+
+            it('3.6.2.55 — 200 OK image is cacheable', () => {
+                const resp = makeResponse(200, { 'content-type': 'image/jpeg' });
+                expect(shouldCacheResponse('https://example.com/photo.jpg', resp)).to.be.true;
+            });
+
+            it('3.6.2.56 — 304 Not Modified is NOT cacheable', () => {
+                const resp = makeResponse(304);
+                expect(shouldCacheResponse('./index.html', resp)).to.be.false;
+            });
+
+            it('3.6.2.57 — 404 Not Found is NOT cacheable', () => {
+                const resp = makeResponse(404);
+                expect(shouldCacheResponse('./index.html', resp)).to.be.false;
+            });
+
+            it('3.6.2.58 — 500 Server Error is NOT cacheable', () => {
+                const resp = makeResponse(500);
+                expect(shouldCacheResponse('./index.html', resp)).to.be.false;
+            });
+
+            it('3.6.2.59 — 403 Forbidden is NOT cacheable', () => {
+                const resp = makeResponse(403);
+                expect(shouldCacheResponse('./index.html', resp)).to.be.false;
+            });
+
+            it('3.6.2.60 — Redirect (301) is NOT cacheable', () => {
+                const resp = makeResponse(301);
+                expect(shouldCacheResponse('./index.html', resp)).to.be.false;
+            });
+
+            it('3.6.2.61 — Response with no content-type is NOT cacheable', () => {
+                const resp = makeResponse(200, {});
+                expect(shouldCacheResponse('./index.html', resp)).to.be.false;
+            });
+
+            it('3.6.2.62 — Null response is NOT cacheable', () => {
+                expect(shouldCacheResponse('./index.html', null)).to.be.false;
+            });
+
+            it('3.6.2.63 — Opaque CORS response is NOT cacheable', () => {
+                const resp = { type: 'opaque', status: 200 };
+                expect(shouldCacheResponse('./index.html', resp)).to.be.false;
+            });
+        });
+
+        // ============================================================
+        // 3.6.2.64 — 3.6.2.68: getCacheName
+        // ============================================================
+        describe('Section 3.6.2.64–68 — getCacheName', () => {
+            it('3.6.2.64 — Shell cache name', () => {
+                expect(getCacheName('shell')).to.equal(CACHE_CONFIG.APP_SHELL_CACHE_NAME);
+            });
+
+            it('3.6.2.65 — Image cache name', () => {
+                expect(getCacheName('images')).to.equal(CACHE_CONFIG.IMAGE_CACHE_NAME);
+            });
+
+            it('3.6.2.66 — Unknown type returns null', () => {
+                expect(getCacheName('unknown')).to.be.null;
+            });
+
+            it('3.6.2.67 — Empty string returns null', () => {
+                expect(getCacheName('')).to.be.null;
+            });
+
+            it('3.6.2.68 — Null input returns null', () => {
+                expect(getCacheName(null)).to.be.null;
+            });
+        });
+
+        // ============================================================
+        // 3.6.2.69 — 3.6.2.87: validateManifest
+        // ============================================================
+        describe('Section 3.6.2.69–87 — validateManifest', () => {
+            function validManifest() {
+                return {
+                    name: 'CollageMaker',
+                    short_name: 'CollageMaker',
+                    start_url: './index.html',
+                    display: 'standalone',
+                    icons: [
+                        { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+                        { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' }
+                    ],
+                    background_color: '#ffffff',
+                    theme_color: '#ffffff'
+                };
+            }
+
+            it('3.6.2.69 — Valid manifest passes', () => {
+                const result = validateManifest(validManifest());
+                expect(result.valid).to.be.true;
+                expect(result.errors).to.have.lengthOf(0);
+            });
+
+            it('3.6.2.70 — Missing name fails', () => {
+                const m = validManifest();
+                delete m.name;
+                const result = validateManifest(m);
+                expect(result.valid).to.be.false;
+                expect(result.errors).to.include('Missing required field: name');
+            });
+
+            it('3.6.2.71 — Missing short_name fails', () => {
+                const m = validManifest();
+                delete m.short_name;
+                const result = validateManifest(m);
+                expect(result.valid).to.be.false;
+                expect(result.errors).to.include('Missing required field: short_name');
+            });
+
+            it('3.6.2.72 — Missing start_url fails', () => {
+                const m = validManifest();
+                delete m.start_url;
+                const result = validateManifest(m);
+                expect(result.valid).to.be.false;
+                expect(result.errors).to.include('Missing required field: start_url');
+            });
+
+            it('3.6.2.73 — Missing display fails', () => {
+                const m = validManifest();
+                delete m.display;
+                const result = validateManifest(m);
+                expect(result.valid).to.be.false;
+                expect(result.errors).to.include('Missing required field: display');
+            });
+
+            it('3.6.2.74 — Missing icons fails', () => {
+                const m = validManifest();
+                delete m.icons;
+                const result = validateManifest(m);
+                expect(result.valid).to.be.false;
+                expect(result.errors).to.include('Missing required field: icons');
+            });
+
+            it('3.6.2.75 — Empty icons array fails', () => {
+                const m = validManifest();
+                m.icons = [];
+                const result = validateManifest(m);
+                expect(result.valid).to.be.false;
+                expect(result.errors).to.include('icons must have at least 1 entry');
+            });
+
+            it('3.6.2.76 — Icon missing src fails', () => {
+                const m = validManifest();
+                m.icons = [{ sizes: '192x192', type: 'image/png' }];
+                const result = validateManifest(m);
+                expect(result.valid).to.be.false;
+                expect(result.errors[0]).to.include('src');
+            });
+
+            it('3.6.2.77 — Icon missing sizes fails', () => {
+                const m = validManifest();
+                m.icons = [{ src: 'icon.png', type: 'image/png' }];
+                const result = validateManifest(m);
+                expect(result.valid).to.be.false;
+                expect(result.errors[0]).to.include('sizes');
+            });
+
+            it('3.6.2.78 — Invalid display value fails', () => {
+                const m = validManifest();
+                m.display = 'browser';
+                const result = validateManifest(m);
+                expect(result.valid).to.be.false;
+                expect(result.errors[0]).to.match(/display must be/);
+            });
+
+            it('3.6.2.79 — Valid display standalone passes', () => {
+                const m = validManifest();
+                m.display = 'standalone';
+                const result = validateManifest(m);
+                expect(result.valid).to.be.true;
+            });
+
+            it('3.6.2.80 — start_url not relative fails', () => {
+                const m = validManifest();
+                m.start_url = 'https://other.com/';
+                const result = validateManifest(m);
+                expect(result.valid).to.be.false;
+                expect(result.errors[0]).to.include('start_url must be relative');
+            });
+
+            it('3.6.2.81 — Missing background_color is reported', () => {
+                const m = validManifest();
+                delete m.background_color;
+                const result = validateManifest(m);
+                expect(result.valid).to.be.false;
+                expect(result.errors).to.include('Missing recommended field: background_color');
+            });
+
+            it('3.6.2.82 — Missing theme_color is reported', () => {
+                const m = validManifest();
+                delete m.theme_color;
+                const result = validateManifest(m);
+                expect(result.valid).to.be.false;
+                expect(result.errors).to.include('Missing recommended field: theme_color');
+            });
+
+            it('3.6.2.83 — Null manifest fails', () => {
+                const result = validateManifest(null);
+                expect(result.valid).to.be.false;
+                expect(result.errors).to.include('Manifest is null');
+            });
+
+            it('3.6.2.84 — Non-object manifest fails', () => {
+                const result = validateManifest('string');
+                expect(result.valid).to.be.false;
+                expect(result.errors).to.include('Manifest must be an object');
+            });
+
+            it('3.6.2.85 — Empty name string fails', () => {
+                const m = validManifest();
+                m.name = '';
+                const result = validateManifest(m);
+                expect(result.valid).to.be.false;
+                expect(result.errors).to.include('name must be non-empty');
+            });
+
+            it('3.6.2.86 — short_name exceeds 12 chars fails', () => {
+                const m = validManifest();
+                m.short_name = 'CollageMaker12345';
+                const result = validateManifest(m);
+                expect(result.valid).to.be.false;
+                expect(result.errors).to.include('short_name exceeds 12 characters');
+            });
+
+            it('3.6.2.87 — Icon with 192x192 passes', () => {
+                const m = validManifest();
+                m.icons = [{ src: '192.png', sizes: '192x192', type: 'image/png' }];
+                const result = validateManifest(m);
+                expect(result.valid).to.be.true;
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

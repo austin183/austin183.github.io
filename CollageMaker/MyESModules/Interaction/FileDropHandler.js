@@ -11,6 +11,7 @@ import { getBrowserUtils } from '../Utils/BrowserUtils.js';
  */
 export function createFileDropHandler() {
     const browserUtils = getBrowserUtils();
+    let activeCleanup = null;
 
     return {
         /**
@@ -24,37 +25,57 @@ export function createFileDropHandler() {
          * @param {Function} onFilesDropped - Callback receiving File[] array
          */
         setupGlobalDrop(onFilesDropped) {
+            // Clean up previous setup if it exists (prevents listener accumulation)
+            if (activeCleanup) {
+                activeCleanup();
+            }
+
             let dragCounter = 0;
 
-            document.addEventListener('dragenter', (e) => {
+            const onDragEnter = (e) => {
                 e.preventDefault();
                 dragCounter++;
                 document.body.classList.add('drag-over');
-            });
-
-            document.addEventListener('dragleave', (e) => {
+            };
+            const onDragLeave = (e) => {
                 e.preventDefault();
                 dragCounter--;
                 if (dragCounter <= 0) {
                     dragCounter = 0;
                     document.body.classList.remove('drag-over');
                 }
-            });
-
-            document.addEventListener('dragover', (e) => {
+            };
+            const onDragOver = (e) => {
                 e.preventDefault();
-            });
-
-            document.addEventListener('drop', (e) => {
+            };
+            const onDrop = (e) => {
                 e.preventDefault();
                 dragCounter = 0;
                 document.body.classList.remove('drag-over');
 
-                const files = e.dataTransfer.files;
-                if (files.length > 0) {
+                const files = e.dataTransfer?.files;
+                if (files && files.length > 0) {
                     onFilesDropped(files);
                 }
-            });
+            };
+
+            document.addEventListener('dragenter', onDragEnter);
+            document.addEventListener('dragleave', onDragLeave);
+            document.addEventListener('dragover', onDragOver);
+            document.addEventListener('drop', onDrop);
+
+            const cleanup = function cleanup() {
+                document.removeEventListener('dragenter', onDragEnter);
+                document.removeEventListener('dragleave', onDragLeave);
+                document.removeEventListener('dragover', onDragOver);
+                document.removeEventListener('drop', onDrop);
+                // Clear visual state on cleanup (prevents stuck drag-over class)
+                document.body.classList.remove('drag-over');
+                activeCleanup = null;
+            };
+
+            activeCleanup = cleanup;
+            return cleanup;
         },
 
         /**

@@ -5,6 +5,7 @@
 
 import { LayoutGenerator } from '../Layout/LayoutGenerator.js';
 import { SIZE_CONSTANTS } from '../Models/SizeConstants.js';
+import { regenerateLayoutAction } from './actions.js';
 
 /**
  * Creates a layout manager instance.
@@ -15,49 +16,46 @@ import { SIZE_CONSTANTS } from '../Models/SizeConstants.js';
 export function createLayoutManager(state, assembler) {
     return {
         /**
-         * Regenerates the layout for the current images.
-         */
-        regenerate() {
-            if (state.images.length === 0) {
-                state.panels = [];
-                state.crops = new Map();
-                state.panelAssignments = new Map();
-                return;
-            }
+          * Regenerates the layout for the current images.
+          */
+         regenerate() {
+             if (state.images.length === 0) {
+                 // Use action to clear and reset state
+                 state.panels = [];
+                 state.crops = new Map();
+                 state.panelAssignments = new Map();
+                 state.layoutVersion += 1;
+                 return;
+             }
 
-            state.layoutVersion += 1;
+             const imageOrder = Array.from({ length: state.images.length }, (_, i) => i);
 
-            const imageOrder = Array.from({ length: state.images.length }, (_, i) => i);
+             const panels = LayoutGenerator.generate({
+                 numImages: state.images.length,
+                 canvasSize: {
+                     width: SIZE_CONSTANTS.defaultCanvasWidth,
+                     height: SIZE_CONSTANTS.defaultCanvasHeight
+                 },
+                 gutter: state.gutter,
+                 style: state.layoutStyle,
+                 imageOrder: imageOrder,
+                 sliceAngle: state.sliceAngle,
+                 hexSpacing: state.hexSpacing
+             });
 
-            state.panels = LayoutGenerator.generate({
-                numImages: state.images.length,
-                canvasSize: {
-                    width: SIZE_CONSTANTS.defaultCanvasWidth,
-                    height: SIZE_CONSTANTS.defaultCanvasHeight
-                },
-                gutter: state.gutter,
-                style: state.layoutStyle,
-                imageOrder: imageOrder,
-                sliceAngle: state.sliceAngle,
-                hexSpacing: state.hexSpacing
-            });
+             // Build panel assignments
+             const panelAssignments = new Map();
+             panels.forEach((panel, i) => {
+                 panelAssignments.set(panel.id, imageOrder[i]);
+             });
 
-            // Build panel assignments
-            state.panelAssignments = new Map();
-            state.panels.forEach((panel, i) => {
-                state.panelAssignments.set(panel.id, imageOrder[i]);
-            });
-
-            // Compute default crops
-            state.crops = assembler.computeDefaultCrops(
-                state.panels,
-                state.images,
-                state.panelAssignments
-            );
-        },
+             // Use action to apply layout changes
+             regenerateLayoutAction(state, panels, new Map(), panelAssignments, assembler.computeDefaultCrops);
+         },
 
         /**
          * Changes the layout style and regenerates.
+         * Note: This is a configuration change not tracked by UndoManager.
          * @param {string} style
          */
         setLayoutStyle(style) {
@@ -67,6 +65,7 @@ export function createLayoutManager(state, assembler) {
 
         /**
          * Changes the gutter and regenerates.
+         * Note: This is a configuration change not tracked by UndoManager.
          * @param {number} value
          */
         setGutter(value) {
@@ -76,6 +75,7 @@ export function createLayoutManager(state, assembler) {
 
         /**
          * Changes the slice angle and regenerates (for diagonal slices).
+         * Note: This is a configuration change not tracked by UndoManager.
          * @param {number} value
          */
         setSliceAngle(value) {
@@ -87,6 +87,7 @@ export function createLayoutManager(state, assembler) {
 
         /**
          * Changes the hex spacing and regenerates (for hexagonal).
+         * Note: This is a configuration change not tracked by UndoManager.
          * @param {number} value
          */
         setHexSpacing(value) {

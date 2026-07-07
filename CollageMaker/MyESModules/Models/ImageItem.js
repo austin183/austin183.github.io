@@ -28,11 +28,11 @@ export function createImageItem({ image, filename, width, height, thumbnail }) {
 }
 
 /**
- * Generates a thumbnail data URL from an HTMLImageElement.
- * @param {HTMLImageElement} image
- * @param {number} maxDim - Maximum dimension (default 64)
- * @returns {string} Data URL of the thumbnail
- */
+  * Generates a thumbnail data URL from an HTMLImageElement.
+  * @param {HTMLImageElement} image
+  * @param {number} maxDim - Maximum dimension (default 64)
+  * @returns {string} Data URL of the thumbnail
+  */
 export function generateThumbnail(image, maxDim = 64) {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -53,4 +53,14 @@ export function generateThumbnail(image, maxDim = 64) {
     ctx.drawImage(image, 0, 0, thumbW, thumbH);
 
     return canvas.toDataURL('image/jpeg', 0.7);
+}
+
+/**
+  * Disposes an image item by nullifying its image reference.
+  * @param {Object} item - ImageItem object
+  */
+export function disposeImageItem(item) {
+    if (item && item.image) {
+        item.image = null;
+    }
 }

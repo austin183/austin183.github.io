@@ -96,9 +96,13 @@ async function runTests(testPath, baseUrl = 'http://localhost:' + SERVER_PORT) {
     try {
         console.log(baseUrl + '/' + testPath);
         // Navigate to test page
+        // Use 'domcontentloaded' instead of 'networkidle' to avoid timeouts
+        // from deferred tests that fetch non-existent resources (e.g., manifest.json)
         await page.goto(baseUrl + '/' + testPath, {
-            waitUntil: 'networkidle'
+            waitUntil: 'domcontentloaded'
         });
+        // Wait for external resources (Mocha/Chai CDN) to load
+        await page.waitForSelector('#mocha', { state: 'attached', timeout: 10000 });
 
         // Wait a bit for tests to run (Mocha runs synchronously on load)
         await page.waitForTimeout(1000);

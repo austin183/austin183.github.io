@@ -1,9 +1,9 @@
 /**
- * ImageLibrary - Image collection management.
- * Ported from Swift ViewModel/ImageLibraryManager.swift
- */
+  * ImageLibrary - Image collection management.
+  * Ported from Swift ViewModel/ImageLibraryManager.swift
+  */
 
-import { createImageItem, generateThumbnail } from '../Models/ImageItem.js';
+import { createImageItem, generateThumbnail, disposeImageItem } from '../Models/ImageItem.js';
 
 /**
  * Creates an image library manager.
@@ -38,20 +38,44 @@ export function createImageLibrary(state, onImagesChanged) {
         },
 
         /**
-         * Removes an image at the given index.
-         * @param {number} index
-         */
+          * Disposes and removes an image at the given index.
+          * Properly nulls out image references to allow garbage collection.
+          * @param {number} index
+          */
+        disposeImage(index) {
+            if (index < 0 || index >= state.images.length) return;
+
+            const imageItem = state.images[index];
+            disposeImageItem(imageItem); // Centralized disposal logic
+
+            // Remove from array
+            state.images.splice(index, 1);
+            onImagesChanged();
+        },
+
+        /**
+          * Removes an image at the given index (legacy, no cleanup).
+          * @param {number} index
+          * @deprecated Use disposeImage instead for proper cleanup
+          */
         removeImage(index) {
+            console.warn('ImageLibrary.removeImage() is deprecated. Use disposeImage() for proper memory cleanup.');
             if (index < 0 || index >= state.images.length) return;
             state.images.splice(index, 1);
             onImagesChanged();
         },
 
         /**
-         * Clears all images.
-         */
+          * Clears all images, disposing their references.
+          */
         clearAll() {
-            state.images = [];
+            // Dispose each image first to release HTMLImageElement references
+            for (let i = 0; i < state.images.length; i++) {
+                disposeImageItem(state.images[i]);
+            }
+
+            // Remove all items from the array in-place to maintain reactive reference
+            state.images.splice(0, state.images.length);
             onImagesChanged();
         },
 

@@ -71,7 +71,7 @@ npx playwright test --config=playwright.config.cjs
 ## Working on the Project
 
 - Write session summaries in `_agent_docs/project-timeline/sessions/` using the template from `.opencode/skills/analyzing-opencode-usage/references/session-summary.json`
-- Capture learnings in `_agent_docs/learnings/` after significant discoveries
+- Capture learnings in `_agent_docs/learnings/` after significant discoveries using the `capturing-learnings` skill
 - Consult the `building-web-apps` skill for Vue 3, Canvas 2D, and ES module patterns
 - Git commits must include `Co-Authored-By: LittleLight <noreply@traveler.dstny>`
 - Commit all project files — source code, tests (`MyComponents/`, `scripts/`), configs (`playwright.config.cjs`), and skills (`.opencode/skills/`)

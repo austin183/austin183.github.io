@@ -5,6 +5,7 @@
  */
 
 import { createDefaultCrop } from '../Models/CropInfo.js';
+import { setCropAction, resetCropAction } from './actions.js';
 
 /**
  * Creates a crop manager instance.
@@ -37,8 +38,12 @@ export function createCropManager(state, onCropChanged) {
             newX = Math.max(0, Math.min(newX, image.width - sr.width));
             newY = Math.max(0, Math.min(newY, image.height - sr.height));
 
-            crop.sourceRect.x = newX;
-            crop.sourceRect.y = newY;
+            // Create new crop with updated source rect and use action
+            const updatedCrop = {
+                ...crop,
+                sourceRect: { ...sr, x: newX, y: newY }
+            };
+            setCropAction(state, panelId, updatedCrop);
 
             onCropChanged();
         },
@@ -82,10 +87,12 @@ export function createCropManager(state, onCropChanged) {
             newX = Math.max(0, Math.min(newX, image.width - newW));
             newY = Math.max(0, Math.min(newY, image.height - newH));
 
-            crop.sourceRect.x = newX;
-            crop.sourceRect.y = newY;
-            crop.sourceRect.width = newW;
-            crop.sourceRect.height = newH;
+            // Create new crop with updated source rect and use action
+            const updatedCrop = {
+                ...crop,
+                sourceRect: { x: newX, y: newY, width: newW, height: newH }
+            };
+            setCropAction(state, panelId, updatedCrop);
 
             onCropChanged();
         },
@@ -106,13 +113,9 @@ export function createCropManager(state, onCropChanged) {
                 ? panel.geometry.rect
                 : panel.geometry.boundingRect;
 
-            const defaultCrop = createDefaultCrop({
-                panelId: panelId,
-                imageSize: { width: image.width, height: image.height },
-                panelSize: panelSize
-            });
+            // Use action to reset crop
+            resetCropAction(state, panelId, panel, state.images, state.panelAssignments, createDefaultCrop);
 
-            state.crops.set(panelId, defaultCrop);
             onCropChanged();
         },
 
@@ -131,10 +134,19 @@ export function createCropManager(state, onCropChanged) {
             const image = state.images[imageIndex];
 
             // Clamp to image bounds
-            crop.sourceRect.x = Math.max(0, Math.min(sourceRect.x, image.width - sourceRect.width));
-            crop.sourceRect.y = Math.max(0, Math.min(sourceRect.y, image.height - sourceRect.height));
-            crop.sourceRect.width = Math.max(1, Math.min(sourceRect.width, image.width));
-            crop.sourceRect.height = Math.max(1, Math.min(sourceRect.height, image.height));
+            const newRect = {
+                x: Math.max(0, Math.min(sourceRect.x, image.width - sourceRect.width)),
+                y: Math.max(0, Math.min(sourceRect.y, image.height - sourceRect.height)),
+                width: Math.max(1, Math.min(sourceRect.width, image.width)),
+                height: Math.max(1, Math.min(sourceRect.height, image.height))
+            };
+
+            // Create new crop with updated source rect and use action
+            const updatedCrop = {
+                ...crop,
+                sourceRect: newRect
+            };
+            setCropAction(state, panelId, updatedCrop);
 
             onCropChanged();
         },

@@ -17,6 +17,7 @@ export function createCanvasRenderer(canvasId) {
     let renderPending = false;
     let rafId = null;
     let pendingDrawFn = null;
+    let disposed = false;
 
     return {
         /**
@@ -26,6 +27,7 @@ export function createCanvasRenderer(canvasId) {
          * @param {number} [options.height] - Canvas height (default: preview height)
          */
         init({ width = SIZE_CONSTANTS.defaultPreviewWidth, height = SIZE_CONSTANTS.defaultPreviewHeight } = {}) {
+            disposed = false;
             canvas = document.getElementById(canvasId);
             if (!canvas) {
                 console.error('CanvasRenderer: Canvas element not found:', canvasId);
@@ -69,6 +71,7 @@ export function createCanvasRenderer(canvasId) {
          * @param {Function} [drawFn] - function(ctx, width, height) to draw content
          */
         scheduleRender(drawFn) {
+            if (disposed) return;
             if (drawFn) {
                 pendingDrawFn = drawFn;
             }
@@ -90,6 +93,22 @@ export function createCanvasRenderer(canvasId) {
         },
 
         /**
+         * Clear the canvas and fill with white background.
+         * @param {number} width - Width in CSS pixels
+         * @param {number} height - Height in CSS pixels
+         */
+        clear(width, height) {
+            if (!ctx || !canvas) return;
+
+            // Clear canvas
+            ctx.clearRect(0, 0, width, height);
+
+            // Fill white background
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, width, height);
+        },
+
+        /**
          * Execute the render immediately.
          * @param {Function} [drawFn] - Optional function(ctx, width, height) to draw content
          */
@@ -99,12 +118,8 @@ export function createCanvasRenderer(canvasId) {
             const width = canvas.width / (window.devicePixelRatio || 1);
             const height = canvas.height / (window.devicePixelRatio || 1);
 
-            // Clear canvas
-            ctx.clearRect(0, 0, width, height);
-
-            // Fill white background
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, width, height);
+            // Clear canvas - centralized clearing logic
+            this.clear(width, height);
 
             // Execute custom draw function
             if (drawFn && typeof drawFn === 'function') {
@@ -128,7 +143,12 @@ export function createCanvasRenderer(canvasId) {
          * Dispose of resources.
          */
         dispose() {
+            disposed = true;
             this.cancelPending();
+            if (canvas) {
+                canvas.width = 0;
+                canvas.height = 0;
+            }
             canvas = null;
             ctx = null;
         },

@@ -1,6 +1,7 @@
 /**
  * LayoutGenerator - Main generator that dispatches to layout strategies.
  * Ported from Swift LayoutGenerator.swift
+ * Refactored to use strategy pattern for OCP compliance.
  */
 
 import { LayoutStyle } from '../Models/LayoutStyle.js';
@@ -9,6 +10,15 @@ import { generateHeroLayout } from './HeroLayout.js';
 import { generateMosaicLayout } from './MosaicLayout.js';
 import { generateDiagonalSlicesLayout } from './DiagonalSlicesLayout.js';
 import { generateHexagonalLayout } from './HexagonalLayout.js';
+
+// Map of layout styles to generator functions
+const LAYOUT_GENERATORS = {
+    [LayoutStyle.UNIFORM]: generateUniformLayout,
+    [LayoutStyle.HERO]: generateHeroLayout,
+    [LayoutStyle.MOSAIC]: generateMosaicLayout,
+    [LayoutStyle.DIAGONAL_SLICES]: generateDiagonalSlicesLayout,
+    [LayoutStyle.HEXAGONAL]: generateHexagonalLayout
+};
 
 export const LayoutGenerator = {
     /**
@@ -36,19 +46,27 @@ export const LayoutGenerator = {
     }) {
         const base = { numImages, canvasSize, gutter, imageOrder };
 
-        switch (style) {
-            case LayoutStyle.UNIFORM:
-                return generateUniformLayout(base);
-            case LayoutStyle.HERO:
-                return generateHeroLayout(base);
-            case LayoutStyle.MOSAIC:
-                return generateMosaicLayout({ ...base, mosaicSeed });
-            case LayoutStyle.DIAGONAL_SLICES:
-                return generateDiagonalSlicesLayout({ ...base, angle: sliceAngle });
-            case LayoutStyle.HEXAGONAL:
-                return generateHexagonalLayout({ ...base, spacing: hexSpacing });
-            default:
-                return generateHeroLayout(base);
+        const generator = LAYOUT_GENERATORS[style];
+        if (!generator) {
+            console.warn(`Unknown layout style: ${style}, defaulting to HERO`);
+            return generateHeroLayout(base);
         }
+
+        // Pass all optional parameters; each generator extracts what it needs
+        const generatorOptions = { ...base };
+        if (mosaicSeed !== null) generatorOptions.mosaicSeed = mosaicSeed;
+        if (sliceAngle !== 45) generatorOptions.angle = sliceAngle;
+        if (hexSpacing !== 8) generatorOptions.spacing = hexSpacing;
+
+        return generator(generatorOptions);
+    },
+
+    /**
+     * Register a custom layout generator.
+     * @param {string} styleName - The layout style name
+     * @param {Function} generatorFn - Function that generates panels
+     */
+    registerLayoutStyle(styleName, generatorFn) {
+        LAYOUT_GENERATORS[styleName] = generatorFn;
     }
 };

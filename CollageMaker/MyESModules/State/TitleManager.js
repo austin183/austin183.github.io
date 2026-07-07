@@ -39,7 +39,9 @@ export function createTitleManager(state, onChange) {
                 merged.push(curr);
             }
         }
-        state.titleRuns = merged;
+        // Mutate existing array to preserve Vue reactivity reference
+        state.titleRuns.length = 0;
+        state.titleRuns.push(...merged);
     }
 
     /**
@@ -103,7 +105,8 @@ export function createTitleManager(state, onChange) {
             }
         }
 
-        state.titleRuns = newRuns;
+        // Mutate existing array to preserve Vue reactivity reference
+        state.titleRuns.splice(0, state.titleRuns.length, ...newRuns);
         mergeAdjacentRuns();
     }
 
@@ -300,6 +303,65 @@ export function createTitleManager(state, onChange) {
                 runs: state.titleRuns || [],
                 style: state.titleStyle
             };
+        },
+
+        // ============================================================
+        // Title Style Setters - For UI Controls
+        // These update the titleStyle configuration object.
+        // ============================================================
+
+        /**
+         * Sets the font family for the title.
+         * @param {string} fontFamily
+         */
+        setFontFamily(fontFamily) {
+            state.titleStyle.fontFamily = fontFamily;
+            notify();
+        },
+
+        /**
+         * Sets the font size for the title.
+         * @param {number} fontSize
+         */
+        setFontSize(fontSize) {
+            state.titleStyle.fontSize = fontSize;
+            notify();
+        },
+
+        /**
+         * Sets the font color for the title.
+         * @param {string} fontColor - Hex color string
+         */
+        setFontColor(fontColor) {
+            state.titleStyle.fontColor = fontColor;
+            notify();
+        },
+
+        /**
+         * Sets the background color for the title.
+         * @param {string} backgroundColor - Hex color string
+         */
+        setBackgroundColor(backgroundColor) {
+            state.titleStyle.backgroundColor = backgroundColor;
+            notify();
+        },
+
+        /**
+         * Sets the text alignment for the title.
+         * @param {string} alignment - 'left', 'center', or 'right'
+         */
+        setAlignment(alignment) {
+            state.titleStyle.alignment = alignment;
+            notify();
+        },
+
+        /**
+         * Toggles the visibility of the title background.
+         * @param {boolean} showBackground
+         */
+        showBackground(showBackground) {
+            state.titleStyle.showBackground = showBackground;
+            notify();
         }
     };
 }
