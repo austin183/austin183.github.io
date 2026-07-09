@@ -29,7 +29,10 @@ export function createCropInteraction({ canvasId, cropManager, panelId, onRender
     // Corner handle size in CSS pixels
     const CORNER_HANDLE_SIZE = 12;
 
-    return {
+    // Placeholder for bound handlers (set after handler object is created)
+    let onPointerDown, onPointerMove, onPointerUp;
+
+    const handler = {
         /**
          * Attaches pointer event listeners to the crop preview canvas.
          */
@@ -40,10 +43,10 @@ export function createCropInteraction({ canvasId, cropManager, panelId, onRender
             canvas = document.getElementById(canvasId);
             if (!canvas) return;
 
-            canvas.addEventListener('pointerdown', (e) => this._onPointerDown(e));
-            canvas.addEventListener('pointermove', (e) => this._onPointerMove(e));
-            canvas.addEventListener('pointerup', (e) => this._onPointerUp(e));
-            canvas.addEventListener('pointercancel', (e) => this._onPointerUp(e));
+            canvas.addEventListener('pointerdown', onPointerDown);
+            canvas.addEventListener('pointermove', onPointerMove);
+            canvas.addEventListener('pointerup', onPointerUp);
+            canvas.addEventListener('pointercancel', onPointerUp);
         },
 
         /**
@@ -54,10 +57,10 @@ export function createCropInteraction({ canvasId, cropManager, panelId, onRender
             handlerAttached = false;
 
             if (canvas) {
-                canvas.removeEventListener('pointerdown', this._onPointerDown);
-                canvas.removeEventListener('pointermove', this._onPointerMove);
-                canvas.removeEventListener('pointerup', this._onPointerUp);
-                canvas.removeEventListener('pointercancel', this._onPointerUp);
+                canvas.removeEventListener('pointerdown', onPointerDown);
+                canvas.removeEventListener('pointermove', onPointerMove);
+                canvas.removeEventListener('pointerup', onPointerUp);
+                canvas.removeEventListener('pointercancel', onPointerUp);
             }
         },
 
@@ -363,4 +366,11 @@ export function createCropInteraction({ canvasId, cropManager, panelId, onRender
             }
         }
     };
+
+    // Bind event handlers now that handler object exists
+    onPointerDown = (e) => handler._onPointerDown(e);
+    onPointerMove = (e) => handler._onPointerMove(e);
+    onPointerUp = (e) => handler._onPointerUp(e);
+
+    return handler;
 }

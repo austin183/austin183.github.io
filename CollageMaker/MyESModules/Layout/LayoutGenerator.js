@@ -32,6 +32,7 @@ export const LayoutGenerator = {
      * @param {number} [options.mosaicSeed] - Seed for deterministic mosaic
      * @param {number} [options.sliceAngle] - Angle for diagonal slices (default 45)
      * @param {number} [options.hexSpacing] - Spacing for hexagonal (default 8)
+     * @param {number} [options.hexSizeMultiplier] - Size multiplier for hexagons (default 1.0)
      * @returns {Array} Array of ImagePanel objects
      */
     generate({
@@ -42,7 +43,8 @@ export const LayoutGenerator = {
         imageOrder = null,
         mosaicSeed = null,
         sliceAngle = 45,
-        hexSpacing = 8
+        hexSpacing = 8,
+        hexSizeMultiplier = 1.0
     }) {
         const base = { numImages, canvasSize, gutter, imageOrder };
 
@@ -57,6 +59,7 @@ export const LayoutGenerator = {
         if (mosaicSeed !== null) generatorOptions.mosaicSeed = mosaicSeed;
         if (sliceAngle !== 45) generatorOptions.angle = sliceAngle;
         if (hexSpacing !== 8) generatorOptions.spacing = hexSpacing;
+        if (hexSizeMultiplier !== 1.0) generatorOptions.hexSizeMultiplier = hexSizeMultiplier;
 
         return generator(generatorOptions);
     },
@@ -68,5 +71,23 @@ export const LayoutGenerator = {
      */
     registerLayoutStyle(styleName, generatorFn) {
         LAYOUT_GENERATORS[styleName] = generatorFn;
+    },
+
+    /**
+     * Returns which options each layout uses. Enables the UI to
+     * dynamically show/hide options based on the selected layout
+     * without hardcoded conditions.
+     * @param {string} style - LayoutStyle value
+     * @returns {Object} Layout options descriptor
+     */
+    getLayoutOptions(style) {
+        const options = {
+            [LayoutStyle.UNIFORM]: { gutter: true, sliceAngle: false, hexSpacing: false, hexSizeMultiplier: false },
+            [LayoutStyle.HERO]: { gutter: true, sliceAngle: false, hexSpacing: false, hexSizeMultiplier: false },
+            [LayoutStyle.MOSAIC]: { gutter: true, sliceAngle: false, hexSpacing: false, hexSizeMultiplier: false },
+            [LayoutStyle.DIAGONAL_SLICES]: { gutter: true, sliceAngle: true, hexSpacing: false, hexSizeMultiplier: false },
+            [LayoutStyle.HEXAGONAL]: { gutter: false, sliceAngle: false, hexSpacing: true, hexSizeMultiplier: true }
+        };
+        return options[style] || options[LayoutStyle.HERO];
     }
 };

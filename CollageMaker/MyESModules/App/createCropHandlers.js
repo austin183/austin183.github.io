@@ -1,14 +1,16 @@
 /**
  * Crop handlers - Handles crop adjustments and reset.
+ * Uses injected callbacks for DIP compliance — no direct this._scheduleRender().
  */
 
 /**
  * Creates crop handlers.
  * @param {Function} getCropManager - Function that returns CropManager instance
- * @param {Function} getCanvasRenderer - Function that returns CanvasRenderer instance
+ * @param {Function} onRenderScheduled - Callback to schedule a canvas render
+ * @param {Function} onCropPreviewRender - Callback to schedule a crop preview render
  * @returns {Object} Crop handlers object
  */
-export function createCropHandlers(getCropManager, getCanvasRenderer) {
+export function createCropHandlers(getCropManager, onRenderScheduled, onCropPreviewRender) {
     return {
         /**
          * Selects a panel on the canvas.
@@ -17,14 +19,18 @@ export function createCropHandlers(getCropManager, getCanvasRenderer) {
          */
         selectPanel(panelId, cropInteraction = null) {
             this.selectedPanelId = panelId;
-            this._scheduleRender();
+            onRenderScheduled(this);
+            // Auto-expand crop section when a panel is selected
+            if (this.autoExpandCropOnSelect) {
+                this.autoExpandCropOnSelect(panelId);
+            }
             // Delay both crop interaction attach and crop preview render until
             // after Vue updates the DOM (the crop canvas is inside a v-if block).
             this.$nextTick(() => {
                 if (cropInteraction) {
                     cropInteraction.setPanelId(panelId);
                 }
-                this._scheduleCropPreviewRender();
+                onCropPreviewRender(this);
             });
         },
 
@@ -42,7 +48,7 @@ export function createCropHandlers(getCropManager, getCanvasRenderer) {
             if (prevCrop) {
                 // We'll handle undo in the caller, just trigger reset here
                 cropManager.resetCrop(panelId);
-                this._scheduleRender();
+                onRenderScheduled(this);
             }
         },
 
@@ -55,7 +61,7 @@ export function createCropHandlers(getCropManager, getCanvasRenderer) {
             const cropManager = getCropManager();
             if (cropManager) {
                 cropManager.adjustCrop(panelId, delta);
-                this._scheduleRender();
+                onRenderScheduled(this);
             }
         },
 
@@ -68,7 +74,7 @@ export function createCropHandlers(getCropManager, getCanvasRenderer) {
             const cropManager = getCropManager();
             if (cropManager) {
                 cropManager.zoomCrop(panelId, factor);
-                this._scheduleRender();
+                onRenderScheduled(this);
             }
         }
     };

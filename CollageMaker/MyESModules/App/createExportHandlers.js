@@ -33,10 +33,12 @@ export function createExportHandlers(assembler) {
                 };
 
                 // Use ExportManager for extensibility
+                // Validate format — only 'jpeg' and 'png' are supported
+                const format = (this.exportFormat === 'png' ? 'png' : 'jpeg');
                 await ExportManager.export(
                     assembler,
                     stateSnapshot,
-                    this.exportFormat || 'jpeg',
+                    format,
                     this.exportQuality
                 );
 

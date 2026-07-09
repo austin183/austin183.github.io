@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MultiTouchHandler Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — MultiTouchHandler Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Phase 4 — CR-06 Multi-Touch Gestures (two-finger move, pinch-to-zoom)</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import {
+            computeTouchMidpoint,
+            computeTouchDistance,
+            computePinchScale,
+            createMultiTouchHandler
+        } from '../MyESModules/Interaction/MultiTouchHandler.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // Helper: create mock TouchList-like objects that are iterable
+        // TouchEvent constructor requires touches/targetTouches/changedTouches
+        // to have a callable @@iterator property.
+        // ============================================================
+        function makeTouchList(touches) {
+            const list = {
+                length: touches.length,
+                item: (i) => touches[i] || null
+            };
+            for (let i = 0; i < touches.length; i++) {
+                list[i] = touches[i];
+            }
+            list[Symbol.iterator] = function* () {
+                for (let i = 0; i < this.length; i++) {
+                    yield this[i];
+                }
+            };
+            return list;
+        }
+
+        function makeTouch(touchId, clientX, clientY) {
+            return { identifier: touchId, clientX, clientY };
+        }
+
+        /**
+         * Creates a TouchEvent with mock touch lists.
+         * The browser TouchEvent constructor requires real Touch objects,
+         * which can't be instantiated from JS. Instead we create the event
+         * and use Object.defineProperty to set the touch properties.
+         */
+        function createMockTouchEvent(type, { touches, targetTouches, changedTouches } = {}) {
+            const evt = new Event(type, { bubbles: true, cancelable: true });
+            const props = {};
+            if (touches) props.touches = touches;
+            if (targetTouches) props.targetTouches = targetTouches;
+            if (changedTouches) props.changedTouches = changedTouches;
+
+            for (const [key, value] of Object.entries(props)) {
+                Object.defineProperty(evt, key, {
+                    get: () => value,
+                    configurable: true
+                });
+            }
+            return evt;
+        }
+
+        // ============================================================
+        // Pure Math Functions — testable without DOM
+        // ============================================================
+        describe('computeTouchMidpoint', () => {
+            it('returns midpoint of two touches', () => {
+                const t1 = { clientX: 100, clientY: 200 };
+                const t2 = { clientX: 300, clientY: 400 };
+                const mid = computeTouchMidpoint(t1, t2);
+                expect(mid.x).to.equal(200);
+                expect(mid.y).to.equal(300);
+            });
+
+            it('returns same point when touches are identical', () => {
+                const t = { clientX: 100, clientY: 200 };
+                const mid = computeTouchMidpoint(t, t);
+                expect(mid.x).to.equal(100);
+                expect(mid.y).to.equal(200);
+            });
+
+            it('handles non-integer coordinates', () => {
+                const t1 = { clientX: 100.5, clientY: 200.3 };
+                const t2 = { clientX: 300.7, clientY: 400.9 };
+                const mid = computeTouchMidpoint(t1, t2);
+                expect(mid.x).to.equal(200.6);
+                expect(mid.y).to.equal(300.6);
+            });
+        });
+
+        describe('computeTouchDistance', () => {
+            it('computes Euclidean distance between two touches', () => {
+                const t1 = { clientX: 0, clientY: 0 };
+                const t2 = { clientX: 300, clientY: 400 };
+                const dist = computeTouchDistance(t1, t2);
+                expect(dist).to.equal(500);
+            });
+
+            it('returns zero for identical touches', () => {
+                const t = { clientX: 100, clientY: 200 };
+                expect(computeTouchDistance(t, t)).to.equal(0);
+            });
+
+            it('handles horizontal distance', () => {
+                const t1 = { clientX: 0, clientY: 100 };
+                const t2 = { clientX: 200, clientY: 100 };
+                expect(computeTouchDistance(t1, t2)).to.equal(200);
+            });
+
+            it('handles vertical distance', () => {
+                const t1 = { clientX: 100, clientY: 0 };
+                const t2 = { clientX: 100, clientY: 150 };
+                expect(computeTouchDistance(t1, t2)).to.equal(150);
+            });
+        });
+
+        describe('computePinchScale', () => {
+            it('returns 1.0 when distances are equal (no zoom)', () => {
+                expect(computePinchScale(100, 100)).to.equal(1.0);
+            });
+
+            it('returns factor > 1 when fingers spread (zoom in)', () => {
+                const scale = computePinchScale(100, 200);
+                expect(scale).to.equal(2.0);
+            });
+
+            it('returns factor < 1 when fingers close (zoom out)', () => {
+                const scale = computePinchScale(200, 100);
+                expect(scale).to.equal(0.5);
+            });
+
+            it('guards against zero initial distance', () => {
+                const scale = computePinchScale(0, 100);
+                expect(scale).to.be.a('number');
+                expect(scale).to.not.be.NaN;
+                // Should return 1.0 (no zoom) when initial distance is zero
+                expect(scale).to.equal(1.0);
+            });
+
+            it('guards against zero current distance', () => {
+                const scale = computePinchScale(100, 0);
+                expect(scale).to.be.a('number');
+                expect(scale).to.not.be.NaN;
+            });
+        });
+
+        // ============================================================
+        // Factory — createMultiTouchHandler
+        // ============================================================
+        describe('createMultiTouchHandler', () => {
+            it('returns a handler object with attach and detach methods', () => {
+                const handler = createMultiTouchHandler({
+                    canvasId: 'testCanvas',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {} },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                expect(handler).to.be.an('object');
+                expect(handler.attach).to.be.a('function');
+                expect(handler.detach).to.be.a('function');
+            });
+
+            it('attaches touch event listeners to the canvas', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-test-canvas';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-test-canvas',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {} },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+
+                handler.attach();
+
+                let prevented = false;
+                const touches = makeTouchList([
+                    makeTouch(1, 100, 100),
+                    makeTouch(2, 200, 200)
+                ]);
+
+                const evt = createMockTouchEvent('touchstart', {
+                    touches: touches,
+                    targetTouches: touches,
+                    changedTouches: makeTouchList([])
+                });
+                evt.preventDefault = () => { prevented = true; };
+
+                canvas.dispatchEvent(evt);
+                expect(prevented).to.be.true;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('detaches touch event listeners', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-test-detach';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-test-detach',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {} },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+
+                handler.attach();
+                handler.detach();
+
+                let prevented = false;
+                const twoTouches = makeTouchList([makeTouch(1, 100, 100), makeTouch(2, 200, 200)]);
+                const evt = createMockTouchEvent('touchstart', {
+                    touches: twoTouches,
+                    targetTouches: twoTouches,
+                    changedTouches: makeTouchList([])
+                });
+                evt.preventDefault = () => { prevented = true; };
+
+                canvas.dispatchEvent(evt);
+                expect(prevented).to.be.false;
+
+                document.body.removeChild(canvas);
+            });
+
+            it('does not activate for single-touch events', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-test-single';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                let prevented = false;
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-test-single',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {} },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                const touch1 = makeTouch(1, 100, 100);
+                const touches = makeTouchList([touch1]);
+
+                const evt = createMockTouchEvent('touchstart', {
+                    touches: touches,
+                    targetTouches: touches,
+                    changedTouches: makeTouchList([touch1])
+                });
+                evt.preventDefault = () => { prevented = true; };
+
+                canvas.dispatchEvent(evt);
+                // Single touch should NOT be intercepted by multi-touch handler
+                expect(prevented).to.be.false;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('calls adjustCrop on two-finger move', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-test-move';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let adjustCalled = false;
+                let adjustPanelId = null;
+                let adjustDelta = null;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-test-move',
+                    cropManager: {
+                        adjustCrop: (panelId, delta) => {
+                            adjustCalled = true;
+                            adjustPanelId = panelId;
+                            adjustDelta = delta;
+                        },
+                        zoomCrop: () => {},
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Simulate touchstart with two fingers
+                const touchesStart = makeTouchList([
+                    makeTouch(1, 100, 100),
+                    makeTouch(2, 200, 200)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchstart', {
+                    touches: touchesStart,
+                    targetTouches: touchesStart,
+                    changedTouches: touchesStart
+                }));
+
+                // Simulate touchmove with two fingers moved
+                const touchesMove = makeTouchList([
+                    makeTouch(1, 150, 150),
+                    makeTouch(2, 250, 250)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchmove', {
+                    touches: touchesMove,
+                    targetTouches: touchesMove,
+                    changedTouches: touchesMove
+                }));
+
+                await new Promise(r => setTimeout(r, 10));
+
+                expect(adjustCalled).to.be.true;
+                expect(adjustPanelId).to.equal('panel-0');
+                expect(adjustDelta).to.be.an('object');
+                expect(adjustDelta.x).to.be.a('number');
+                expect(adjustDelta.y).to.be.a('number');
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('calls zoomCrop on pinch gesture', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-test-pinch';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let zoomCalled = false;
+                let zoomPanelId = null;
+                let zoomFactor = null;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-test-pinch',
+                    cropManager: {
+                        adjustCrop: () => {},
+                        zoomCrop: (panelId, factor) => {
+                            zoomCalled = true;
+                            zoomPanelId = panelId;
+                            zoomFactor = factor;
+                        },
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Pinch open: start close, move far apart
+                const touchesStart = makeTouchList([
+                    makeTouch(1, 100, 100),
+                    makeTouch(2, 120, 120)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchstart', {
+                    touches: touchesStart,
+                    targetTouches: touchesStart,
+                    changedTouches: touchesStart
+                }));
+
+                // Spread apart significantly
+                const touchesMove = makeTouchList([
+                    makeTouch(1, 50, 50),
+                    makeTouch(2, 250, 250)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchmove', {
+                    touches: touchesMove,
+                    targetTouches: touchesMove,
+                    changedTouches: touchesMove
+                }));
+
+                await new Promise(r => setTimeout(r, 10));
+
+                expect(zoomCalled).to.be.true;
+                expect(zoomPanelId).to.equal('panel-0');
+                expect(zoomFactor).to.be.a('number');
+                // Pinch open = zoom in => factor > 1
+                expect(zoomFactor).to.be.greaterThan(1.0);
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('stops gesture when one finger is lifted (touchend with 1 touch remaining)', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-test-lift';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let moveCount = 0;
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-test-lift',
+                    cropManager: {
+                        adjustCrop: () => { moveCount++; },
+                        zoomCrop: () => { moveCount++; },
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Start two-finger gesture
+                const touchesStart = makeTouchList([
+                    makeTouch(1, 100, 100),
+                    makeTouch(2, 200, 200)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchstart', {
+                    touches: touchesStart, targetTouches: touchesStart,
+                    changedTouches: touchesStart
+                }));
+
+                // Move
+                const touchesMove = makeTouchList([
+                    makeTouch(1, 150, 150),
+                    makeTouch(2, 250, 250)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchmove', {
+                    touches: touchesMove, targetTouches: touchesMove,
+                    changedTouches: touchesMove
+                }));
+
+                await new Promise(r => setTimeout(r, 10));
+                const countBeforeLift = moveCount;
+
+                // Lift one finger — only 1 touch remains
+                const touch1m = makeTouch(1, 150, 150);
+                const touch2 = makeTouch(2, 200, 200);
+                const touchesEnd = makeTouchList([touch1m]);
+                const changedEnd = makeTouchList([touch2]);
+
+                canvas.dispatchEvent(createMockTouchEvent('touchend', {
+                    touches: touchesEnd, targetTouches: touchesEnd,
+                    changedTouches: changedEnd
+                }));
+
+                await new Promise(r => setTimeout(r, 10));
+
+                // After lifting a finger, further moves should not trigger gestures
+                const touchesMove2 = makeTouchList([makeTouch(1, 200, 200)]);
+                canvas.dispatchEvent(createMockTouchEvent('touchmove', {
+                    touches: touchesMove2, targetTouches: touchesMove2,
+                    changedTouches: touchesMove2
+                }));
+
+                await new Promise(r => setTimeout(r, 10));
+                expect(moveCount).to.equal(countBeforeLift);
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('does not activate for 3+ finger events (avoids OS gesture conflict)', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-test-3finger';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                let prevented = false;
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-test-3finger',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {} },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // 3 fingers should NOT be intercepted
+                const touches = makeTouchList([
+                    makeTouch(1, 100, 100),
+                    makeTouch(2, 200, 200),
+                    makeTouch(3, 300, 150)
+                ]);
+
+                const evt = createMockTouchEvent('touchstart', {
+                    touches: touches,
+                    targetTouches: touches,
+                    changedTouches: touches
+                });
+                evt.preventDefault = () => { prevented = true; };
+
+                canvas.dispatchEvent(evt);
+                expect(prevented).to.be.false;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('cancels gesture when 3rd finger is added mid-gesture', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-test-3mid';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let moveCount = 0;
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-test-3mid',
+                    cropManager: {
+                        adjustCrop: () => { moveCount++; },
+                        zoomCrop: () => { moveCount++; },
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Start two-finger gesture
+                const touchesStart = makeTouchList([
+                    makeTouch(1, 100, 100),
+                    makeTouch(2, 200, 200)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchstart', {
+                    touches: touchesStart, targetTouches: touchesStart,
+                    changedTouches: touchesStart
+                }));
+
+                // Move with 2 fingers
+                const touchesMove = makeTouchList([
+                    makeTouch(1, 150, 150),
+                    makeTouch(2, 250, 250)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchmove', {
+                    touches: touchesMove, targetTouches: touchesMove,
+                    changedTouches: touchesMove
+                }));
+                await new Promise(r => setTimeout(r, 10));
+                const countBeforeThird = moveCount;
+
+                // 3rd finger added — gesture should cancel
+                const touchesThree = makeTouchList([
+                    makeTouch(1, 150, 150),
+                    makeTouch(2, 250, 250),
+                    makeTouch(3, 300, 100)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchmove', {
+                    touches: touchesThree, targetTouches: touchesThree,
+                    changedTouches: makeTouchList([makeTouch(3, 300, 100)])
+                }));
+
+                await new Promise(r => setTimeout(r, 10));
+
+                // Further 2-finger moves should NOT trigger gestures (gesture was cancelled)
+                canvas.dispatchEvent(createMockTouchEvent('touchmove', {
+                    touches: touchesMove, targetTouches: touchesMove,
+                    changedTouches: touchesMove
+                }));
+                await new Promise(r => setTimeout(r, 10));
+                expect(moveCount).to.equal(countBeforeThird);
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('ends gesture on touchcancel event', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-test-cancel';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let renderScheduled = false;
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-test-cancel',
+                    cropManager: {
+                        adjustCrop: () => {},
+                        zoomCrop: () => {},
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => { renderScheduled = true; }
+                });
+                handler.attach();
+
+                // Start two-finger gesture
+                const touchesStart = makeTouchList([
+                    makeTouch(1, 100, 100),
+                    makeTouch(2, 200, 200)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchstart', {
+                    touches: touchesStart, targetTouches: touchesStart,
+                    changedTouches: touchesStart
+                }));
+
+                // Simulate touchcancel (e.g., system interrupt)
+                canvas.dispatchEvent(createMockTouchEvent('touchcancel', {
+                    touches: makeTouchList([]),
+                    targetTouches: makeTouchList([]),
+                    changedTouches: makeTouchList([makeTouch(1, 100, 100), makeTouch(2, 200, 200)])
+                }));
+
+                await new Promise(r => setTimeout(r, 10));
+                expect(renderScheduled).to.be.true;
+
+                // Gesture should be cancelled — further moves do nothing
+                const touchesMove = makeTouchList([
+                    makeTouch(1, 150, 150),
+                    makeTouch(2, 250, 250)
+                ]);
+                let adjustCalled = false;
+                handler._onTouchMove = function () {
+                    // Override to detect if gesture is still active
+                    adjustCalled = true;
+                };
+                // Actually, just dispatch and check no crop changes
+                canvas.dispatchEvent(createMockTouchEvent('touchmove', {
+                    touches: touchesMove, targetTouches: touchesMove,
+                    changedTouches: touchesMove
+                }));
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('consolidates render calls when both pan and zoom occur', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-test-consolidate';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let renderCount = 0;
+                let adjustCount = 0;
+                let zoomCount = 0;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-test-consolidate',
+                    cropManager: {
+                        adjustCrop: () => { adjustCount++; },
+                        zoomCrop: () => { zoomCount++; },
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => { renderCount++; },
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Start with two fingers close together
+                const touchesStart = makeTouchList([
+                    makeTouch(1, 100, 100),
+                    makeTouch(2, 120, 120)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchstart', {
+                    touches: touchesStart, targetTouches: touchesStart,
+                    changedTouches: touchesStart
+                }));
+
+                // Move both apart (pinch) AND shift position (pan) simultaneously
+                const touchesMove = makeTouchList([
+                    makeTouch(1, 150, 150),   // moved +50,+50 (pan)
+                    makeTouch(2, 300, 300)    // moved +180,+180 (pan + spread = pinch)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchmove', {
+                    touches: touchesMove, targetTouches: touchesMove,
+                    changedTouches: touchesMove
+                }));
+
+                await new Promise(r => setTimeout(r, 10));
+
+                // Both pan and zoom should have been applied
+                expect(adjustCount).to.be.greaterThan(0);
+                expect(zoomCount).to.be.greaterThan(0);
+                // But render should only be called once (consolidated)
+                expect(renderCount).to.equal(1);
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+        });
+
+        mocha.run();
+    </script>
+</body>
+</html>

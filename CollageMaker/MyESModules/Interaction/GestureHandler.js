@@ -6,6 +6,7 @@
  */
 
 import { isRectGeometry } from '../Models/PanelGeometry.js';
+import { LayoutStyle } from '../Models/LayoutStyle.js';
 
 /**
  * Creates a gesture handler for the main preview canvas.
@@ -21,7 +22,10 @@ export function createGestureHandler({ canvasId, state, onPanelSelected, onHover
     let handlerAttached = false;
     let lastHoveredPanelId = null;
 
-    return {
+    // Placeholder for bound handlers (set after handler object is created)
+    let onPointerDown, onPointerMove, onPointerLeave;
+
+    const handler = {
         /**
          * Attaches pointer event listeners to the canvas.
          */
@@ -32,9 +36,9 @@ export function createGestureHandler({ canvasId, state, onPanelSelected, onHover
             const canvas = document.getElementById(canvasId);
             if (!canvas) return;
 
-            canvas.addEventListener('pointerdown', (e) => this._onPointerDown(e));
-            canvas.addEventListener('pointermove', (e) => this._onPointerMove(e));
-            canvas.addEventListener('pointerleave', () => this._onPointerLeave());
+            canvas.addEventListener('pointerdown', onPointerDown);
+            canvas.addEventListener('pointermove', onPointerMove);
+            canvas.addEventListener('pointerleave', onPointerLeave);
         },
 
         /**
@@ -47,9 +51,9 @@ export function createGestureHandler({ canvasId, state, onPanelSelected, onHover
             const canvas = document.getElementById(canvasId);
             if (!canvas) return;
 
-            canvas.removeEventListener('pointerdown', this._onPointerDown);
-            canvas.removeEventListener('pointermove', this._onPointerMove);
-            canvas.removeEventListener('pointerleave', this._onPointerLeave);
+            canvas.removeEventListener('pointerdown', onPointerDown);
+            canvas.removeEventListener('pointermove', onPointerMove);
+            canvas.removeEventListener('pointerleave', onPointerLeave);
         },
 
         /**
@@ -132,6 +136,9 @@ export function createGestureHandler({ canvasId, state, onPanelSelected, onHover
 
         // Private event handlers
         _onPointerDown(e) {
+            // Skip pointerdown for hexagonal layout — HexDragHandler handles it
+            if (state.layoutStyle === LayoutStyle.HEXAGONAL) return;
+
             const coords = this.screenToCanvas(e);
             if (!coords) return;
 
@@ -170,4 +177,11 @@ export function createGestureHandler({ canvasId, state, onPanelSelected, onHover
             }
         }
     };
+
+    // Bind event handlers now that handler object exists
+    onPointerDown = (e) => handler._onPointerDown(e);
+    onPointerMove = (e) => handler._onPointerMove(e);
+    onPointerLeave = () => handler._onPointerLeave();
+
+    return handler;
 }

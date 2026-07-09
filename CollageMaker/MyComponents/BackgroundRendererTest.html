@@ -509,6 +509,133 @@
             });
         });
 
+        // ============================================================
+        // Section 1.5: Image Background Compositing (CR-03)
+        // When image opacity < 1.0, the background color/gradient
+        // should be drawn first so transparent areas of the image
+        // show the background, not white canvas.
+        // ============================================================
+        describe('Section 1.5 — Image Background Compositing (CR-03)', () => {
+            function createTestImage() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 100;
+                canvas.height = 100;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#FF0000';
+                ctx.fillRect(0, 0, 100, 100);
+                return canvas;
+            }
+
+            it('1.5.1 — Image bg with solid color: fills color behind image', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const img = createTestImage();
+                render(ctx, 1920, 1080, {
+                    type: 'image',
+                    image: img,
+                    opacity: 0.5,
+                    color1: '#FF0000'
+                });
+                // Should fill background color first, then draw image with alpha
+                expect(calls.fillStyle).to.include('#FF0000');
+                // fillRect should be called: once for bg fill, drawImage for the image
+                expect(calls.fillRect.length).to.be.greaterThanOrEqual(1);
+                expect(calls.fillRect[0]).to.deep.equal({ x: 0, y: 0, w: 1920, h: 1080 });
+                expect(calls.fillStyle[0]).to.equal('#FF0000');
+                expect(calls.globalAlpha).to.deep.equal([0.5]);
+                expect(calls.drawImage.length).to.equal(1);
+            });
+
+            it('1.5.2 — Image bg with gradient: fills gradient behind image', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const img = createTestImage();
+                render(ctx, 1920, 1080, {
+                    type: 'image',
+                    image: img,
+                    opacity: 0.3,
+                    color1: '#000000',
+                    color2: '#FFFFFF',
+                    angle: 90
+                });
+                // Should create gradient and fill, then draw image with alpha
+                expect(calls.createLinearGradient.length).to.be.greaterThanOrEqual(1);
+                expect(calls.globalAlpha).to.deep.equal([0.3]);
+                expect(calls.drawImage.length).to.equal(1);
+            });
+
+            it('1.5.3 — Image bg at 100% opacity: still fills background first', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const img = createTestImage();
+                render(ctx, 1920, 1080, {
+                    type: 'image',
+                    image: img,
+                    opacity: 1.0,
+                    color1: '#0000FF'
+                });
+                // Even at 100%, background should be pre-filled (defensive)
+                expect(calls.fillStyle).to.include('#0000FF');
+                expect(calls.fillRect.length).to.be.greaterThanOrEqual(1);
+                expect(calls.globalAlpha).to.deep.equal([1.0]);
+                expect(calls.drawImage.length).to.equal(1);
+            });
+
+            it('1.5.4 — Image bg at 0% opacity: fills background, draws invisible image', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const img = createTestImage();
+                render(ctx, 1920, 1080, {
+                    type: 'image',
+                    image: img,
+                    opacity: 0.0,
+                    color1: '#00FF00'
+                });
+                // Background fills, image drawn at 0 alpha (invisible)
+                expect(calls.fillStyle).to.include('#00FF00');
+                expect(calls.fillRect.length).to.be.greaterThanOrEqual(1);
+                expect(calls.globalAlpha).to.deep.equal([0.0]);
+                expect(calls.drawImage.length).to.equal(1);
+            });
+
+            it('1.5.5 — Alpha state restored after image render (no leakage)', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const img = createTestImage();
+                render(ctx, 1920, 1080, {
+                    type: 'image',
+                    image: img,
+                    opacity: 0.5,
+                    color1: '#FF0000'
+                });
+                // save/restore should be called to isolate alpha
+                expect(calls.save.length).to.be.greaterThanOrEqual(1);
+                expect(calls.restore.length).to.be.greaterThanOrEqual(1);
+            });
+
+            it('1.5.6 — Image bg with no color1: uses default black background', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const img = createTestImage();
+                render(ctx, 1920, 1080, {
+                    type: 'image',
+                    image: img,
+                    opacity: 0.5
+                });
+                // Should fill with default black
+                expect(calls.fillStyle[0]).to.equal('#000000');
+                expect(calls.fillRect.length).to.be.greaterThanOrEqual(1);
+                expect(calls.drawImage.length).to.equal(1);
+            });
+
+            it('1.5.7 — Image bg with null image: still fills background', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                render(ctx, 1920, 1080, {
+                    type: 'image',
+                    image: null,
+                    color1: '#FF0000'
+                });
+                // No image, but should still fill with background color
+                expect(calls.fillStyle).to.include('#FF0000');
+                expect(calls.fillRect.length).to.be.greaterThanOrEqual(1);
+                expect(calls.drawImage.length).to.equal(0);
+            });
+        });
+
         // Run mocha after all tests are defined
         window.addEventListener('load', () => {
             mocha.run();

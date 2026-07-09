@@ -1,15 +1,16 @@
 /**
  * Overlay handlers - Handles overlay controls.
+ * Uses injected callback for DIP compliance — no direct this._scheduleRender().
  */
 
 import { loadImageFromFile } from '../Utils/loadImageFromFile.js';
 
 /**
  * Creates overlay handlers.
- * @param {Function} getCanvasRenderer - Function that returns CanvasRenderer instance
+ * @param {Function} onRenderScheduled - Callback to schedule a canvas render
  * @returns {Object} Overlay handlers object
  */
-export function createOverlayHandlers(getCanvasRenderer) {
+export function createOverlayHandlers(onRenderScheduled) {
     return {
         /**
          * Handles overlay image file input.
@@ -25,7 +26,7 @@ export function createOverlayHandlers(getCanvasRenderer) {
                     this.overlayImage = null;
                 }
                 this.overlayImage = img;
-                this._scheduleRender();
+                onRenderScheduled(this);
             }
         },
 
@@ -34,7 +35,7 @@ export function createOverlayHandlers(getCanvasRenderer) {
          */
         onOverlayModeChange() {
             this.overlayMode = this.overlayMode || 'source-over'; // ensure it's set
-            this._scheduleRender();
+            onRenderScheduled(this);
         },
 
         /**
@@ -42,7 +43,7 @@ export function createOverlayHandlers(getCanvasRenderer) {
          */
         onOverlayOpacityChange() {
             this.overlayOpacity = this.overlayOpacity || 1;
-            this._scheduleRender();
+            onRenderScheduled(this);
         },
 
         /**
@@ -50,7 +51,7 @@ export function createOverlayHandlers(getCanvasRenderer) {
          */
         removeOverlay() {
             this.overlayImage = null;
-            this._scheduleRender();
+            onRenderScheduled(this);
         }
     };
 }

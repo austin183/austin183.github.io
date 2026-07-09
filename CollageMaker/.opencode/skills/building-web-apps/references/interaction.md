@@ -6,6 +6,8 @@
 - Focus-aware suppression
 - preventDefault ordering
 - Test conventions
+- Pointer handler coordination
+- Multi-touch gestures
 
 ## Three-Layer Architecture
 
@@ -110,3 +112,147 @@ try {
 - Pattern lowercased to `'escape'` but key comparison must also lowercase: `(parsed.key || '').toLowerCase()`
 - Events with `target=document` (no tagName) — guard with `(el.tagName || '')`
 - DELETE and BACKSPACE are separate keys — consolidate into single array pattern when they share a callback
+
+## Pointer Handler Coordination
+
+### Problem
+
+When two pointer event handlers (e.g., `GestureHandler` for panel selection, `HexDragHandler` for hex panel swap) both attach listeners to the same canvas, pointer events fire on both handlers simultaneously. This causes:
+- Double panel selection on click
+- Conflicting drag/click interpretation
+- Unexpected state mutations
+
+### Solution: Layout-Gated Handler Delegation
+
+Each handler checks the current layout at pointerdown time and returns early if it's not responsible:
+
+```javascript
+// GestureHandler — general-purpose, skips hexagonal layout
+_onPointerDown(e) {
+    if (state.layoutStyle === LayoutStyle.HEXAGONAL) return;
+    // ... rest of handler
+}
+
+// HexDragHandler — hex-specific, skips non-hexagonal layouts
+_onPointerDown(e) {
+    if (state.layoutStyle !== LayoutStyle.HEXAGONAL) return;
+    // ... hex-specific handling
+}
+```
+
+### Key Design Decisions
+
+1. **Both handlers always attached** — no attach/detach cycles on layout change. The layout check is O(1) and happens at pointerdown time.
+
+2. **Drag threshold distinguishes click from drag** — 10 CSS pixels of movement triggers drag mode. Below threshold, the interaction is treated as a click:
+
+```javascript
+_onPointerUp(e) {
+    if (isDragging) {
+        // Drag: find target panel and swap
+        swapPanelAssignments(state, dragSourceId, targetId);
+    } else {
+        // Click: select panel
+        onPanelSelected(dragSourceId);
+    }
+}
+```
+
+3. **CSS pixel threshold** — on high-DPR displays, the threshold feels the same regardless of physical pixel density because CSS pixels are device-independent.
+
+### Gotchas
+
+- **Guard is mandatory on the general handler** — `GestureHandler` MUST return early for hexagonal layout. Without it, the click fires twice.
+
+- **Panel geometry type matters** — hexagonal layout with 1 image returns a rectangular path geometry (not a rect geometry). The hit test must handle both via `geometry.type === 'rect'` check.
+
+### When to Use This Pattern
+
+Use layout-gated delegation when:
+- Two handlers need to interact with the same DOM element
+- One handler is layout-specific (hex drag-and-drop)
+- The other handler is general-purpose (panel selection)
+- You want to avoid attach/detach cycles on layout changes
+
+## Multi-Touch Gestures
+
+Two-finger pan and pinch-to-zoom on mobile use direct `touchstart`/`touchmove`/`touchend` listeners (not pointer events), attached with `{ passive: false }` to allow `preventDefault()`.
+
+### Exactly 2 Fingers, Not 2+
+
+Mobile OSes reserve 3-finger and 4-finger gestures for system navigation:
+- **iOS Safari:** 3-finger swipe for back/forward and app switcher
+- **Android Chrome:** 3-finger swipe for split-screen and recent apps
+
+**Anti-pattern:**
+```javascript
+// Activates on 3+ fingers — may conflict with OS gestures
+if (e.touches.length < 2) return;
+```
+
+**Correct:**
+```javascript
+// Exactly 2 fingers only
+if (e.touches.length !== 2) return;
+```
+
+Additionally, cancel the gesture if the finger count changes mid-gesture:
+```javascript
+_onTouchMove(e) {
+    if (!gestureActive) return;
+    if (e.touches.length !== 2) {
+        // Cancel — 3rd finger added or 1st lifted
+        gestureActive = false;
+        return;
+    }
+    // ... gesture processing
+}
+```
+
+### removeEventListener Must Match addEventListener Options
+
+When listeners are added with `{ passive: false }`, removal must include the same options. Mismatched options cause `removeEventListener` to silently fail, leaking handlers.
+
+```javascript
+// Attach
+canvas.addEventListener('touchstart', handler, { passive: false });
+
+// Detach — MUST include { passive: false }
+canvas.removeEventListener('touchstart', handler, { passive: false });
+```
+
+This applies to all touch event types: `touchstart`, `touchmove`, `touchend`.
+
+### Consolidate Render Calls
+
+When a single `touchmove` can trigger both pan and zoom, calling the render callback after each creates unnecessary double rendering. Use a flag to consolidate:
+
+```javascript
+let needsRender = false;
+
+if (panThresholdExceeded) {
+    cropManager.adjustCrop(panelId, delta);
+    needsRender = true;
+}
+
+if (zoomThresholdExceeded) {
+    cropManager.zoomCrop(panelId, factor);
+    needsRender = true;
+}
+
+if (needsRender) {
+    onCropPreviewRender(); // Called at most once per touchmove
+}
+```
+
+### Incremental Pinch Scale Factor
+
+The raw pinch distance ratio (e.g., 2.0 for doubling the finger distance) is too aggressive for a single zoom call. Apply a root to convert to a small incremental factor:
+
+```javascript
+const scaleRatio = currentDistance / initialDistance; // e.g., 2.0
+const factor = Math.pow(scaleRatio, 0.15);            // e.g., 2.0^0.15 ≈ 1.12
+cropManager.zoomCrop(panelId, factor);
+```
+
+The exponent `0.15` produces smooth, responsive zooming without overshooting. After each successful zoom, reset the reference distance to avoid accumulating scale.

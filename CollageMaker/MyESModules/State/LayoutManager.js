@@ -30,18 +30,19 @@ export function createLayoutManager(state, assembler) {
 
              const imageOrder = Array.from({ length: state.images.length }, (_, i) => i);
 
-             const panels = LayoutGenerator.generate({
-                 numImages: state.images.length,
-                 canvasSize: {
-                     width: SIZE_CONSTANTS.defaultCanvasWidth,
-                     height: SIZE_CONSTANTS.defaultCanvasHeight
-                 },
-                 gutter: state.gutter,
-                 style: state.layoutStyle,
-                 imageOrder: imageOrder,
-                 sliceAngle: state.sliceAngle,
-                 hexSpacing: state.hexSpacing
-             });
+              const panels = LayoutGenerator.generate({
+                  numImages: state.images.length,
+                  canvasSize: {
+                      width: SIZE_CONSTANTS.defaultCanvasWidth,
+                      height: SIZE_CONSTANTS.defaultCanvasHeight
+                  },
+                  gutter: state.gutter,
+                  style: state.layoutStyle,
+                  imageOrder: imageOrder,
+                  sliceAngle: state.sliceAngle,
+                  hexSpacing: state.hexSpacing,
+                  hexSizeMultiplier: state.hexSizeMultiplier
+              });
 
              // Build panel assignments
              const panelAssignments = new Map();
@@ -92,6 +93,18 @@ export function createLayoutManager(state, assembler) {
          */
         setHexSpacing(value) {
             state.hexSpacing = value;
+            if (state.layoutStyle === 'hexagonal') {
+                this.regenerate();
+            }
+        },
+
+        /**
+         * Changes the hex size multiplier and regenerates (for hexagonal).
+         * Note: This is a configuration change not tracked by UndoManager.
+         * @param {number} value
+         */
+        setHexSizeMultiplier(value) {
+            state.hexSizeMultiplier = value;
             if (state.layoutStyle === 'hexagonal') {
                 this.regenerate();
             }

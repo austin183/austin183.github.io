@@ -14,6 +14,7 @@
 - Playwright Page Load Strategy
 - PointerEvent Testing
 - DragEvent Testing
+- Worker Testing
 - Deferred Feature Tests
 - Pure Function Testing
 - Cache API Gotchas
@@ -594,6 +595,49 @@ const event = new PointerEvent('pointerdown', {
 
 No separate `touchstart`/`touchmove` handlers are needed in modern browsers.
 
+### TouchEvent Constructor Requires Real Touch Objects
+
+The browser's `TouchEvent` constructor requires real `Touch` objects for `touches`/`targetTouches`/`changedTouches` properties. `Touch` instances cannot be created from JavaScript (the `Touch` constructor is not exposed).
+
+**Use `Object.defineProperty` on a plain `Event`:**
+
+```javascript
+function createMockTouchEvent(type, { touches, targetTouches, changedTouches } = {}) {
+    const evt = new Event(type, { bubbles: true, cancelable: true });
+    const props = {};
+    if (touches) props.touches = touches;
+    if (targetTouches) props.targetTouches = targetTouches;
+    if (changedTouches) props.changedTouches = changedTouches;
+
+    for (const [key, value] of Object.entries(props)) {
+        Object.defineProperty(evt, key, {
+            get: () => value,
+            configurable: true
+        });
+    }
+    return evt;
+}
+```
+
+**Mock TouchList must support multiple access patterns:**
+- `list.length` — length property
+- `list[i]` — indexed access
+- `list.item(i)` — item() method
+- `for (const t of list)` — Symbol.iterator
+
+```javascript
+function makeTouchList(touches) {
+    const list = { length: touches.length, item: (i) => touches[i] || null };
+    for (let i = 0; i < touches.length; i++) list[i] = touches[i];
+    list[Symbol.iterator] = function* () {
+        for (let i = 0; i < this.length; i++) yield this[i];
+    };
+    return list;
+}
+```
+
+See `MyComponents/MultiTouchHandlerTest.html` for full working examples.
+
 ## DragEvent Testing
 
 ### DragEvent.dataTransfer Cannot Be Mocked
@@ -653,6 +697,74 @@ describe('Drop handler cleanup', () => {
 
 **Anti-pattern:** Using `beforeEach` to set up a handler AND having tests create their own. This causes listener accumulation — "after cleanup" assertions become false positives because old listeners remain active.
 
+## Worker Testing
+
+### Mock Worker Pattern
+
+When testing code that uses `window.Worker`, mock the constructor to capture `onmessage` assignments and fire messages manually. This avoids spawning real workers and enables deterministic control over message timing.
+
+```javascript
+let capturedOnMessage = null;
+let capturedWorker = null;
+
+function mockWorker() {
+    const originalWorker = window.Worker;
+    Object.defineProperty(window, 'Worker', {
+        configurable: true,
+        value: class {
+            constructor(url) {
+                capturedWorker = this;
+            }
+            set onmessage(fn) { capturedOnMessage = fn; }
+            postMessage(msg) { /* no-op */ }
+            terminate() { /* no-op */ }
+        }
+    });
+    return () => {
+        Object.defineProperty(window, 'Worker', {
+            configurable: true,
+            value: originalWorker
+        });
+    };
+}
+```
+
+**Key points:**
+- Use `Object.defineProperty` with `configurable: true` to replace `window.Worker`
+- Capture `onmessage` via a setter to retrieve the message handler
+- Capture the worker instance to verify `terminate()` calls
+- Always restore the original `Worker` constructor in `afterEach`
+
+### Firing Mock Messages
+
+To simulate the worker sending a message, invoke the captured handler with a synthetic event:
+
+```javascript
+capturedOnMessage({ data: { type: 'ready' } });
+capturedOnMessage({ data: { type: 'result', saliencyMap: [1, 2, 3] } });
+capturedOnMessage({ data: { type: 'failed', error: 'Model load failed' } });
+```
+
+### Testing Timeout Guards
+
+To test timeout behavior without waiting the full production timeout (e.g., 15 seconds), override the timeout config:
+
+```javascript
+// Before creating the analyzer
+SALIENCY_CONFIG.INFERENCE_TIMEOUT_MS = 50;
+
+// Test happy path — worker responds before timeout
+capturedOnMessage({ data: { type: 'result', saliencyMap: [1, 2, 3] } });
+expect(analyzer.inferenceTimeoutId).to.be.null; // Timeout was cleared
+
+// Test dispose path — dispose before timeout fires
+analyzer.dispose();
+await new Promise(r => setTimeout(r, 100));
+expect(analyzer.error).to.be.null; // Stale callback was a no-op
+```
+
+See `references/web-workers.md` for the full timeout guard pattern and additional examples.
+
 ## Deferred Feature Tests
 
 For deferred features (PWA, ML saliency, responsive CSS), tests serve as requirements documentation:
@@ -709,6 +821,9 @@ Design browser-dependent utilities as pure functions that can be unit tested wit
 18. **RAF mock must be bound** — `window.requestAnimationFrame.bind(window)` preserves `this`. Without bind, restoring the original fails in strict mode. Always restore in `afterEach`.
 19. **Read state inside RAF callback** — When debouncing with RAF, capture state at frame time, not call time. Reading at call time produces stale values during rapid interactions.
 20. **Null inputs crash browser API utilities** — `FileReader.readAsDataURL(null)` throws `TypeError`. Always guard: `if (!file) return Promise.resolve(null)`.
+21. **Worker timeout guards** — Always clear `setTimeout` IDs on every exit path (ready, failed, error, dispose). Guard the callback with `if (this.isDisposed || !this.worker) return;`. See `references/web-workers.md`.
+22. **TouchEvent requires real Touch objects** — Cannot create `Touch` instances from JS. Use `Object.defineProperty` on a plain `Event` to set `touches`/`targetTouches`/`changedTouches`. Mock TouchLists need `length`, indexed access, `item()`, and `Symbol.iterator`. See `references/testing.md` TouchEvent section.
+23. **Multi-touch: exactly 2 fingers, not 2+** — Mobile OSes reserve 3-finger gestures for system navigation (iOS: back/forward; Android: split-screen). Check `e.touches.length !== 2` and cancel gesture if count deviates.
 
 ### Testing undo/redo buttons
 

@@ -303,6 +303,9 @@ export function createSaliencyAnalyzer(callbacks) {
     // Queue for analysis requests that arrive before models are ready
     let pendingQueue = [];
 
+    // Timeout guard for model loading (CR-11)
+    let loadingTimeoutId = null;
+
     function processQueue() {
         while (pendingQueue.length > 0 && state === 'ready') {
             const item = pendingQueue.shift();
@@ -327,6 +330,16 @@ export function createSaliencyAnalyzer(callbacks) {
             if (worker) {
                 worker.postMessage({ type: WORKER_MSG.INIT_MODELS });
                 state = 'loading';
+                // Start timeout guard (CR-11)
+                loadingTimeoutId = setTimeout(() => {
+                    if (state === 'loading') {
+                        state = 'failed';
+                        if (cb.onModelsFailed) {
+                            cb.onModelsFailed('Model loading timeout after ' + SALIENCY_CONFIG.INFERENCE_TIMEOUT_MS + 'ms');
+                        }
+                    }
+                    loadingTimeoutId = null;
+                }, SALIENCY_CONFIG.INFERENCE_TIMEOUT_MS);
                 return;
             }
 
@@ -334,15 +347,30 @@ export function createSaliencyAnalyzer(callbacks) {
                 worker = new Worker(SALIENCY_CONFIG.WORKER_URL);
                 state = 'loading';
 
+                // Start timeout guard (CR-11)
+                loadingTimeoutId = setTimeout(() => {
+                    if (state === 'loading') {
+                        state = 'failed';
+                        if (cb.onModelsFailed) {
+                            cb.onModelsFailed('Model loading timeout after ' + SALIENCY_CONFIG.INFERENCE_TIMEOUT_MS + 'ms');
+                        }
+                    }
+                    loadingTimeoutId = null;
+                }, SALIENCY_CONFIG.INFERENCE_TIMEOUT_MS);
+
                 worker.onmessage = (e) => {
                     const msg = e.data;
                     switch (msg.type) {
                         case WORKER_MSG.MODELS_READY:
+                            clearTimeout(loadingTimeoutId);
+                            loadingTimeoutId = null;
                             state = 'ready';
                             if (cb.onModelsReady) cb.onModelsReady(msg.models);
                             processQueue();
                             break;
                         case WORKER_MSG.MODELS_FAILED:
+                            clearTimeout(loadingTimeoutId);
+                            loadingTimeoutId = null;
                             state = 'failed';
                             if (cb.onModelsFailed) cb.onModelsFailed(msg.error);
                             // Drain queue with center fallback
@@ -428,6 +456,9 @@ export function createSaliencyAnalyzer(callbacks) {
         },
 
         dispose() {
+            clearTimeout(loadingTimeoutId);
+            loadingTimeoutId = null;
+
             if (worker) {
                 try {
                     worker.postMessage({ type: WORKER_MSG.DISPOSE });

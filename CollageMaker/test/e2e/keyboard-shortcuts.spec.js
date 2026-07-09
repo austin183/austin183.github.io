@@ -54,54 +54,54 @@ test.describe('Section 3.1.3 — Keyboard Shortcuts E2E', () => {
         expect(fileChooser).toBeTruthy();
     });
 
-    test('3.1.3.2 — Cmd+S triggers export', async ({ page }) => {
+    test('3.1.3.2 — Cmd+E triggers export', async ({ page }) => {
         await loadApp(page);
         await loadImages(page);
 
         const downloadPromise = page.waitForEvent('download', { timeout: 10000 }).catch(() => null);
-        await page.keyboard.press('Control+S');
+        await page.keyboard.press('Control+E');
         const download = await downloadPromise;
         // Download may or may not fire in headless mode; verify no crash
         await page.waitForTimeout(500);
         expect(await page.isVisible('#app')).toBe(true);
     });
 
-    test('3.1.3.3 — Cmd+1 switches to uniform', async ({ page }) => {
+    test('3.1.3.3 — Alt+1 switches to uniform', async ({ page }) => {
         await loadApp(page);
         await loadImages(page);
-        await page.keyboard.press('Control+1');
+        await page.keyboard.press('Alt+1');
         await page.waitForTimeout(300);
         expect(await page.locator('#layoutStyleSelect').inputValue()).toBe('uniform');
     });
 
-    test('3.1.3.4 — Cmd+2 switches to hero', async ({ page }) => {
+    test('3.1.3.4 — Alt+2 switches to hero', async ({ page }) => {
         await loadApp(page);
         await loadImages(page);
-        await page.keyboard.press('Control+2');
+        await page.keyboard.press('Alt+2');
         await page.waitForTimeout(300);
         expect(await page.locator('#layoutStyleSelect').inputValue()).toBe('hero');
     });
 
-    test('3.1.3.5 — Cmd+3 switches to mosaic', async ({ page }) => {
+    test('3.1.3.5 — Alt+3 switches to mosaic', async ({ page }) => {
         await loadApp(page);
         await loadImages(page);
-        await page.keyboard.press('Control+3');
+        await page.keyboard.press('Alt+3');
         await page.waitForTimeout(300);
         expect(await page.locator('#layoutStyleSelect').inputValue()).toBe('mosaic');
     });
 
-    test('3.1.3.6 — Cmd+4 switches to diagonalSlices', async ({ page }) => {
+    test('3.1.3.6 — Alt+4 switches to diagonalSlices', async ({ page }) => {
         await loadApp(page);
         await loadImages(page);
-        await page.keyboard.press('Control+4');
+        await page.keyboard.press('Alt+4');
         await page.waitForTimeout(300);
         expect(await page.locator('#layoutStyleSelect').inputValue()).toBe('diagonalSlices');
     });
 
-    test('3.1.3.7 — Cmd+5 switches to hexagonal', async ({ page }) => {
+    test('3.1.3.7 — Alt+5 switches to hexagonal', async ({ page }) => {
         await loadApp(page);
         await loadImages(page);
-        await page.keyboard.press('Control+5');
+        await page.keyboard.press('Alt+5');
         await page.waitForTimeout(300);
         expect(await page.locator('#layoutStyleSelect').inputValue()).toBe('hexagonal');
     });
@@ -250,17 +250,17 @@ test.describe('Section 3.1.3 — Keyboard Shortcuts E2E', () => {
         await loadApp(page);
         await loadImages(page);
 
-        // Press Cmd+1 through Cmd+5 rapidly 3x
+        // Press Alt+1 through Alt+5 rapidly 3x
         for (let cycle = 0; cycle < 3; cycle++) {
             for (let num = 1; num <= 5; num++) {
-                await page.keyboard.press(`Control+${num}`);
+                await page.keyboard.press(`Alt+${num}`);
             }
         }
 
         // Wait for rendering to settle
         await page.waitForTimeout(1000);
 
-        // Final layout should be hexagonal (last pressed was Cmd+5)
+        // Final layout should be hexagonal (last pressed was Alt+5)
         expect(await page.locator('#layoutStyleSelect').inputValue()).toBe('hexagonal');
 
         // Canvas should still be visible

@@ -18,6 +18,7 @@ export function createCollageData(base) {
             gutter: 0,
             sliceAngle: 45,
             hexSpacing: 8,
+            hexSizeMultiplier: 1.0,
             panelAssignments: new Map(),
             layoutVersion: 0,
 
@@ -50,6 +51,7 @@ export function createCollageData(base) {
             overlayOpacity: 0.5,
 
             // Export
+            exportFormat: 'jpeg',
             exportQuality: 0.92,
             isExporting: false,
             exportStatus: '',
@@ -63,6 +65,24 @@ export function createCollageData(base) {
 
             // Right sidebar toggle
             rightSidebarOpen: true,
+
+            // Collapsible sidebar sections
+            sidebarSections: [
+                { id: 'layout', label: 'Layout' },
+                { id: 'title', label: 'Title' },
+                { id: 'crop', label: 'Crop' },
+                { id: 'background', label: 'Background' },
+                { id: 'overlay', label: 'Overlay' },
+                { id: 'export', label: 'Export' }
+            ],
+            expandedSections: {
+                layout: false,
+                title: false,
+                crop: false,
+                background: false,
+                overlay: false,
+                export: false
+            },
 
             // Layout style options (from base)
             layoutStyles: base.layoutStyleOptions

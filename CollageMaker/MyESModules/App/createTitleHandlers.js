@@ -1,14 +1,15 @@
 /**
  * Title handlers - Handles title editing and formatting.
+ * Uses injected callback for DIP compliance — no direct this._scheduleRender().
  */
 
 /**
  * Creates title handlers.
  * @param {Function} getTitleManager - Function that returns TitleManager instance
- * @param {Function} getCanvasRenderer - Function that returns CanvasRenderer instance
+ * @param {Function} onRenderScheduled - Callback to schedule a canvas render
  * @returns {Object} Title handlers object
  */
-export function createTitleHandlers(getTitleManager, getCanvasRenderer) {
+export function createTitleHandlers(getTitleManager, onRenderScheduled) {
     return {
         /**
          * Handles title text change.
@@ -18,7 +19,7 @@ export function createTitleHandlers(getTitleManager, getCanvasRenderer) {
             if (titleManager) {
                 titleManager.setText(this.titleText);
             }
-            this._scheduleRender();
+            onRenderScheduled(this);
         },
 
         /**
@@ -44,7 +45,7 @@ export function createTitleHandlers(getTitleManager, getCanvasRenderer) {
             if (titleManager && start < end) {
                 titleManager.toggleBold(start, end);
                 this.titleText = titleManager.getFullText();
-                this._scheduleRender();
+                onRenderScheduled(this);
             }
         },
 
@@ -58,7 +59,7 @@ export function createTitleHandlers(getTitleManager, getCanvasRenderer) {
             if (titleManager && start < end) {
                 titleManager.toggleItalic(start, end);
                 this.titleText = titleManager.getFullText();
-                this._scheduleRender();
+                onRenderScheduled(this);
             }
         },
 
@@ -72,7 +73,7 @@ export function createTitleHandlers(getTitleManager, getCanvasRenderer) {
             if (titleManager && start < end) {
                 titleManager.toggleUnderline(start, end);
                 this.titleText = titleManager.getFullText();
-                this._scheduleRender();
+                onRenderScheduled(this);
             }
         },
 
@@ -106,7 +107,7 @@ export function createTitleHandlers(getTitleManager, getCanvasRenderer) {
             if (titleManager) {
                 titleManager.setFontFamily(this.titleStyle.fontFamily);
             }
-            this._scheduleRender();
+            onRenderScheduled(this);
         },
 
         /**
@@ -117,7 +118,7 @@ export function createTitleHandlers(getTitleManager, getCanvasRenderer) {
             if (titleManager) {
                 titleManager.setFontSize(this.titleStyle.fontSize);
             }
-            this._scheduleRender();
+            onRenderScheduled(this);
         },
 
         /**
@@ -128,7 +129,7 @@ export function createTitleHandlers(getTitleManager, getCanvasRenderer) {
             if (titleManager) {
                 titleManager.setFontColor(this.titleStyle.fontColor);
             }
-            this._scheduleRender();
+            onRenderScheduled(this);
         },
 
         /**
@@ -139,7 +140,7 @@ export function createTitleHandlers(getTitleManager, getCanvasRenderer) {
             if (titleManager) {
                 titleManager.setBackgroundColor(this.titleStyle.backgroundColor);
             }
-            this._scheduleRender();
+            onRenderScheduled(this);
         },
 
         /**
@@ -150,7 +151,7 @@ export function createTitleHandlers(getTitleManager, getCanvasRenderer) {
             if (titleManager) {
                 titleManager.setAlignment(this.titleStyle.alignment);
             }
-            this._scheduleRender();
+            onRenderScheduled(this);
         },
 
         /**
@@ -161,7 +162,7 @@ export function createTitleHandlers(getTitleManager, getCanvasRenderer) {
             if (titleManager) {
                 titleManager.showBackground(this.titleStyle.showBackground);
             }
-            this._scheduleRender();
+            onRenderScheduled(this);
         }
     };
 }

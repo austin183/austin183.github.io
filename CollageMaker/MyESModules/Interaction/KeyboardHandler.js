@@ -20,12 +20,12 @@ import { LayoutStyle } from '../Models/LayoutStyle.js';
  */
 export const KEYBOARD_SHORTCUTS = {
     OPEN_FILE_PICKER: 'meta+o',
-    EXPORT: 'meta+s',
-    LAYOUT_UNIFORM: { pattern: 'meta+1', value: LayoutStyle.UNIFORM },
-    LAYOUT_HERO: { pattern: 'meta+2', value: LayoutStyle.HERO },
-    LAYOUT_MOSAIC: { pattern: 'meta+3', value: LayoutStyle.MOSAIC },
-    LAYOUT_DIAGONAL_SLICES: { pattern: 'meta+4', value: LayoutStyle.DIAGONAL_SLICES },
-    LAYOUT_HEXAGONAL: { pattern: 'meta+5', value: LayoutStyle.HEXAGONAL },
+    EXPORT: 'meta+e',
+    LAYOUT_UNIFORM: { pattern: 'alt+1', value: LayoutStyle.UNIFORM },
+    LAYOUT_HERO: { pattern: 'alt+2', value: LayoutStyle.HERO },
+    LAYOUT_MOSAIC: { pattern: 'alt+3', value: LayoutStyle.MOSAIC },
+    LAYOUT_DIAGONAL_SLICES: { pattern: 'alt+4', value: LayoutStyle.DIAGONAL_SLICES },
+    LAYOUT_HEXAGONAL: { pattern: 'alt+5', value: LayoutStyle.HEXAGONAL },
     DESELECT: 'Escape',
     DELETE_BACKSPACE: ['Delete', 'Backspace'],
     UNDO: 'meta+z',

@@ -73,13 +73,26 @@ function renderGradient(ctx, width, height, state) {
 
 /**
  * Renders an image background stretched to fill the canvas.
+ * Pre-fills the canvas with the configured background color or gradient
+ * so that transparent/semi-transparent areas of the image show the
+ * background instead of white canvas.
  * @private
  */
 function renderImage(ctx, width, height, state) {
-    if (!state.image) {
-        // No image, fill with dark background
-        ctx.fillStyle = '#000000';
+    // Step 1: Fill background (color or gradient) so it shows through
+    // transparent areas of the image
+    if (state.color2 && state.angle !== undefined) {
+        // Gradient background behind image
+        renderGradient(ctx, width, height, state);
+    } else {
+        // Solid color background behind image
+        ctx.fillStyle = state.color1 || '#000000';
         ctx.fillRect(0, 0, width, height);
+    }
+
+    // Step 2: Draw image with opacity on top
+    if (!state.image) {
+        // No image provided — background fill is sufficient
         return;
     }
 

@@ -6,9 +6,10 @@
  * Creates file handlers.
  * @param {Function} getImageLibrary - Function that returns ImageLibrary instance
  * @param {Function} onRegenerate - Callback to trigger layout regeneration and render
+ * @param {string} [fileInputId='fileInput'] - DOM ID of the file input element
  * @returns {Object} File handlers object
  */
-export function createFileHandlers(getImageLibrary, onRegenerate) {
+export function createFileHandlers(getImageLibrary, onRegenerate, fileInputId = 'fileInput') {
     let activeCleanup = null;
 
     return {
@@ -16,7 +17,7 @@ export function createFileHandlers(getImageLibrary, onRegenerate) {
          * Triggers the hidden file input.
          */
         triggerFilePicker() {
-            const input = document.getElementById('fileInput');
+            const input = document.getElementById(fileInputId);
             if (input) {
                 input.value = '';
                 input.click();
@@ -24,18 +25,21 @@ export function createFileHandlers(getImageLibrary, onRegenerate) {
         },
 
         /**
-          * Handles file input change.
-          * @param {Event} event
-          */
-          async handleFileInputChange(event) {
-              const files = event.target.files;
-              if (files && files.length > 0) {
-                  const imageLibrary = getImageLibrary();
-                  await imageLibrary.addImages(files);
-                  // Use _regenerateAndRender to ensure layout is regenerated and canvas is rendered
-                  this._regenerateAndRender();
-              }
-          },
+         * Handles file input change.
+         * @param {Event} event
+         */
+        async handleFileInputChange() {
+            const input = document.getElementById(fileInputId);
+            const files = input ? input.files : null;
+            if (files && files.length > 0) {
+                const imageLibrary = getImageLibrary();
+                await imageLibrary.addImages(files);
+                // Use injected callback for DIP compliance
+                onRegenerate(this);
+                // Reset input so re-selecting the same file works
+                if (input) input.value = '';
+            }
+        },
 
         /**
          * Sets up global drop handler for files dropped outside Vue-managed elements.

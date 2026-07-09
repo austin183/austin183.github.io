@@ -80,7 +80,7 @@ For any module or component acquiring resources, implement cleanup in `beforeUnm
 - [ ] Nullify HTMLImageElement references in state
 - [ ] Revoke `URL.createObjectURL` URLs if not already done
 - [ ] Dispose Canvas 2D contexts (if created dynamically with `getContext('webgl')`)
-- [ ] Clear any timers (`setTimeout`, `setInterval`)
+- [ ] Clear any timers (`setTimeout`, `setInterval`) — use `clearTimeout(id); id = null;` on every exit path (success, failure, error, dispose). For timeout guards on Web Workers, also add a guard clause in the callback: `if (this.isDisposed || !this.worker) return;`. See `references/web-workers.md`
 
 ### Example: Canvas Renderer Disposal
 

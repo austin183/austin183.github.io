@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sidebar Sections Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Sidebar Sections Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Phase 3 — CR-08 Collapsible Sidebar Sections (test plan 3.1.1–3.1.5)</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createCollageData } from '../MyESModules/App/createCollageData.js';
+        import { createCollageMethods } from '../MyESModules/App/createCollageMethods.js';
+
+        const { expect } = chai;
+
+        // Minimal base mock for factory initialization
+        function createMockBase() {
+            return {
+                assembler: { render: () => {} },
+                dropHandler: { setupGlobalDrop: () => () => {} },
+                getCanvasRenderer: () => null,
+                setCanvasRenderer: () => {},
+                getLayoutManager: () => null,
+                setLayoutManager: () => {},
+                getCropManager: () => null,
+                setCropManager: () => {},
+                getImageLibrary: () => null,
+                setImageLibrary: () => {},
+                getBackgroundManager: () => null,
+                setBackgroundManager: () => {},
+                getTitleManager: () => null,
+                setTitleManager: () => {},
+                layoutStyleOptions: []
+            };
+        }
+
+        // ============================================================
+        // 3.1 Collapsible Sidebar Sections
+        // ============================================================
+        describe('Section 3.1 — Collapsible Sidebar Sections', () => {
+            let data, methods, mockBase;
+
+            beforeEach(() => {
+                mockBase = createMockBase();
+                data = createCollageData(mockBase);
+                methods = createCollageMethods(mockBase);
+            });
+
+            it('3.1.1 — All sections start collapsed', () => {
+                const state = data();
+                expect(state.expandedSections).to.be.an('object');
+                expect(state.expandedSections.layout).to.be.false;
+                expect(state.expandedSections.title).to.be.false;
+                expect(state.expandedSections.crop).to.be.false;
+                expect(state.expandedSections.background).to.be.false;
+                expect(state.expandedSections.overlay).to.be.false;
+                expect(state.expandedSections.export).to.be.false;
+            });
+
+            it('3.1.2 — sidebarSections array has 6 sections', () => {
+                const state = data();
+                expect(state.sidebarSections).to.be.an('array');
+                expect(state.sidebarSections.length).to.equal(6);
+                const ids = state.sidebarSections.map(s => s.id);
+                expect(ids).to.include('layout');
+                expect(ids).to.include('title');
+                expect(ids).to.include('crop');
+                expect(ids).to.include('background');
+                expect(ids).to.include('overlay');
+                expect(ids).to.include('export');
+            });
+
+            it('3.1.3 — toggleSection expands a collapsed section', () => {
+                const state = data();
+                // Simulate Vue instance with state
+                const vm = { ...state };
+                methods.toggleSection.call(vm, 'crop');
+                expect(vm.expandedSections.crop).to.be.true;
+            });
+
+            it('3.1.4 — toggleSection collapses an expanded section', () => {
+                const state = data();
+                state.expandedSections.crop = true;
+                const vm = { ...state };
+                methods.toggleSection.call(vm, 'crop');
+                expect(vm.expandedSections.crop).to.be.false;
+            });
+
+            it('3.1.5 — toggleSection does not affect other sections', () => {
+                const state = data();
+                state.expandedSections.layout = true;
+                const vm = { ...state };
+                methods.toggleSection.call(vm, 'crop');
+                expect(vm.expandedSections.layout).to.be.true;
+                expect(vm.expandedSections.crop).to.be.true;
+            });
+
+            it('3.1.6 — autoExpandCropOnSelect expands crop when panel selected', () => {
+                const state = data();
+                const vm = { ...state };
+                methods.autoExpandCropOnSelect.call(vm, 'panel-1');
+                expect(vm.expandedSections.crop).to.be.true;
+            });
+
+            it('3.1.7 — autoExpandCropOnSelect does not collapse crop when panel deselected', () => {
+                const state = data();
+                state.expandedSections.crop = true;
+                const vm = { ...state };
+                methods.autoExpandCropOnSelect.call(vm, null);
+                // Deselecting should NOT collapse the crop section (user control)
+                expect(vm.expandedSections.crop).to.be.true;
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

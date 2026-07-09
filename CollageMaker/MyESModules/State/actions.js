@@ -1,11 +1,10 @@
 /**
- * State actions - Pure functions for mutating state.
- * These are decoupled from Vue and can be used in any context.
+ * State actions — Pure functions for mutating state.
+ * Used by CropManager, LayoutManager, and other state managers
+ * to provide testable, decoupled state mutation logic.
  *
- * @todo WIREFUTURE: These functions are scaffolding for the DIP transition
- * where state managers will depend on pure action functions instead of
- * directly mutating Vue reactive state. Not yet wired into any manager.
- * See: State/ImageLibrary.js, State/CropManager.js, State/LayoutManager.js
+ * Future: Additional managers (ImageLibrary, etc.) should migrate
+ * to use action functions for full DIP compliance.
  */
 
 /**

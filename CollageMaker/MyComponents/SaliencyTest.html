@@ -860,6 +860,159 @@
             });
         });
 
+        // ============================================================
+        // CR-11: Saliency Timeout Guard (1.2.1 — 1.2.5)
+        // ============================================================
+        describe('createSaliencyAnalyzer timeout guard', () => {
+            let originalWorker;
+            const originalTimeout = SALIENCY_CONFIG.INFERENCE_TIMEOUT_MS;
+
+            beforeEach(() => {
+                originalWorker = window.Worker;
+                // Use a short timeout for testing (50ms instead of 15000ms)
+                Object.defineProperty(SALIENCY_CONFIG, 'INFERENCE_TIMEOUT_MS', {
+                    value: 50,
+                    writable: true,
+                    configurable: true,
+                    enumerable: true
+                });
+            });
+
+            afterEach(() => {
+                window.Worker = originalWorker;
+                Object.defineProperty(SALIENCY_CONFIG, 'INFERENCE_TIMEOUT_MS', {
+                    value: originalTimeout,
+                    writable: true,
+                    configurable: true,
+                    enumerable: true
+                });
+            });
+
+            function mockWorkerThatNeverLoads() {
+                let messageHandler = null;
+                window.Worker = function () {
+                    const self = this;
+                    Object.defineProperty(self, 'onmessage', {
+                        set: function (fn) { messageHandler = fn; },
+                        configurable: true
+                    });
+                    Object.defineProperty(self, 'onerror', {
+                        set: function () {},
+                        configurable: true
+                    });
+                    this.postMessage = function () {};
+                    this.terminate = function () {};
+                };
+                return { messageHandler };
+            }
+
+            function mockWorkerThatLoads(models) {
+                let messageHandler = null;
+                window.Worker = function () {
+                    const self = this;
+                    Object.defineProperty(self, 'onmessage', {
+                        set: function (fn) {
+                            messageHandler = fn;
+                            // Simulate worker responding with models ready after handler is set
+                            setTimeout(() => {
+                                if (messageHandler) {
+                                    messageHandler({ data: { type: WORKER_MSG.MODELS_READY, models: models } });
+                                }
+                            }, 10);
+                        },
+                        configurable: true
+                    });
+                    Object.defineProperty(self, 'onerror', {
+                        set: function () {},
+                        configurable: true
+                    });
+                    this.postMessage = function () {};
+                    this.terminate = function () {};
+                };
+                return { messageHandler };
+            }
+
+            it('1.2.1 — Timeout fires and state becomes failed if models never load', async () => {
+                mockWorkerThatNeverLoads();
+                let failedCalled = false;
+                const analyzer = createSaliencyAnalyzer({
+                    onModelsFailed: () => { failedCalled = true; }
+                });
+
+                analyzer.initModels();
+                expect(analyzer.getState()).to.equal('loading');
+
+                // Wait longer than the short timeout used in tests
+                await new Promise(r => setTimeout(r, 100));
+
+                expect(analyzer.getState()).to.equal('failed');
+                expect(failedCalled).to.be.true;
+            });
+
+            it('1.2.2 — onModelsFailed called with timeout message on timeout', async () => {
+                mockWorkerThatNeverLoads();
+                let errorMsg = null;
+                const analyzer = createSaliencyAnalyzer({
+                    onModelsFailed: (msg) => { errorMsg = msg; }
+                });
+
+                analyzer.initModels();
+                await new Promise(r => setTimeout(r, 100));
+
+                expect(errorMsg).to.be.a('string');
+                expect(errorMsg.toLowerCase()).to.include('timeout');
+            });
+
+            it('1.2.3 — Timeout cleared on successful model load', async () => {
+                mockWorkerThatLoads(['face-detection']);
+                let failedCalled = false;
+                const analyzer = createSaliencyAnalyzer({
+                    onModelsFailed: () => { failedCalled = true; }
+                });
+
+                analyzer.initModels();
+                expect(analyzer.getState()).to.equal('loading');
+
+                // Wait for models to load (10ms) plus some buffer
+                await new Promise(r => setTimeout(r, 50));
+
+                expect(analyzer.getState()).to.equal('ready');
+
+                // Now wait well past the timeout — should NOT fire
+                await new Promise(r => setTimeout(r, 100));
+
+                expect(analyzer.getState()).to.equal('ready');
+                expect(failedCalled).to.be.false;
+            });
+
+            it('1.2.4 — Timeout cleared on dispose while loading', async () => {
+                mockWorkerThatNeverLoads();
+                let failedCalled = false;
+                const analyzer = createSaliencyAnalyzer({
+                    onModelsFailed: () => { failedCalled = true; }
+                });
+
+                analyzer.initModels();
+                expect(analyzer.getState()).to.equal('loading');
+
+                // Dispose before timeout fires
+                analyzer.dispose();
+
+                // Wait past the timeout duration
+                await new Promise(r => setTimeout(r, 100));
+
+                expect(failedCalled).to.be.false;
+            });
+
+            it('1.2.5 — State is loading immediately after initModels', () => {
+                mockWorkerThatNeverLoads();
+                const analyzer = createSaliencyAnalyzer({});
+                expect(analyzer.getState()).to.equal('idle');
+                analyzer.initModels();
+                expect(analyzer.getState()).to.equal('loading');
+            });
+        });
+
         // Run mocha after all tests are defined
         window.addEventListener('load', () => {
             mocha.run();

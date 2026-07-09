@@ -1,5 +1,6 @@
 /**
  * Background handlers - Handles background controls.
+ * Uses injected callback for DIP compliance — no direct this._scheduleRender().
  */
 
 import { loadImageFromFile } from '../Utils/loadImageFromFile.js';
@@ -7,10 +8,10 @@ import { loadImageFromFile } from '../Utils/loadImageFromFile.js';
 /**
  * Creates background handlers.
  * @param {Function} getBackgroundManager - Function that returns BackgroundManager instance
- * @param {Function} getCanvasRenderer - Function that returns CanvasRenderer instance
+ * @param {Function} onRenderScheduled - Callback to schedule a canvas render
  * @returns {Object} Background handlers object
  */
-export function createBackgroundHandlers(getBackgroundManager, getCanvasRenderer) {
+export function createBackgroundHandlers(getBackgroundManager, onRenderScheduled) {
     return {
         /**
          * Handles background style change.
@@ -20,7 +21,7 @@ export function createBackgroundHandlers(getBackgroundManager, getCanvasRenderer
             if (backgroundManager) {
                 backgroundManager.updateStyle(this.backgroundStyle);
             }
-            this._scheduleRender();
+            onRenderScheduled(this);
         },
 
         /**
@@ -31,7 +32,7 @@ export function createBackgroundHandlers(getBackgroundManager, getCanvasRenderer
             if (backgroundManager) {
                 backgroundManager.setColor(this.backgroundColor);
             }
-            this._scheduleRender();
+            onRenderScheduled(this);
         },
 
         /**
@@ -44,7 +45,7 @@ export function createBackgroundHandlers(getBackgroundManager, getCanvasRenderer
             if (backgroundManager) {
                 backgroundManager.setGradientColors(c1, c2);
             }
-            this._scheduleRender();
+            onRenderScheduled(this);
         },
 
         /**
@@ -57,7 +58,7 @@ export function createBackgroundHandlers(getBackgroundManager, getCanvasRenderer
             if (backgroundManager) {
                 backgroundManager.setGradientColors(c1, c2);
             }
-            this._scheduleRender();
+            onRenderScheduled(this);
         },
 
         /**
@@ -68,7 +69,7 @@ export function createBackgroundHandlers(getBackgroundManager, getCanvasRenderer
             if (backgroundManager) {
                 backgroundManager.setAngle(this.gradientAngle);
             }
-            this._scheduleRender();
+            onRenderScheduled(this);
         },
 
         /**
@@ -86,7 +87,7 @@ export function createBackgroundHandlers(getBackgroundManager, getCanvasRenderer
                 if (backgroundManager) {
                     backgroundManager.setImage(img);
                 }
-                this._scheduleRender();
+                onRenderScheduled(this);
             }
             // Reset file input so re-selecting the same file triggers @change
             // This is handled by caller setting value=''
@@ -100,7 +101,7 @@ export function createBackgroundHandlers(getBackgroundManager, getCanvasRenderer
             if (backgroundManager) {
                 backgroundManager.setOpacity(this.backgroundOpacity);
             }
-            this._scheduleRender();
+            onRenderScheduled(this);
         },
 
         /**
@@ -113,7 +114,7 @@ export function createBackgroundHandlers(getBackgroundManager, getCanvasRenderer
             if (backgroundManager) {
                 backgroundManager.setImage(null);
             }
-            this._scheduleRender();
+            onRenderScheduled(this);
         }
     };
 }

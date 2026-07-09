@@ -88,224 +88,242 @@
             <!-- Right Sidebar: Detail / Editor Panel -->
             <div id="sidebar-right" class="sidebar sidebar-right" :class="{ 'sidebar-collapsed': !rightSidebarOpen }">
                 <div class="sidebar-scroll-container">
-                    <!-- Layout Section -->
-                    <h3>Layout</h3>
-                    <div class="detail-section">
-                        <label for="layoutStyleSelect">Layout Style</label>
-                        <select id="layoutStyleSelect" v-model="layoutStyle" class="pure-input-rounded" @change="onLayoutStyleChange">
-                            <option v-for="style in layoutStyles" :key="style.value" :value="style.value">{{ style.label }}</option>
-                        </select>
-                    </div>
-                    <div class="detail-section">
-                        <label for="gutterSlider">Gutter: {{ gutter }}px</label>
-                        <input type="range" id="gutterSlider" v-model.number="gutter" min="0" max="20" step="1" class="fullRange" @input="onGutterChange">
-                    </div>
-                    <div class="detail-section" v-if="layoutStyle === 'diagonalSlices'">
-                        <label for="sliceAngleSlider">Slice Angle: {{ sliceAngle }}&deg;</label>
-                        <input type="range" id="sliceAngleSlider" v-model.number="sliceAngle" min="0" max="75" step="1" class="fullRange" @input="onSliceAngleChange">
-                    </div>
-                    <div class="detail-section" v-if="layoutStyle === 'hexagonal'">
-                        <label for="hexSpacingSlider">Hex Spacing: {{ hexSpacing }}px</label>
-                        <input type="range" id="hexSpacingSlider" v-model.number="hexSpacing" min="0" max="30" step="1" class="fullRange" @input="onHexSpacingChange">
-                    </div>
-
-                    <!-- Crop Section -->
-                    <template v-if="selectedPanelId && selectedCropInfo">
-                        <h3>Crop</h3>
-                        <div class="detail-section crop-preview-section">
-                            <canvas id="cropPreviewCanvas" class="crop-preview-canvas"></canvas>
-                            <div class="crop-info">
-                                <span class="crop-info-item">X: {{ Math.round(selectedCropInfo.sourceRect.x) }}</span>
-                                <span class="crop-info-item">Y: {{ Math.round(selectedCropInfo.sourceRect.y) }}</span>
-                                <span class="crop-info-item">W: {{ Math.round(selectedCropInfo.sourceRect.width) }}</span>
-                                <span class="crop-info-item">H: {{ Math.round(selectedCropInfo.sourceRect.height) }}</span>
-                            </div>
-                            <button class="pure-button reset-crop-btn" @click="resetSelectedCrop">
-                                <span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 4px;">restart_alt</span>
-                                Reset Crop
-                            </button>
-                        </div>
-                    </template>
-                    <template v-else-if="images.length > 0">
-                        <h3>Crop</h3>
-                        <div class="detail-section crop-placeholder-section">
-                            <span class="material-icons crop-placeholder-icon">crop_free</span>
-                            <p>Select a panel on the canvas to edit its crop.</p>
-                        </div>
-                    </template>
-
-                    <!-- Background Section -->
-                    <h3>Background</h3>
-                    <div class="detail-section">
-                        <label>Style</label>
-                        <div class="segmented-control">
-                            <button class="segment-btn" :class="{ active: backgroundStyle === 'solid' }" @click="backgroundStyle = 'solid'; onBackgroundStyleChange()">Solid</button>
-                            <button class="segment-btn" :class="{ active: backgroundStyle === 'gradient' }" @click="backgroundStyle = 'gradient'; onBackgroundStyleChange()">Gradient</button>
-                            <button class="segment-btn" :class="{ active: backgroundStyle === 'image' }" @click="backgroundStyle = 'image'; onBackgroundStyleChange()">Image</button>
-                        </div>
-                    </div>
-
-                    <!-- Solid Background -->
-                    <div class="detail-section" v-if="backgroundStyle === 'solid'">
-                        <label for="bgColorPicker">Color</label>
-                        <div class="color-picker-row">
-                            <input type="color" id="bgColorPicker" v-model="backgroundColor" @input="onBackgroundColorChange">
-                            <span class="color-hex">{{ backgroundColor }}</span>
-                        </div>
-                    </div>
-
-                    <!-- Gradient Background -->
-                    <template v-if="backgroundStyle === 'gradient'">
-                        <div class="detail-section">
-                            <label for="gradientColor1">Color 1</label>
-                            <div class="color-picker-row">
-                                <input type="color" id="gradientColor1" v-model="backgroundColor" @input="onGradientColor1Change">
-                                <span class="color-hex">{{ backgroundColor }}</span>
-                            </div>
-                        </div>
-                        <div class="detail-section">
-                            <label for="gradientColor2">Color 2</label>
-                            <div class="color-picker-row">
-                                <input type="color" id="gradientColor2" :value="gradientColors ? gradientColors[1] : '#333333'" @input="onGradientColor2Input($event)">
-                                <span class="color-hex">{{ gradientColors ? gradientColors[1] : '#333333' }}</span>
-                            </div>
-                        </div>
-                        <div class="detail-section">
-                            <label for="gradientAngleSlider">Angle: {{ gradientAngle }}&deg;</label>
-                            <input type="range" id="gradientAngleSlider" v-model.number="gradientAngle" min="0" max="360" step="1" class="fullRange" @input="onGradientAngleChange">
-                        </div>
-                    </template>
-
-                    <!-- Image Background -->
-                    <template v-if="backgroundStyle === 'image'">
-                        <div class="detail-section">
-                            <label for="bgImageInput">Background Image</label>
-                            <input type="file" id="bgImageInput" accept="image/*" @change="handleBackgroundImageChange" class="file-input-styled">
-                            <button v-if="backgroundImage" class="pure-button remove-bg-btn" @click="removeBackgroundImage">
-                                <span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 4px;">delete</span>
-                                Remove Image
-                            </button>
-                        </div>
-                        <div class="detail-section">
-                            <label for="bgOpacitySlider">Opacity: {{ Math.round(backgroundOpacity * 100) }}%</label>
-                            <input type="range" id="bgOpacitySlider" v-model.number="backgroundOpacity" min="0" max="1" step="0.01" class="fullRange" @input="onBackgroundOpacityChange">
-                        </div>
-                    </template>
-
-                    <!-- Title Section -->
-                    <h3>Title</h3>
-                    <div class="detail-section">
-                        <label for="titleInput">Text</label>
-                        <input type="text" id="titleInput" v-model="titleText" @input="onTitleTextChange" @select="onTitleSelectionChange" @click="onTitleSelectionChange" @keyup="onTitleSelectionChange" placeholder="Enter title text..." class="pure-input-rounded">
-                    </div>
-                    <div class="detail-section">
-                        <!-- Formatting buttons -->
-                        <div class="formatting-bar">
-                            <button class="format-btn" :class="{ active: isTitleFormatActive('bold') }" @mousedown.prevent @click="toggleTitleBold" title="Bold" :disabled="titleSelectionStart === titleSelectionEnd">
-                                <strong>B</strong>
-                            </button>
-                            <button class="format-btn" :class="{ active: isTitleFormatActive('italic') }" @mousedown.prevent @click="toggleTitleItalic" title="Italic" :disabled="titleSelectionStart === titleSelectionEnd">
-                                <em>I</em>
-                            </button>
-                            <button class="format-btn" :class="{ active: isTitleFormatActive('underline') }" @mousedown.prevent @click="toggleTitleUnderline" title="Underline" :disabled="titleSelectionStart === titleSelectionEnd">
-                                <u>U</u>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="detail-section">
-                        <label for="titleFontSelect">Font</label>
-                        <select id="titleFontSelect" v-model="titleStyle.fontFamily" class="pure-input-rounded" @change="onTitleFontFamilyChange">
-                            <option v-for="font in ['Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Courier New', 'Verdana', 'Trebuchet MS', 'Impact', 'Comic Sans MS', 'Palatino', 'Lucida Console', 'Garamond', 'Bookman']" :key="font" :value="font">{{ font }}</option>
-                        </select>
-                    </div>
-                    <div class="detail-section">
-                        <label for="titleFontSizeSlider">Size: {{ titleStyle.fontSize }}pt</label>
-                        <input type="range" id="titleFontSizeSlider" v-model.number="titleStyle.fontSize" min="12" max="120" step="1" class="fullRange" @input="onTitleFontSizeChange">
-                    </div>
-                    <div class="detail-section">
-                        <label for="titleFontColorPicker">Font Color</label>
-                        <div class="color-picker-row">
-                            <input type="color" id="titleFontColorPicker" v-model="titleStyle.fontColor" @input="onTitleFontColorChange">
-                            <span class="color-hex">{{ titleStyle.fontColor }}</span>
-                        </div>
-                    </div>
-                    <div class="detail-section">
-                        <label for="titleBgColorPicker">Background Color</label>
-                        <div class="color-picker-row">
-                            <input type="color" id="titleBgColorPicker" v-model="titleStyle.backgroundColor" @input="onTitleBackgroundColorChange">
-                            <span class="color-hex">{{ titleStyle.backgroundColor }}</span>
-                        </div>
-                    </div>
-                    <div class="detail-section">
-                        <label>
-                            <input type="checkbox" v-model="titleStyle.showBackground" @change="onTitleShowBackgroundChange">
-                            Show Background
-                        </label>
-                    </div>
-                    <div class="detail-section">
-                        <label>Alignment</label>
-                        <div class="segmented-control">
-                            <button class="segment-btn" :class="{ active: titleStyle.alignment === 'left' }" @click="titleStyle.alignment = 'left'; onTitleAlignmentChange()">
-                                <span class="material-icons" style="font-size: 18px;">format_align_left</span>
-                            </button>
-                            <button class="segment-btn" :class="{ active: titleStyle.alignment === 'center' }" @click="titleStyle.alignment = 'center'; onTitleAlignmentChange()">
-                                <span class="material-icons" style="font-size: 18px;">format_align_center</span>
-                            </button>
-                            <button class="segment-btn" :class="{ active: titleStyle.alignment === 'right' }" @click="titleStyle.alignment = 'right'; onTitleAlignmentChange()">
-                                <span class="material-icons" style="font-size: 18px;">format_align_right</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Overlay Section -->
-                    <h3>Overlay</h3>
-                    <div class="detail-section">
-                        <label for="overlayImageInput">Mask Image</label>
-                        <input type="file" id="overlayImageInput" accept="image/*" @change="handleOverlayImageChange" class="file-input-styled">
-                        <button v-if="overlayImage" class="pure-button remove-overlay-btn" @click="removeOverlay">
-                            <span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 4px;">delete</span>
-                            Remove Mask
+                    <!-- Collapsible Sections -->
+                    <div class="sidebar-section" v-for="section in sidebarSections" :key="section.id">
+                        <button class="sidebar-section-header" @click="toggleSection(section.id)" :aria-expanded="expandedSections[section.id]">
+                            <span class="section-chevron" :class="{ expanded: expandedSections[section.id] }">▶</span>
+                            <span>{{ section.label }}</span>
                         </button>
-                    </div>
-                    <div class="detail-section" v-if="overlayImage">
-                        <label for="overlayModeSelect">Blend Mode</label>
-                        <select id="overlayModeSelect" v-model="overlayMode" class="pure-input-rounded" @change="onOverlayModeChange">
-                            <option value="source-over">Normal</option>
-                            <option value="multiply">Multiply</option>
-                            <option value="screen">Screen</option>
-                            <option value="overlay">Overlay</option>
-                            <option value="darken">Darken</option>
-                            <option value="lighten">Lighten</option>
-                            <option value="color-dodge">Color Dodge</option>
-                            <option value="color-burn">Color Burn</option>
-                            <option value="hard-light">Hard Light</option>
-                            <option value="soft-light">Soft Light</option>
-                            <option value="difference">Difference</option>
-                            <option value="exclusion">Exclusion</option>
-                            <option value="hue">Hue</option>
-                            <option value="saturation">Saturation</option>
-                            <option value="color">Color</option>
-                            <option value="luminosity">Luminosity</option>
-                        </select>
-                    </div>
-                    <div class="detail-section" v-if="overlayImage">
-                        <label for="overlayOpacitySlider">Opacity: {{ Math.round(overlayOpacity * 100) }}%</label>
-                        <input type="range" id="overlayOpacitySlider" v-model.number="overlayOpacity" min="0" max="1" step="0.01" class="fullRange" @input="onOverlayOpacityChange">
-                    </div>
+                        <div class="sidebar-section-content" v-show="expandedSections[section.id]">
+                            <!-- Layout Section -->
+                            <template v-if="section.id === 'layout'">
+                                <div class="detail-section">
+                                    <label for="layoutStyleSelect">Layout Style</label>
+                                    <select id="layoutStyleSelect" v-model="layoutStyle" class="pure-input-rounded" @change="onLayoutStyleChange">
+                                        <option v-for="style in layoutStyles" :key="style.value" :value="style.value">{{ style.label }}</option>
+                                    </select>
+                                </div>
+                                <div class="detail-section" v-show="layoutStyle !== 'hexagonal'">
+                                    <label for="gutterSlider">Gutter: {{ gutter }}px</label>
+                                    <input type="range" id="gutterSlider" v-model.number="gutter" min="0" max="20" step="1" class="fullRange" @input="onGutterChange">
+                                </div>
+                                <div class="detail-section" v-if="layoutStyle === 'diagonalSlices'">
+                                    <label for="sliceAngleSlider">Slice Angle: {{ sliceAngle }}&deg;</label>
+                                    <input type="range" id="sliceAngleSlider" v-model.number="sliceAngle" min="-75" max="75" step="1" class="fullRange" @input="onSliceAngleChange">
+                                </div>
+                                <div class="detail-section" v-if="layoutStyle === 'hexagonal'">
+                                    <label for="hexSpacingSlider">Hex Spacing: {{ hexSpacing }}px</label>
+                                    <input type="range" id="hexSpacingSlider" v-model.number="hexSpacing" min="0" max="30" step="1" class="fullRange" @input="onHexSpacingChange">
+                                </div>
+                                <div class="detail-section" v-if="layoutStyle === 'hexagonal'">
+                                    <label for="hexSizeSlider">Hexagon Size: {{ Math.round(hexSizeMultiplier * 100) }}%</label>
+                                    <input type="range" id="hexSizeSlider" v-model.number="hexSizeMultiplier" min="0.5" max="2" step="0.05" class="fullRange" @input="onHexSizeMultiplierChange">
+                                </div>
+                            </template>
 
-                    <!-- Export Section -->
-                    <h3>Export</h3>
-                    <div class="detail-section">
-                        <label for="exportQualitySlider">Quality: {{ Math.round(exportQuality * 100) }}%</label>
-                        <input type="range" id="exportQualitySlider" v-model.number="exportQuality" min="0.5" max="1" step="0.01" class="fullRange" @input="onExportQualityChange">
-                    </div>
-                    <div class="detail-section">
-                        <button id="exportBtn" class="pure-button pure-button-primary export-btn" @click="exportCollage" :disabled="isExporting || images.length === 0" title="Export as JPEG (Cmd+S)">
-                            <span class="material-icons" style="vertical-align: middle; margin-right: 4px;">save</span>
-                            {{ isExporting ? 'Exporting...' : 'Export JPEG' }}
-                        </button>
-                        <div v-if="exportStatus" class="export-status" :class="{ 'status-success': exportStatus.includes('success'), 'status-error': exportStatus.includes('failed') }">
-                            {{ exportStatus }}
+                            <!-- Title Section -->
+                            <template v-if="section.id === 'title'">
+                                <div class="detail-section">
+                                    <label for="titleInput">Text</label>
+                                    <input type="text" id="titleInput" v-model="titleText" @input="onTitleTextChange" @select="onTitleSelectionChange" @click="onTitleSelectionChange" @keyup="onTitleSelectionChange" placeholder="Enter title text..." class="pure-input-rounded">
+                                </div>
+                                <div class="detail-section">
+                                    <div class="formatting-bar">
+                                        <button class="format-btn" :class="{ active: isTitleFormatActive('bold') }" @mousedown.prevent @click="toggleTitleBold" title="Bold" :disabled="titleSelectionStart === titleSelectionEnd">
+                                            <strong>B</strong>
+                                        </button>
+                                        <button class="format-btn" :class="{ active: isTitleFormatActive('italic') }" @mousedown.prevent @click="toggleTitleItalic" title="Italic" :disabled="titleSelectionStart === titleSelectionEnd">
+                                            <em>I</em>
+                                        </button>
+                                        <button class="format-btn" :class="{ active: isTitleFormatActive('underline') }" @mousedown.prevent @click="toggleTitleUnderline" title="Underline" :disabled="titleSelectionStart === titleSelectionEnd">
+                                            <u>U</u>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="detail-section">
+                                    <label for="titleFontSelect">Font</label>
+                                    <select id="titleFontSelect" v-model="titleStyle.fontFamily" class="pure-input-rounded" @change="onTitleFontFamilyChange">
+                                        <option v-for="font in ['Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Courier New', 'Verdana', 'Trebuchet MS', 'Impact', 'Comic Sans MS', 'Palatino', 'Lucida Console', 'Garamond', 'Bookman']" :key="font" :value="font">{{ font }}</option>
+                                    </select>
+                                </div>
+                                <div class="detail-section">
+                                    <label for="titleFontSizeSlider">Size: {{ titleStyle.fontSize }}pt</label>
+                                    <input type="range" id="titleFontSizeSlider" v-model.number="titleStyle.fontSize" min="12" max="120" step="1" class="fullRange" @input="onTitleFontSizeChange">
+                                </div>
+                                <div class="detail-section">
+                                    <label for="titleFontColorPicker">Font Color</label>
+                                    <div class="color-picker-row">
+                                        <input type="color" id="titleFontColorPicker" v-model="titleStyle.fontColor" @input="onTitleFontColorChange">
+                                        <span class="color-swatch" :style="{ backgroundColor: titleStyle.fontColor }" aria-hidden="true"></span>
+                                    </div>
+                                </div>
+                                <div class="detail-section">
+                                    <label for="titleBgColorPicker">Background Color</label>
+                                    <div class="color-picker-row">
+                                        <input type="color" id="titleBgColorPicker" v-model="titleStyle.backgroundColor" @input="onTitleBackgroundColorChange">
+                                        <span class="color-swatch" :style="{ backgroundColor: titleStyle.backgroundColor }" aria-hidden="true"></span>
+                                    </div>
+                                </div>
+                                <div class="detail-section">
+                                    <label>
+                                        <input type="checkbox" v-model="titleStyle.showBackground" @change="onTitleShowBackgroundChange">
+                                        Show Background
+                                    </label>
+                                </div>
+                                <div class="detail-section">
+                                    <label>Alignment</label>
+                                    <div class="segmented-control">
+                                        <button class="segment-btn" :class="{ active: titleStyle.alignment === 'left' }" @click="titleStyle.alignment = 'left'; onTitleAlignmentChange()">
+                                            <span class="material-icons" style="font-size: 18px;">format_align_left</span>
+                                        </button>
+                                        <button class="segment-btn" :class="{ active: titleStyle.alignment === 'center' }" @click="titleStyle.alignment = 'center'; onTitleAlignmentChange()">
+                                            <span class="material-icons" style="font-size: 18px;">format_align_center</span>
+                                        </button>
+                                        <button class="segment-btn" :class="{ active: titleStyle.alignment === 'right' }" @click="titleStyle.alignment = 'right'; onTitleAlignmentChange()">
+                                            <span class="material-icons" style="font-size: 18px;">format_align_right</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Crop Section -->
+                            <template v-if="section.id === 'crop'">
+                                <template v-if="selectedPanelId && selectedCropInfo">
+                                    <div class="detail-section crop-preview-section">
+                                        <canvas id="cropPreviewCanvas" class="crop-preview-canvas"></canvas>
+                                        <div class="crop-info">
+                                            <span class="crop-info-item">X: {{ Math.round(selectedCropInfo.sourceRect.x) }}</span>
+                                            <span class="crop-info-item">Y: {{ Math.round(selectedCropInfo.sourceRect.y) }}</span>
+                                            <span class="crop-info-item">W: {{ Math.round(selectedCropInfo.sourceRect.width) }}</span>
+                                            <span class="crop-info-item">H: {{ Math.round(selectedCropInfo.sourceRect.height) }}</span>
+                                        </div>
+                                        <button class="pure-button reset-crop-btn" @click="resetSelectedCrop">
+                                            <span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 4px;">restart_alt</span>
+                                            Reset Crop
+                                        </button>
+                                    </div>
+                                </template>
+                                <template v-else-if="images.length > 0">
+                                    <div class="detail-section crop-placeholder-section">
+                                        <span class="material-icons crop-placeholder-icon">crop_free</span>
+                                        <p>Select a panel on the canvas to edit its crop.</p>
+                                    </div>
+                                </template>
+                            </template>
+
+                            <!-- Background Section -->
+                            <template v-if="section.id === 'background'">
+                                <div class="detail-section">
+                                    <label>Style</label>
+                                    <div class="segmented-control">
+                                        <button class="segment-btn" :class="{ active: backgroundStyle === 'solid' }" @click="backgroundStyle = 'solid'; onBackgroundStyleChange()">Solid</button>
+                                        <button class="segment-btn" :class="{ active: backgroundStyle === 'gradient' }" @click="backgroundStyle = 'gradient'; onBackgroundStyleChange()">Gradient</button>
+                                        <button class="segment-btn" :class="{ active: backgroundStyle === 'image' }" @click="backgroundStyle = 'image'; onBackgroundStyleChange()">Image</button>
+                                    </div>
+                                </div>
+                                <div class="detail-section" v-if="backgroundStyle === 'solid'">
+                                    <label for="bgColorPicker">Color</label>
+                                    <div class="color-picker-row">
+                                        <input type="color" id="bgColorPicker" v-model="backgroundColor" @input="onBackgroundColorChange">
+                                        <span class="color-swatch" :style="{ backgroundColor: backgroundColor }" aria-hidden="true"></span>
+                                    </div>
+                                </div>
+                                <template v-if="backgroundStyle === 'gradient'">
+                                    <div class="detail-section">
+                                        <label for="gradientColor1">Color 1</label>
+                                        <div class="color-picker-row">
+                                            <input type="color" id="gradientColor1" v-model="backgroundColor" @input="onGradientColor1Change">
+                                            <span class="color-swatch" :style="{ backgroundColor: backgroundColor }" aria-hidden="true"></span>
+                                        </div>
+                                    </div>
+                                    <div class="detail-section">
+                                        <label for="gradientColor2">Color 2</label>
+                                        <div class="color-picker-row">
+                                            <input type="color" id="gradientColor2" :value="gradientColors ? gradientColors[1] : '#333333'" @input="onGradientColor2Input($event)">
+                                            <span class="color-swatch" :style="{ backgroundColor: gradientColors ? gradientColors[1] : '#333333' }" aria-hidden="true"></span>
+                                        </div>
+                                    </div>
+                                    <div class="detail-section">
+                                        <label for="gradientAngleSlider">Angle: {{ gradientAngle }}&deg;</label>
+                                        <input type="range" id="gradientAngleSlider" v-model.number="gradientAngle" min="0" max="360" step="1" class="fullRange" @input="onGradientAngleChange">
+                                    </div>
+                                </template>
+                                <template v-if="backgroundStyle === 'image'">
+                                    <div class="detail-section">
+                                        <label for="bgImageInput">Background Image</label>
+                                        <input type="file" id="bgImageInput" accept="image/*" @change="handleBackgroundImageChange" class="file-input-styled">
+                                        <button v-if="backgroundImage" class="pure-button remove-bg-btn" @click="removeBackgroundImage">
+                                            <span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 4px;">delete</span>
+                                            Remove Image
+                                        </button>
+                                    </div>
+                                    <div class="detail-section">
+                                        <label for="bgOpacitySlider">Opacity: {{ Math.round(backgroundOpacity * 100) }}%</label>
+                                        <input type="range" id="bgOpacitySlider" v-model.number="backgroundOpacity" min="0" max="1" step="0.01" class="fullRange" @input="onBackgroundOpacityChange">
+                                    </div>
+                                </template>
+                            </template>
+
+                            <!-- Overlay Section -->
+                            <template v-if="section.id === 'overlay'">
+                                <div class="detail-section">
+                                    <label for="overlayImageInput">Mask Image</label>
+                                    <input type="file" id="overlayImageInput" accept="image/*" @change="handleOverlayImageChange" class="file-input-styled">
+                                    <button v-if="overlayImage" class="pure-button remove-overlay-btn" @click="removeOverlay">
+                                        <span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 4px;">delete</span>
+                                        Remove Mask
+                                    </button>
+                                </div>
+                                <div class="detail-section" v-if="overlayImage">
+                                    <label for="overlayModeSelect">Blend Mode</label>
+                                    <select id="overlayModeSelect" v-model="overlayMode" class="pure-input-rounded" @change="onOverlayModeChange">
+                                        <option value="source-over">Normal</option>
+                                        <option value="multiply">Multiply</option>
+                                        <option value="screen">Screen</option>
+                                        <option value="overlay">Overlay</option>
+                                        <option value="darken">Darken</option>
+                                        <option value="lighten">Lighten</option>
+                                        <option value="color-dodge">Color Dodge</option>
+                                        <option value="color-burn">Color Burn</option>
+                                        <option value="hard-light">Hard Light</option>
+                                        <option value="soft-light">Soft Light</option>
+                                        <option value="difference">Difference</option>
+                                        <option value="exclusion">Exclusion</option>
+                                        <option value="hue">Hue</option>
+                                        <option value="saturation">Saturation</option>
+                                        <option value="color">Color</option>
+                                        <option value="luminosity">Luminosity</option>
+                                    </select>
+                                </div>
+                                <div class="detail-section" v-if="overlayImage">
+                                    <label for="overlayOpacitySlider">Opacity: {{ Math.round(overlayOpacity * 100) }}%</label>
+                                    <input type="range" id="overlayOpacitySlider" v-model.number="overlayOpacity" min="0" max="1" step="0.01" class="fullRange" @input="onOverlayOpacityChange">
+                                </div>
+                            </template>
+
+                            <!-- Export Section -->
+                            <template v-if="section.id === 'export'">
+                                <div class="detail-section">
+                                    <label id="exportFormatLabel">Format</label>
+                                    <div class="segmented-control" role="radiogroup" aria-labelledby="exportFormatLabel">
+                                        <button class="segment-btn" :class="{ active: exportFormat === 'jpeg' }" role="radio" :aria-checked="exportFormat === 'jpeg'" @click="exportFormat = 'jpeg'">JPEG</button>
+                                        <button class="segment-btn" :class="{ active: exportFormat === 'png' }" role="radio" :aria-checked="exportFormat === 'png'" @click="exportFormat = 'png'">PNG</button>
+                                    </div>
+                                </div>
+                                <div class="detail-section" v-if="exportFormat === 'jpeg'">
+                                    <label for="exportQualitySlider">Quality: {{ Math.round(exportQuality * 100) }}%</label>
+                                    <input type="range" id="exportQualitySlider" v-model.number="exportQuality" min="0.5" max="1" step="0.01" class="fullRange" @input="onExportQualityChange">
+                                </div>
+                                <div class="detail-section">
+                                    <button id="exportBtn" class="pure-button pure-button-primary export-btn" @click="exportCollage" :disabled="isExporting || images.length === 0" :title="'Export as ' + (exportFormat === 'jpeg' ? 'JPEG' : 'PNG') + ' (Cmd+E)'">
+                                        <span class="material-icons" style="vertical-align: middle; margin-right: 4px;">save</span>
+                                        {{ isExporting ? 'Exporting...' : 'Export ' + exportFormat.toUpperCase() }}
+                                    </button>
+                                    <div v-if="exportStatus" class="export-status" :class="{ 'status-success': exportStatus.includes('success'), 'status-error': exportStatus.includes('failed') }">
+                                        {{ exportStatus }}
+                                    </div>
+                                </div>
+                            </template>
                         </div>
                     </div>
                 </div>
@@ -325,9 +343,16 @@
 
         const base = initializeCollageBase();
 
+        // DOM element IDs — injected to avoid hardcoded getElementById calls
+        const domIds = {
+            previewCanvas: 'previewCanvas',
+            cropPreviewCanvas: 'cropPreviewCanvas',
+            fileInput: 'fileInput'
+        };
+
         const dataConfig = createCollageData(base);
-        const methodsConfig = createCollageMethods(base);
-        const lifecycleConfig = createCollageLifecycle(base);
+        const methodsConfig = createCollageMethods(base, domIds);
+        const lifecycleConfig = createCollageLifecycle(base, domIds);
         const servicesConfig = createCollageServices(base);
 
         const app = createCollageApp({

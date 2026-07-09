@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hex Panel Swap Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Hex Panel Swap Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Phase 3 — CR-04c Hexagonal Panel Drag-and-Drop</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { swapPanelAssignments } from '../MyESModules/Interaction/HexPanelSwap.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // CR-04c: Hexagonal Panel Drag-and-Drop
+        // ============================================================
+        describe('HexPanelSwap — swapPanelAssignments', () => {
+            it('swaps imageIndex between two panels', () => {
+                const state = {
+                    panels: [
+                        { id: 'panel-0', imageIndex: 0, geometry: { type: 'path', points: [], boundingRect: {} } },
+                        { id: 'panel-1', imageIndex: 1, geometry: { type: 'path', points: [], boundingRect: {} } },
+                        { id: 'panel-2', imageIndex: 2, geometry: { type: 'path', points: [], boundingRect: {} } }
+                    ],
+                    panelAssignments: new Map([['panel-0', 0], ['panel-1', 1], ['panel-2', 2]])
+                };
+
+                swapPanelAssignments(state, 'panel-0', 'panel-1');
+
+                expect(state.panels[0].imageIndex).to.equal(1);
+                expect(state.panels[1].imageIndex).to.equal(0);
+                expect(state.panels[2].imageIndex).to.equal(2);
+                expect(state.panelAssignments.get('panel-0')).to.equal(1);
+                expect(state.panelAssignments.get('panel-1')).to.equal(0);
+                expect(state.panelAssignments.get('panel-2')).to.equal(2);
+            });
+
+            it('returns false when source and target are the same', () => {
+                const state = {
+                    panels: [{ id: 'panel-0', imageIndex: 0 }],
+                    panelAssignments: new Map([['panel-0', 0]])
+                };
+
+                const result = swapPanelAssignments(state, 'panel-0', 'panel-0');
+                expect(result).to.be.false;
+                expect(state.panels[0].imageIndex).to.equal(0);
+            });
+
+            it('returns false when source panel not found', () => {
+                const state = {
+                    panels: [{ id: 'panel-0', imageIndex: 0 }],
+                    panelAssignments: new Map([['panel-0', 0]])
+                };
+
+                const result = swapPanelAssignments(state, 'nonexistent', 'panel-0');
+                expect(result).to.be.false;
+            });
+
+            it('returns false when target panel not found', () => {
+                const state = {
+                    panels: [{ id: 'panel-0', imageIndex: 0 }],
+                    panelAssignments: new Map([['panel-0', 0]])
+                };
+
+                const result = swapPanelAssignments(state, 'panel-0', 'nonexistent');
+                expect(result).to.be.false;
+            });
+
+            it('does not affect other panels or assignments', () => {
+                const state = {
+                    panels: [
+                        { id: 'panel-0', imageIndex: 0 },
+                        { id: 'panel-1', imageIndex: 1 },
+                        { id: 'panel-2', imageIndex: 2 },
+                        { id: 'panel-3', imageIndex: 3 }
+                    ],
+                    panelAssignments: new Map([
+                        ['panel-0', 0], ['panel-1', 1], ['panel-2', 2], ['panel-3', 3]
+                    ])
+                };
+
+                swapPanelAssignments(state, 'panel-0', 'panel-1');
+
+                expect(state.panels[2].imageIndex).to.equal(2);
+                expect(state.panels[3].imageIndex).to.equal(3);
+                expect(state.panelAssignments.get('panel-2')).to.equal(2);
+                expect(state.panelAssignments.get('panel-3')).to.equal(3);
+            });
+
+            it('supports multiple swaps (undo-friendly)', () => {
+                const state = {
+                    panels: [
+                        { id: 'panel-0', imageIndex: 0 },
+                        { id: 'panel-1', imageIndex: 1 }
+                    ],
+                    panelAssignments: new Map([['panel-0', 0], ['panel-1', 1]])
+                };
+
+                // Swap
+                swapPanelAssignments(state, 'panel-0', 'panel-1');
+                expect(state.panels[0].imageIndex).to.equal(1);
+
+                // Swap back (simulates undo)
+                swapPanelAssignments(state, 'panel-0', 'panel-1');
+                expect(state.panels[0].imageIndex).to.equal(0);
+                expect(state.panels[1].imageIndex).to.equal(1);
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

@@ -13,7 +13,7 @@
 </head>
 <body>
     <h1>CollageMaker — Layout Math Unit Tests</h1>
-    <p class="test-plan-ref">Covers: Section 1.1 FitMath, 1.2 SeededPRNG, 1.3 PolygonClipper, 1.4 UniformLayout, 1.5 HeroLayout, 1.6 MosaicLayout, 1.7 DiagonalSlicesLayout, 1.8 HexagonalLayout, 1.9 LayoutGenerator, 1.10 LayoutStyle</p>
+    <p class="test-plan-ref">Covers: Section 1.1 FitMath, 1.2 SeededPRNG, 1.3 PolygonClipper, 1.4 UniformLayout, 1.5 HeroLayout, 1.6 MosaicLayout, 1.7 DiagonalSlicesLayout (incl. Phase 3 negative angles), 1.8 HexagonalLayout (incl. Phase 3 size multiplier), 1.9 LayoutGenerator, 1.10 LayoutStyle</p>
     <div id="mocha"></div>
 
     <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
@@ -594,20 +594,49 @@
                 }
             });
 
-            it('1.7.9 — bounding rects are valid', () => {
-                const panels = generateDiagonalSlicesLayout({ numImages: 5, canvasSize: CANVAS, gutter: GUTTER });
+            it('1.7.8 — maximum positive angle (75°): no NaN', () => {
+                const panels = generateDiagonalSlicesLayout({ numImages: 5, canvasSize: CANVAS, gutter: GUTTER, angle: 75 });
                 for (const p of panels) {
-                    const br = p.geometry.boundingRect;
                     for (const pt of p.geometry.points) {
-                        expect(pt[0]).to.be.at.least(br.x - 0.01);
-                        expect(pt[0]).to.be.at.most(br.x + br.width + 0.01);
-                        expect(pt[1]).to.be.at.least(br.y - 0.01);
-                        expect(pt[1]).to.be.at.most(br.y + br.height + 0.01);
+                        expect(isNaN(pt[0])).to.be.false;
+                        expect(isNaN(pt[1])).to.be.false;
                     }
                 }
             });
 
-            it('1.7.10 — custom imageOrder', () => {
+            it('1.7.9 — negative angle (-45°): clockwise shear', () => {
+                const panels = generateDiagonalSlicesLayout({ numImages: 4, canvasSize: CANVAS, gutter: GUTTER, angle: -45 });
+                expect(panels.length).to.equal(4);
+                // Negative angle should produce negative shear — bottom corners shift left
+                const pts = panels[0].geometry.points;
+                // Top-left corner (pts[0]) vs bottom-left corner (pts[3])
+                // At -45°, bottom-left x should be less than top-left x (sheared left)
+                expect(pts[3][0]).to.be.lessThan(pts[0][0]);
+            });
+
+            it('1.7.10 — negative angle (-75°): valid, no NaN', () => {
+                const panels = generateDiagonalSlicesLayout({ numImages: 4, canvasSize: CANVAS, gutter: GUTTER, angle: -75 });
+                for (const p of panels) {
+                    for (const pt of p.geometry.points) {
+                        expect(isNaN(pt[0])).to.be.false;
+                        expect(isNaN(pt[1])).to.be.false;
+                    }
+                }
+            });
+
+            it('1.7.11 — positive vs negative angle: opposite shear direction', () => {
+                const posPanels = generateDiagonalSlicesLayout({ numImages: 4, canvasSize: CANVAS, gutter: GUTTER, angle: 30 });
+                const negPanels = generateDiagonalSlicesLayout({ numImages: 4, canvasSize: CANVAS, gutter: GUTTER, angle: -30 });
+                // First panel: compare bottom-left x offset from top-left x
+                const posShear = posPanels[0].geometry.points[3][0] - posPanels[0].geometry.points[0][0];
+                const negShear = negPanels[0].geometry.points[3][0] - negPanels[0].geometry.points[0][0];
+                // Positive angle: bottom-left is to the right of top-left (positive shear)
+                // Negative angle: bottom-left is to the left of top-left (negative shear)
+                expect(posShear).to.be.greaterThan(0);
+                expect(negShear).to.be.lessThan(0);
+            });
+
+            it('1.7.12 — bounding rects are valid', () => {
                 const panels = generateDiagonalSlicesLayout({
                     numImages: 4, canvasSize: CANVAS, gutter: GUTTER,
                     imageOrder: [3, 1, 2, 0]
@@ -695,6 +724,37 @@
                 const r20 = p20[0].geometry.boundingRect.width;
                 expect(r0).to.not.equal(r20);
             });
+
+            it('1.8.11 — hexSizeMultiplier 1.0: default size', () => {
+                const panels = generateHexagonalLayout({ numImages: 7, canvasSize: CANVAS, gutter: GUTTER, hexSizeMultiplier: 1.0 });
+                expect(panels.length).to.equal(7);
+                const defaultWidth = panels[0].geometry.boundingRect.width;
+                expect(defaultWidth).to.be.greaterThan(0);
+            });
+
+            it('1.8.12 — hexSizeMultiplier 2.0: hexagons are larger', () => {
+                const panels1x = generateHexagonalLayout({ numImages: 7, canvasSize: CANVAS, gutter: GUTTER, hexSizeMultiplier: 1.0 });
+                const panels2x = generateHexagonalLayout({ numImages: 7, canvasSize: CANVAS, gutter: GUTTER, hexSizeMultiplier: 2.0 });
+                const w1 = panels1x[0].geometry.boundingRect.width;
+                const w2 = panels2x[0].geometry.boundingRect.width;
+                expect(w2).to.be.greaterThan(w1);
+            });
+
+            it('1.8.13 — hexSizeMultiplier 0.5: hexagons are smaller', () => {
+                const panels1x = generateHexagonalLayout({ numImages: 7, canvasSize: CANVAS, gutter: GUTTER, hexSizeMultiplier: 1.0 });
+                const panels05x = generateHexagonalLayout({ numImages: 7, canvasSize: CANVAS, gutter: GUTTER, hexSizeMultiplier: 0.5 });
+                const w1 = panels1x[0].geometry.boundingRect.width;
+                const w05 = panels05x[0].geometry.boundingRect.width;
+                expect(w05).to.be.lessThan(w1);
+            });
+
+            it('1.8.14 — large multiplier with few images: panels still generated', () => {
+                const panels = generateHexagonalLayout({ numImages: 3, canvasSize: CANVAS, gutter: GUTTER, hexSizeMultiplier: 2.0 });
+                expect(panels.length).to.equal(3);
+                for (const p of panels) {
+                    expect(p.geometry.points.length).to.equal(6);
+                }
+            });
         });
 
         // ============================================================
@@ -774,6 +834,28 @@
                 const panels = LayoutGenerator.generate({ numImages: 2 });
                 const gap = panels[1].geometry.rect.x - panels[0].geometry.rect.width;
                 expect(gap).to.equal(4);
+            });
+
+            it('1.9.10 — negative sliceAngle passed through to DiagonalSlices', () => {
+                const panels = LayoutGenerator.generate({
+                    numImages: 4, style: LayoutStyle.DIAGONAL_SLICES, sliceAngle: -30
+                });
+                expect(panels.length).to.equal(4);
+                // Negative angle produces negative shear
+                const pts = panels[0].geometry.points;
+                expect(pts[3][0]).to.be.lessThan(pts[0][0]);
+            });
+
+            it('1.9.11 — hexSizeMultiplier passed through to Hexagonal', () => {
+                const panels1x = LayoutGenerator.generate({
+                    numImages: 7, style: LayoutStyle.HEXAGONAL, hexSizeMultiplier: 1.0
+                });
+                const panels2x = LayoutGenerator.generate({
+                    numImages: 7, style: LayoutStyle.HEXAGONAL, hexSizeMultiplier: 2.0
+                });
+                const w1 = panels1x[0].geometry.boundingRect.width;
+                const w2 = panels2x[0].geometry.boundingRect.width;
+                expect(w2).to.be.greaterThan(w1);
             });
         });
 

@@ -54,12 +54,41 @@ Without DPR scaling, canvas content appears blurry on Retina displays.
 | `CGContextSaveGState` | `ctx.save()` |
 | `CGContextRestoreGState` | `ctx.restore()` |
 
+## Semi-Transparent Image Compositing
+
+Canvas 2D `globalAlpha` blends directly against existing canvas pixels — unlike CSS `opacity` which creates an isolated compositing layer. A semi-transparent PNG drawn on a white or transparent canvas shows the canvas color through transparent areas, not the user's configured background.
+
+**Always pre-fill the canvas before drawing semi-transparent images:**
+
+```javascript
+function renderImage(ctx, width, height, state) {
+    // Step 1: Fill background so it shows through transparent image areas
+    ctx.fillStyle = state.color1 || '#000000';
+    ctx.fillRect(0, 0, width, height);
+
+    // Step 2: Draw image with opacity on top
+    if (state.image) {
+        ctx.save();
+        ctx.globalAlpha = state.opacity ?? 1.0;
+        ctx.drawImage(state.image, 0, 0, width, height);
+        ctx.restore();
+    }
+}
+```
+
+**Key rules:**
+- `ctx.save()`/`ctx.restore()` isolates `globalAlpha` — prevents alpha leakage to subsequent pipeline stages
+- Pre-fill even at 100% opacity — defensive coding; if opacity changes, the background is already there
+- Skip `drawImage` when image is null — background fill alone suffices
+- Test with Proxy-based context mocking: verify both `fillStyle`/`fillRect` (background) AND `globalAlpha`/`drawImage` (foreground) calls
+
 ## Gotchas
 
 1. **Canvas coordinates are CSS pixels after DPR transform** — `ctx.setTransform(dpr, ...)` means you draw in CSS pixel coordinates
 2. **Path clipping is persistent** — once `ctx.clip()` is called, all drawing is clipped until `ctx.restore()`
 3. **`drawImage` 9-parameter form** — `drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh)` for cropped rendering
 4. **Shadow requires 4 properties** — `shadowColor`, `shadowBlur`, `shadowOffsetX`, `shadowOffsetY`
+5. **`globalAlpha` blends against canvas, not isolated** — pre-fill background before drawing semi-transparent images (see "Semi-Transparent Image Compositing" above)
 
 ## Offscreen Canvas Export
 

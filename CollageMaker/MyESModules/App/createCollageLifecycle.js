@@ -1,6 +1,7 @@
 /**
  * createCollageLifecycle - Vue lifecycle hooks for CollageMaker.
  * Handles canvas initialization, render scheduling, and cleanup.
+ * Accepts domIds configuration to avoid hardcoded getElementById calls.
  */
 
 import { createCanvasRenderer } from '../Rendering/CanvasRenderer.js';
@@ -12,12 +13,23 @@ import { createBackgroundManager } from '../State/BackgroundManager.js';
 import { createTitleManager } from '../State/TitleManager.js';
 import { createGestureHandler } from '../Interaction/GestureHandler.js';
 import { createCropInteraction } from '../Interaction/CropInteraction.js';
+import { createHexDragHandler, swapPanelAssignments } from '../Interaction/HexPanelSwap.js';
 import { createKeyboardHandler } from '../Interaction/KeyboardHandler.js';
+import { createMultiTouchHandler } from '../Interaction/MultiTouchHandler.js';
 import { load as loadSettings } from '../Persistence/SettingsPersistence.js';
 import { SIZE_CONSTANTS } from '../Models/SizeConstants.js';
 import { createTitleStyle } from '../Models/TitleStyle.js';
 
-export function createCollageLifecycle(base) {
+/**
+ * Default DOM element IDs for lifecycle initialization.
+ */
+const DEFAULT_DOM_IDS = {
+    previewCanvas: 'previewCanvas',
+    cropPreviewCanvas: 'cropPreviewCanvas'
+};
+
+export function createCollageLifecycle(base, domIds = {}) {
+    const ids = { ...DEFAULT_DOM_IDS, ...domIds };
     return {
         mounted() {
             // Load persisted settings
@@ -25,7 +37,7 @@ export function createCollageLifecycle(base) {
             this._applySavedSettings(savedSettings);
 
             // Initialize canvas renderer
-            const renderer = createCanvasRenderer('previewCanvas');
+            const renderer = createCanvasRenderer(ids.previewCanvas);
             renderer.init({
                 width: SIZE_CONSTANTS.defaultPreviewWidth,
                 height: SIZE_CONSTANTS.defaultPreviewHeight
@@ -76,7 +88,7 @@ export function createCollageLifecycle(base) {
 
             // Initialize gesture handler (panel selection on main canvas)
             this._gestureHandler = createGestureHandler({
-                canvasId: 'previewCanvas',
+                canvasId: ids.previewCanvas,
                 state: this,
                 onPanelSelected: (panelId) => {
                     this.selectPanel(panelId);
@@ -90,10 +102,38 @@ export function createCollageLifecycle(base) {
             });
             this._gestureHandler.attach();
 
+            // Initialize hex drag handler (panel swap via drag-and-drop for hexagonal layout)
+            this._hexDragHandler = createHexDragHandler({
+                canvasId: ids.previewCanvas,
+                state: this,
+                onPanelSelected: (panelId) => {
+                    this.selectPanel(panelId);
+                },
+                onRenderScheduled: () => {
+                    this._scheduleRender();
+                },
+                onSwapPerformed: (swapInfo) => {
+                    // Push undo command for the swap
+                    if (this.undoManager) {
+                        this.undoManager.push({
+                            label: 'Swap Hex Panels',
+                            undo: () => {
+                                swapPanelAssignments(this, swapInfo.sourceId, swapInfo.targetId);
+                            },
+                            redo: () => {
+                                swapPanelAssignments(this, swapInfo.sourceId, swapInfo.targetId);
+                            }
+                        });
+                        this._updateUndoState();
+                    }
+                }
+            });
+            this._hexDragHandler.attach();
+
             // Initialize crop interaction handler
             let cropUndoSnapshot = null;
             this._cropInteraction = createCropInteraction({
-                canvasId: 'cropPreviewCanvas',
+                canvasId: ids.cropPreviewCanvas,
                 cropManager: this.cropManager,
                 panelId: null,
                 onRenderScheduled: () => {
@@ -133,6 +173,20 @@ export function createCollageLifecycle(base) {
                     cropUndoSnapshot = null;
                 }
             });
+
+            // Initialize multi-touch gesture handler (two-finger pan + pinch-to-zoom on main canvas)
+            this._multiTouchHandler = createMultiTouchHandler({
+                canvasId: ids.previewCanvas,
+                cropManager: this.cropManager,
+                state: this,
+                onCropPreviewRender: () => {
+                    this._scheduleCropPreviewRender();
+                },
+                onRenderScheduled: () => {
+                    this._scheduleRender();
+                }
+            });
+            this._multiTouchHandler.attach();
 
             // Set up global file drop handler for drops outside Vue-managed elements
             // (the element-level @drop handlers in the template handle drops on canvas/library)
@@ -182,8 +236,14 @@ export function createCollageLifecycle(base) {
             if (this._gestureHandler) {
                 this._gestureHandler.detach();
             }
+            if (this._hexDragHandler) {
+                this._hexDragHandler.detach();
+            }
             if (this._cropInteraction) {
                 this._cropInteraction.detach();
+            }
+            if (this._multiTouchHandler) {
+                this._multiTouchHandler.detach();
             }
 
             // 2. Remove window listeners

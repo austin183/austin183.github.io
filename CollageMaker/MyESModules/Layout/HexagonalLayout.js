@@ -14,9 +14,10 @@ import { createPathGeometry } from '../Models/PanelGeometry.js';
  * @param {number} options.gutter
  * @param {number[]} [options.imageOrder]
  * @param {number} [options.spacing] - Visual spacing between hexagons (default 8)
+ * @param {number} [options.hexSizeMultiplier] - Size multiplier for hexagons (default 1.0)
  * @returns {Array} Array of ImagePanel objects
  */
-export function generateHexagonalLayout({ numImages, canvasSize, gutter, imageOrder, spacing = 8 }) {
+export function generateHexagonalLayout({ numImages, canvasSize, gutter, imageOrder, spacing = 8, hexSizeMultiplier = 1.0 }) {
     if (numImages <= 0) return [];
 
     if (numImages === 1) {
@@ -46,7 +47,10 @@ export function generateHexagonalLayout({ numImages, canvasSize, gutter, imageOr
         canvasSize.width / (Math.sqrt(3) * (2 * ringsNeeded + 1)),
         canvasSize.height / (3 * ringsNeeded + Math.sqrt(3))
     );
-    const R = Math.max(Math.sqrt(3) / 2 * R_eff - spacing / 2, spacing);
+    let R = Math.max(Math.sqrt(3) / 2 * R_eff - spacing / 2, spacing);
+
+    // Apply size multiplier to hexagon radius
+    R = R * hexSizeMultiplier;
 
     // Axial coordinate directions for pointy-top hex ring traversal
     const directions = [
