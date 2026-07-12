@@ -23,12 +23,17 @@ Your sole responsibility is JavaScript, HTML, and CSS source code — features, 
 
 ## What You Must Track
 
-At the end of your work, fill out the session summary template from `.opencode/skills/analyzing-opencode-usage/references/session-summary.json`:
-- Set `purpose` to `code` or `refactor`
-- Set `agent_role` to `build-code`
-- List all modified files in `files_changed`
-- Record commit hashes in `commits`
-- Set `outcome` to `success`, `partial`, or `failed`
+At the end of your work, write a session summary to `_agent_docs/project-timeline/sessions/` using the template from `.opencode/skills/analyzing-opencode-usage/references/session-summary.json`. Fill in every field in the template.
+
+**Filename convention:** `YYYY-MM-DD-XXX-build-code-<description>.json`
+- `YYYY-MM-DD` — today's date
+- `XXX` — sequential number for the day (001, 002, …)
+- `build-code` — your agent role
+- `<description>` — kebab-case summary of the work (e.g., `layout-refactor`, `export-canvas-fix`)
+
+**Agent-specific fields:**
+- `purpose`: `code` or `refactor`
+- `agent_role`: `build-code`
 
 ## Conventions
 

@@ -296,6 +296,7 @@ body.drag-over .canvas-container {
     border-radius: var(--radius-small);
     box-shadow: var(--elevation-2);
     background-color: #ffffff;
+    touch-action: none;
 }
 
 /* Detail Section */
@@ -557,8 +558,9 @@ body.drag-over .canvas-container {
 }
 
 .color-picker-row input[type="color"] {
-    width: 36px;
-    height: 28px;
+    flex: 1;
+    height: 36px;
+    min-height: 36px;
     padding: 0;
     border: 1px solid var(--color-surface-variant);
     border-radius: var(--radius-small);
@@ -570,16 +572,6 @@ body.drag-over .canvas-container {
     font-size: var(--font-size-xs);
     font-family: var(--font-mono, 'SF Mono', 'Consolas', monospace);
     color: var(--color-text-secondary);
-}
-
-/* Color Swatch — visual color preview */
-.color-swatch {
-    display: inline-block;
-    width: 32px;
-    height: 32px;
-    border: 2px solid var(--color-surface-variant);
-    border-radius: var(--radius-small);
-    flex-shrink: 0;
 }
 
 /* ========================
@@ -692,6 +684,22 @@ body.drag-over .canvas-container {
     background-color: rgba(186, 26, 26, 0.08);
 }
 
+/* Export spinner animation */
+.export-spinner {
+    vertical-align: middle;
+    margin-right: 4px;
+    animation: export-spin 1s linear infinite;
+}
+@keyframes export-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .export-spinner {
+        animation: none;
+    }
+}
+
 /* ========================
  * Checkbox styling in detail sections
  * ======================== */
@@ -759,3 +767,39 @@ input[type="range"].fullRange {
 .sidebar-section-content {
     overflow: hidden;
 }
+
+/* ========================
+ * Layout Shortcut Hint
+ * ======================== */
+
+.layout-shortcut-hint {
+    font-size: 11px;
+    color: var(--color-text-secondary, #888);
+    padding: 4px 16px 8px;
+    opacity: 0.7;
+    line-height: 1.4;
+}
+
+/* ========================
+ * Toast Notification
+ * ======================== */
+
+.toast-notification {
+    position: fixed;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 9999;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: opacity 0.3s ease;
+}
+.toast-info { background-color: #3b82f6; color: white; }
+.toast-success { background-color: #22c55e; color: white; }
+.toast-error { background-color: #ef4444; color: white; }
+.toast-notification .material-icons { font-size: 18px; }

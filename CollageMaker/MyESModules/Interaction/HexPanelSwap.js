@@ -45,16 +45,20 @@ export function swapPanelAssignments(state, sourceId, targetId) {
  * @param {Function} options.onPanelSelected - Called with panelId when a panel is selected
  * @param {Function} options.onRenderScheduled - Call to trigger a canvas re-render
  * @param {Function} options.onSwapPerformed - Called after a successful swap for undo tracking
+ * @param {Function} [options.onTargetHovered] - Called with target panelId (or null) during drag
+ * @param {Function} [options.onDragStart] - Called when drag begins (for cursor feedback)
+ * @param {Function} [options.onDragEnd] - Called when drag ends (for cursor feedback)
  * @returns {Object} HexDragHandler
  */
-export function createHexDragHandler({ canvasId, state, onPanelSelected, onRenderScheduled, onSwapPerformed }) {
+export function createHexDragHandler({ canvasId, state, onPanelSelected, onRenderScheduled, onSwapPerformed, onTargetHovered, onDragStart, onDragEnd }) {
     let handlerAttached = false;
     let isDragging = false;
     let dragSourceId = null;
+    let dragTargetId = null;
     const DRAG_THRESHOLD = 10; // Minimum movement in CSS pixels to count as drag
 
     // Placeholder for bound handlers (set after handler object is created)
-    let onPointerDown, onPointerMove, onPointerUp;
+    let onPointerDown, onPointerMove, onPointerUp, onGlobalPointerUp;
 
     const handler = {
         attach() {
@@ -68,6 +72,8 @@ export function createHexDragHandler({ canvasId, state, onPanelSelected, onRende
             canvas.addEventListener('pointermove', onPointerMove);
             canvas.addEventListener('pointerup', onPointerUp);
             canvas.addEventListener('pointercancel', onPointerUp);
+            // Global cleanup: catches drags that end outside the canvas
+            window.addEventListener('pointerup', onGlobalPointerUp);
         },
 
         detach() {
@@ -81,6 +87,20 @@ export function createHexDragHandler({ canvasId, state, onPanelSelected, onRende
             canvas.removeEventListener('pointermove', onPointerMove);
             canvas.removeEventListener('pointerup', onPointerUp);
             canvas.removeEventListener('pointercancel', onPointerUp);
+            window.removeEventListener('pointerup', onGlobalPointerUp);
+        },
+
+        _clearDragState() {
+            dragTargetId = null;
+            if (onTargetHovered) {
+                onTargetHovered(null);
+            }
+            const canvas = document.getElementById(canvasId);
+            if (canvas) canvas.style.cursor = '';
+            if (onDragEnd) onDragEnd();
+            dragSourceId = null;
+            isDragging = false;
+            this._dragStartCoords = null;
         },
 
         _screenToCanvas(e) {
@@ -159,6 +179,29 @@ export function createHexDragHandler({ canvasId, state, onPanelSelected, onRende
                 const dy = coords.y - this._dragStartCoords.y;
                 if (Math.sqrt(dx * dx + dy * dy) >= DRAG_THRESHOLD) {
                     isDragging = true;
+                    // Set cursor to grabbing when drag begins
+                    const canvas = document.getElementById(canvasId);
+                    if (canvas) canvas.style.cursor = 'grabbing';
+                    if (onDragStart) onDragStart();
+                }
+            }
+
+            if (!isDragging) return;
+
+            // Hit test for target panel during drag
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            const canvasWidth = canvas.getBoundingClientRect().width;
+            const canvasHeight = canvas.getBoundingClientRect().height;
+
+            const newTargetId = this._hitTestPanel(coords.x, coords.y, canvasWidth, canvasHeight);
+            if (newTargetId !== dragTargetId) {
+                dragTargetId = newTargetId;
+                if (onTargetHovered) {
+                    onTargetHovered(dragTargetId);
+                }
+                if (onRenderScheduled) {
+                    onRenderScheduled();
                 }
             }
         },
@@ -203,9 +246,7 @@ export function createHexDragHandler({ canvasId, state, onPanelSelected, onRende
                 }
             }
 
-            dragSourceId = null;
-            isDragging = false;
-            this._dragStartCoords = null;
+            this._clearDragState();
         }
     };
 
@@ -213,6 +254,12 @@ export function createHexDragHandler({ canvasId, state, onPanelSelected, onRende
     onPointerDown = (e) => handler._onPointerDown(e);
     onPointerMove = (e) => handler._onPointerMove(e);
     onPointerUp = (e) => handler._onPointerUp(e);
+    onGlobalPointerUp = () => {
+        // Only clean up if a drag is in progress (pointerup happened outside canvas)
+        if (isDragging || dragSourceId) {
+            handler._clearDragState();
+        }
+    };
 
     return handler;
 }

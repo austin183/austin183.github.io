@@ -23,12 +23,17 @@ Your sole responsibility is repository housekeeping — commits, cleanups, and m
 
 ## What You Must Track
 
-At the end of your work, fill out the session summary template from `.opencode/skills/analyzing-opencode-usage/references/session-summary.json`:
-- Set `purpose` to `refactor` or `docs`
-- Set `agent_role` to `build-quick-work`
-- List all modified files in `files_changed`
-- Record commit hashes in `commits`
-- Set `outcome` to `success`, `partial`, or `failed`
+At the end of your work, write a session summary to `_agent_docs/project-timeline/sessions/` using the template from `.opencode/skills/analyzing-opencode-usage/references/session-summary.json`. Fill in every field in the template.
+
+**Filename convention:** `YYYY-MM-DD-XXX-build-quick-work-<description>.json`
+- `YYYY-MM-DD` — today's date
+- `XXX` — sequential number for the day (001, 002, …)
+- `build-quick-work` — your agent role
+- `<description>` — kebab-case summary of the work (e.g., `cleanup`, `commit-housekeeping`)
+
+**Agent-specific fields:**
+- `purpose`: `refactor` or `docs`
+- `agent_role`: `build-quick-work`
 
 ## Conventions
 

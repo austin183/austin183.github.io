@@ -52,6 +52,10 @@ export function generateHexagonalLayout({ numImages, canvasSize, gutter, imageOr
     // Apply size multiplier to hexagon radius
     R = R * hexSizeMultiplier;
 
+    // Scale grid spacing by the same multiplier so center positions move apart
+    // proportionally with hexagon size, preventing overlap.
+    const R_grid = R_eff * hexSizeMultiplier;
+
     // Axial coordinate directions for pointy-top hex ring traversal
     const directions = [
         { dq: 0, dr: -1 },
@@ -71,8 +75,8 @@ export function generateHexagonalLayout({ numImages, canvasSize, gutter, imageOr
         for (const { dq, dr } of directions) {
             for (let s = 0; s < ring; s++) {
                 if (centers.length - 1 >= numImages) break;
-                const x = canvasCenter.x + (q + r / 2) * Math.sqrt(3) * R_eff;
-                const y = canvasCenter.y + r * 1.5 * R_eff;
+                const x = canvasCenter.x + (q + r / 2) * Math.sqrt(3) * R_grid;
+                const y = canvasCenter.y + r * 1.5 * R_grid;
                 centers.push({ x, y });
                 q += dq;
                 r += dr;

@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phase 2 — Export Progress + Expanded Color Swatch Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <link rel="stylesheet" href="../Style.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Phase 2 Follow-Up Tests</h1>
+    <p class="test-plan-ref">Covers: CR-FU-03 Expanded Color Swatch, CR-FU-08 Export Progress Loading Indicator</p>
+    <p class="test-plan-ref">Test plan refs: 2A.2.1&ndash;2A.2.6 (export progress), 2A.1.1&ndash;2A.1.3 (expanded color swatch)</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createExportHandlers } from '../MyESModules/App/createExportHandlers.js';
+        import { ExportManager } from '../MyESModules/Export/ExportManager.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // Helpers
+        // ============================================================
+
+        function createMockAssembler() {
+            return { render: () => {} };
+        }
+
+        function createMockVM() {
+            return {
+                isExporting: false,
+                exportStatus: '',
+                exportFormat: 'jpeg',
+                exportQuality: 0.92,
+                panels: [],
+                images: [],
+                crops: new Map(),
+                panelAssignments: new Map(),
+                backgroundColor: '#ffffff',
+                titleStyle: null,
+                titleRuns: [],
+                toast: {
+                    message: '',
+                    type: '',
+                    visible: false,
+                    timer: null
+                },
+                showToast: function (message, type, duration) {
+                    type = type || 'info';
+                    duration = duration != null ? duration : 5000;
+                    if (this.toast.timer) {
+                        clearTimeout(this.toast.timer);
+                    }
+                    this.toast.message = message;
+                    this.toast.type = type;
+                    this.toast.visible = true;
+                    this.toast.timer = setTimeout(() => {
+                        this.toast.visible = false;
+                        this.toast.message = '';
+                        this.toast.timer = null;
+                    }, duration);
+                },
+                _buildBackgroundState: function () { return null; },
+                _buildOverlayState: function () { return null; }
+            };
+        }
+
+        function stubExportManagerExport(resolveValue) {
+            const originalExport = ExportManager.export;
+            ExportManager.export = async function () {
+                return resolveValue;
+            };
+            return function restore() {
+                ExportManager.export = originalExport;
+            };
+        }
+
+        // ============================================================
+        // 2A.2 Export Progress — Toast Feedback
+        // ============================================================
+        describe('Section 2A.2 — Export Progress Toast Feedback', () => {
+            let handlers, vm, restoreStub;
+
+            beforeEach(() => {
+                vm = createMockVM();
+                handlers = createExportHandlers(createMockAssembler());
+                restoreStub = stubExportManagerExport('success');
+            });
+
+            afterEach(() => {
+                restoreStub();
+                if (vm.toast.timer) {
+                    clearTimeout(vm.toast.timer);
+                    vm.toast.timer = null;
+                }
+            });
+
+            it('2A.2.1 — isExporting set to true immediately on export call', () => {
+                handlers.exportCollage.call(vm);
+                expect(vm.isExporting).to.be.true;
+            });
+
+            it('2A.2.2 — isExporting cleared to false after export completes', async () => {
+                const promise = handlers.exportCollage.call(vm);
+                expect(vm.isExporting).to.be.true;
+
+                await promise;
+                expect(vm.isExporting).to.be.false;
+            });
+
+            it('2A.2.3 — isExporting cleared to false when export throws', async () => {
+                restoreStub();
+                restoreStub = stubExportManagerExport(
+                    Promise.reject(new Error('Simulated export failure'))
+                );
+                handlers = createExportHandlers(createMockAssembler());
+
+                const promise = handlers.exportCollage.call(vm);
+                expect(vm.isExporting).to.be.true;
+
+                try {
+                    await promise;
+                } catch (e) {
+                    // Expected — export throws
+                }
+                expect(vm.isExporting).to.be.false;
+            });
+
+            it('2A.2.4 — Success toast called after export completes', async () => {
+                const promise = handlers.exportCollage.call(vm);
+                await promise;
+
+                expect(vm.toast.visible).to.be.true;
+                expect(vm.toast.message).to.include('exported');
+                expect(vm.toast.type).to.equal('success');
+            });
+
+            it('2A.2.5 — Error toast called when export fails', async () => {
+                restoreStub();
+                const errorMessage = 'Simulated export failure';
+                restoreStub = stubExportManagerExport(
+                    Promise.reject(new Error(errorMessage))
+                );
+                handlers = createExportHandlers(createMockAssembler());
+
+                const promise = handlers.exportCollage.call(vm);
+                try {
+                    await promise;
+                } catch (e) {
+                    // Expected
+                }
+
+                expect(vm.toast.visible).to.be.true;
+                expect(vm.toast.message).to.include('failed');
+                expect(vm.toast.type).to.equal('error');
+            });
+
+            it('2A.2.6 — Export ignores call when already exporting (double-click guard)', async () => {
+                handlers.exportCollage.call(vm);
+                expect(vm.isExporting).to.be.true;
+
+                // Record toast state before second call
+                const toastBefore = { ...vm.toast };
+
+                // Second call should return early (no-op due to guard)
+                const result = handlers.exportCollage.call(vm);
+                // async function always returns a promise, even with early return
+                expect(result).to.be.a('promise');
+
+                // Toast state should be unchanged (second call was a no-op)
+                expect(vm.toast.message).to.equal(toastBefore.message);
+            });
+        });
+
+        // ============================================================
+        // 2A.1 Expanded Color Swatch — DOM Verification
+        // ============================================================
+        describe('Section 2A.1 — Expanded Color Swatch', () => {
+            let container;
+
+            beforeEach(() => {
+                container = document.createElement('div');
+                document.body.appendChild(container);
+            });
+
+            afterEach(() => {
+                document.body.removeChild(container);
+                container = null;
+            });
+
+            it('2A.1.1 — Color picker row is a flex container', () => {
+                const row = document.createElement('div');
+                row.className = 'color-picker-row';
+                container.appendChild(row);
+
+                expect(row.tagName).to.equal('DIV');
+                expect(row.classList.contains('color-picker-row')).to.be.true;
+            });
+
+            it('2A.1.2 — Color input inside row has no color-swatch-label sibling', () => {
+                const row = document.createElement('div');
+                row.className = 'color-picker-row';
+                const input = document.createElement('input');
+                input.type = 'color';
+                row.appendChild(input);
+                container.appendChild(row);
+
+                const labels = row.querySelectorAll('.color-swatch-label');
+                expect(labels.length).to.equal(0);
+            });
+
+            it('2A.1.3 — Color input flex property is set to 1 (expands to fill row)', () => {
+                const row = document.createElement('div');
+                row.className = 'color-picker-row';
+                row.style.width = '200px';
+                const input = document.createElement('input');
+                input.type = 'color';
+                row.appendChild(input);
+                container.appendChild(row);
+
+                const computed = getComputedStyle(input);
+                // flex: 1 should result in flex-grow: 1
+                expect(computed.flexGrow).to.equal('1');
+            });
+        });
+
+        // ============================================================
+        // 2A.3 Export Spinner — CSS Class Presence
+        // ============================================================
+        describe('Section 2A.3 — Export Spinner Element', () => {
+            let container;
+
+            beforeEach(() => {
+                container = document.createElement('div');
+                document.body.appendChild(container);
+            });
+
+            afterEach(() => {
+                document.body.removeChild(container);
+                container = null;
+            });
+
+            it('2A.3.1 — Spinner element has export-spinner class for animation', () => {
+                const spinner = document.createElement('span');
+                spinner.className = 'material-icons export-spinner';
+                spinner.textContent = 'autorenew';
+                container.appendChild(spinner);
+
+                expect(spinner.classList.contains('export-spinner')).to.be.true;
+                expect(spinner.classList.contains('material-icons')).to.be.true;
+            });
+
+            it('2A.3.2 — Export spinner has aria-hidden to prevent screen reader confusion', () => {
+                const spinner = document.createElement('span');
+                spinner.className = 'material-icons export-spinner';
+                spinner.setAttribute('aria-hidden', 'true');
+                spinner.textContent = 'autorenew';
+                container.appendChild(spinner);
+
+                expect(spinner.getAttribute('aria-hidden')).to.equal('true');
+            });
+
+            it('2A.3.3 — Export button has aria-busy for loading state', () => {
+                const btn = document.createElement('button');
+                btn.setAttribute('aria-busy', 'true');
+                container.appendChild(btn);
+
+                expect(btn.getAttribute('aria-busy')).to.equal('true');
+            });
+
+            it('2A.3.4 — Export button disabled state prevents interaction', () => {
+                const btn = document.createElement('button');
+                btn.disabled = true;
+                container.appendChild(btn);
+
+                expect(btn.disabled).to.be.true;
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

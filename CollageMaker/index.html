@@ -81,8 +81,18 @@
                         <h3>No Images Loaded</h3>
                         <p>Drag &amp; drop images onto this area, or use the "Add Images" button above.</p>
                     </div>
-                    <canvas id="previewCanvas" v-show="images.length > 0"></canvas>
+                    <canvas id="previewCanvas" v-show="images.length > 0" role="application" aria-label="Collage preview — select panels to edit, drag to swap images in hexagonal layout"></canvas>
                 </div>
+            </div>
+
+            <!-- Toast Notification -->
+            <div class="toast-notification"
+                 v-show="toast.visible"
+                 :class="'toast-' + toast.type"
+                 role="status"
+                 aria-live="polite">
+                <span class="material-icons" aria-hidden="true">{{ toast.type === 'error' ? 'error' : 'info' }}</span>
+                {{ toast.message }}
             </div>
 
             <!-- Right Sidebar: Detail / Editor Panel -->
@@ -90,11 +100,11 @@
                 <div class="sidebar-scroll-container">
                     <!-- Collapsible Sections -->
                     <div class="sidebar-section" v-for="section in sidebarSections" :key="section.id">
-                        <button class="sidebar-section-header" @click="toggleSection(section.id)" :aria-expanded="expandedSections[section.id]">
+                        <button class="sidebar-section-header" @click="toggleSection(section.id)" :aria-expanded="expandedSections[section.id]" :aria-controls="'section-content-' + section.id">
                             <span class="section-chevron" :class="{ expanded: expandedSections[section.id] }">▶</span>
                             <span>{{ section.label }}</span>
                         </button>
-                        <div class="sidebar-section-content" v-show="expandedSections[section.id]">
+                        <div class="sidebar-section-content" :id="'section-content-' + section.id" v-show="expandedSections[section.id]">
                             <!-- Layout Section -->
                             <template v-if="section.id === 'layout'">
                                 <div class="detail-section">
@@ -118,6 +128,9 @@
                                 <div class="detail-section" v-if="layoutStyle === 'hexagonal'">
                                     <label for="hexSizeSlider">Hexagon Size: {{ Math.round(hexSizeMultiplier * 100) }}%</label>
                                     <input type="range" id="hexSizeSlider" v-model.number="hexSizeMultiplier" min="0.5" max="2" step="0.05" class="fullRange" @input="onHexSizeMultiplierChange">
+                                </div>
+                                <div class="layout-shortcut-hint">
+                                    Shortcuts: Alt+1 Uniform · Alt+2 Hero · Alt+3 Mosaic · Alt+4 Slices · Alt+5 Hex
                                 </div>
                             </template>
 
@@ -154,14 +167,12 @@
                                     <label for="titleFontColorPicker">Font Color</label>
                                     <div class="color-picker-row">
                                         <input type="color" id="titleFontColorPicker" v-model="titleStyle.fontColor" @input="onTitleFontColorChange">
-                                        <span class="color-swatch" :style="{ backgroundColor: titleStyle.fontColor }" aria-hidden="true"></span>
                                     </div>
                                 </div>
                                 <div class="detail-section">
                                     <label for="titleBgColorPicker">Background Color</label>
                                     <div class="color-picker-row">
                                         <input type="color" id="titleBgColorPicker" v-model="titleStyle.backgroundColor" @input="onTitleBackgroundColorChange">
-                                        <span class="color-swatch" :style="{ backgroundColor: titleStyle.backgroundColor }" aria-hidden="true"></span>
                                     </div>
                                 </div>
                                 <div class="detail-section">
@@ -190,7 +201,7 @@
                             <template v-if="section.id === 'crop'">
                                 <template v-if="selectedPanelId && selectedCropInfo">
                                     <div class="detail-section crop-preview-section">
-                                        <canvas id="cropPreviewCanvas" class="crop-preview-canvas"></canvas>
+                                        <canvas id="cropPreviewCanvas" class="crop-preview-canvas" role="application" aria-label="Crop editor — drag handles to adjust crop region"></canvas>
                                         <div class="crop-info">
                                             <span class="crop-info-item">X: {{ Math.round(selectedCropInfo.sourceRect.x) }}</span>
                                             <span class="crop-info-item">Y: {{ Math.round(selectedCropInfo.sourceRect.y) }}</span>
@@ -225,22 +236,19 @@
                                     <label for="bgColorPicker">Color</label>
                                     <div class="color-picker-row">
                                         <input type="color" id="bgColorPicker" v-model="backgroundColor" @input="onBackgroundColorChange">
-                                        <span class="color-swatch" :style="{ backgroundColor: backgroundColor }" aria-hidden="true"></span>
                                     </div>
                                 </div>
                                 <template v-if="backgroundStyle === 'gradient'">
                                     <div class="detail-section">
                                         <label for="gradientColor1">Color 1</label>
                                         <div class="color-picker-row">
-                                            <input type="color" id="gradientColor1" v-model="backgroundColor" @input="onGradientColor1Change">
-                                            <span class="color-swatch" :style="{ backgroundColor: backgroundColor }" aria-hidden="true"></span>
+                                             <input type="color" id="gradientColor1" v-model="backgroundColor" @input="onGradientColor1Change">
                                         </div>
                                     </div>
                                     <div class="detail-section">
                                         <label for="gradientColor2">Color 2</label>
                                         <div class="color-picker-row">
-                                            <input type="color" id="gradientColor2" :value="gradientColors ? gradientColors[1] : '#333333'" @input="onGradientColor2Input($event)">
-                                            <span class="color-swatch" :style="{ backgroundColor: gradientColors ? gradientColors[1] : '#333333' }" aria-hidden="true"></span>
+                                             <input type="color" id="gradientColor2" :value="gradientColors ? gradientColors[1] : '#333333'" @input="onGradientColor2Input($event)">
                                         </div>
                                     </div>
                                     <div class="detail-section">
@@ -315,8 +323,9 @@
                                     <input type="range" id="exportQualitySlider" v-model.number="exportQuality" min="0.5" max="1" step="0.01" class="fullRange" @input="onExportQualityChange">
                                 </div>
                                 <div class="detail-section">
-                                    <button id="exportBtn" class="pure-button pure-button-primary export-btn" @click="exportCollage" :disabled="isExporting || images.length === 0" :title="'Export as ' + (exportFormat === 'jpeg' ? 'JPEG' : 'PNG') + ' (Cmd+E)'">
-                                        <span class="material-icons" style="vertical-align: middle; margin-right: 4px;">save</span>
+                                    <button id="exportBtn" class="pure-button pure-button-primary export-btn" @click="exportCollage" :disabled="isExporting || images.length === 0" :title="'Export as ' + (exportFormat === 'jpeg' ? 'JPEG' : 'PNG') + ' (Cmd+E)'" :aria-busy="isExporting">
+                                        <span v-if="isExporting" class="material-icons export-spinner" aria-hidden="true">autorenew</span>
+                                        <span v-else class="material-icons" style="vertical-align: middle; margin-right: 4px;">save</span>
                                         {{ isExporting ? 'Exporting...' : 'Export ' + exportFormat.toUpperCase() }}
                                     </button>
                                     <div v-if="exportStatus" class="export-status" :class="{ 'status-success': exportStatus.includes('success'), 'status-error': exportStatus.includes('failed') }">

@@ -56,6 +56,14 @@ export function createCollageData(base) {
             isExporting: false,
             exportStatus: '',
 
+            // Toast notifications
+            toast: {
+                message: '',
+                type: '',       // 'info', 'success', 'error'
+                visible: false,
+                timer: null
+            },
+
             // Search
             searchQuery: '',
 
@@ -66,21 +74,24 @@ export function createCollageData(base) {
             // Right sidebar toggle
             rightSidebarOpen: true,
 
+            // Hex drag target (for visual feedback during hex panel swap)
+            hexDragTargetId: null,
+
             // Collapsible sidebar sections
             sidebarSections: [
-                { id: 'layout', label: 'Layout' },
-                { id: 'title', label: 'Title' },
                 { id: 'crop', label: 'Crop' },
+                { id: 'layout', label: 'Layout' },
                 { id: 'background', label: 'Background' },
                 { id: 'overlay', label: 'Overlay' },
+                { id: 'title', label: 'Title' },
                 { id: 'export', label: 'Export' }
             ],
             expandedSections: {
-                layout: false,
-                title: false,
                 crop: false,
+                layout: false,
                 background: false,
                 overlay: false,
+                title: false,
                 export: false
             },
 

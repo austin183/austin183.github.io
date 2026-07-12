@@ -16,6 +16,7 @@ import { createCropInteraction } from '../Interaction/CropInteraction.js';
 import { createHexDragHandler, swapPanelAssignments } from '../Interaction/HexPanelSwap.js';
 import { createKeyboardHandler } from '../Interaction/KeyboardHandler.js';
 import { createMultiTouchHandler } from '../Interaction/MultiTouchHandler.js';
+import { createSaliencyAnalyzer } from '../Saliency/SaliencyAnalyzer.js';
 import { load as loadSettings } from '../Persistence/SettingsPersistence.js';
 import { SIZE_CONSTANTS } from '../Models/SizeConstants.js';
 import { createTitleStyle } from '../Models/TitleStyle.js';
@@ -112,6 +113,9 @@ export function createCollageLifecycle(base, domIds = {}) {
                 onRenderScheduled: () => {
                     this._scheduleRender();
                 },
+                onTargetHovered: (targetId) => {
+                    this.hexDragTargetId = targetId;
+                },
                 onSwapPerformed: (swapInfo) => {
                     // Push undo command for the swap
                     if (this.undoManager) {
@@ -188,6 +192,15 @@ export function createCollageLifecycle(base, domIds = {}) {
             });
             this._multiTouchHandler.attach();
 
+            // Initialize saliency analyzer (AI-based crop focus, deferred feature)
+            // onModelsFailed shows a non-blocking toast when ML models can't load
+            this._saliencyAnalyzer = createSaliencyAnalyzer({
+                onModelsFailed: (errorMsg) => {
+                    this.showToast('AI features unavailable — using default focus', 'info', 5000);
+                }
+            });
+            this._saliencyAnalyzer.initModels();
+
             // Set up global file drop handler for drops outside Vue-managed elements
             // (the element-level @drop handlers in the template handle drops on canvas/library)
             this._dropCleanup = base.dropHandler.setupGlobalDrop(async (files) => {
@@ -226,6 +239,11 @@ export function createCollageLifecycle(base, domIds = {}) {
         },
 
         beforeUnmount() {
+            // Clear active toast timer to prevent state updates on destroyed instance
+            if (this.toast && this.toast.timer) {
+                clearTimeout(this.toast.timer);
+                this.toast.timer = null;
+            }
             // 1. Stop new interactions first (prevents race conditions with async drop handlers)
             if (this._dropCleanup) {
                 this._dropCleanup();

@@ -283,6 +283,43 @@
                 document.body.removeChild(canvas);
             });
 
+            it('touch gesture does not activate without selected panel', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-test-nopanel';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                let prevented = false;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-test-nopanel',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {} },
+                    state: { selectedPanelId: null }, // No panel selected
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Two touches but no panel — should NOT intercept
+                const touches = makeTouchList([
+                    makeTouch(1, 100, 100),
+                    makeTouch(2, 200, 200)
+                ]);
+                const evt = createMockTouchEvent('touchstart', {
+                    touches: touches,
+                    targetTouches: touches,
+                    changedTouches: touches
+                });
+                evt.preventDefault = () => { prevented = true; };
+
+                canvas.dispatchEvent(evt);
+                expect(prevented).to.be.false;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
             it('calls adjustCrop on two-finger move', async () => {
                 const canvas = document.createElement('canvas');
                 canvas.id = 'mt-test-move';
@@ -660,7 +697,745 @@
                 document.body.removeChild(canvas);
             });
 
-            it('consolidates render calls when both pan and zoom occur', async () => {
+            // ============================================================
+            // PointerEvent Path — CR-FU-02: Multi-Finger Trackpad Gestures
+            // ============================================================
+
+            it('two mouse pointers start a gesture via PointerEvent', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-ptr-test1';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-ptr-test1',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {} },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                let prevented = false;
+
+                // First pointer down (pointerType: mouse) — should NOT start gesture yet
+                const p1 = new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100,
+                    pointerType: 'mouse', bubbles: true, cancelable: true
+                });
+                p1.preventDefault = () => { prevented = true; };
+                canvas.dispatchEvent(p1);
+                // Only one pointer — no gesture yet, preventDefault not called
+                expect(prevented).to.be.false;
+
+                // Second pointer down — should start gesture and call preventDefault
+                prevented = false;
+                const p2 = new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200,
+                    pointerType: 'mouse', bubbles: true, cancelable: true
+                });
+                p2.preventDefault = () => { prevented = true; };
+                canvas.dispatchEvent(p2);
+                expect(prevented).to.be.true;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('skips pointer events with pointerType touch (delegates to TouchEvent)', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-ptr-test2';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-ptr-test2',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {} },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                let prevented = false;
+
+                // Touch-type pointer should be ignored by pointer handler
+                const tp1 = new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                });
+                tp1.preventDefault = () => { prevented = true; };
+                canvas.dispatchEvent(tp1);
+
+                const tp2 = new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                });
+                tp2.preventDefault = () => { prevented = true; };
+                canvas.dispatchEvent(tp2);
+
+                // Pointer handler should NOT have intercepted touch-type pointers
+                expect(prevented).to.be.false;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('pointermove processes pan gesture on active pointer', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-ptr-test3';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let adjustCalled = false;
+                let adjustDelta = null;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-ptr-test3',
+                    cropManager: {
+                        adjustCrop: (panelId, delta) => {
+                            adjustCalled = true;
+                            adjustDelta = delta;
+                        },
+                        zoomCrop: () => {},
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Start two-finger pointer gesture
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100, pointerType: 'mouse'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200, pointerType: 'mouse'
+                }));
+
+                // Move both pointers significantly
+                let prevented = false;
+                const pm = new PointerEvent('pointermove', {
+                    pointerId: 1, clientX: 160, clientY: 160, pointerType: 'mouse',
+                    bubbles: true, cancelable: true
+                });
+                pm.preventDefault = () => { prevented = true; };
+                canvas.dispatchEvent(pm);
+
+                const pm2 = new PointerEvent('pointermove', {
+                    pointerId: 2, clientX: 260, clientY: 260, pointerType: 'mouse',
+                    bubbles: true, cancelable: true
+                });
+                pm2.preventDefault = () => { prevented = true; };
+                canvas.dispatchEvent(pm2);
+
+                await new Promise(r => setTimeout(r, 10));
+
+                expect(adjustCalled).to.be.true;
+                expect(adjustDelta).to.be.an('object');
+                expect(adjustDelta.x).to.be.a('number');
+                expect(adjustDelta.y).to.be.a('number');
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('pointermove processes zoom gesture on active pointer', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-ptr-test4';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let zoomCalled = false;
+                let zoomFactor = null;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-ptr-test4',
+                    cropManager: {
+                        adjustCrop: () => {},
+                        zoomCrop: (panelId, factor) => {
+                            zoomCalled = true;
+                            zoomFactor = factor;
+                        },
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Start with pointers close together
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100, pointerType: 'mouse'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 120, clientY: 120, pointerType: 'mouse'
+                }));
+
+                // Pinch open — move pointers far apart
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 1, clientX: 50, clientY: 50, pointerType: 'mouse'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 2, clientX: 250, clientY: 250, pointerType: 'mouse'
+                }));
+
+                await new Promise(r => setTimeout(r, 10));
+
+                expect(zoomCalled).to.be.true;
+                expect(zoomFactor).to.be.a('number');
+                expect(zoomFactor).to.be.greaterThan(1.0);
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('single pointerup ends pointer gesture and clears state', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-ptr-test5';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let moveCount = 0;
+                let renderScheduled = false;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-ptr-test5',
+                    cropManager: {
+                        adjustCrop: () => { moveCount++; },
+                        zoomCrop: () => { moveCount++; },
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => { renderScheduled = true; }
+                });
+                handler.attach();
+
+                // Start gesture
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100, pointerType: 'mouse'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200, pointerType: 'mouse'
+                }));
+
+                // Move
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 1, clientX: 160, clientY: 160, pointerType: 'mouse'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 2, clientX: 260, clientY: 260, pointerType: 'mouse'
+                }));
+                await new Promise(r => setTimeout(r, 10));
+                const countBeforeLift = moveCount;
+
+                // Lift one pointer — gesture should end
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    pointerId: 1, clientX: 160, clientY: 160, pointerType: 'mouse'
+                }));
+                await new Promise(r => setTimeout(r, 10));
+
+                expect(renderScheduled).to.be.true;
+
+                // Further moves should NOT trigger gestures
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 2, clientX: 300, clientY: 300, pointerType: 'mouse'
+                }));
+                await new Promise(r => setTimeout(r, 10));
+                expect(moveCount).to.equal(countBeforeLift);
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('pointercancel ends pointer gesture and clears state', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-ptr-test6';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let renderScheduled = false;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-ptr-test6',
+                    cropManager: {
+                        adjustCrop: () => {},
+                        zoomCrop: () => {},
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => { renderScheduled = true; }
+                });
+                handler.attach();
+
+                // Start gesture
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100, pointerType: 'mouse'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200, pointerType: 'mouse'
+                }));
+
+                // Cancel gesture
+                canvas.dispatchEvent(new PointerEvent('pointercancel', {
+                    pointerId: 1, clientX: 100, clientY: 100, pointerType: 'mouse'
+                }));
+                await new Promise(r => setTimeout(r, 10));
+
+                expect(renderScheduled).to.be.true;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('three+ pointers uses only first two for gesture math', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-ptr-test7';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let adjustCalled = false;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-ptr-test7',
+                    cropManager: {
+                        adjustCrop: () => { adjustCalled = true; },
+                        zoomCrop: () => {},
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Three pointers down
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100, pointerType: 'mouse'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200, pointerType: 'mouse'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 3, clientX: 150, clientY: 150, pointerType: 'mouse'
+                }));
+
+                // Move first two pointers significantly
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 1, clientX: 160, clientY: 160, pointerType: 'mouse'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 2, clientX: 260, clientY: 260, pointerType: 'mouse'
+                }));
+
+                await new Promise(r => setTimeout(r, 10));
+
+                // Gesture should still work with 3+ pointers (uses first two)
+                expect(adjustCalled).to.be.true;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('detaches pointer event listeners', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-ptr-test8';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-ptr-test8',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {} },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+
+                handler.attach();
+                handler.detach();
+
+                let prevented = false;
+                const p1 = new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100, pointerType: 'mouse',
+                    bubbles: true, cancelable: true
+                });
+                p1.preventDefault = () => { prevented = true; };
+                canvas.dispatchEvent(p1);
+
+                const p2 = new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200, pointerType: 'mouse',
+                    bubbles: true, cancelable: true
+                });
+                p2.preventDefault = () => { prevented = true; };
+                canvas.dispatchEvent(p2);
+
+                // After detach, pointer events should not be intercepted
+                expect(prevented).to.be.false;
+
+                document.body.removeChild(canvas);
+            });
+
+            it('pointer gesture does not activate without selected panel', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-ptr-test9';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                let prevented = false;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-ptr-test9',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {} },
+                    state: { selectedPanelId: null }, // No panel selected
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100, pointerType: 'mouse'
+                }));
+
+                const p2 = new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200, pointerType: 'mouse',
+                    bubbles: true, cancelable: true
+                });
+                p2.preventDefault = () => { prevented = true; };
+                canvas.dispatchEvent(p2);
+
+                // No selected panel — gesture should not activate
+                expect(prevented).to.be.false;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            // ============================================================
+            // WheelEvent Path — macOS trackpad two-finger pan + pinch-to-zoom
+            // ============================================================
+
+            it('wheel event with deltaY triggers pan via adjustCrop', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-wheel-test1';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let adjustCalled = false;
+                let adjustDelta = null;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-wheel-test1',
+                    cropManager: {
+                        adjustCrop: (panelId, delta) => {
+                            adjustCalled = true;
+                            adjustDelta = delta;
+                        },
+                        zoomCrop: () => {},
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                let prevented = false;
+                const wheelEvent = new WheelEvent('wheel', {
+                    deltaX: 0, deltaY: 10, deltaMode: 0,
+                    bubbles: true, cancelable: true
+                });
+                wheelEvent.preventDefault = () => { prevented = true; };
+                canvas.dispatchEvent(wheelEvent);
+
+                await new Promise(r => setTimeout(r, 10));
+
+                expect(adjustCalled).to.be.true;
+                expect(adjustDelta).to.be.an('object');
+                expect(adjustDelta.y).to.be.a('number');
+                expect(adjustDelta.y).to.not.equal(0);
+                expect(prevented).to.be.true;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('wheel event with deltaZ triggers zoom via zoomCrop', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-wheel-test2';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let zoomCalled = false;
+                let zoomFactor = null;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-wheel-test2',
+                    cropManager: {
+                        adjustCrop: () => {},
+                        zoomCrop: (panelId, factor) => {
+                            zoomCalled = true;
+                            zoomFactor = factor;
+                        },
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Pinch open: negative deltaZ = zoom in
+                const wheelEvent = new WheelEvent('wheel', {
+                    deltaX: 0, deltaY: 0, deltaZ: -10, deltaMode: 0,
+                    bubbles: true, cancelable: true
+                });
+                canvas.dispatchEvent(wheelEvent);
+
+                await new Promise(r => setTimeout(r, 10));
+
+                expect(zoomCalled).to.be.true;
+                expect(zoomFactor).to.be.a('number');
+                // Pinch open (negative deltaZ) = zoom in => factor > 1
+                expect(zoomFactor).to.be.greaterThan(1.0);
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('wheel event with positive deltaZ zooms out (factor < 1)', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-wheel-test3';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let zoomFactor = null;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-wheel-test3',
+                    cropManager: {
+                        adjustCrop: () => {},
+                        zoomCrop: (panelId, factor) => { zoomFactor = factor; },
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Pinch close: positive deltaZ = zoom out
+                const wheelEvent = new WheelEvent('wheel', {
+                    deltaX: 0, deltaY: 0, deltaZ: 10, deltaMode: 0,
+                    bubbles: true, cancelable: true
+                });
+                canvas.dispatchEvent(wheelEvent);
+
+                await new Promise(r => setTimeout(r, 10));
+
+                expect(zoomFactor).to.be.a('number');
+                expect(zoomFactor).to.be.lessThan(1.0);
+                expect(zoomFactor).to.be.greaterThan(0);
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('wheel event does not activate without selected panel', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-wheel-test4';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                let prevented = false;
+                let adjustCalled = false;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-wheel-test4',
+                    cropManager: {
+                        adjustCrop: () => { adjustCalled = true; },
+                        zoomCrop: () => {},
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: null }, // No panel selected
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                const wheelEvent = new WheelEvent('wheel', {
+                    deltaX: 0, deltaY: 10, deltaMode: 0,
+                    bubbles: true, cancelable: true
+                });
+                wheelEvent.preventDefault = () => { prevented = true; };
+                canvas.dispatchEvent(wheelEvent);
+
+                // No selected panel — should not intercept
+                expect(prevented).to.be.false;
+                expect(adjustCalled).to.be.false;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('wheel event with deltaX triggers horizontal pan', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-wheel-test5';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let adjustDelta = null;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-wheel-test5',
+                    cropManager: {
+                        adjustCrop: (panelId, delta) => { adjustDelta = delta; },
+                        zoomCrop: () => {},
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                const wheelEvent = new WheelEvent('wheel', {
+                    deltaX: 15, deltaY: 0, deltaMode: 0,
+                    bubbles: true, cancelable: true
+                });
+                canvas.dispatchEvent(wheelEvent);
+
+                await new Promise(r => setTimeout(r, 10));
+
+                expect(adjustDelta).to.be.an('object');
+                expect(adjustDelta.x).to.be.a('number');
+                expect(adjustDelta.x).to.not.equal(0);
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('wheel event calls onCropPreviewRender after pan', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-wheel-test6';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let renderCount = 0;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-wheel-test6',
+                    cropManager: {
+                        adjustCrop: () => {},
+                        zoomCrop: () => {},
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => { renderCount++; },
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                const wheelEvent = new WheelEvent('wheel', {
+                    deltaX: 0, deltaY: 10, deltaMode: 0,
+                    bubbles: true, cancelable: true
+                });
+                canvas.dispatchEvent(wheelEvent);
+
+                await new Promise(r => setTimeout(r, 10));
+
+                expect(renderCount).to.equal(1);
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('detaches wheel event listener', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-wheel-test7';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                let prevented = false;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-wheel-test7',
+                    cropManager: {
+                        adjustCrop: () => {},
+                        zoomCrop: () => {},
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+
+                handler.attach();
+                handler.detach();
+
+                const wheelEvent = new WheelEvent('wheel', {
+                    deltaX: 0, deltaY: 10, deltaMode: 0,
+                    bubbles: true, cancelable: true
+                });
+                wheelEvent.preventDefault = () => { prevented = true; };
+                canvas.dispatchEvent(wheelEvent);
+
+                // After detach, wheel events should not be intercepted
+                expect(prevented).to.be.false;
+
+                document.body.removeChild(canvas);
+            });
+
+            it('consolidates render calls when both pan and zoom occur via pointer', async () => {
                 const canvas = document.createElement('canvas');
                 canvas.id = 'mt-test-consolidate';
                 canvas.style.width = '400px';

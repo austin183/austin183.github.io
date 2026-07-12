@@ -2,7 +2,7 @@
   "session_id": "",
   "session_number": 0,
   "date": "",
-  "purpose": "code|test|docs|debug|refactor|research",
+  "purpose": "code|test|docs|debug|refactor|research|tdd",
   "agent_role": "",
   "files_changed": [],
   "test_files_added": [],

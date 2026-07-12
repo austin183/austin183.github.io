@@ -82,6 +82,50 @@ function renderImage(ctx, width, height, state) {
 - Skip `drawImage` when image is null — background fill alone suffices
 - Test with Proxy-based context mocking: verify both `fillStyle`/`fillRect` (background) AND `globalAlpha`/`drawImage` (foreground) calls
 
+## Config-Based Rendering Helpers
+
+When multiple Canvas 2D methods share the same `save`/`restore` + property-setting + geometry-drawing pattern, extract a shared helper that accepts a style config object. This eliminates DRY violations while keeping each public method as a thin, readable wrapper.
+
+```javascript
+_drawPanelBorder(ctx, panel, config) {
+    ctx.save();
+    ctx.strokeStyle = config.strokeStyle;
+    ctx.lineWidth = config.lineWidth;
+    if (config.shadowColor !== undefined) ctx.shadowColor = config.shadowColor;
+    if (config.shadowBlur !== undefined) ctx.shadowBlur = config.shadowBlur;
+    if (config.shadowOffsetX !== undefined) ctx.shadowOffsetX = config.shadowOffsetX;
+    if (config.shadowOffsetY !== undefined) ctx.shadowOffsetY = config.shadowOffsetY;
+    // ... geometry drawing
+    ctx.restore();
+}
+
+drawSelectionBorder(ctx, panel) {
+    this._drawPanelBorder(ctx, panel, {
+        strokeStyle: '#ffffff',
+        lineWidth: 3,
+        shadowColor: 'rgba(0, 0, 0, 0.4)',
+        shadowBlur: 4
+    });
+}
+
+drawHoverBorder(ctx, panel) {
+    this._drawPanelBorder(ctx, panel, {
+        strokeStyle: '#4a9eff',
+        lineWidth: 2
+    });
+}
+```
+
+**Critical: Guard optional config properties with `!== undefined`, not truthy checks.** Canvas property values like `0` (lineWidth, shadowBlur) and `''` (strokeStyle) are valid falsy values. A truthy check (`if (config.lineWidth)`) would silently skip setting `lineWidth: 0`, producing incorrect rendering.
+
+**When to use:**
+- 2+ methods share the same save/restore + property-setting pattern
+- Methods differ only in which properties they set or their values
+- The geometry-drawing logic is identical across callers
+
+**File Reference:**
+- `MyESModules/Rendering/PanelRenderer.js` — `_drawPanelBorder` extraction
+
 ## Gotchas
 
 1. **Canvas coordinates are CSS pixels after DPR transform** — `ctx.setTransform(dpr, ...)` means you draw in CSS pixel coordinates

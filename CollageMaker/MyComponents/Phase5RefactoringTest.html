@@ -32,6 +32,9 @@
         import { createOverlayHandlers } from '../MyESModules/App/createOverlayHandlers.js';
         import { LayoutGenerator } from '../MyESModules/Layout/LayoutGenerator.js';
         import { LayoutStyle } from '../MyESModules/Models/LayoutStyle.js';
+        import { createRenderMethods } from '../MyESModules/App/createRenderMethods.js';
+        import { createCropPreviewRenderer } from '../MyESModules/App/createCropPreviewRenderer.js';
+        import { createUndoMethods } from '../MyESModules/App/createUndoMethods.js';
 
         const { expect } = chai;
 
@@ -485,6 +488,394 @@
                 expect(data.layoutStyle).to.equal('hero');
                 expect(methodsConfig._scheduleRender).to.be.a('function');
                 expect(lifecycleConfig.mounted).to.be.a('function');
+            });
+        });
+
+        // ============================================================
+        // 5.6 CR-FU-09: createRenderMethods Module
+        // ============================================================
+        describe('Section 5.6 — createRenderMethods Module (CR-FU-09)', () => {
+            let mockBase;
+
+            beforeEach(() => {
+                mockBase = createMockBase();
+            });
+
+            it('5.6.1 — createRenderMethods is a function', () => {
+                expect(createRenderMethods).to.be.a('function');
+            });
+
+            it('5.6.2 — createRenderMethods returns expected methods', () => {
+                const renderMethods = createRenderMethods(mockBase);
+                expect(renderMethods._scheduleRender).to.be.a('function');
+                expect(renderMethods._buildBackgroundState).to.be.a('function');
+                expect(renderMethods._buildOverlayState).to.be.a('function');
+                expect(renderMethods._regenerateAndRender).to.be.a('function');
+            });
+
+            it('5.6.3 — _buildBackgroundState returns correct shape', () => {
+                const renderMethods = createRenderMethods(mockBase);
+                const mockVm = {
+                    backgroundStyle: 'gradient',
+                    backgroundColor: '#ff0000',
+                    gradientColors: ['#ff0000', '#00ff00'],
+                    gradientAngle: 45,
+                    backgroundImage: null,
+                    backgroundOpacity: 0.8
+                };
+                const state = renderMethods._buildBackgroundState(mockVm);
+                expect(state.type).to.equal('gradient');
+                expect(state.color1).to.equal('#ff0000');
+                expect(state.color2).to.equal('#00ff00');
+                expect(state.angle).to.equal(45);
+                expect(state.opacity).to.equal(0.8);
+            });
+
+            it('5.6.4 — _buildBackgroundState handles missing gradientColors', () => {
+                const renderMethods = createRenderMethods(mockBase);
+                const mockVm = {
+                    backgroundStyle: 'solid',
+                    backgroundColor: '#ffffff',
+                    gradientAngle: 90,
+                    backgroundImage: null,
+                    backgroundOpacity: 1.0
+                };
+                const state = renderMethods._buildBackgroundState(mockVm);
+                expect(state.color1).to.equal('#ffffff');
+                expect(state.color2).to.equal('#ffffff');
+            });
+
+            it('5.6.5 — _buildOverlayState returns correct shape', () => {
+                const renderMethods = createRenderMethods(mockBase);
+                const mockVm = {
+                    overlayImage: null,
+                    overlayMode: 'screen',
+                    overlayOpacity: 0.7
+                };
+                const state = renderMethods._buildOverlayState(mockVm);
+                expect(state.image).to.be.null;
+                expect(state.mode).to.equal('screen');
+                expect(state.opacity).to.equal(0.7);
+            });
+
+            it('5.6.6 — _scheduleRender is a no-op when no canvas renderer', () => {
+                const renderMethods = createRenderMethods(mockBase);
+                const mockVm = {
+                    images: [],
+                    panels: [],
+                    crops: new Map(),
+                    panelAssignments: new Map(),
+                    backgroundColor: '#ffffff',
+                    selectedPanelId: null,
+                    hoveredPanelId: null,
+                    hexDragTargetId: null,
+                    backgroundStyle: 'solid',
+                    gradientColors: ['#ffffff', '#e0e0e0'],
+                    gradientAngle: 90,
+                    backgroundImage: null,
+                    backgroundOpacity: 1.0,
+                    overlayImage: null,
+                    overlayMode: 'multiply',
+                    overlayOpacity: 0.5,
+                    titleStyle: {},
+                    titleRuns: []
+                };
+                // mockBase.getCanvasRenderer() returns null
+                expect(() => {
+                    renderMethods._scheduleRender(mockVm);
+                }).to.not.throw();
+            });
+
+            it('5.6.7 — _scheduleRender is a no-op when no images', () => {
+                const mockRenderer = {
+                    scheduleRender: (cb) => {
+                        // Simulate RAF callback
+                        const mockCtx = {
+                            save: () => {},
+                            scale: () => {},
+                            restore: () => {}
+                        };
+                        cb(mockCtx, 1920, 1080);
+                    }
+                };
+                mockBase.getCanvasRenderer = () => mockRenderer;
+                const renderMethods = createRenderMethods(mockBase);
+                const mockVm = {
+                    images: [],
+                    panels: [],
+                    crops: new Map(),
+                    panelAssignments: new Map(),
+                    backgroundColor: '#ffffff',
+                    selectedPanelId: null,
+                    hoveredPanelId: null,
+                    hexDragTargetId: null,
+                    backgroundStyle: 'solid',
+                    gradientColors: ['#ffffff', '#e0e0e0'],
+                    gradientAngle: 90,
+                    backgroundImage: null,
+                    backgroundOpacity: 1.0,
+                    overlayImage: null,
+                    overlayMode: 'multiply',
+                    overlayOpacity: 0.5,
+                    titleStyle: {},
+                    titleRuns: []
+                };
+                expect(() => {
+                    renderMethods._scheduleRender(mockVm);
+                }).to.not.throw();
+            });
+
+            it('5.6.8 — _regenerateAndRender calls layoutManager.regenerate and renders', () => {
+                let regenerated = false;
+                let rendered = false;
+                const mockLayoutManager = {
+                    regenerate: () => { regenerated = true; }
+                };
+                const mockRenderer = {
+                    scheduleRender: () => { rendered = true; }
+                };
+                mockBase.getLayoutManager = () => mockLayoutManager;
+                mockBase.getCanvasRenderer = () => mockRenderer;
+                const renderMethods = createRenderMethods(mockBase);
+                const mockVm = {
+                    layoutManager: mockLayoutManager,
+                    images: [],
+                    panels: [],
+                    crops: new Map(),
+                    panelAssignments: new Map(),
+                    backgroundColor: '#ffffff',
+                    selectedPanelId: null,
+                    hoveredPanelId: null,
+                    hexDragTargetId: null,
+                    backgroundStyle: 'solid',
+                    gradientColors: ['#ffffff', '#e0e0e0'],
+                    gradientAngle: 90,
+                    backgroundImage: null,
+                    backgroundOpacity: 1.0,
+                    overlayImage: null,
+                    overlayMode: 'multiply',
+                    overlayOpacity: 0.5,
+                    titleStyle: {},
+                    titleRuns: []
+                };
+                renderMethods._regenerateAndRender(mockVm);
+                expect(regenerated).to.be.true;
+                expect(rendered).to.be.true;
+            });
+        });
+
+        // ============================================================
+        // 5.7 CR-FU-09: createCropPreviewRenderer Module
+        // ============================================================
+        describe('Section 5.7 — createCropPreviewRenderer Module (CR-FU-09)', () => {
+            let mockBase;
+
+            beforeEach(() => {
+                mockBase = createMockBase();
+            });
+
+            it('5.7.1 — createCropPreviewRenderer is a function', () => {
+                expect(createCropPreviewRenderer).to.be.a('function');
+            });
+
+            it('5.7.2 — createCropPreviewRenderer returns expected methods', () => {
+                const cropPreview = createCropPreviewRenderer(mockBase, {
+                    cropPreviewCanvas: 'cropPreviewCanvas'
+                });
+                expect(cropPreview._scheduleCropPreviewRender).to.be.a('function');
+            });
+
+            it('5.7.3 — _scheduleCropPreviewRender is idempotent (debounced)', () => {
+                const cropPreview = createCropPreviewRenderer(mockBase, {
+                    cropPreviewCanvas: 'cropPreviewCanvas'
+                });
+                const mockVm = {
+                    _cropPreviewPending: false,
+                    selectedPanelId: null
+                };
+                // First call sets pending flag
+                cropPreview._scheduleCropPreviewRender(mockVm);
+                expect(mockVm._cropPreviewPending).to.be.true;
+                // Second call is a no-op while pending
+                const secondCallResult = cropPreview._scheduleCropPreviewRender(mockVm);
+                // Should not throw and should be a no-op
+                expect(mockVm._cropPreviewPending).to.be.true;
+            });
+
+            it('5.7.4 — _scheduleCropPreviewRender is a no-op when no selected panel', () => {
+                const cropPreview = createCropPreviewRenderer(mockBase, {
+                    cropPreviewCanvas: 'cropPreviewCanvas'
+                });
+                const mockVm = {
+                    _cropPreviewPending: false,
+                    selectedPanelId: null
+                };
+                expect(() => {
+                    cropPreview._scheduleCropPreviewRender(mockVm);
+                }).to.not.throw();
+            });
+        });
+
+        // ============================================================
+        // 5.8 CR-FU-09: createUndoMethods Module
+        // ============================================================
+        describe('Section 5.8 — createUndoMethods Module (CR-FU-09)', () => {
+            let mockBase;
+
+            beforeEach(() => {
+                mockBase = createMockBase();
+            });
+
+            it('5.8.1 — createUndoMethods is a function', () => {
+                expect(createUndoMethods).to.be.a('function');
+            });
+
+            it('5.8.2 — createUndoMethods returns expected methods', () => {
+                const undoMethods = createUndoMethods(mockBase);
+                expect(undoMethods._updateUndoState).to.be.a('function');
+                expect(undoMethods._performUndo).to.be.a('function');
+                expect(undoMethods._performRedo).to.be.a('function');
+            });
+
+            it('5.8.3 — _updateUndoState is a no-op when no undo manager', () => {
+                const undoMethods = createUndoMethods(mockBase);
+                const mockVm = { canUndo: false, canRedo: false };
+                // mockBase.undoManager is null
+                expect(() => {
+                    undoMethods._updateUndoState(mockVm);
+                }).to.not.throw();
+            });
+
+            it('5.8.4 — _updateUndoState updates canUndo/canRedo', () => {
+                const mockUndoManager = {
+                    canUndo: () => true,
+                    canRedo: () => false
+                };
+                mockBase.undoManager = mockUndoManager;
+                const undoMethods = createUndoMethods(mockBase);
+                const mockVm = { canUndo: false, canRedo: false };
+                undoMethods._updateUndoState(mockVm);
+                expect(mockVm.canUndo).to.be.true;
+                expect(mockVm.canRedo).to.be.false;
+            });
+
+            it('5.8.5 — _performUndo is a no-op when no undo manager', () => {
+                const undoMethods = createUndoMethods(mockBase);
+                const mockVm = { canUndo: false, canRedo: false };
+                expect(() => {
+                    undoMethods._performUndo(mockVm);
+                }).to.not.throw();
+            });
+
+            it('5.8.6 — _performRedo is a no-op when no undo manager', () => {
+                const undoMethods = createUndoMethods(mockBase);
+                const mockVm = { canUndo: false, canRedo: false };
+                expect(() => {
+                    undoMethods._performRedo(mockVm);
+                }).to.not.throw();
+            });
+
+            it('5.8.7 — _performUndo calls undo and triggers render callbacks', () => {
+                let renderCalled = false;
+                let cropPreviewCalled = false;
+                const mockUndoManager = {
+                    canUndo: () => true,
+                    canRedo: () => false,
+                    undo: () => true
+                };
+                mockBase.undoManager = mockUndoManager;
+                const undoMethods = createUndoMethods(mockBase, {
+                    onRenderScheduled: () => { renderCalled = true; },
+                    onCropPreviewRender: () => { cropPreviewCalled = true; }
+                });
+                const mockVm = { canUndo: false, canRedo: false };
+                undoMethods._performUndo(mockVm);
+                expect(renderCalled).to.be.true;
+                expect(cropPreviewCalled).to.be.true;
+                expect(mockVm.canUndo).to.be.true;  // _updateUndoState updated it
+                expect(mockVm.canRedo).to.be.false;
+            });
+        });
+
+        // ============================================================
+        // 5.9 CR-FU-09: Composition — Extracted methods in createCollageMethods
+        // ============================================================
+        describe('Section 5.9 — Composition: Extracted Methods in createCollageMethods (CR-FU-09)', () => {
+            let methods, mockBase;
+
+            beforeEach(() => {
+                mockBase = createMockBase();
+                methods = createCollageMethods(mockBase);
+            });
+
+            it('5.9.1 — Render methods are accessible on composed methods object', () => {
+                expect(methods._scheduleRender).to.be.a('function');
+                expect(methods._buildBackgroundState).to.be.a('function');
+                expect(methods._buildOverlayState).to.be.a('function');
+                expect(methods._regenerateAndRender).to.be.a('function');
+            });
+
+            it('5.9.2 — Crop preview method is accessible on composed methods object', () => {
+                expect(methods._scheduleCropPreviewRender).to.be.a('function');
+            });
+
+            it('5.9.3 — Undo methods are accessible on composed methods object', () => {
+                expect(methods._updateUndoState).to.be.a('function');
+                expect(methods._performUndo).to.be.a('function');
+                expect(methods._performRedo).to.be.a('function');
+            });
+
+            it('5.9.4 — Method names unchanged after extraction', () => {
+                const methodNames = Object.keys(methods).filter(k => k.startsWith('_'));
+                expect(methodNames).to.include('_scheduleRender');
+                expect(methodNames).to.include('_buildBackgroundState');
+                expect(methodNames).to.include('_buildOverlayState');
+                expect(methodNames).to.include('_scheduleCropPreviewRender');
+                expect(methodNames).to.include('_updateUndoState');
+                expect(methodNames).to.include('_performUndo');
+                expect(methodNames).to.include('_performRedo');
+                expect(methodNames).to.include('_regenerateAndRender');
+            });
+
+            it('5.9.5 — _buildBackgroundState works via composed methods', () => {
+                const mockVm = {
+                    backgroundStyle: 'solid',
+                    backgroundColor: '#aabbcc',
+                    gradientColors: ['#aabbcc', '#ddeeff'],
+                    gradientAngle: 180,
+                    backgroundImage: null,
+                    backgroundOpacity: 0.5
+                };
+                const state = methods._buildBackgroundState.call(mockVm);
+                expect(state.type).to.equal('solid');
+                expect(state.color1).to.equal('#aabbcc');
+                expect(state.color2).to.equal('#ddeeff');
+                expect(state.angle).to.equal(180);
+                expect(state.opacity).to.equal(0.5);
+            });
+
+            it('5.9.6 — _buildOverlayState works via composed methods', () => {
+                const mockVm = {
+                    overlayImage: null,
+                    overlayMode: 'multiply',
+                    overlayOpacity: 0.5
+                };
+                const state = methods._buildOverlayState.call(mockVm);
+                expect(state.image).to.be.null;
+                expect(state.mode).to.equal('multiply');
+                expect(state.opacity).to.equal(0.5);
+            });
+
+            it('5.9.7 — _updateUndoState works via composed methods', () => {
+                const mockUndoManager = {
+                    canUndo: () => true,
+                    canRedo: () => true
+                };
+                mockBase.undoManager = mockUndoManager;
+                const mockVm = { canUndo: false, canRedo: false };
+                methods._updateUndoState.call(mockVm);
+                expect(mockVm.canUndo).to.be.true;
+                expect(mockVm.canRedo).to.be.true;
             });
         });
 

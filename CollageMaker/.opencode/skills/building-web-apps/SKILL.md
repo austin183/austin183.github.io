@@ -1,11 +1,9 @@
 ---
 name: building-web-apps
-description: Build static web apps with Vue 3 Options API, Canvas 2D rendering, ES modules, and CDN-loaded libraries. Covers factory testability patterns (callback injection, DOM ID injection), extensibility patterns (strategy/registry), canvas clearing for exports, test-driven refactoring, multi-touch gestures, and web edge cases (DPR, CORS). No build step, no bundler. Use when working on CollageMaker web app features, rendering, state management, testing, or architectural refactoring.
+description: Build static web apps with Vue 3 Options API, Canvas 2D rendering, ES modules, and CDN-loaded libraries. Covers factory testability patterns (callback injection, DOM ID injection, module extraction, service locator safety), extensibility patterns (strategy/registry), canvas clearing for exports, config-based rendering helpers, toast notifications, accessibility (ARIA live regions, custom button keyboard activation, aria-busy loading states, reduced motion, interactive canvas roles), drag-and-drop cleanup, test-driven refactoring (characterization tests), multi-touch and trackpad gestures (TouchEvent, PointerEvent, WheelEvent paths, pointerType guards, wheel event pan/zoom), and web edge cases (DPR, CORS). No build step, no bundler. Use when working on CollageMaker web app features, rendering, state management, testing, or architectural refactoring.
 ---
 
 # Building Web Apps
-
-This skill covers patterns for the CollageMaker web app: Vue 3 Options API, Canvas 2D rendering, ES modules, the Midiestro3D project pattern, factory testability patterns (callback injection, DOM ID injection), extensibility patterns (strategy/registry), and web-specific edge cases.
 
 ## Project Pattern
 
@@ -15,18 +13,20 @@ This skill covers patterns for the CollageMaker web app: Vue 3 Options API, Canv
 
 Consult these files for verified patterns and gotchas:
 
-- `references/vue-options-api.md` — Vue 3 Options API factory decomposition, provide() timing, @mousedown.prevent, array mutation patterns for reactivity
-- `references/canvas-2d.md` — Canvas 2D rendering, DPR scaling, semi-transparent compositing, offscreen export
+- `references/vue-options-api.md` — Vue 3 Options API factory decomposition, provide() timing, @mousedown.prevent, $refs on native form inputs, array mutation patterns for reactivity
+- `references/canvas-2d.md` — Canvas 2D rendering, DPR scaling, semi-transparent compositing, config-based rendering helpers, offscreen export
 - `references/es-modules.md` — ES module conventions and barrel exports
 - `references/rich-text-runs.md` — Run-based text formatting, merge/split algorithm
-- `references/testing.md` — Mocha/Chai unit tests and Playwright E2E, integration testing after modularization
-- `references/interaction.md` — Keyboard shortcut patterns: three-layer architecture, modifier matching, focus suppression, preventDefault ordering, pointer handler coordination, multi-touch gestures
+- `references/testing-unit.md` — Mocha/Chai unit tests, mocking patterns, integration testing, characterization tests before refactor
+- `references/testing-e2e.md` — Playwright E2E, page load strategy, pointer/Touch/Drag event testing
+- `references/testing-strategy.md` — Testing approach, gotchas, deferred features, assertion density
+- `references/interaction.md` — Keyboard shortcut patterns: three-layer architecture, modifier matching, focus suppression, preventDefault ordering, pointer handler coordination, global pointerup drag cleanup, multi-touch and trackpad gestures (TouchEvent/PointerEvent dual path, pointerType guards, wheel event pan/zoom, setPointerCapture gotchas, blur safety net, touch-action CSS)
 - `references/midiestro-pattern.md` — Entry point pattern, shared infrastructure, directory structure
-- `references/css-layout.md` — Flex column chain, `min-height: 0` requirement, responsive sidebar config, CSS computed value naming
+- `references/css-layout.md` — Flex column chain, `min-height: 0` requirement, responsive sidebar config, CSS computed value naming, mobile safe areas
 - `references/memory-management.md` — Disposing HTMLImageElement references, URL.createObjectURL cleanup, lifecycle cleanup ordering, canvas GPU memory release, visual state cleanup, image disposal when replacing references
 - `references/manager-patterns.md` — Action-based vs. direct mutation state managers, when to use each pattern, undo/redo integration
 - `references/web-workers.md` — Web Worker lifecycle, timeout guard pattern, clearing timeouts on every exit path, mock Worker pattern for testing
-- `references/accessibility.md` — ARIA patterns for segmented controls (radiogroup), decorative indicators (aria-hidden)
+- `references/accessibility.md` — ARIA patterns for segmented controls (radiogroup), color picker accessibility, custom button keyboard activation (Enter + Space), aria-busy loading states, prefers-reduced-motion, ARIA live regions (toast notifications), interactive canvas role selection
 
 ## Core Conventions
 
@@ -86,7 +86,35 @@ export function createCollageLifecycle(base, domIds = {}) {
 - Always provide sensible defaults so existing callers don't break
 - Tests can supply mock IDs to verify `getElementById` is called with the correct ID
 
-**Internal vs. Module Extraction** — If internal functions within a factory already have clear boundaries and accept explicit parameters (not `this`), extracting to separate modules may be unnecessary. The callback injection pattern is the stronger DIP improvement. Separate modules add import complexity without meaningful testability gains when the functions are tightly coupled to Vue internals.
+**Internal vs. Module Extraction** — Callback injection is the *primary* DIP improvement. Module extraction is the *secondary* SRP improvement. If internal functions have clear boundaries AND the file exceeds ~400 lines, extraction is worthwhile: it yields independent testability, clearer module boundaries, and reduced cognitive load (the composition layer becomes a wiring diagram rather than intertwined logic). If the file stays under ~400 lines and functions are tightly coupled to Vue internals, skip extraction to avoid unnecessary import complexity.
+
+**Callback Wiring in Extracted Modules** — When extracted modules depend on each other, accept callback objects as factory parameters instead of importing sibling modules. This prevents circular dependencies and preserves one-way dependency flow: `Composition → Extracted Modules`.
+```javascript
+// Undo methods need render callbacks to trigger re-renders after state changes
+const undoMethods = createUndoMethods(base, {
+    onRenderScheduled: (vm) => renderMethods._scheduleRender(vm),
+    onCropPreviewRender: (vm) => cropPreviewMethods._scheduleCropPreviewRender(vm)
+});
+```
+
+**Service Locator Access Safety** — Two rules for accessing the `base` service locator:
+
+1. **Use consistent optional chaining** — Always access optional services with `base?.getService?.() || null`. Using `base.getService()` without optional chaining throws if the service is not registered. Apply the same pattern across all modules.
+2. **Look up services inside callbacks, not outside** — When a callback may execute long after factory creation, look up the service inside the callback. Capturing the service at factory time risks a stale or undefined reference if the service is later disposed or replaced:
+```javascript
+// WRONG — assembler captured at factory time, may be stale when callback runs
+const asm = assembler();
+renderer.scheduleRender(function (ctx, width, height) {
+    asm.render(ctx, { ... }); // THROWS if asm is undefined
+});
+
+// CORRECT — assembler looked up at render time
+renderer.scheduleRender(function (ctx, width, height) {
+    const asm = assembler();
+    if (!asm) return;
+    asm.render(ctx, { ... });
+});
+```
 
 ### Guard Against Null Inputs
 Browser API utilities that accept user input MUST guard against null/undefined. Return `Promise.resolve(null)` for null input rather than throwing:
@@ -109,7 +137,8 @@ export function loadImageFromFile(file) {
 - `requestAnimationFrame` for debounced renders
 - In `dispose()`, set `canvas.width = 0; canvas.height = 0` to force GPU memory release
 - **Pre-fill background before `globalAlpha`** — Canvas blends against existing pixels, not isolated layers. Always `fillRect` with background color before drawing semi-transparent images. Isolate alpha with `save()`/`restore()`.
-- See `references/canvas-2d.md` for offscreen export, clearing patterns, and compositing
+- **Config-based rendering helpers** — When multiple methods share the same save/restore + property-setting pattern, extract a shared helper accepting a style config object. Guard optional config properties with `!== undefined` (not truthy checks) because `0` and `''` are valid canvas values.
+- See `references/canvas-2d.md` for offscreen export, clearing patterns, compositing, and config-based helpers
 
 ### Interaction & Keyboard Shortcuts
 - Three-layer architecture: pure parse functions → pattern matching → factory event handler with attach/detach lifecycle
@@ -139,17 +168,30 @@ _onPointerDown(e) {
 - **Both handlers always attached** — no attach/detach cycles on layout change; O(1) layout check at pointerdown time
 - **Drag threshold distinguishes click from drag** — 10 CSS pixels of movement triggers drag mode; below threshold, treat as click
 - **CSS pixel threshold** — device-independent, feels consistent on high-DPR displays
+- **Global pointerup for drag cleanup** — Always add a `window.addEventListener('pointerup', ...)` listener alongside the element-level listener. If the user releases the pointer outside the element (off-screen drag, tab switch), the element-level `pointerup` never fires and drag state gets stuck. See `references/interaction.md` for the pattern.
 - See `references/interaction.md` for the full pattern and gotchas
 
-### Multi-Touch Gestures
+### Multi-Touch and Trackpad Gestures
 
-Two-finger pan and pinch-to-zoom on mobile use `touchstart`/`touchmove`/`touchend` with `{ passive: false }`.
+Pan and zoom gestures must support **three input paths** for cross-platform coverage:
 
-- **Exactly 2 fingers, not 2+** — Mobile OSes reserve 3-finger and 4-finger gestures for system navigation (iOS: back/forward; Android: split-screen). Check `e.touches.length !== 2` and cancel the gesture if the count deviates mid-gesture.
-- **removeEventListener must match addEventListener options** — If attached with `{ passive: false }`, removal must include the same options. Mismatched options cause silent failure and memory leaks.
-- **Consolidate render calls** — When a single `touchmove` can trigger both pan and zoom, use a `needsRender` flag to call the render callback at most once per event.
-- **Incremental pinch scale** — Apply `Math.pow(distanceRatio, 0.15)` to convert raw pinch distance to a smooth incremental zoom factor. Reset the reference distance after each zoom to avoid accumulating scale.
-- See `references/interaction.md` for the full multi-touch patterns.
+| Path | Platform | Events |
+|------|----------|--------|
+| **TouchEvent** | Mobile touchscreen | `touchstart`/`touchmove`/`touchend` |
+| **PointerEvent** | Windows precision touchpad, some Linux | `pointerdown`/`pointermove`/`pointerup` (two pointers) |
+| **WheelEvent** | macOS trackpad (universal) | `wheel` with `deltaX`/`deltaY` (pan) and `deltaZ` (zoom) |
+
+**Critical: macOS trackpad gestures are wheel events, NOT pointer events.** The browser synthesizes two-finger trackpad input as a single `wheel` event. A PointerEvent-based two-pointer approach never activates on macOS.
+
+**Key patterns:**
+- **PointerType guard** — On hybrid devices (touchscreen + trackpad), guard PointerEvent handlers with `if (e.pointerType === 'touch') return;` to avoid double-firing with the TouchEvent path.
+- **Unified gesture functions** — Extract `startGesture()`, `processGesture()`, `endGesture()` so both TouchEvent and PointerEvent paths share identical logic.
+- **Wheel event handler** — Handle `deltaX`/`deltaY` for pan and `deltaZ` for zoom. Use `{ passive: false }` to allow `preventDefault()`. Attach with `{ passive: false }`.
+- **Exactly 2 fingers** — For TouchEvent, check `e.touches.length !== 2`. Mobile OSes reserve 3+ finger gestures.
+- **touch-action: none** — Add this CSS to gesture canvases to prevent browser default scroll/zoom.
+- **Window blur safety net** — Listen for `window.blur` and `document.visibilitychange` to cancel stuck gesture state if the user switches tabs/windows mid-gesture.
+- **preventDefault after gesture check** — Only call `preventDefault()` when the gesture actually activates (e.g., panel is selected), not unconditionally.
+- See `references/interaction.md` for the full dual-input path patterns, wheel event handling, pointer capture gotchas, and blur safety net.
 
 ### File Input Handlers
 
@@ -164,18 +206,69 @@ handleFileInputChange() {
 - Decouples the handler from the event object — Vue template `@change="handleFileInputChange"` still works (Vue passes event, handler ignores it)
 - More testable — mock `document.getElementById` instead of constructing events
 
+### Toast Notifications
+
+Minimal toast system using reactive state + `setTimeout` for auto-dismiss. No dedicated component — just data, a method, and a template element.
+
+```javascript
+// Reactive state in createCollageData.js
+toast: {
+    message: '',
+    type: '',       // 'info', 'success', 'error'
+    visible: false,
+    timer: null
+},
+
+// Method in createCollageMethods.js
+showToast(message, type, duration) {
+    type = type || 'info';
+    duration = duration != null ? duration : 5000;
+    if (this.toast.timer) clearTimeout(this.toast.timer);
+    this.toast.message = message;
+    this.toast.type = type;
+    this.toast.visible = true;
+    this.toast.timer = setTimeout(() => {
+        this.toast.visible = false;
+        this.toast.message = '';
+        this.toast.timer = null;
+    }, duration);
+},
+```
+
+```html
+<!-- Template in index.html -->
+<div class="toast-notification"
+     v-show="toast.visible"
+     :class="'toast-' + toast.type"
+     role="status"
+     aria-live="polite">
+    <span class="material-icons" aria-hidden="true">
+        {{ toast.type === 'error' ? 'error' : 'info' }}
+    </span>
+    {{ toast.message }}
+</div>
+```
+
+**Key gotchas:**
+- **Timer cleanup in `beforeUnmount()`** — Clear the toast timer to prevent updating reactive state on a destroyed instance: `if (this.toast && this.toast.timer) { clearTimeout(this.toast.timer); this.toast.timer = null; }`
+- **Toast coalescing** — Rapid successive calls clear the previous timer and overwrite the message. Only the last message is shown. Prevents spam but loses quick successive errors.
+- **`v-show` with CSS transitions** — `v-show` toggles `display: none`, which cannot be CSS-transitioned. For fade animations, use `v-if` with `<transition>` or bind `visibility` + `opacity` via inline styles. For simple toasts, `v-show` is acceptable (instant show/hide).
+- **Mobile safe areas** — Use `calc(16px + env(safe-area-inset-bottom, 0px))` for bottom-positioned fixed elements to avoid iOS home indicator overlap. See `references/css-layout.md`.
+- **ARIA live region role** — Use `role="status" aria-live="polite"` for info/success toasts. Consider `role="alert"` for critical errors. Never combine `role="alert"` with `aria-live="polite"` — they contradict each other. Always add `aria-hidden="true"` to decorative icons inside live regions. See `references/accessibility.md`.
+
 ### Testing
 - Mocha + Chai via CDN for unit tests (browser-based)
 - Playwright for E2E tests
 - Test HTML files in `MyComponents/`
-- **Prefer real browser objects over mocks** when objects are easy to construct (e.g., `File`, `Image`) — tests actual behavior with no mock maintenance. Use base64 PNG helper for test image files. Mock only for uncontrolled side effects (network, quota) or hard-to-trigger error paths (`FileReader.onerror`). See `references/testing.md`
+- **Prefer real browser objects over mocks** when objects are easy to construct (e.g., `File`, `Image`) — tests actual behavior with no mock maintenance. Use base64 PNG helper for test image files. Mock only for uncontrolled side effects (network, quota) or hard-to-trigger error paths (`FileReader.onerror`). See `references/testing-unit.md`
+- **Characterization tests before refactor** — Before refactoring shared code, add tests that capture current observable behavior. This ensures the refactor doesn't change behavior, especially for subtle differences between callers (e.g., one method sets `shadowColor`, another doesn't). See `references/testing-unit.md`
 - Mock browser APIs by intercepting `document.createElement` and `localStorage` (bind original, always restore)
-- Mock `requestAnimationFrame`/`cancelAnimationFrame` with a callback collector + `flushRAF()` for deterministic debounce testing — see `references/testing.md`
-- Use Proxy-based wrapper for Canvas 2D context mocking instead of `Object.defineProperty` — see `references/testing.md`
+- Mock `requestAnimationFrame`/`cancelAnimationFrame` with a callback collector + `flushRAF()` for deterministic debounce testing — see `references/testing-unit.md`
+- Use Proxy-based wrapper for Canvas 2D context mocking instead of `Object.defineProperty` — see `references/testing-unit.md`
 - `DragEvent.dataTransfer` cannot be mocked in constructor — test listener presence via `preventDefault()` tracking
 - Mock `window.Worker` with `Object.defineProperty` + setter for `onmessage` to capture the handler, then fire synthetic messages. Override timeout config (e.g., `INFERENCE_TIMEOUT_MS = 50`) to test timeout paths without waiting. See `references/web-workers.md`
 - Document-level listeners leak across tests — use describe-level `afterEach` cleanup, never `beforeEach` + per-test setup
-- See `references/testing.md` for patterns on testing state, combined edge cases, and deferred features
+- See `references/testing-unit.md` for patterns on testing state and combined edge cases, `references/testing-strategy.md` for deferred features
 
 ### Extensibility Patterns
 
@@ -234,33 +327,15 @@ See `references/memory-management.md` for patterns on disposing image references
 3. Wire into the Vue app via the matching config module (`createCollageData`, `createCollageMethods`, etc.)
 4. Add tests in `MyComponents/` (unit) or Playwright (E2E)
 5. **Run world-review on P1 test files** — have a fresh reviewer identify gaps using checklist: "What if input is null/empty/partial? What edge cases exist?"
-6. **For architectural changes, run world-review after implementation** — use comprehensive checklist:
+6. **For architectural changes, run world-review after implementation** — Tests verify *specified* behavior; world-review questions *assumed* behavior. It catches edge cases tests miss (e.g., services undefined at callback time, optional chaining inconsistencies). Use comprehensive checklist:
     - [ ] Check for missing methods in managers that are called by handlers (integration gap)
     - [ ] Verify image disposal when replacing image references (memory leak prevention)
     - [ ] Review array assignments for reference preservation (Vue reactivity)
     - [ ] Confirm all state mutation patterns are intentional and documented (action vs. direct)
+    - [ ] Verify services are looked up inside callbacks, not captured outside (stale reference risk)
+    - [ ] Check optional chaining consistency on all `base` service locator access across modules
 7. **When refactoring to new patterns, update dependent code** — check all imports that may be affected by API changes; ensure backward compatibility where possible
 8. Verify: run `node scripts/run-tests.js`, check dev server, confirm no regressions
-
-## Quick Reference
-- **Optional chaining guards** — Use `base?.method?.()` instead of ternary guards (`base.getMethod ? base.getMethod() : null`) for resilient existence checks on objects with optional interfaces.
-
-- **Vue:** `provide()` runs before `mounted()` — lazy services are null. Use getter functions or `this.manager` access. Use `@mousedown.prevent` on toolbar buttons that operate on text selection.
-- **Factory testability:** Use callback injection — handler factories accept callbacks that receive Vue instance as parameter. Internal functions are closures over services accepting explicit `vm`, not `this`. Inject DOM IDs via factory config with sensible defaults. Prefer internal functions over module extraction when functions are tightly coupled to Vue internals.
-- **File inputs:** Read `files` from DOM element by injected ID, not from event parameter. Vue template `@change="handler"` still works — event is passed but ignored.
-- **Data-driven UI:** Use `getLayoutOptions(style)` on layout generators to let UI dynamically show/hide options. Adding new layouts requires no template changes.
-- **Keyboard shortcuts:** Pure parse/match functions exported for testing without DOM. Pattern parts order-insensitive, key comparison case-insensitive. See `references/interaction.md` for modifier rules.
-- **Pointer handlers:** Use layout-gated delegation — each handler checks `state.layoutStyle` at pointerdown and returns early if not its domain. Both handlers stay attached (no attach/detach on layout change). Drag vs. click: 10 CSS pixel threshold. See `references/interaction.md`.
-- **Multi-touch gestures:** Exactly 2 fingers (`!== 2`), cancel on count change. `removeEventListener` must match `addEventListener` options (e.g., `{ passive: false }`). Consolidate renders with `needsRender` flag. Pinch zoom: `Math.pow(distanceRatio, 0.15)`. See `references/interaction.md`.
-- **Canvas export:** Wrap `URL.createObjectURL` + `a.click()` in `try/finally`. Always clear canvas and fill white before rendering (especially for JPEG).
-- **Canvas compositing:** `globalAlpha` blends against existing pixels — pre-fill background color before drawing semi-transparent images. Isolate alpha with `save()`/`restore()`.
-- **Run processing:** Never use `break` in run-processing loops — it drops subsequent runs. Use a flag. Always merge after mutations.
-- **CSS flex:** Every `flex: 1` item inside a `flex-direction: column` container needs `min-height: 0`. Same for `min-width: 0` in row containers. See `references/css-layout.md`.
-- **Memory management:** Dispose image references (`null`), replace old before new, use `try/finally` for blob URLs, prefer `splice()` over reassignment. In `beforeUnmount()`, remove interaction listeners BEFORE disposing renderers. Set `canvas.width = 0; canvas.height = 0` to force GPU memory release. Cleanup functions must also reverse visual state (DOM classes, etc.). See `references/memory-management.md`.
-- **Timeout guards:** Clear `setTimeout` IDs on every exit path (ready, failed, error, dispose). Guard the callback with `if (this.isDisposed || !this.worker) return;`. The timeout is a safety net, not the primary flow. See `references/web-workers.md`.
-- **Extensibility:** Use strategy pattern for layout generators (registry + pass-all-options). Use registry pattern for export handlers. Every registry strategy must match the dispatcher's parameter order — use `_unused` prefix for positional alignment.
-- **Testing:** Mock browser APIs with `bind()` and restore. Use Proxy-based Canvas 2D context mocking. For RAF debounce tests, use a callback collector + `flushRAF()` — always `bind()` the original, restore in `afterEach`, read state inside the RAF callback (latest-wins). Verify both calls AND property state. Test default behavior explicitly. Cover combined edge cases. For `DragEvent`, mock `preventDefault()` — `dataTransfer` cannot be set in constructor. For `document`-level listeners, use describe-level `afterEach` cleanup to avoid cross-test leakage. For `window.Worker`, use `Object.defineProperty` with `onmessage` setter. Override timeout configs for fast timeout tests. See `references/testing.md` and `references/web-workers.md` for details.
-- **Accessibility:** Use `role="radiogroup"` + `role="radio"` + `:aria-checked` for segmented controls. Use `aria-hidden="true"` on decorative indicators that duplicate adjacent control info. See `references/accessibility.md`.
 
 ---
 

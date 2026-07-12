@@ -24,15 +24,17 @@ Your sole responsibility is test code. Every `*.js` file in `MyESModules/` shoul
 
 ## What You Must Track
 
-At the end of your work, fill out the session summary template from `.opencode/skills/analyzing-opencode-usage/references/session-summary.json`:
-- Set `purpose` to `test`
-- Set `agent_role` to `build-test`
-- List all modified files in `files_changed`
-- List new test files in `test_files_added`
-- Record `tests_added` (count of new Mocha `it()` blocks)
-- Record `assertions_added` (count of new Chai `expect()` calls)
-- Record commit hashes in `commits`
-- Set `outcome` to `success`, `partial`, or `failed`
+At the end of your work, write a session summary to `_agent_docs/project-timeline/sessions/` using the template from `.opencode/skills/analyzing-opencode-usage/references/session-summary.json`. Fill in every field in the template.
+
+**Filename convention:** `YYYY-MM-DD-XXX-build-test-<description>.json`
+- `YYYY-MM-DD` — today's date
+- `XXX` — sequential number for the day (001, 002, …)
+- `build-test` — your agent role
+- `<description>` — kebab-case summary of the work (e.g., `layout-math-tests`, `export-e2e`)
+
+**Agent-specific fields:**
+- `purpose`: `test`
+- `agent_role`: `build-test`
 
 ## Conventions
 

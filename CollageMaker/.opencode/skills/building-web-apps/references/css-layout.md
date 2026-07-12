@@ -70,3 +70,17 @@ return { totalPaddingIncrease: 12, finalWidth: 44, finalHeight: 44 };
 ```
 
 An implementer seeing `padding: 12` may apply `padding: 12px` on each side (left/right), effectively doubling the intended size.
+
+## Mobile Safe Areas
+
+For bottom-positioned fixed elements (toast notifications, bottom bars, FABs), use `env(safe-area-inset-bottom)` to avoid overlap with the iOS home indicator:
+
+```css
+.toast-notification {
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+}
+```
+
+**Why:** On iPhone X and later, the home indicator occupies the bottom ~34px of the viewport. Without the safe area inset, fixed elements will be partially obscured. The `0px` fallback ensures no extra padding on non-Notch devices.
+
+Apply the same pattern to `env(safe-area-inset-top)` for top-positioned fixed elements on devices with dynamic islands or notches.

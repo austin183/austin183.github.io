@@ -146,7 +146,7 @@ Managers use different callback names (`onCropChanged`, `onChange`). While not c
 
 - `references/vue-options-api.md` — Array mutation patterns for Vue reactivity
 - `references/memory-management.md` — Disposing image references when replacing them
-- `references/testing.md` — Integration testing for handler-manager composition
+- `references/testing-unit.md` — Integration testing for handler-manager composition
 
 ---
 

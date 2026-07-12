@@ -3,6 +3,10 @@
  * Composes smaller handler modules to avoid God Module anti-pattern.
  * Handlers use injected callbacks for DIP compliance — no direct
  * this._scheduleRender() calls inside handler modules.
+ *
+ * Render, crop preview, and undo methods are extracted into
+ * dedicated modules (createRenderMethods, createCropPreviewRenderer,
+ * createUndoMethods) and composed here.
  */
 
 import { loadImageFromFile } from '../Utils/loadImageFromFile.js';
@@ -15,7 +19,9 @@ import { createTitleHandlers } from './createTitleHandlers.js';
 import { createOverlayHandlers } from './createOverlayHandlers.js';
 import { createExportHandlers } from './createExportHandlers.js';
 import { createSettingsHandlers } from './createSettingsHandlers.js';
-import { computeShapeOverlayPoints, drawShapeOverlay } from '../Layout/CropOverlayShape.js';
+import { createRenderMethods } from './createRenderMethods.js';
+import { createCropPreviewRenderer } from './createCropPreviewRenderer.js';
+import { createUndoMethods } from './createUndoMethods.js';
 
 /**
  * Default DOM element IDs. Passed as configuration to avoid
@@ -28,215 +34,26 @@ const DEFAULT_DOM_IDS = {
 
 export function createCollageMethods(base, domIds = {}) {
     const ids = { ...DEFAULT_DOM_IDS, ...domIds };
-    // Build the methods object first so callbacks can reference it.
-    // This avoids circular dependencies and enables proper DIP:
-    // handlers receive callbacks as factory parameters instead of
-    // calling this._scheduleRender() directly.
 
-    // ---- Core methods that handlers depend on ----
+    // ---- Compose extracted method modules ----
+    // Each module accepts explicit `vm` parameters (no `this` dependency)
+    // and returns plain functions that are spread into the Vue methods object.
 
-    function _scheduleRender(vm) {
-        const canvasRenderer = base.getCanvasRenderer();
-        if (!canvasRenderer) return;
+    const renderMethods = createRenderMethods(base);
+    const cropPreviewMethods = createCropPreviewRenderer(base, ids);
 
-        const assembler = base.assembler;
-
-        canvasRenderer.scheduleRender(function (ctx, width, height) {
-            if (!vm.images || vm.images.length === 0) return;
-
-            const scaleX = width / 1920;
-            const scaleY = height / 1080;
-
-            ctx.save();
-            ctx.scale(scaleX, scaleY);
-
-            assembler.render(ctx, {
-                panels: vm.panels,
-                images: vm.images,
-                crops: vm.crops,
-                panelAssignments: vm.panelAssignments,
-                backgroundColor: vm.backgroundColor,
-                canvasSize: {
-                    width: 1920,
-                    height: 1080
-                },
-                selectedPanelId: vm.selectedPanelId,
-                hoveredPanelId: vm.hoveredPanelId,
-                backgroundState: _buildBackgroundState(vm),
-                overlayState: _buildOverlayState(vm),
-                titleStyle: vm.titleStyle,
-                titleRuns: vm.titleRuns
-            });
-
-            ctx.restore();
-        });
-    }
-
-    function _buildBackgroundState(vm) {
-        return {
-            type: vm.backgroundStyle,
-            color1: vm.backgroundColor,
-            color2: vm.gradientColors ? vm.gradientColors[1] || vm.backgroundColor : vm.backgroundColor,
-            angle: vm.gradientAngle,
-            image: vm.backgroundImage,
-            opacity: vm.backgroundOpacity
-        };
-    }
-
-    function _buildOverlayState(vm) {
-        return {
-            image: vm.overlayImage,
-            mode: vm.overlayMode,
-            opacity: vm.overlayOpacity
-        };
-    }
-
-    function _scheduleCropPreviewRender(vm) {
-        if (vm._cropPreviewPending) return;
-        vm._cropPreviewPending = true;
-
-        requestAnimationFrame(() => {
-            vm._cropPreviewPending = false;
-
-            const cropManager = base.getCropManager();
-            if (!vm.selectedPanelId || !cropManager) return;
-
-            const crop = cropManager.getCrop(vm.selectedPanelId);
-            const image = cropManager.getPanelImage(vm.selectedPanelId);
-            if (!crop || !image) return;
-
-            const canvas = document.getElementById(ids.cropPreviewCanvas);
-            if (!canvas) return;
-
-            const ctx = canvas.getContext('2d');
-            if (!ctx) return;
-
-            // Size canvas to fit in the sidebar
-            const dpr = window.devicePixelRatio || 1;
-            const rect = canvas.getBoundingClientRect();
-            const cssW = rect.width || 200;
-            const cssH = rect.height || 150;
-
-            canvas.width = cssW * dpr;
-            canvas.height = cssH * dpr;
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-            // Clear
-            ctx.fillStyle = '#000000';
-            ctx.fillRect(0, 0, cssW, cssH);
-
-            // Calculate image draw size (contain)
-            const imageAspect = image.width / image.height;
-            const canvasAspect = cssW / cssH;
-
-            let drawW, drawH, offsetX, offsetY;
-            if (imageAspect > canvasAspect) {
-                drawW = cssW;
-                drawH = cssW / imageAspect;
-                offsetX = 0;
-                offsetY = (cssH - drawH) / 2;
-            } else {
-                drawH = cssH;
-                drawW = cssH * imageAspect;
-                offsetX = (cssW - drawW) / 2;
-                offsetY = 0;
-            }
-
-            const scale = drawW / image.width;
-
-            // Draw the full image
-            ctx.drawImage(image.image, offsetX, offsetY, drawW, drawH);
-
-            // Draw dark overlay outside the crop region
-            const sr = crop.sourceRect;
-            const cropScreenX = offsetX + sr.x * scale;
-            const cropScreenY = offsetY + sr.y * scale;
-            const cropScreenW = sr.width * scale;
-            const cropScreenH = sr.height * scale;
-
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-            // Top
-            ctx.fillRect(0, 0, cssW, cropScreenY);
-            // Bottom
-            ctx.fillRect(0, cropScreenY + cropScreenH, cssW, cssH - cropScreenY - cropScreenH);
-            // Left
-            ctx.fillRect(0, cropScreenY, cropScreenX, cropScreenH);
-            // Right
-            ctx.fillRect(cropScreenX + cropScreenW, cropScreenY, cssW - cropScreenX - cropScreenW, cropScreenH);
-
-            // Draw crop border
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 1.5;
-            ctx.strokeRect(cropScreenX, cropScreenY, cropScreenW, cropScreenH);
-
-            // Draw panel shape overlay for non-rectangular layouts
-            const selectedPanel = vm.panels.find(p => p.id === vm.selectedPanelId);
-            if (selectedPanel && selectedPanel.geometry) {
-                const shapePoints = computeShapeOverlayPoints(
-                    selectedPanel.geometry,
-                    { x: cropScreenX, y: cropScreenY, width: cropScreenW, height: cropScreenH }
-                );
-                if (shapePoints) {
-                    drawShapeOverlay(ctx, shapePoints);
-                }
-            }
-
-            // Draw corner handles (size matches CORNER_HANDLE_SIZE in CropInteraction.js)
-            const handleSize = 12;
-            ctx.fillStyle = '#ffffff';
-            const corners = [
-                [cropScreenX, cropScreenY],
-                [cropScreenX + cropScreenW, cropScreenY],
-                [cropScreenX, cropScreenY + cropScreenH],
-                [cropScreenX + cropScreenW, cropScreenY + cropScreenH]
-            ];
-            for (const [cx, cy] of corners) {
-                ctx.fillRect(cx - handleSize / 2, cy - handleSize / 2, handleSize, handleSize);
-            }
-        });
-    }
-
-    function _updateUndoState(vm) {
-        if (!base.undoManager) return;
-        vm.canUndo = base.undoManager.canUndo();
-        vm.canRedo = base.undoManager.canRedo();
-    }
-
-    function _performUndo(vm) {
-        if (!base.undoManager || !base.undoManager.canUndo()) return;
-
-        const hadUndo = base.undoManager.undo();
-        if (!hadUndo) return;
-
-        _updateUndoState(vm);
-        _scheduleRender(vm);
-        _scheduleCropPreviewRender(vm);
-    }
-
-    function _performRedo(vm) {
-        if (!base.undoManager || !base.undoManager.canRedo()) return;
-
-        const hadRedo = base.undoManager.redo();
-        if (!hadRedo) return;
-
-        _updateUndoState(vm);
-        _scheduleRender(vm);
-        _scheduleCropPreviewRender(vm);
-    }
-
-    function _regenerateAndRender(vm) {
-        if (vm.layoutManager) {
-            vm.layoutManager.regenerate();
-        }
-        _scheduleRender(vm);
-    }
+    // Undo methods need render callbacks to trigger re-renders after undo/redo
+    const undoMethods = createUndoMethods(base, {
+        onRenderScheduled: (vm) => renderMethods._scheduleRender(vm),
+        onCropPreviewRender: (vm) => cropPreviewMethods._scheduleCropPreviewRender(vm)
+    });
 
     // ---- Create handler factories with injected callbacks ----
     // Each callback receives the Vue instance (vm) as a parameter.
 
     const fileHandlers = createFileHandlers(
         () => base.getImageLibrary(),
-        (vm) => _regenerateAndRender(vm),
+        (vm) => renderMethods._regenerateAndRender(vm),
         ids.fileInput
     );
 
@@ -248,27 +65,27 @@ export function createCollageMethods(base, domIds = {}) {
 
     const layoutHandlers = createLayoutHandlers(
         () => base.getLayoutManager(),
-        (vm) => _scheduleRender(vm)
+        (vm) => renderMethods._scheduleRender(vm)
     );
 
     const cropHandlers = createCropHandlers(
         () => base?.getCropManager?.() ?? null,
-        (vm) => _scheduleRender(vm),
-        (vm) => _scheduleCropPreviewRender(vm)
+        (vm) => renderMethods._scheduleRender(vm),
+        (vm) => cropPreviewMethods._scheduleCropPreviewRender(vm)
     );
 
     const backgroundHandlers = createBackgroundHandlers(
         () => base.getBackgroundManager(),
-        (vm) => _scheduleRender(vm)
+        (vm) => renderMethods._scheduleRender(vm)
     );
 
     const titleHandlers = createTitleHandlers(
         () => base.getTitleManager(),
-        (vm) => _scheduleRender(vm)
+        (vm) => renderMethods._scheduleRender(vm)
     );
 
     const overlayHandlers = createOverlayHandlers(
-        (vm) => _scheduleRender(vm)
+        (vm) => renderMethods._scheduleRender(vm)
     );
 
     const exportHandlers = createExportHandlers(base.assembler);
@@ -341,10 +158,10 @@ export function createCollageMethods(base, domIds = {}) {
             cropHandlers.resetSelectedCrop.call(this);
         },
         undo() {
-            _performUndo(this);
+            undoMethods._performUndo(this);
         },
         redo() {
-            _performRedo(this);
+            undoMethods._performRedo(this);
         },
 
         // Background handlers
@@ -449,6 +266,23 @@ export function createCollageMethods(base, domIds = {}) {
             exportHandlers.onExportQualityChange.call(this);
         },
 
+        // Toast notifications
+        showToast(message, type, duration) {
+            type = type || 'info';
+            duration = duration != null ? duration : 5000;
+            if (this.toast.timer) {
+                clearTimeout(this.toast.timer);
+            }
+            this.toast.message = message;
+            this.toast.type = type;
+            this.toast.visible = true;
+            this.toast.timer = setTimeout(() => {
+                this.toast.visible = false;
+                this.toast.message = '';
+                this.toast.timer = null;
+            }, duration);
+        },
+
         // Sidebar methods
         toggleRightSidebar() {
             this.rightSidebarOpen = !this.rightSidebarOpen;
@@ -484,7 +318,7 @@ export function createCollageMethods(base, domIds = {}) {
 
         // ========================
         // Render / Crop / Undo methods
-        // (kept as Vue methods for lifecycle hooks and template bindings)
+        // (delegated to extracted modules, wrapped for Vue `this` binding)
         // ========================
 
         /**
@@ -492,7 +326,7 @@ export function createCollageMethods(base, domIds = {}) {
          * @private
          */
         _regenerateAndRender() {
-            _regenerateAndRender(this);
+            renderMethods._regenerateAndRender(this);
         },
 
         /**
@@ -502,7 +336,7 @@ export function createCollageMethods(base, domIds = {}) {
          * @private
          */
         _scheduleRender() {
-            _scheduleRender(this);
+            renderMethods._scheduleRender(this);
         },
 
         /**
@@ -510,7 +344,7 @@ export function createCollageMethods(base, domIds = {}) {
          * @private
          */
         _buildBackgroundState() {
-            return _buildBackgroundState(this);
+            return renderMethods._buildBackgroundState(this);
         },
 
         /**
@@ -518,7 +352,7 @@ export function createCollageMethods(base, domIds = {}) {
          * @private
          */
         _buildOverlayState() {
-            return _buildOverlayState(this);
+            return renderMethods._buildOverlayState(this);
         },
 
         /**
@@ -528,7 +362,7 @@ export function createCollageMethods(base, domIds = {}) {
          * @private
          */
         _scheduleCropPreviewRender() {
-            _scheduleCropPreviewRender(this);
+            cropPreviewMethods._scheduleCropPreviewRender(this);
         },
 
         /**
@@ -536,7 +370,7 @@ export function createCollageMethods(base, domIds = {}) {
          * @private
          */
         _updateUndoState() {
-            _updateUndoState(this);
+            undoMethods._updateUndoState(this);
         },
 
         /**
@@ -544,7 +378,7 @@ export function createCollageMethods(base, domIds = {}) {
          * @private
          */
         _performUndo() {
-            _performUndo(this);
+            undoMethods._performUndo(this);
         },
 
         /**
@@ -552,7 +386,7 @@ export function createCollageMethods(base, domIds = {}) {
          * @private
          */
         _performRedo() {
-            _performRedo(this);
+            undoMethods._performRedo(this);
         }
     };
 }

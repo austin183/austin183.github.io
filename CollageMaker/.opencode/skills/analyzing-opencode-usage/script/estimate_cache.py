@@ -169,6 +169,7 @@ def compute_cache_estimate(project=None, since=None, until=None, by=None, sessio
         SELECT
             COALESCE(json_extract(c.model, '$.id'), 'unknown') AS model,
             COUNT(DISTINCT pt.session_id) AS sessions,
+            COUNT(*) AS total_turns,
             SUM(pt.input_tokens) AS total_input_raw,
             SUM(pt.new_uncached_input) AS estimated_uncached_input,
             SUM(pt.cached_input) AS estimated_cached_input,
@@ -184,12 +185,19 @@ def compute_cache_estimate(project=None, since=None, until=None, by=None, sessio
         result['by_model'] = [{
             'model': r.get('model', 'unknown'),
             'sessions': r.get('sessions', 0) or 0,
+            'total_turns': r.get('total_turns', 0) or 0,
             'total_input_raw': r.get('total_input_raw', 0) or 0,
             'estimated_uncached_input': r.get('estimated_uncached_input', 0) or 0,
             'estimated_cached_input': r.get('estimated_cached_input', 0) or 0,
             'cache_hit_pct': r.get('cache_hit_pct', 0) or 0,
             'total_output': r.get('total_output', 0) or 0,
             'total_reasoning': r.get('total_reasoning', 0) or 0,
+            'effective_total': (r.get('estimated_uncached_input', 0) or 0)
+                              + (r.get('total_output', 0) or 0)
+                              + (r.get('total_reasoning', 0) or 0),
+            'raw_total': (r.get('total_input_raw', 0) or 0)
+                         + (r.get('total_output', 0) or 0)
+                         + (r.get('total_reasoning', 0) or 0),
         } for r in model_rows]
 
     # ── Breakdown by agent ────────────────────────────────────────────────
@@ -198,6 +206,7 @@ def compute_cache_estimate(project=None, since=None, until=None, by=None, sessio
         SELECT
             COALESCE(c.agent, 'unknown') AS agent,
             COUNT(DISTINCT pt.session_id) AS sessions,
+            COUNT(*) AS total_turns,
             SUM(pt.input_tokens) AS total_input_raw,
             SUM(pt.new_uncached_input) AS estimated_uncached_input,
             SUM(pt.cached_input) AS estimated_cached_input,
@@ -213,12 +222,19 @@ def compute_cache_estimate(project=None, since=None, until=None, by=None, sessio
         result['by_agent'] = [{
             'agent': r.get('agent', 'unknown'),
             'sessions': r.get('sessions', 0) or 0,
+            'total_turns': r.get('total_turns', 0) or 0,
             'total_input_raw': r.get('total_input_raw', 0) or 0,
             'estimated_uncached_input': r.get('estimated_uncached_input', 0) or 0,
             'estimated_cached_input': r.get('estimated_cached_input', 0) or 0,
             'cache_hit_pct': r.get('cache_hit_pct', 0) or 0,
             'total_output': r.get('total_output', 0) or 0,
             'total_reasoning': r.get('total_reasoning', 0) or 0,
+            'effective_total': (r.get('estimated_uncached_input', 0) or 0)
+                              + (r.get('total_output', 0) or 0)
+                              + (r.get('total_reasoning', 0) or 0),
+            'raw_total': (r.get('total_input_raw', 0) or 0)
+                         + (r.get('total_output', 0) or 0)
+                         + (r.get('total_reasoning', 0) or 0),
         } for r in agent_rows]
 
     # ── Breakdown by day ──────────────────────────────────────────────────
@@ -227,6 +243,7 @@ def compute_cache_estimate(project=None, since=None, until=None, by=None, sessio
         SELECT
             strftime('%Y-%m-%d', c.time_created / 1000, 'unixepoch') AS day,
             COUNT(DISTINCT pt.session_id) AS sessions,
+            COUNT(*) AS total_turns,
             SUM(pt.input_tokens) AS total_input_raw,
             SUM(pt.new_uncached_input) AS estimated_uncached_input,
             SUM(pt.cached_input) AS estimated_cached_input,
@@ -242,12 +259,19 @@ def compute_cache_estimate(project=None, since=None, until=None, by=None, sessio
         result['by_day'] = [{
             'day': r.get('day', ''),
             'sessions': r.get('sessions', 0) or 0,
+            'total_turns': r.get('total_turns', 0) or 0,
             'total_input_raw': r.get('total_input_raw', 0) or 0,
             'estimated_uncached_input': r.get('estimated_uncached_input', 0) or 0,
             'estimated_cached_input': r.get('estimated_cached_input', 0) or 0,
             'cache_hit_pct': r.get('cache_hit_pct', 0) or 0,
             'total_output': r.get('total_output', 0) or 0,
             'total_reasoning': r.get('total_reasoning', 0) or 0,
+            'effective_total': (r.get('estimated_uncached_input', 0) or 0)
+                              + (r.get('total_output', 0) or 0)
+                              + (r.get('total_reasoning', 0) or 0),
+            'raw_total': (r.get('total_input_raw', 0) or 0)
+                         + (r.get('total_output', 0) or 0)
+                         + (r.get('total_reasoning', 0) or 0),
         } for r in day_rows]
 
     # ── Per-session detail ────────────────────────────────────────────────

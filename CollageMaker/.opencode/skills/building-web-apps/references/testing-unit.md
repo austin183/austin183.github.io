@@ -1,4 +1,4 @@
-# Testing Patterns
+# Unit Testing Patterns
 
 ## Contents
 - Unit Tests — Mocha + Chai
@@ -7,20 +7,17 @@
 - RAF Mocking
 - Canvas Dimension Interception
 - Canvas 2D Context Mocking
+- Test State, Not Just Actions
+- Tolerance Precision in Positioning Tests
+- Testing Default Behavior Explicitly
+- Testing Combined Edge Cases
+- Writing Robust Positioning Tests
 - Chai CDN Limitations
+- Integration Testing After Modularization
+- Integration Testing for Registry Dispatchers
 - Manager-Specific Testing
-- Falsy vs. Missing Field Validation
-- E2E Tests — Playwright
-- Playwright Page Load Strategy
-- PointerEvent Testing
-- DragEvent Testing
 - Worker Testing
-- Deferred Feature Tests
-- Pure Function Testing
-- Cache API Gotchas
-- Gotchas
-- Testing Strategy for Deduplication
-- Assertion Density
+- Characterization Tests Before Refactor
 
 ## Unit Tests — Mocha + Chai
 
@@ -505,198 +502,6 @@ if (manifest.name === undefined || manifest.name === null) {
 
 Same pattern for arrays: `!arr` catches `undefined`, `null`, `false` but NOT `[]` (empty arrays are truthy). Use `arr.length === 0` separately to catch empty arrays.
 
-## E2E Tests — Playwright
-
-```javascript
-const { test, expect } = require('@playwright/test');
-
-test('upload images', async ({ page }) => {
-    await page.goto('http://localhost:8080/CollageMaker/index.html');
-    const fileInput = page.locator('#fileInput');
-    await fileInput.setInputFiles(['test/images/img1.jpg']);
-    await page.waitForSelector('.image-item', { state: 'visible' });
-});
-```
-
-### Key Points
-
-1. Use `waitForSelector()` instead of `waitForTimeout()`
-2. Canvas content can't be queried via DOM — use screenshot comparison
-3. File upload via `setInputFiles()` on file input element
-4. Config: `workers: 1`, `fullyParallel: false`, `timeout: 30000`
-5. Use `waitForSelector('#app')` before interacting — Vue mount timing matters
-6. After `setViewportSize()`, wait for `#app` visibility — Vue re-renders on resize
-
-### Buffer-Based File Upload
-
-For tests that don't need disk fixtures, use base64-encoded PNG buffers with `filechooser`:
-
-```javascript
-const redPng = Buffer.from('iVBORw0KGgo...', 'base64');
-const [fileChooser] = await Promise.all([
-    page.waitForEvent('filechooser'),
-    page.click('#uploadButton'), // triggers file chooser
-]);
-await fileChooser.setFiles([{
-    name: 'test.png',
-    mimeType: 'image/png',
-    buffer: redPng,
-}]);
-```
-
-### Playwright Page Load Strategy
-
-The test runner (`scripts/run-tests.js`) uses `waitUntil: 'domcontentloaded'` plus `waitForSelector('#mocha', { state: 'attached' })` instead of `waitUntil: 'networkidle'`.
-
-**Why:** `networkidle` times out when tests include `fetch()` calls for non-existent resources (e.g., deferred PWA features). `domcontentloaded` loads the DOM quickly without waiting for all network requests, and `waitForSelector('#mocha')` confirms Mocha is ready.
-
-**Rule:** Use `domcontentloaded` + explicit selector waits. Only use `networkidle` if a test genuinely requires all network requests to settle before proceeding.
-
-## PointerEvent Testing
-
-### Proportional Coordinates for Hit Testing
-
-When testing handlers using `getBoundingClientRect()` (e.g., `GestureHandler.hitTestPanel`), use proportional coordinates relative to the actual bounding rect. Canvas rendered dimensions may differ from inline styles in test environments.
-
-```javascript
-// BAD — assumes exact dimensions
-const event = new PointerEvent('pointerdown', {
-    clientX: 480,  // assumes canvas is 960px wide
-    clientY: 270,
-});
-
-// GOOD — works regardless of actual rendered size
-const rect = canvas.getBoundingClientRect();
-const event = new PointerEvent('pointerdown', {
-    clientX: rect.left + rect.width * 0.25,  // 25% into canvas
-    clientY: rect.top + rect.height * 0.25,
-});
-```
-
-**Boundary gotcha:** For a 2x2 uniform grid, the exact center (50%, 50%) lands on the boundary of all four panels. Use 25% or 75% offsets to clearly land inside a single panel.
-
-Verify `hitTestPanel` directly with proportional coordinates before dispatching events, to isolate coordinate issues from handler issues.
-
-### PointerEvent Constructor for Touch Testing
-
-Modern browsers support `new PointerEvent()` with `pointerType: 'touch'` — no polyfills needed in Mocha/Chai browser tests. Since existing handlers already support both mouse and touch via pointer events, this is sufficient:
-
-```javascript
-const event = new PointerEvent('pointerdown', {
-    bubbles: true,
-    cancelable: true,
-    clientX: 100,
-    clientY: 100,
-    pointerType: 'touch',
-    isPrimary: true,
-    pointerId: 1,
-});
-```
-
-No separate `touchstart`/`touchmove` handlers are needed in modern browsers.
-
-### TouchEvent Constructor Requires Real Touch Objects
-
-The browser's `TouchEvent` constructor requires real `Touch` objects for `touches`/`targetTouches`/`changedTouches` properties. `Touch` instances cannot be created from JavaScript (the `Touch` constructor is not exposed).
-
-**Use `Object.defineProperty` on a plain `Event`:**
-
-```javascript
-function createMockTouchEvent(type, { touches, targetTouches, changedTouches } = {}) {
-    const evt = new Event(type, { bubbles: true, cancelable: true });
-    const props = {};
-    if (touches) props.touches = touches;
-    if (targetTouches) props.targetTouches = targetTouches;
-    if (changedTouches) props.changedTouches = changedTouches;
-
-    for (const [key, value] of Object.entries(props)) {
-        Object.defineProperty(evt, key, {
-            get: () => value,
-            configurable: true
-        });
-    }
-    return evt;
-}
-```
-
-**Mock TouchList must support multiple access patterns:**
-- `list.length` — length property
-- `list[i]` — indexed access
-- `list.item(i)` — item() method
-- `for (const t of list)` — Symbol.iterator
-
-```javascript
-function makeTouchList(touches) {
-    const list = { length: touches.length, item: (i) => touches[i] || null };
-    for (let i = 0; i < touches.length; i++) list[i] = touches[i];
-    list[Symbol.iterator] = function* () {
-        for (let i = 0; i < this.length; i++) yield this[i];
-    };
-    return list;
-}
-```
-
-See `MyComponents/MultiTouchHandlerTest.html` for full working examples.
-
-## DragEvent Testing
-
-### DragEvent.dataTransfer Cannot Be Mocked
-
-You cannot pass a custom `dataTransfer` object to the `DragEvent` constructor in any browser:
-
-```javascript
-// FAILS — TypeError: Failed to convert value to 'DataTransfer'
-const event = new DragEvent('drop', {
-    dataTransfer: { files: [mockFile] }
-});
-```
-
-**Workaround:** Test listener presence by tracking `preventDefault()` calls rather than simulating file drops:
-
-```javascript
-const evt = new DragEvent('drop', { bubbles: true, cancelable: true });
-let prevented = false;
-evt.preventDefault = () => { prevented = true; };
-document.dispatchEvent(evt);
-expect(prevented).to.be.true; // Listener was active
-
-cleanup();
-
-const evt2 = new DragEvent('drop', { bubbles: true, cancelable: true });
-prevented = false;
-evt2.preventDefault = () => { prevented = true; };
-document.dispatchEvent(evt2);
-expect(prevented).to.be.false; // Listener was removed
-```
-
-### Document-Level Event Listener Test Isolation
-
-Listeners attached to `document` persist across Mocha tests. Each test that adds listeners MUST clean them up to avoid cross-test contamination.
-
-```javascript
-describe('Drop handler cleanup', () => {
-    let cleanup;
-
-    afterEach(() => {
-        if (cleanup) { cleanup(); cleanup = null; }
-    });
-
-    it('listener is removed after cleanup', () => {
-        const { cleanup: c } = setupHandler();
-        cleanup = c; // Register for afterEach
-
-        // Verify active, then verify removed
-        dispatchDragEvent();
-        expect(prevented).to.be.true;
-        c();
-        dispatchDragEvent();
-        expect(prevented).to.be.false;
-    });
-});
-```
-
-**Anti-pattern:** Using `beforeEach` to set up a handler AND having tests create their own. This causes listener accumulation — "after cleanup" assertions become false positives because old listeners remain active.
-
 ## Worker Testing
 
 ### Mock Worker Pattern
@@ -765,92 +570,37 @@ expect(analyzer.error).to.be.null; // Stale callback was a no-op
 
 See `references/web-workers.md` for the full timeout guard pattern and additional examples.
 
-## Deferred Feature Tests
+## Characterization Tests Before Refactor
 
-For deferred features (PWA, ML saliency, responsive CSS), tests serve as requirements documentation:
+Before refactoring shared code, add **characterization tests** that capture the current observable behavior. These tests assert the existing output, providing confidence that the refactor doesn't change behavior.
 
-- **Unit tests for pure functions** pass immediately (no browser API dependencies)
-- **E2E tests** document expected behavior but will fail until the feature ships
-- **Deferred tests** include clear comments explaining what's needed
-- **Test numbering** follows the priority plan sections for traceability
+**When to use:**
+- Extracting shared logic from multiple methods into a common helper
+- Refactoring a rendering pipeline (e.g., merging two border-drawing methods)
+- Changing internal data flow without changing observable output
+
+**Pattern:**
 
 ```javascript
-it('3.5.3.1 — Style.css: @media rules (deferred — documents requirement)', () => {
-    // Responsive media queries are a deferred feature.
-    // This test documents the requirement: @media rules should be added
-    // for mobile (<768px) and tablet (<1200px) breakpoints.
-    expect(css).to.be.a('string');
-    expect(css.length).to.be.greaterThan(100);
+// Before refactoring _drawPanelBorder, add tests that lock in current behavior:
+it('drawHexDragTarget sets lineWidth and globalAlpha', () => {
+    const ctx = createMockCtx();
+    renderer.drawHexDragTarget(ctx, panel);
+    expect(calls.lineWidth).to.include(2);
+    expect(calls.globalAlpha).to.include(0.5);
+});
+
+it('drawSelectionBorder sets strokeStyle and shadow properties', () => {
+    const ctx = createMockCtx();
+    renderer.drawSelectionBorder(ctx, panel);
+    expect(calls.strokeStyle).to.include('#ffffff');
+    expect(calls.shadowColor).to.include('rgba(0, 0, 0, 0.4)');
 });
 ```
 
-**Rules:**
-1. Label tests as **"deferred"** in the test name
-2. Verify base selectors exist (`.main-layout`, `.sidebar`, `#previewCanvas`)
-3. Comment with `TODO` for the future assertion
-4. **Never assert on features that don't exist yet** — causes CI failures
+**After refactor:** Run the same tests. If they pass, the shared helper preserves all style properties. If they fail, the refactor introduced a regression (e.g., a missing `!== undefined` guard skipping a falsy config value).
 
-### Pure Function Testing
+**Why this matters:** Refactoring shared rendering code is high-risk because subtle differences between callers (one sets `shadowColor`, another doesn't) can be lost in extraction. Characterization tests make those differences explicit before the code changes.
 
-Design browser-dependent utilities as pure functions that can be unit tested without browser APIs. Example: PWA cache utilities (`PWACacheUtils.js`) export pure functions for URL routing, cache key computation, and manifest validation — all testable in Mocha without a service worker context.
-
-### Cache API Gotchas
-
-- **No built-in eviction** — The Cache API has no LRU eviction or size limits. Implement eviction logic in the service worker `activate` event.
-- **Opaque responses cannot be cached** — Cross-origin requests without CORS headers return `response.type === 'opaque'`. `caches.put()` throws `TypeError` on opaque responses. Always check `response.type !== 'opaque'` before caching.
-
-## Gotchas
-
-1. **CORS for ES modules** — Tests must run on HTTP server, not `file://`
-2. **Viewport resize waits** — After `setViewportSize()`, use `waitForSelector('#app', { state: 'visible' })` to wait for Vue re-render, not `waitForTimeout()`. Fixed timeouts are fragile.
-3. **`mocha.run()` timing** — Must be after all `describe` blocks
-4. **`waitForTimeout()` is fragile** — Use assertion-based waits in Playwright. For viewport resizes, wait for `#app` visibility instead.
-5. **Canvas is opaque** — Can't inspect canvas pixels directly in Playwright
-6. **Undo history is crop-only** — Only crop operations push undo commands. Image removal, layout changes, gutter adjustments, and other actions do NOT create undo history. The `#undoBtn` and `#redoBtn` use `:disabled="!canUndo"` / `:disabled="!canRedo"` bindings, so they stay disabled if no undo commands exist on the stack.
-7. **Chai CDN lacks plugins** — No `eventually` for async or `startWith` for strings. Use try/catch and regex.
-8. **TitleManager cross-flag toggling** — `toggleBold()` flips bold+italic+underline. Test actual behavior, not intuitive expectation.
-9. **Mock restore discipline** — Always restore mocked browser APIs in `finally` blocks. A leaking mock breaks all subsequent tests.
-10. **E2E dev server port** — Full session tests require dev server on port 8000 and are sensitive to Vue mount timing.
-11. **Hit test boundary points** — For a 2x2 grid, (50%, 50%) lands on all four panel boundaries. Use 25% or 75% offsets.
-12. **`networkidle` timeouts** — `waitUntil: 'networkidle'` in test runners times out when tests include `fetch()` for non-existent resources. Use `domcontentloaded` + `waitForSelector('#mocha', { state: 'attached' })` instead.
-13. **World-review catches gaps** — An external reviewer asks "What edge cases are not covered?" and often discovers missing tests for combined formatting, default behavior, property state, and exact positioning. Schedule world-review for all P1 test files before marking them complete.
-14. **Registry signature alignment** — Test the dispatcher → strategy integration path, not just the strategy in isolation. A misaligned strategy signature silently corrupts output (e.g., quality passed where exportSize is expected).
-15. **Barrel export verification** — Test barrel exports explicitly: `expect(typeof barrel.exportToJpeg).to.equal('function')`. A re-export of a non-existent name silently yields `undefined`.
-16. **DragEvent.dataTransfer is unmockable** — Cannot pass custom `dataTransfer` to `DragEvent` constructor. Test listener presence via `preventDefault()` tracking instead.
-17. **Document-level listeners leak across tests** — Listeners on `document` persist between Mocha tests. Use describe-level `afterEach` cleanup, never `beforeEach` + per-test setup (causes accumulation).
-18. **RAF mock must be bound** — `window.requestAnimationFrame.bind(window)` preserves `this`. Without bind, restoring the original fails in strict mode. Always restore in `afterEach`.
-19. **Read state inside RAF callback** — When debouncing with RAF, capture state at frame time, not call time. Reading at call time produces stale values during rapid interactions.
-20. **Null inputs crash browser API utilities** — `FileReader.readAsDataURL(null)` throws `TypeError`. Always guard: `if (!file) return Promise.resolve(null)`.
-21. **Worker timeout guards** — Always clear `setTimeout` IDs on every exit path (ready, failed, error, dispose). Guard the callback with `if (this.isDisposed || !this.worker) return;`. See `references/web-workers.md`.
-22. **TouchEvent requires real Touch objects** — Cannot create `Touch` instances from JS. Use `Object.defineProperty` on a plain `Event` to set `touches`/`targetTouches`/`changedTouches`. Mock TouchLists need `length`, indexed access, `item()`, and `Symbol.iterator`. See `references/testing.md` TouchEvent section.
-23. **Multi-touch: exactly 2 fingers, not 2+** — Mobile OSes reserve 3-finger gestures for system navigation (iOS: back/forward; Android: split-screen). Check `e.touches.length !== 2` and cancel gesture if count deviates.
-
-### Testing undo/redo buttons
-
-E2E tests that interact with undo/redo buttons MUST create undo history via a crop operation first:
-
-```javascript
-// WRONG — removing an image does NOT enable the undo button
-await removeBtns[0].click();
-await page.click('#undoBtn'); // TIMEOUT — button is still disabled!
-
-// CORRECT — reset crop creates undo history
-await page.click('#previewCanvas');  // select a panel
-await page.click('.reset-crop-btn'); // creates undo command
-await page.click('#undoBtn');        // works — button is enabled
-```
-
-## Testing Strategy for Deduplication
-
-When extracting a shared utility from N duplicated implementations, follow this 4-step testing approach:
-
-1. **Test the utility in isolation** — happy path, error paths, null inputs
-2. **Test the barrel export** — verify the re-export resolves to a function: `expect(typeof barrel.loadImageFromFile).to.equal('function')`
-3. **Test the consumers still work** — the existing test suite should catch regressions
-4. **Verify line count reduction** — document how many lines were eliminated
-
-This strategy ensures the extracted utility is correct on its own, properly wired through the module system, and doesn't break existing callers.
-
-## Assertion Density
-
-Rule of thumb: unit tests average 2-3 assertions per test. E2E tests average fewer assertions since each interaction is expensive. Grep-based counting (`grep -c 'expect(' file`) is a quick way to estimate coverage.
+**File Reference:**
+- `MyESModules/Rendering/PanelRenderer.js` — `_drawPanelBorder` extraction was preceded by characterization tests for `lineWidth` and `globalAlpha`

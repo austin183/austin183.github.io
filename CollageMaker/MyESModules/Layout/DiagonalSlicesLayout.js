@@ -37,8 +37,21 @@ export function generateDiagonalSlicesLayout({ numImages, canvasSize, gutter, im
     const shearOffset = canvasSize.height * shear;
     const effectiveGutter = gutter * cosA * cosA;
     const totalGutter = (numImages - 1) * effectiveGutter;
-    const colWidth = (canvasSize.width + shearOffset - totalGutter) / numImages;
-    const centerOffset = -shearOffset;
+
+    // For positive shear, the leftmost point of the first panel is its bottom-left
+    // corner (shifted right by shearOffset). For negative shear, the leftmost point
+    // is the top-left corner (no horizontal shift). Similarly, the rightmost point
+    // of the last panel is its bottom-right for positive shear, top-right for negative.
+    // The centerOffset and colWidth formulas must adapt so panels always fill the
+    // full canvas width from x=0 to x=canvasSize.width.
+    let centerOffset, colWidth;
+    if (shear >= 0) {
+        centerOffset = -shearOffset;
+        colWidth = (canvasSize.width + shearOffset - totalGutter) / numImages;
+    } else {
+        centerOffset = 0;
+        colWidth = (canvasSize.width - shearOffset - totalGutter) / numImages;
+    }
 
     const panels = [];
 

@@ -24,14 +24,17 @@ Your sole responsibility is documentation artifacts in `_agent_docs/` and `.open
 
 ## What You Must Track
 
-At the end of your work, fill out the session summary template from `.opencode/skills/analyzing-opencode-usage/references/session-summary.json`:
-- Set `purpose` to `docs`
-- Set `agent_role` to `build-docs`
-- List all modified files in `files_changed`
-- List learning files in `learnings_written`
-- List plan files in `plans_written`
-- Record commit hashes in `commits`
-- Set `outcome` to `success`, `partial`, or `failed`
+At the end of your work, write a session summary to `_agent_docs/project-timeline/sessions/` using the template from `.opencode/skills/analyzing-opencode-usage/references/session-summary.json`. Fill in every field in the template.
+
+**Filename convention:** `YYYY-MM-DD-XXX-build-docs-<description>.json`
+- `YYYY-MM-DD` — today's date
+- `XXX` — sequential number for the day (001, 002, …)
+- `build-docs` — your agent role
+- `<description>` — kebab-case summary of the work (e.g., `learnings-capture`, `skill-refinement`)
+
+**Agent-specific fields:**
+- `purpose`: `docs`
+- `agent_role`: `build-docs`
 
 ## Conventions
 

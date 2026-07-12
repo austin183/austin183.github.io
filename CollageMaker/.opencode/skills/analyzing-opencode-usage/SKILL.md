@@ -27,58 +27,52 @@ bash .opencode/skills/analyzing-opencode-usage/script/analytics.sh --summary --m
 
 # Cache-approximated token usage
 bash .opencode/skills/analyzing-opencode-usage/script/analytics.sh --project CollageMaker --cache
+
+# Generate HTML consolidated report (last 30 days)
+python3 .opencode/skills/analyzing-opencode-usage/script/generate_report.py --project . --output report.html
+
+# Validate session summaries
+bash .opencode/skills/analyzing-opencode-usage/script/validate_summaries.sh
 ```
 
 ## Workflows
 
-### Generate HTML Report
+### Generate Consolidated Report
 
-Produces a self-contained HTML report with charts, tables, and code impact metrics.
+Produces a single unified HTML report combining token analytics (LLM report) with code impact metrics (value report). **All token counts use cache-adjusted (uncached) input** to reflect realistic consumption after prefix caching. Git stats cover all tracked files, not just `.swift`.
 
 ```bash
-# Last 30 days (default)
-bash .opencode/skills/analyzing-opencode-usage/script/generate_llm_report.sh
+# Last 30 days (default) — outputs HTML directly
+python3 .opencode/skills/analyzing-opencode-usage/script/generate_report.py --project . --output report.html
 
 # Custom range or output location
-bash .opencode/skills/analyzing-opencode-usage/script/generate_llm_report.sh \
-  --days 7 --output /tmp/report.html
+python3 .opencode/skills/analyzing-opencode-usage/script/generate_report.py \
+  --project . --days 7 --output /tmp/report.html
 
-# With daily activity data companion file
-bash .opencode/skills/analyzing-opencode-usage/script/generate_llm_report.sh \
-  --days 30 --activity
+# Also emit merged JSON payload for programmatic use
+python3 .opencode/skills/analyzing-opencode-usage/script/generate_report.py \
+  --project . --json --output data.json
 ```
 
-**Output:** HTML report at the specified path, plus `*-daily-data.json` when `--activity` is used. The JSON contains per-day token counts, commit SHAs with full messages, and session file references for use by the activity summary workflow below.
+**Output:** Self-contained HTML report at specified location. With `--json`, emits structured JSON alongside or instead of HTML. The consolidated report includes: summary cards with effective tokens and cost, token breakdowns by model and agent (cache-adjusted), daily trend chart, code impact overview with efficiency metrics, collapsible sections for cumulative curves, agent category breakdown, cache approximation, productivity stats, phase breakdown, commit efficiency rankings, agent context efficiency, and top sessions.
+
+**Cost Analysis:** The report includes a dedicated Cost Analysis section using per-model cloud-equivalent pricing (via `model_pricing.py`). It shows actual cost ($0, all models run locally via LM Studio) alongside cloud-equivalent costs with and without prefix caching, per-model cost breakdown, cumulative cost over time, and "$X.XX saved thanks to prefix caching" in dollar amounts.
+
+**Architecture:** Single Python script (`generate_report.py`) queries the opencode DB via read-only SQLite connections, calls cache estimate modules, extracts git data for all tracked files, merges everything into a unified JSON payload through typed aggregation, then renders HTML using `render_consolidated_report.py`.
+
+**Collapsible section design:** Top 5 sections (Summary Cards, Token Usage by Model/Agent, Daily Trend, Code Impact Overview) are always visible. Remaining sections use `<details>` elements that collapse on load (`i >= 4`) but can be expanded by clicking the header. CSS provides smooth arrow rotation and hover feedback.
 
 ### Generate Daily Activity Summary
 
-Agent-driven workflow that produces a human-readable daily activity markdown from the report data:
+Agent-driven workflow that produces a human-readable daily activity markdown from report data:
 
-1. Run `generate_llm_report.sh --activity` to produce `daily-data.json` (see above)
-2. Read `daily-data.json` for the date range, per-day token counts, and session file references
+1. Run `generate_report.py --json` to produce `<report-name>-data.json`
+2. Read the JSON for the date range, per-day token counts, and session file references
 3. For each day with commits, read the referenced session files from `_agent_docs/project-timeline/sessions/`
 4. Follow `references/activity-template.md` to structure the summary (overview paragraph + per-day sections)
 5. Output to `<date-range>-collagemaker-daily-activity-summary.md` alongside the HTML report
 
 The activity template specifies including total tokens broken down by type, session counts, commit SHAs with full messages, and a narrative overview of what was accomplished each day.
-
-### Generate Token Value Analysis Report
-
-Produces a comprehensive HTML report combining token consumption with code output metrics (commits, lines added, test ratios, efficiency curves).
-
-```bash
-# Last 30 days for CollageMaker (default)
-bash .opencode/skills/analyzing-opencode-usage/script/generate_value_report.sh
-
-# Custom project and date range
-bash .opencode/skills/analyzing-opencode-usage/script/generate_value_report.sh \
-  --project MyProject --output /tmp/value-report.json
-
-# Regenerate HTML from existing JSON data
-python3 .opencode/skills/analyzing-opencode-usage/script/render_value_report.py < value-report-data.json > token-value-report.html
-```
-
-**Output:** `value-report-data.json` (merged DB + git data) and optionally the rendered HTML. The report includes cumulative efficiency curves, cumulative cost estimates (low/high tiers), agent-stacked daily breakdowns, rolling tokens-per-commit trends, test ratio over time, commit efficiency rankings, and agent context efficiency tables. Cost estimates use two tiers: cheap ($0.05/M input, $0.15/M output) and expensive ($0.50/M input, $1.50/M output).
 
 ### Validate Session Summaries
 
@@ -184,6 +178,32 @@ python3 .opencode/skills/analyzing-opencode-usage/script/estimate_cache.py --pro
 }
 ```
 
+### Model Pricing Script
+
+The `model_pricing.py` module provides cloud-equivalent cost estimates for locally-run models. All models run locally via LM Studio (actual cost: $0), but this computes what they would cost through cloud APIs.
+
+```bash
+# Enrich models data with cost (standalone)
+python3 .opencode/skills/analyzing-opencode-usage/script/model_pricing.py < models.json
+
+# As a module (used internally by generate_report.py)
+python3 -c "
+from model_pricing import get_pricing, compute_cost, enrich_models_with_cost
+pricing = get_pricing('qwen/qwen3.6-27b')  # {'input': 0.50, 'output': 1.50, 'cached_input': 0.05}
+cost = compute_cost('qwen/qwen3.6-27b', 1000000, 500000, 800000)
+# {'raw_cost': 0.80, 'cache_adjusted_cost': 0.79, 'cache_savings': 0.01}
+"
+```
+
+**Pricing rates** (per 1M tokens): Real cloud pricing for known cloud models (GPT-4o, Claude Sonnet 4, etc.) and cloud-equivalent estimates for local models. Unknown models fall back to $0.50/M input + $1.50/M output. **These are hypothetical rates for comparison purposes only — actual local execution cost is $0.**
+
+**Cost display in reports:**
+- **Primary Y-axis** (left): Cloud-equivalent cost from per-model pricing × token counts
+- **Secondary display**: Cache-adjusted cost using `estimated_uncached_input` instead of raw input
+- **Annotation**: "Actual cost: $0 (all models run on local LM Studio)"
+- **Cache savings**: "$X.XX saved via prompt context caching" in dollar amounts alongside percentage
+- **Daily cost curves**: Use average per-token rates derived from per-model pricing. May not reflect exact model mix per day — treat as estimates.
+
 ## Direct SQL Queries
 
 When the script isn't enough, use `opencode db` with raw SQL:
@@ -254,9 +274,9 @@ ORDER BY total DESC;
 | `tokens_reasoning` | integer | Reasoning tokens |
 | `tokens_cache_read` | integer | Cache read tokens |
 | `tokens_cache_write` | integer | Cache write tokens |
-| `summary_files` | integer | Files changed in session |
-| `summary_additions` | integer | Lines added |
-| `summary_deletions` | integer | Lines deleted |
+| `summary_files` | integer | **Always 0** — never populated, do not use |
+| `summary_additions` | integer | **Always 0** — never populated, do not use |
+| `summary_deletions` | integer | **Always 0** — never populated, do not use |
 | `time_created` | integer | Milliseconds since epoch |
 | `title` | text | Session title |
 
@@ -269,6 +289,41 @@ ORDER BY total DESC;
 - **No user prompts stored** — the `session_input` table is empty; only session titles are available for context
 - **`opencode stats` is all-time only** — use `opencode db` for any filtered analysis
 - **`tokens_cache_read`/`tokens_cache_write` are always 0** — the DB columns exist but LM Studio doesn't populate them. Use `estimate_cache.py` for prefix cache approximation from per-message data
+- **`summary_files`/`summary_additions`/`summary_deletions` are always 0** — these columns are never populated. For productivity metrics, match session dates to git commit dates instead
+- **Raw vs effective token comparison trap** — with 90%+ cache hit rates, raw tokens are 10-14× effective tokens. Always compare like with like: raw vs raw, effective vs effective. Mixing produces wildly misleading numbers
+- **Agent category `Total` column key mismatch** — chart tables read `total_effective`, not `total_tokens`. A one-character key mismatch causes silent zero display
+- **Two rendering paths** — `generate_report.py` produces JSON, then `render_consolidated_report.py` renders HTML from the same JSON. But `charts.py` reads JSON data directly. A key mismatch in one place doesn't show in the other — validate both paths
+- **Cached input values are 10-20× larger than effective tokens** — on charts they obscure the effective token lines. Keep cached values in data tables only, not on trend charts
+
+## Data Conventions
+
+### Agent Naming Patterns
+
+Agent names use prefixes with hyphenated variants. Use `LIKE` patterns, not exact matches:
+
+| Pattern | Matches |
+|---------|---------|
+| `agent LIKE 'build%'` | `build`, `build-docs`, `build-test`, `build-tdd`, `build-debug`, `build-quick-work` |
+| `agent LIKE 'planner%'` | `planner`, `planner-g31`, `planner-g4` |
+| `agent LIKE 'solid-review%'` | `solid-review`, `solid-review-g31` |
+| `agent LIKE 'diff-review%'` | `diff-review`, `diff-review-g31` |
+
+### Effective Tokens (Primary Metric)
+
+The meaningful measure of LLM work is **effective tokens**: uncached input + output + reasoning. Raw tokens are misleading due to 90%+ prefix cache hit rates. Use `estimate_cache.py` to compute effective tokens from per-message data.
+
+### Git-Based Productivity
+
+Since `summary_files` is always 0, compute productivity by matching session dates to git commit dates. Count sessions on commit dates as "sessions with changes." Typical ratio: ~40% of sessions result in commits.
+
+## Data Validation Checklist
+
+When building or modifying analytics queries, verify:
+
+1. **All expected keys exist** — check merged output has every key the renderer expects (e.g., `total_effective`, `pct_productive`, `zero_change_tokens`)
+2. **Agent category sums match** — per-category token sums should add up to `total_effective`
+3. **TypedDict matches return mapping** — all fields in the query's return mapping must be declared in the corresponding TypedDict
+4. **Key alignment across rendering paths** — verify key names are consistent between JSON output, HTML renderer, and chart functions
 
 ## Shell/JQ Gotchas
 
@@ -359,8 +414,6 @@ This is more reliable than jq for multi-line output with dotted field names.
 
 ## Templates
 
-**`./references/report.html`** — Self-contained HTML report template with charts, tables, and code impact metrics. Filled by `generate_llm_report.sh`.
-
-**`./references/activity-template.md`** — Structure for daily activity summaries from `daily-data.json`: overview paragraph, token breakdowns, session counts, and commit SHAs per day.
+**`./references/activity-template.md`** — Structure for daily activity summaries: overview paragraph, token breakdowns, session counts, and commit SHAs per day.
 
 **`./references/session-summary.json`** — JSON template for session summary files. Used by `validate_summaries.sh` to check structural validity. Agents should copy this template at the end of each session and fill in all fields before writing to `_agent_docs/project-timeline/sessions/`.

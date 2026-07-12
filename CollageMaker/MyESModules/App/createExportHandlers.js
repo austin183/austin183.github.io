@@ -44,11 +44,17 @@ export function createExportHandlers(assembler) {
 
                 this.exportStatus = 'Exported successfully!';
                 setTimeout(() => { this.exportStatus = ''; }, 3000);
+                if (this.showToast) {
+                    this.showToast('Collage exported!', 'success', 3000);
+                }
             } catch (e) {
                 console.error('Export failed:', e);
-                this.exportStatus = 'Export failed: ' + e;
+                this.exportStatus = 'Export failed: ' + (e.message || e);
                 // Error messages stay longer so users can read them
                 setTimeout(() => { this.exportStatus = ''; }, 6000);
+                if (this.showToast) {
+                    this.showToast('Export failed: ' + (e.message || e), 'error', 5000);
+                }
             } finally {
                 this.isExporting = false;
             }

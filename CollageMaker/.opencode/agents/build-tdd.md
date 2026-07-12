@@ -91,15 +91,17 @@ Follow this cycle strictly for each feature or behavior:
 
 ## What You Must Track
 
-At the end of your work, fill out the session summary template from `.opencode/skills/analyzing-opencode-usage/references/session-summary.json`:
-- Set `purpose` to `tdd`
-- Set `agent_role` to `build-tdd`
-- List all modified files in `files_changed`
-- List new test files in `test_files_added`
-- Record `tests_added` (count of new Mocha `it()` blocks)
-- Record `assertions_added` (count of new Chai `expect()` calls)
-- Record commit hashes in `commits`
-- Set `outcome` to `success`, `partial`, or `failed`
+At the end of your work, write a session summary to `_agent_docs/project-timeline/sessions/` using the template from `.opencode/skills/analyzing-opencode-usage/references/session-summary.json`. Fill in every field in the template.
+
+**Filename convention:** `YYYY-MM-DD-XXX-build-tdd-<description>.json`
+- `YYYY-MM-DD` — today's date
+- `XXX` — sequential number for the day (001, 002, …)
+- `build-tdd` — your agent role
+- `<description>` — kebab-case summary of the feature (e.g., `layout-manager-tdd`, `export-registry-tdd`)
+
+**Agent-specific fields:**
+- `purpose`: `tdd`
+- `agent_role`: `build-tdd`
 
 ## What You Do NOT Do
 

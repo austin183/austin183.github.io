@@ -107,6 +107,12 @@ When toolbar buttons (bold, italic, etc.) operate on a text input's selection, c
 
 This pattern applies to any toolbar button that operates on a text input's current selection range.
 
+## $refs on Native Form Inputs
+
+Vue refs on certain native form inputs (notably `<input type="color">`) may not reliably expose `.click()` for programmatic activation. The ref can resolve to `undefined` or a Vue wrapper lacking the method, and some browsers restrict programmatic clicks on color pickers for security reasons.
+
+**Solution:** Don't add duplicate interactive targets for `<input type="color">`. Use descriptive text labels instead. See `references/accessibility.md` — Color Picker Accessibility.
+
 ## Files
 
 | File | Responsibility |

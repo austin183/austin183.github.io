@@ -71,21 +71,13 @@ export function createPanelRenderer() {
          * @param {Object} panel - ImagePanel
          */
         drawSelectionBorder(ctx, panel) {
-            const bounds = geometryBoundingRect(panel.geometry);
-            ctx.save();
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 3;
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-            ctx.shadowBlur = 4;
-
-            if (isRectGeometry(panel.geometry)) {
-                ctx.strokeRect(bounds.x + 1.5, bounds.y + 1.5, bounds.width - 3, bounds.height - 3);
-            } else {
-                this._drawPath(ctx, panel.geometry.points);
-                ctx.stroke();
-            }
-
-            ctx.restore();
+            this._drawPanelBorder(ctx, panel, {
+                strokeStyle: '#ffffff',
+                lineWidth: 3,
+                shadowColor: 'rgba(0, 0, 0, 0.4)',
+                shadowBlur: 4,
+                inset: 1.5
+            });
         },
 
         /**
@@ -94,13 +86,61 @@ export function createPanelRenderer() {
          * @param {Object} panel - ImagePanel
          */
         drawHoverBorder(ctx, panel) {
-            const bounds = geometryBoundingRect(panel.geometry);
-            ctx.save();
-            ctx.strokeStyle = 'rgba(100, 160, 255, 0.7)';
-            ctx.lineWidth = 2;
+            this._drawPanelBorder(ctx, panel, {
+                strokeStyle: 'rgba(100, 160, 255, 0.7)',
+                lineWidth: 2,
+                inset: 1
+            });
+        },
 
+        /**
+         * Draws a dashed blue highlight border on a panel during hex drag-and-drop.
+         * Indicates the target panel that will receive the swapped image.
+         * @param {CanvasRenderingContext2D} ctx
+         * @param {Object} panel - ImagePanel
+         */
+        drawHexDragTarget(ctx, panel) {
+            this._drawPanelBorder(ctx, panel, {
+                strokeStyle: '#4285f4',
+                lineWidth: 3,
+                lineDash: [6, 4],
+                globalAlpha: 0.8,
+                inset: 1.5
+            });
+        },
+
+        // Private methods
+
+        /**
+         * Draws a styled border around a panel geometry.
+         * Shared by drawSelectionBorder, drawHoverBorder, and drawHexDragTarget.
+         * @param {CanvasRenderingContext2D} ctx
+         * @param {Object} panel - ImagePanel
+         * @param {Object} config - Style configuration
+         * @param {string} config.strokeStyle
+         * @param {number} config.lineWidth
+         * @param {string} [config.shadowColor]
+         * @param {number} [config.shadowBlur]
+         * @param {number[]} [config.lineDash]
+         * @param {number} [config.globalAlpha]
+         * @param {number} [config.inset] - Inset offset for rect panels (default 0)
+         */
+        _drawPanelBorder(ctx, panel, config) {
+            ctx.save();
+            ctx.strokeStyle = config.strokeStyle;
+            ctx.lineWidth = config.lineWidth;
+            if (config.shadowColor !== undefined) ctx.shadowColor = config.shadowColor;
+            if (config.shadowBlur !== undefined) ctx.shadowBlur = config.shadowBlur;
+            if (config.lineDash) ctx.setLineDash(config.lineDash);
+            if (config.globalAlpha !== undefined) ctx.globalAlpha = config.globalAlpha;
+
+            const inset = config.inset || 0;
             if (isRectGeometry(panel.geometry)) {
-                ctx.strokeRect(bounds.x + 1, bounds.y + 1, bounds.width - 2, bounds.height - 2);
+                const bounds = geometryBoundingRect(panel.geometry);
+                ctx.strokeRect(
+                    bounds.x + inset, bounds.y + inset,
+                    bounds.width - inset * 2, bounds.height - inset * 2
+                );
             } else {
                 this._drawPath(ctx, panel.geometry.points);
                 ctx.stroke();
@@ -108,8 +148,6 @@ export function createPanelRenderer() {
 
             ctx.restore();
         },
-
-        // Private methods
 
         _applyClip(ctx, geometry) {
             if (isRectGeometry(geometry)) {

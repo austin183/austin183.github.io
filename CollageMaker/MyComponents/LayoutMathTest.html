@@ -755,6 +755,48 @@
                     expect(p.geometry.points.length).to.equal(6);
                 }
             });
+
+            it('1.8.15 — large multiplier: hexagon shapes do not overlap', () => {
+                const panels = generateHexagonalLayout({ numImages: 7, canvasSize: CANVAS, gutter: GUTTER, hexSizeMultiplier: 2.0 });
+                expect(panels.length).to.equal(7);
+                // Compute center and radius for each hexagon
+                const hexData = panels.map(p => {
+                    const pts = p.geometry.points;
+                    const cx = pts.reduce((a, pt) => a + pt[0], 0) / 6;
+                    const cy = pts.reduce((a, pt) => a + pt[1], 0) / 6;
+                    const radius = Math.hypot(pts[0][0] - cx, pts[0][1] - cy);
+                    return { cx, cy, radius };
+                });
+                // Two pointy-top hexagons don't overlap if center distance >= sqrt(3) * maxRadius
+                for (let i = 0; i < hexData.length; i++) {
+                    for (let j = i + 1; j < hexData.length; j++) {
+                        const a = hexData[i], b = hexData[j];
+                        const dist = Math.hypot(a.cx - b.cx, a.cy - b.cy);
+                        const minDist = Math.sqrt(3) * Math.max(a.radius, b.radius);
+                        expect(dist).to.be.at.least(minDist - 0.01,
+                            `Panel ${i} and ${j} hexagons should not overlap at 2x multiplier (dist=${dist.toFixed(2)}, min=${minDist.toFixed(2)})`);
+                    }
+                }
+            });
+
+            it('1.8.16 — large multiplier: center distance scales with multiplier', () => {
+                const panels1x = generateHexagonalLayout({ numImages: 7, canvasSize: CANVAS, gutter: GUTTER, hexSizeMultiplier: 1.0 });
+                const panels2x = generateHexagonalLayout({ numImages: 7, canvasSize: CANVAS, gutter: GUTTER, hexSizeMultiplier: 2.0 });
+                // Distance from center hex to first ring hex should roughly double
+                const c1 = panels1x[0].geometry.points.reduce((a, p) => ({ x: a.x + p[0], y: a.y + p[1] }), { x: 0, y: 0 });
+                c1.x /= 6; c1.y /= 6;
+                const r1_1 = panels1x[1].geometry.points.reduce((a, p) => ({ x: a.x + p[0], y: a.y + p[1] }), { x: 0, y: 0 });
+                r1_1.x /= 6; r1_1.y /= 6;
+                const dist1 = Math.hypot(r1_1.x - c1.x, r1_1.y - c1.y);
+
+                const c2 = panels2x[0].geometry.points.reduce((a, p) => ({ x: a.x + p[0], y: a.y + p[1] }), { x: 0, y: 0 });
+                c2.x /= 6; c2.y /= 6;
+                const r2_1 = panels2x[1].geometry.points.reduce((a, p) => ({ x: a.x + p[0], y: a.y + p[1] }), { x: 0, y: 0 });
+                r2_1.x /= 6; r2_1.y /= 6;
+                const dist2 = Math.hypot(r2_1.x - c2.x, r2_1.y - c2.y);
+
+                expect(dist2).to.be.closeTo(dist1 * 2, dist1 * 0.05);
+            });
         });
 
         // ============================================================

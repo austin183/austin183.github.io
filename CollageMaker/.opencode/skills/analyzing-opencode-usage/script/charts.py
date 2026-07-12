@@ -50,7 +50,9 @@ def render_stacked_area(rows):
 
     width, height, pad = 800, 320, 55
     n = len(rows)
-    max_total = max(r[1] for r in rows) if rows else 1
+    max_total = max((r[1] for r in rows), default=0)
+    if max_total == 0:
+        max_total = 1
 
     def compute_points(values):
         pts = []
@@ -191,7 +193,8 @@ def render_stacked_area(rows):
 def render_tokens_vs_commits(rows):
     """Chart 2: Dual-axis tokens vs commits.
 
-    Returns SVG string with token bars/line (left axis) and commit line (right, dashed).
+    Returns SVG string with token bars/line (left axis), uncached input line,
+    cached input line, and commit line (right, dashed).
     Includes a data table below.
     """
     if not rows:
@@ -202,6 +205,8 @@ def render_tokens_vs_commits(rows):
 
     tok_vals = [r[1] for r in rows]
     commit_vals = [r[6] for r in rows]
+    uncached_vals = [r[2] for r in rows]
+    inp_raw_vals = [r[13] if len(r) > 13 else 0 for r in rows]
 
     max_tok = max(1, max(tok_vals)) if tok_vals else 1
     max_commits = max(1, max(commit_vals)) if commit_vals else 1
@@ -243,6 +248,15 @@ def render_tokens_vs_commits(rows):
     svg_parts.append(
         f'  <polyline points="{tok_points}" fill="none" stroke="#4fc3f7"'
         f'stroke-width="2" stroke-linejoin="round"/>'
+    )
+
+    # Uncached input line (green, solid)
+    uncached_points = ' '.join(
+        f'{x_coord(i)},{y_tok(uncached_vals[i])}' for i in range(n)
+    )
+    svg_parts.append(
+        f'  <polyline points="{uncached_points}" fill="none" stroke="#4db6ac"'
+        f'stroke-width="1.5" stroke-linejoin="round"/>'
     )
 
     # Commit line (right axis, dashed)
@@ -321,7 +335,14 @@ def render_tokens_vs_commits(rows):
     svg_parts.append(
         f'  <text x="{lx+20}" y="{ly+1}" fill="#8892a4" font-size="10">Total Tokens</text>'
     )
-    lx += 130
+    lx += 120
+    svg_parts.append(
+        f'  <line x1="{lx}" y1="{ly-3}" x2="{lx+16}" y2="{ly-3}" stroke="#4db6ac" stroke-width="1.5"/>'
+    )
+    svg_parts.append(
+        f'  <text x="{lx+20}" y="{ly+1}" fill="#8892a4" font-size="10">Uncached Input</text>'
+    )
+    lx += 110
     svg_parts.append(
         f'  <line x1="{lx}" y1="{ly-3}" x2="{lx+16}" y2="{ly-3}" stroke="#f5a623" '
         f'stroke-width="2" stroke-dasharray="6,3"/>'
@@ -336,13 +357,17 @@ def render_tokens_vs_commits(rows):
     result = '\n'.join(svg_parts)
     result += (
         '<table><thead><tr><th>Date</th><th class="num">Total Tokens</th>'
-        '<th class="num">Input</th><th class="num">Output</th>'
-        '<th class="num">Reasoning</th><th class="num">Commits</th></tr></thead><tbody>'
+        '<th class="num">Input (Uncached)</th><th class="num">Input (Cached)</th>'
+        '<th class="num">Output</th><th class="num">Reasoning</th>'
+        '<th class="num">Commits</th></tr></thead><tbody>'
     )
-    for r in rows:
+    for i, r in enumerate(rows):
+        cached_in = max(0, inp_raw_vals[i] - uncached_vals[i])
         result += (
             f'<tr><td>{r[0]}</td><td class="num">{fmt(r[1])}</td>'
-            f'<td class="num">{fmt(r[2])}</td><td class="num">{fmt(r[3])}</td>'
+            f'<td class="num">{fmt(uncached_vals[i])}</td>'
+            f'<td class="num">{fmt(cached_in)}</td>'
+            f'<td class="num">{fmt(r[3])}</td>'
             f'<td class="num">{fmt(r[4])}</td><td class="num">{r[6]}</td></tr>'
         )
     result += '</tbody></table>'
@@ -725,7 +750,7 @@ def render_daily_agent_stacked(rows):
             f'<td class="num">{fmt(r.get("plan_tok", 0))}</td>'
             f'<td class="num">{fmt(r.get("explore_tok", 0))}</td>'
             f'<td class="num">{fmt(r.get("other_tok", 0))}</td>'
-            f'<td class="num">{fmt(r.get("total_tokens", 0))}</td></tr>'
+            f'<td class="num">{fmt(r.get("total_effective", 0))}</td></tr>'
         )
     result += '</tbody></table>'
     return result
@@ -882,27 +907,29 @@ def render_test_ratio(rows):
     return result
 
 
-def render_context_efficiency_table(agent_context):
+def render_context_efficiency_table(agents_detailed):
     """Table: Agent context efficiency (avg turns, avg input/session, avg input/turn).
 
-    Input: list of dicts with agent, sessions, total_input, avg_turns, avg_input_per_turn keys.
+    Input: list of dicts with context_type, sessions, total_tokens_raw, input_tokens_raw,
+    output_tokens_raw, reasoning_tokens_raw keys.
     """
-    if not agent_context:
+    if not agents_detailed:
         return '<p style="color:#8892a4">No context efficiency data.</p>'
 
     # Filter out agents with zero tokens (failed sessions, model errors)
-    agent_context = [a for a in agent_context if (a.get('total_tokens', 0) or 0) > 0]
-    if not agent_context:
+    agents_detailed = [a for a in agents_detailed if (a.get('total_tokens_raw', 0) or 0) > 0]
+    if not agents_detailed:
         return '<p style="color:#8892a4">No agents with token data.</p>'
 
-    html = '<table><thead><tr><th>Agent</th><th class="num">Sessions</th><th class="num">Avg Turns</th><th class="num">Avg Input/Session</th><th class="num">Avg Input/Turn</th></tr></thead><tbody>'
-    for a in agent_context:
-        name = (a.get('agent') or 'unknown').replace('_', '-').replace('-', '-')[:20]
+    html = '<table><thead><tr><th>Agent</th><th class="num">Sessions</th><th class="num">Total Tokens</th><th class="num">Input</th><th class="num">Output</th><th class="num">Reasoning</th></tr></thead><tbody>'
+    for a in agents_detailed:
+        name = (a.get('context_type') or 'unknown').replace('_', '-').replace('-', '-')[:20]
         sessions = a.get('sessions', 0) or 0
-        avg_turns = a.get('avg_turns', 0) or 0
-        avg_input_sess = a.get('total_input', 0) / sessions if sessions > 0 else 0
-        avg_input_turn = a.get('avg_input_per_turn', 0) or 0
-        html += f'<tr><td>{name}</td><td class="num">{sessions}</td><td class="num">{avg_turns}</td><td class="num">{fmt(avg_input_sess)}</td><td class="num">{fmt(avg_input_turn)}</td></tr>'
+        total_tok = a.get('total_tokens_raw', 0) or 0
+        inp = a.get('input_tokens_raw', 0) or 0
+        out_ = a.get('output_tokens_raw', 0) or 0
+        rea = a.get('reasoning_tokens_raw', 0) or 0
+        html += f'<tr><td>{name}</td><td class="num">{sessions}</td><td class="num">{fmt(total_tok)}</td><td class="num">{fmt(inp)}</td><td class="num">{fmt(out_)}</td><td class="num">{fmt(rea)}</td></tr>'
     html += '</tbody></table>'
     return html
 
