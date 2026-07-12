@@ -43,9 +43,10 @@ export function createCollageMethods(base, domIds = {}) {
     const cropPreviewMethods = createCropPreviewRenderer(base, ids);
 
     // Undo methods need render callbacks to trigger re-renders after undo/redo
+    // Provider functions return the callback at call time, preventing stale references
     const undoMethods = createUndoMethods(base, {
-        onRenderScheduled: (vm) => renderMethods._scheduleRender(vm),
-        onCropPreviewRender: (vm) => cropPreviewMethods._scheduleCropPreviewRender(vm)
+        getOnRenderScheduled: () => (vm) => renderMethods._scheduleRender(vm),
+        getOnCropPreviewRender: () => (vm) => cropPreviewMethods._scheduleCropPreviewRender(vm)
     });
 
     // ---- Create handler factories with injected callbacks ----

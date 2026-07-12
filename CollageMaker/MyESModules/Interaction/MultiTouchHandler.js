@@ -14,6 +14,8 @@
  * Pure math functions are exported for unit testing without DOM dependencies.
  */
 
+import { LayoutStyle } from '../Models/LayoutStyle.js';
+
 /**
  * Computes the midpoint between two touch points.
  * @param {Object} t1 - Touch-like object with clientX, clientY
@@ -259,7 +261,20 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
         // Skip touch pointers — delegate to TouchEvent path
         if (e.pointerType === 'touch') return;
 
+        // In hexagonal layout, skip pointer-based two-finger gestures to avoid
+        // conflict with HexDragHandler. Users can still use wheel events (trackpad)
+        // or touch events (touchscreen) for pan/zoom.
+        if (state.layoutStyle === LayoutStyle.HEXAGONAL) return;
+
         activePointers.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
+
+        // Capture this pointer so events continue if cursor leaves canvas bounds.
+        // Each pointer is captured at its own pointerdown event.
+        if (canvas && canvas.setPointerCapture) {
+            try {
+                canvas.setPointerCapture(e.pointerId);
+            } catch (_) { /* not all browsers support */ }
+        }
 
         if (activePointers.size === 2) {
             const pointers = [...activePointers.values()];
@@ -270,13 +285,6 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
             }
             e.preventDefault();
             pointerGestureActive = true;
-            if (canvas && canvas.setPointerCapture) {
-                try {
-                    // Only capture the current pointer — setPointerCapture only works
-                    // for the pointer that fired the current event
-                    canvas.setPointerCapture(e.pointerId);
-                } catch (_) { /* not all browsers support */ }
-            }
         }
     }
 
@@ -297,6 +305,11 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
     function _onPointerUp(e) {
         if (e.pointerType === 'touch') return;
 
+        // Release capture for this pointer
+        if (canvas && canvas.releasePointerCapture) {
+            try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+        }
+
         activePointers.delete(e.pointerId);
 
         if (activePointers.size < 2) {
@@ -304,6 +317,12 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
                 endGesture();
             }
             pointerGestureActive = false;
+            // Release capture for any remaining pointer
+            if (canvas && canvas.releasePointerCapture) {
+                for (const pid of activePointers.keys()) {
+                    try { canvas.releasePointerCapture(pid); } catch (_) {}
+                }
+            }
             activePointers.clear();
         }
     }
@@ -311,10 +330,23 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
     function _onPointerCancel(e) {
         if (e.pointerType === 'touch') return;
 
+        // Release capture for this pointer
+        if (canvas && canvas.releasePointerCapture) {
+            try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+        }
+
+        activePointers.delete(e.pointerId);
+
         if (gestureActive) {
             endGesture();
         }
         pointerGestureActive = false;
+        // Release capture for any remaining pointers
+        if (canvas && canvas.releasePointerCapture) {
+            for (const pid of activePointers.keys()) {
+                try { canvas.releasePointerCapture(pid); } catch (_) {}
+            }
+        }
         activePointers.clear();
     }
 
@@ -326,10 +358,9 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
         const panelId = state.selectedPanelId;
         if (!panelId) return;
 
-        e.preventDefault();
-
         const imageScale = estimateImageScale(panelId);
         let needsRender = false;
+        let hasAction = false;
 
         // --- Pan: two-finger drag produces deltaY/deltaX ---
         if (e.deltaY !== 0 || e.deltaX !== 0) {
@@ -338,6 +369,7 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
                 y: e.deltaY * WHEEL_PAN_SENSITIVITY * imageScale
             });
             needsRender = true;
+            hasAction = true;
         }
 
         // --- Zoom: pinch-to-zoom produces deltaZ (macOS) or ctrlKey + deltaY ---
@@ -355,6 +387,12 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
             const factor = Math.exp(-zoomDelta * WHEEL_ZOOM_SENSITIVITY);
             cropManager.zoomCrop(panelId, factor);
             needsRender = true;
+            hasAction = true;
+        }
+
+        // Only suppress browser default if we actually processed a gesture
+        if (hasAction) {
+            e.preventDefault();
         }
 
         if (needsRender) {

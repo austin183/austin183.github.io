@@ -267,6 +267,162 @@
             });
         });
 
+        describe('createUndoMethods — provider function callbacks', () => {
+            let createUndoMethods;
+
+            before(async () => {
+                const mod = await import('../MyESModules/App/createUndoMethods.js');
+                createUndoMethods = mod.createUndoMethods;
+            });
+
+            function makeMockUndoManager() {
+                const undoStack = [];
+                const redoStack = [];
+                return {
+                    canUndo: () => undoStack.length > 0,
+                    canRedo: () => redoStack.length > 0,
+                    undo: () => {
+                        if (undoStack.length === 0) return false;
+                        redoStack.push(undoStack.pop());
+                        return true;
+                    },
+                    redo: () => {
+                        if (redoStack.length === 0) return false;
+                        undoStack.push(redoStack.pop());
+                        return true;
+                    }
+                };
+            }
+
+            it('4.2.1 — undo uses provider function for render callback', () => {
+                const um = makeMockUndoManager();
+                um.undo = (() => {
+                    const orig = um.undo;
+                    return function () {
+                        return true;
+                    };
+                })();
+                // Push one command so canUndo is true
+                const testUM = makeMockUndoManager();
+                // Manually put something on undo stack
+                testUM._undoStack = ['cmd'];
+                testUM.canUndo = () => true;
+                testUM.undo = () => { testUM._undoStack.pop(); return true; };
+                testUM.canRedo = () => false;
+                testUM.redo = () => false;
+
+                let renderCalled = false;
+                let cropCalled = false;
+                const base = { undoManager: testUM };
+                const methods = createUndoMethods(base, {
+                    getOnRenderScheduled: () => (vm) => { renderCalled = true; },
+                    getOnCropPreviewRender: () => (vm) => { cropCalled = true; }
+                });
+
+                methods._performUndo({});
+                expect(renderCalled).to.be.true;
+                expect(cropCalled).to.be.true;
+            });
+
+            it('4.2.2 — provider returns a different callback on each call', () => {
+                const testUM = makeMockUndoManager();
+                testUM._undoStack = ['cmd'];
+                testUM.canUndo = () => true;
+                testUM.undo = () => { testUM._undoStack.pop(); return true; };
+                testUM.canRedo = () => false;
+                testUM.redo = () => false;
+
+                let callCount = 0;
+                const base = { undoManager: testUM };
+                const methods = createUndoMethods(base, {
+                    getOnRenderScheduled: () => (vm) => { callCount++; }
+                });
+
+                // First undo
+                methods._performUndo({});
+                const afterFirst = callCount;
+
+                // Put another command and undo again
+                testUM._undoStack = ['cmd2'];
+                methods._performUndo({});
+                const afterSecond = callCount;
+
+                expect(afterSecond).to.equal(afterFirst + 1);
+            });
+
+            it('4.2.3 — default callbacks are no-op (no error)', () => {
+                const testUM = makeMockUndoManager();
+                testUM._undoStack = ['cmd'];
+                testUM.canUndo = () => true;
+                testUM.undo = () => { testUM._undoStack.pop(); return true; };
+                testUM.canRedo = () => false;
+                testUM.redo = () => false;
+
+                const base = { undoManager: testUM };
+                const methods = createUndoMethods(base);
+
+                expect(() => {
+                    methods._performUndo({});
+                }).to.not.throw();
+            });
+
+            it('4.2.4 — redo uses provider function for render callback', () => {
+                const testUM = makeMockUndoManager();
+                testUM._redoStack = ['cmd'];
+                testUM.canUndo = () => false;
+                testUM.canRedo = () => true;
+                testUM.undo = () => false;
+                testUM.redo = () => { testUM._redoStack.pop(); return true; };
+
+                let renderCalled = false;
+                const base = { undoManager: testUM };
+                const methods = createUndoMethods(base, {
+                    getOnRenderScheduled: () => (vm) => { renderCalled = true; }
+                });
+
+                methods._performRedo({});
+                expect(renderCalled).to.be.true;
+            });
+
+            it('4.2.5 — provider callback receives vm parameter', () => {
+                const testUM = makeMockUndoManager();
+                testUM._undoStack = ['cmd'];
+                testUM.canUndo = () => true;
+                testUM.undo = () => { testUM._undoStack.pop(); return true; };
+                testUM.canRedo = () => false;
+                testUM.redo = () => false;
+
+                let receivedVm = null;
+                const base = { undoManager: testUM };
+                const methods = createUndoMethods(base, {
+                    getOnRenderScheduled: () => (vm) => { receivedVm = vm; }
+                });
+
+                const mockVm = { id: 'test-vue-instance' };
+                methods._performUndo(mockVm);
+                expect(receivedVm).to.equal(mockVm);
+            });
+
+            it('4.2.6 — provider returning non-function does not throw', () => {
+                const testUM = makeMockUndoManager();
+                testUM._undoStack = ['cmd'];
+                testUM.canUndo = () => true;
+                testUM.undo = () => { testUM._undoStack.pop(); return true; };
+                testUM.canRedo = () => false;
+                testUM.redo = () => false;
+
+                const base = { undoManager: testUM };
+                const methods = createUndoMethods(base, {
+                    getOnRenderScheduled: () => null,  // invalid: returns non-function
+                    getOnCropPreviewRender: () => 42    // invalid: returns non-function
+                });
+
+                expect(() => {
+                    methods._performUndo({});
+                }).to.not.throw();
+            });
+        });
+
         // Run mocha after all tests are defined
         window.addEventListener('load', () => {
             mocha.run();

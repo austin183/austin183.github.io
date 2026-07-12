@@ -179,6 +179,172 @@
             });
         });
 
+        // ============================================================
+        // Phase 2 Pre-Merge Review: Render Order — Issue #2
+        // Hex drag target must be drawn BEFORE selection border
+        // so the selection border appears visually on top.
+        // ============================================================
+        describe('Phase 2 — Render Order: Hex Drag Target vs Selection Border', () => {
+            let testCanvas, ctx, callLog;
+
+            beforeEach(() => {
+                testCanvas = document.createElement('canvas');
+                testCanvas.id = 'test-render-order-canvas';
+                testCanvas.width = 400;
+                testCanvas.height = 300;
+                document.body.appendChild(testCanvas);
+
+                ctx = testCanvas.getContext('2d');
+                callLog = [];
+
+                // Wrap stroke and strokeRect to capture canvas state at call time
+                const origStroke = ctx.stroke.bind(ctx);
+                const origStrokeRect = ctx.strokeRect.bind(ctx);
+                ctx.stroke = function () {
+                    callLog.push({
+                        method: 'stroke',
+                        lineDash: ctx.getLineDash().join(','),
+                        strokeStyle: ctx.strokeStyle,
+                        shadowColor: ctx.shadowColor,
+                        globalAlpha: ctx.globalAlpha
+                    });
+                    return origStroke();
+                };
+                ctx.strokeRect = function () {
+                    callLog.push({
+                        method: 'strokeRect',
+                        lineDash: ctx.getLineDash().join(','),
+                        strokeStyle: ctx.strokeStyle,
+                        shadowColor: ctx.shadowColor,
+                        globalAlpha: ctx.globalAlpha
+                    });
+                    return origStrokeRect.apply(ctx, arguments);
+                };
+            });
+
+            afterEach(() => {
+                if (testCanvas && testCanvas.parentNode) {
+                    testCanvas.parentNode.removeChild(testCanvas);
+                }
+            });
+
+            it('2.2.1 — hex drag target drawn before selection border when both set', () => {
+                const assembler = createCollageAssembler();
+
+                // Simple rect panels for predictable rendering
+                const panels = [
+                    { id: 'panel-A', geometry: { type: 'rect', rect: { x: 10, y: 10, width: 100, height: 100 } } },
+                    { id: 'panel-B', geometry: { type: 'rect', rect: { x: 120, y: 10, width: 100, height: 100 } } }
+                ];
+
+                assembler.render(ctx, {
+                    panels: panels,
+                    images: [],
+                    crops: new Map(),
+                    panelAssignments: new Map(),
+                    backgroundColor: '#ffffff',
+                    canvasSize: { width: 400, height: 300 },
+                    selectedPanelId: 'panel-B',
+                    hoveredPanelId: null,
+                    hexDragTargetId: 'panel-A'
+                });
+
+                // Find the stroke/strokeRect calls for hex drag target (blue dashed)
+                // and selection border (white with shadow)
+                const hexDragCalls = callLog.filter(c => c.strokeStyle === '#4285f4');
+                const selectionCalls = callLog.filter(c => c.strokeStyle === '#ffffff');
+
+                expect(hexDragCalls.length).to.be.greaterThan(0, 'hex drag target border should be drawn');
+                expect(selectionCalls.length).to.be.greaterThan(0, 'selection border should be drawn');
+
+                // Hex drag target must appear BEFORE selection border in call log
+                const firstHexDragIndex = callLog.indexOf(hexDragCalls[0]);
+                const firstSelectionIndex = callLog.indexOf(selectionCalls[0]);
+                expect(firstHexDragIndex).to.be.lessThan(firstSelectionIndex,
+                    'hex drag target (blue dashed) must be drawn before selection border (white)');
+            });
+
+            it('2.2.2 — only hex drag target drawn when no selection', () => {
+                const assembler = createCollageAssembler();
+
+                const panels = [
+                    { id: 'panel-A', geometry: { type: 'rect', rect: { x: 10, y: 10, width: 100, height: 100 } } }
+                ];
+
+                assembler.render(ctx, {
+                    panels: panels,
+                    images: [],
+                    crops: new Map(),
+                    panelAssignments: new Map(),
+                    backgroundColor: '#ffffff',
+                    canvasSize: { width: 400, height: 300 },
+                    selectedPanelId: null,
+                    hoveredPanelId: null,
+                    hexDragTargetId: 'panel-A'
+                });
+
+                const hexDragCalls = callLog.filter(c => c.strokeStyle === '#4285f4');
+                const selectionCalls = callLog.filter(c => c.strokeStyle === '#ffffff');
+
+                expect(hexDragCalls.length).to.be.greaterThan(0, 'hex drag target border should be drawn');
+                expect(selectionCalls.length).to.equal(0, 'no selection border when selectedPanelId is null');
+            });
+
+            it('2.2.1b — hex drag target skipped when same as selected panel (avoid compositing artifacts)', () => {
+                const assembler = createCollageAssembler();
+
+                const panels = [
+                    { id: 'panel-A', geometry: { type: 'rect', rect: { x: 10, y: 10, width: 100, height: 100 } } }
+                ];
+
+                assembler.render(ctx, {
+                    panels: panels,
+                    images: [],
+                    crops: new Map(),
+                    panelAssignments: new Map(),
+                    backgroundColor: '#ffffff',
+                    canvasSize: { width: 400, height: 300 },
+                    selectedPanelId: 'panel-A',
+                    hoveredPanelId: null,
+                    hexDragTargetId: 'panel-A' // Same as selected — should skip hex drag target
+                });
+
+                const hexDragCalls = callLog.filter(c => c.strokeStyle === '#4285f4');
+                const selectionCalls = callLog.filter(c => c.strokeStyle === '#ffffff');
+
+                expect(hexDragCalls.length).to.equal(0,
+                    'hex drag target should be skipped when it matches the selected panel');
+                expect(selectionCalls.length).to.be.greaterThan(0,
+                    'selection border should still be drawn');
+            });
+
+            it('2.2.3 — only selection border drawn when no hex drag target', () => {
+                const assembler = createCollageAssembler();
+
+                const panels = [
+                    { id: 'panel-A', geometry: { type: 'rect', rect: { x: 10, y: 10, width: 100, height: 100 } } }
+                ];
+
+                assembler.render(ctx, {
+                    panels: panels,
+                    images: [],
+                    crops: new Map(),
+                    panelAssignments: new Map(),
+                    backgroundColor: '#ffffff',
+                    canvasSize: { width: 400, height: 300 },
+                    selectedPanelId: 'panel-A',
+                    hoveredPanelId: null,
+                    hexDragTargetId: null
+                });
+
+                const hexDragCalls = callLog.filter(c => c.strokeStyle === '#4285f4');
+                const selectionCalls = callLog.filter(c => c.strokeStyle === '#ffffff');
+
+                expect(hexDragCalls.length).to.equal(0, 'no hex drag target when hexDragTargetId is null');
+                expect(selectionCalls.length).to.be.greaterThan(0, 'selection border should be drawn');
+            });
+        });
+
         // Run mocha after all tests are defined
         window.addEventListener('load', () => {
             mocha.run();

@@ -13,7 +13,9 @@
 - PointerType guard (hybrid device protection)
 - Unified gesture functions
 - Wheel event handling (macOS trackpad)
-- setPointerCapture gotchas
+- setPointerCapture / releasePointerCapture lifecycle
+- pointercancel cleanup
+- pointer capture testing pattern
 - Window blur / visibilitychange safety net
 - touch-action: none CSS
 
@@ -312,7 +314,8 @@ On macOS, two-finger trackpad gestures are delivered as a single `wheel` event:
 function _onWheel(e) {
     const panelId = state.selectedPanelId;
     if (!panelId) return;
-    e.preventDefault();
+
+    let hasAction = false;
 
     // Pan: two-finger drag
     if (e.deltaY !== 0 || e.deltaX !== 0) {
@@ -320,12 +323,27 @@ function _onWheel(e) {
             x: e.deltaX * panSensitivity * imageScale,
             y: e.deltaY * panSensitivity * imageScale
         });
+        hasAction = true;
     }
 
-    // Zoom: pinch-to-zoom
+    // Zoom: pinch-to-zoom (deltaZ) or ctrlKey + deltaY (cross-platform fallback)
+    let zoomDelta = 0;
     if (e.deltaZ !== 0) {
-        const factor = Math.exp(-e.deltaZ * zoomSensitivity);
+        zoomDelta = e.deltaZ;
+    } else if (e.ctrlKey && e.deltaY !== 0) {
+        zoomDelta = e.deltaY;
+    }
+    if (zoomDelta !== 0) {
+        const factor = Math.exp(-zoomDelta * zoomSensitivity);
         cropManager.zoomCrop(panelId, factor);
+        hasAction = true;
+    }
+
+    // Only suppress browser default if we actually processed a gesture.
+    // Without this guard, a wheel event with zero deltas (e.g., single-finger
+    // mouse scroll over canvas with panel selected) blocks page scrolling.
+    if (hasAction) {
+        e.preventDefault();
     }
 }
 ```
@@ -349,9 +367,11 @@ function _onPointerDown(e) {
 }
 ```
 
-## setPointerCapture Gotchas
+## Pointer Capture Lifecycle: setPointerCapture and releasePointerCapture
 
-`canvas.setPointerCapture(pointerId)` only succeeds for the pointer that fired the current event. Attempting to capture a different pointer's ID silently throws.
+`canvas.setPointerCapture(pointerId)` only succeeds for the pointer that fired the current event. Attempting to capture a different pointer's ID throws.
+
+### Capture: Each pointer independently on pointerdown
 
 **Anti-pattern — trying to capture all pointers at once:**
 ```javascript
@@ -364,18 +384,111 @@ if (activePointers.size === 2) {
 }
 ```
 
-**Correct — only capture the current pointer:**
+**Correct — capture each pointer on its own pointerdown:**
 ```javascript
-if (activePointers.size === 2) {
-    try {
-        canvas.setPointerCapture(e.pointerId); // Only the current pointer
-    } catch (_) { /* not supported */ }
+function _onPointerDown(e) {
+    activePointers.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
+
+    // Capture this pointer so events continue if cursor leaves canvas bounds.
+    // Each pointer is captured at its own pointerdown event.
+    if (canvas && canvas.setPointerCapture) {
+        try {
+            canvas.setPointerCapture(e.pointerId);
+        } catch (_) { /* not all browsers support */ }
+    }
+
+    if (activePointers.size === 2) {
+        // ... start gesture
+    }
 }
 ```
 
-**If you need both pointers captured:** Capture the first one during its own `pointerdown`, and the second one during its `pointerdown`. For the wheel event path, pointer capture is irrelevant since wheel events don't use pointer IDs.
+**Key:** Do NOT wait until `activePointers.size === 2` to capture. The first pointer needs capture too — if it drags off-canvas before the second pointer arrives, it loses events.
 
-**Always wrap in try/catch** — `setPointerCapture` may throw on some browsers.
+### Release: pointerup — release current pointer + remaining pointers on gesture end
+
+```javascript
+function _onPointerUp(e) {
+    // Release capture for this pointer
+    if (canvas && canvas.releasePointerCapture) {
+        try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+    }
+    activePointers.delete(e.pointerId);
+
+    if (activePointers.size < 2) {
+        endGesture();
+        // Release capture for any remaining pointer
+        if (canvas && canvas.releasePointerCapture) {
+            for (const pid of activePointers.keys()) {
+                try { canvas.releasePointerCapture(pid); } catch (_) {}
+            }
+        }
+        activePointers.clear();
+    }
+}
+```
+
+**Key ordering:** `activePointers.delete(e.pointerId)` MUST happen BEFORE the release loop. The loop iterates over `activePointers.keys()` — the tracking data structure — not a separate list of captured pointer IDs. This ensures the loop only sees pointers still tracked, and deleting first prevents double-release of the lifted pointer.
+
+### Release: pointercancel — release all captures
+
+`pointercancel` fires when the browser cancels pointer events (e.g., input type change, device orientation change, element removed from DOM). It requires the same cleanup as `pointerup`:
+
+```javascript
+function _onPointerCancel(e) {
+    // Release capture for this pointer
+    if (canvas && canvas.releasePointerCapture) {
+        try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+    }
+    activePointers.delete(e.pointerId);
+
+    if (activePointers.size < 2) {
+        endGesture();
+        pointerGestureActive = false;
+        // Release capture for any remaining pointers
+        if (canvas && canvas.releasePointerCapture) {
+            for (const pid of activePointers.keys()) {
+                try { canvas.releasePointerCapture(pid); } catch (_) {}
+            }
+        }
+        activePointers.clear();
+    }
+}
+```
+
+### Gotchas
+
+**Browser auto-release is not reliable.** The browser auto-releases pointer captures only when the element loses focus or the page unloads. During normal interaction (e.g., user lifts one finger of a two-finger gesture), the browser does NOT auto-release the remaining capture. You MUST call `releasePointerCapture` explicitly.
+
+**releasePointerCapture throws on invalid states.** Calling `releasePointerCapture` for a pointer that was never captured, already released, or whose capture was auto-released throws a `DOMException`. Always wrap in try/catch — these are non-fatal hygiene operations.
+
+**Feature detection is required.** Not all browsers support pointer capture. Always check for method existence before calling.
+
+**For the wheel event path:** Pointer capture is irrelevant since wheel events don't use pointer IDs.
+
+### Testing Pattern
+
+Test capture and release by overriding the canvas methods:
+
+```javascript
+let capturedIds = [];
+let releasedIds = [];
+canvas.setPointerCapture = (pid) => { capturedIds.push(pid); };
+canvas.releasePointerCapture = (pid) => { releasedIds.push(pid); };
+
+// Fire pointerdown events
+canvas.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 1, ... }));
+canvas.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 2, ... }));
+
+expect(capturedIds).to.include(1);
+expect(capturedIds).to.include(2);
+
+// Fire pointerup for one pointer
+canvas.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, ... }));
+
+expect(releasedIds).to.include(1);
+expect(releasedIds).to.include(2); // Remaining pointer also released
+```
 
 ## Window Blur / Visibility Change Safety Net
 
@@ -520,3 +633,5 @@ function _onTouchStart(e) {
 ```
 
 When no panel is selected, `preventDefault()` still fires if called unconditionally — blocking browser defaults like page scrolling. This pattern applies equally to TouchEvent and PointerEvent paths.
+
+**Stricter variant for WheelEvent:** Even when the handler is "active" (panel selected), a wheel event with zero deltas (e.g., single-finger mouse scroll over canvas) should NOT call `preventDefault()`. Use a `hasAction` flag that tracks whether pan or zoom deltas were actually processed, and only call `preventDefault()` when `hasAction` is true. This prevents blocking page scrolling when the user scrolls normally over the canvas with a panel selected. Also guard the `ctrlKey + deltaY` zoom path: if `ctrlKey` is true but `deltaY` and `deltaZ` are both zero, do NOT call `preventDefault()` (would block browser zoom).

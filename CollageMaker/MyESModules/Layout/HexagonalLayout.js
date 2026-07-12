@@ -52,8 +52,10 @@ export function generateHexagonalLayout({ numImages, canvasSize, gutter, imageOr
     // Apply size multiplier to hexagon radius
     R = R * hexSizeMultiplier;
 
-    // Scale grid spacing by the same multiplier so center positions move apart
-    // proportionally with hexagon size, preventing overlap.
+    // R_eff is the base grid spacing derived from canvas size and ring count.
+    // R_grid applies the size multiplier to R_eff so center positions move apart
+    // proportionally with hexagon size, maintaining consistent relative spacing
+    // across multipliers.
     const R_grid = R_eff * hexSizeMultiplier;
 
     // Axial coordinate directions for pointy-top hex ring traversal

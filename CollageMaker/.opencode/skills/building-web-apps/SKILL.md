@@ -1,6 +1,6 @@
 ---
 name: building-web-apps
-description: Build static web apps with Vue 3 Options API, Canvas 2D rendering, ES modules, and CDN-loaded libraries. Covers factory testability patterns (callback injection, DOM ID injection, module extraction, service locator safety), extensibility patterns (strategy/registry), canvas clearing for exports, config-based rendering helpers, toast notifications, accessibility (ARIA live regions, custom button keyboard activation, aria-busy loading states, reduced motion, interactive canvas roles), drag-and-drop cleanup, test-driven refactoring (characterization tests), multi-touch and trackpad gestures (TouchEvent, PointerEvent, WheelEvent paths, pointerType guards, wheel event pan/zoom), and web edge cases (DPR, CORS). No build step, no bundler. Use when working on CollageMaker web app features, rendering, state management, testing, or architectural refactoring.
+description: Build static web apps with Vue 3 Options API, Canvas 2D rendering, ES modules, and CDN-loaded libraries. Covers factory testability patterns (callback injection, provider functions, DOM ID injection, module extraction, service locator safety), extensibility patterns (strategy/registry), canvas clearing for exports, config-based rendering helpers, render order testing via context method wrapping, toast notifications, accessibility (ARIA live regions, custom button keyboard activation, aria-busy loading states, reduced motion, interactive canvas roles), drag-and-drop cleanup, test-driven refactoring (characterization tests), multi-touch and trackpad gestures (TouchEvent, PointerEvent, WheelEvent paths, pointerType guards, wheel event pan/zoom), and web edge cases (DPR, CORS). No build step, no bundler. Use when working on CollageMaker web app features, rendering, state management, testing, or architectural refactoring.
 ---
 
 # Building Web Apps
@@ -20,7 +20,7 @@ Consult these files for verified patterns and gotchas:
 - `references/testing-unit.md` — Mocha/Chai unit tests, mocking patterns, integration testing, characterization tests before refactor
 - `references/testing-e2e.md` — Playwright E2E, page load strategy, pointer/Touch/Drag event testing
 - `references/testing-strategy.md` — Testing approach, gotchas, deferred features, assertion density
-- `references/interaction.md` — Keyboard shortcut patterns: three-layer architecture, modifier matching, focus suppression, preventDefault ordering, pointer handler coordination, global pointerup drag cleanup, multi-touch and trackpad gestures (TouchEvent/PointerEvent dual path, pointerType guards, wheel event pan/zoom, setPointerCapture gotchas, blur safety net, touch-action CSS)
+- `references/interaction.md` — Keyboard shortcut patterns: three-layer architecture, modifier matching, focus suppression, preventDefault ordering, pointer handler coordination, global pointerup drag cleanup, multi-touch and trackpad gestures (TouchEvent/PointerEvent dual path, pointerType guards, wheel event pan/zoom, setPointerCapture gotchas, releasePointerCapture hygiene, blur safety net, touch-action CSS)
 - `references/midiestro-pattern.md` — Entry point pattern, shared infrastructure, directory structure
 - `references/css-layout.md` — Flex column chain, `min-height: 0` requirement, responsive sidebar config, CSS computed value naming, mobile safe areas
 - `references/memory-management.md` — Disposing HTMLImageElement references, URL.createObjectURL cleanup, lifecycle cleanup ordering, canvas GPU memory release, visual state cleanup, image disposal when replacing references
@@ -89,13 +89,39 @@ export function createCollageLifecycle(base, domIds = {}) {
 **Internal vs. Module Extraction** — Callback injection is the *primary* DIP improvement. Module extraction is the *secondary* SRP improvement. If internal functions have clear boundaries AND the file exceeds ~400 lines, extraction is worthwhile: it yields independent testability, clearer module boundaries, and reduced cognitive load (the composition layer becomes a wiring diagram rather than intertwined logic). If the file stays under ~400 lines and functions are tightly coupled to Vue internals, skip extraction to avoid unnecessary import complexity.
 
 **Callback Wiring in Extracted Modules** — When extracted modules depend on each other, accept callback objects as factory parameters instead of importing sibling modules. This prevents circular dependencies and preserves one-way dependency flow: `Composition → Extracted Modules`.
+
+**Provider Functions vs. Direct Callbacks** — Choose based on whether the referenced objects are stable:
+
+- **Direct callbacks** — Use when the referenced objects are stable for the factory's lifetime (simpler, less indirection):
 ```javascript
-// Undo methods need render callbacks to trigger re-renders after state changes
+// Safe: layoutManager is never replaced after factory creation
+const layoutHandlers = createLayoutHandlers(
+    () => base.getLayoutManager(),
+    (vm) => renderMethods._scheduleRender(vm)  // Direct callback — renderMethods is stable
+);
+```
+
+- **Provider functions** — Use when callbacks reference objects that may be replaced after factory creation. The provider returns the callback at *call time*, not factory time:
+```javascript
+// Provider functions return the callback at undo/redo time, preventing stale references
 const undoMethods = createUndoMethods(base, {
-    onRenderScheduled: (vm) => renderMethods._scheduleRender(vm),
-    onCropPreviewRender: (vm) => cropPreviewMethods._scheduleCropPreviewRender(vm)
+    getOnRenderScheduled: () => (vm) => renderMethods._scheduleRender(vm),
+    getOnCropPreviewRender: () => (vm) => cropPreviewMethods._scheduleCropPreviewRender(vm)
 });
 ```
+
+Inside the factory, invoke providers with a defensive guard:
+```javascript
+const getOnRenderScheduled = callbacks.getOnRenderScheduled || (() => () => {});
+// ...
+function _invokeProvider(provider, vm) {
+    const callback = provider();
+    if (typeof callback === 'function') { callback(vm); }
+}
+_invokeProvider(getOnRenderScheduled, vm);
+```
+
+**Always add the `typeof callback === 'function'` guard** — it costs virtually nothing and prevents cryptic `TypeError` from malformed providers (e.g., `() => null`).
 
 **Service Locator Access Safety** — Two rules for accessing the `base` service locator:
 
@@ -186,11 +212,12 @@ Pan and zoom gestures must support **three input paths** for cross-platform cove
 **Key patterns:**
 - **PointerType guard** — On hybrid devices (touchscreen + trackpad), guard PointerEvent handlers with `if (e.pointerType === 'touch') return;` to avoid double-firing with the TouchEvent path.
 - **Unified gesture functions** — Extract `startGesture()`, `processGesture()`, `endGesture()` so both TouchEvent and PointerEvent paths share identical logic.
-- **Wheel event handler** — Handle `deltaX`/`deltaY` for pan and `deltaZ` for zoom. Use `{ passive: false }` to allow `preventDefault()`. Attach with `{ passive: false }`.
+- **Wheel event handler** — Handle `deltaX`/`deltaY` for pan and `deltaZ` for zoom. Also check `ctrlKey + deltaY` as a cross-platform zoom fallback (Windows mice). Attach with `{ passive: false }`.
 - **Exactly 2 fingers** — For TouchEvent, check `e.touches.length !== 2`. Mobile OSes reserve 3+ finger gestures.
 - **touch-action: none** — Add this CSS to gesture canvases to prevent browser default scroll/zoom.
 - **Window blur safety net** — Listen for `window.blur` and `document.visibilitychange` to cancel stuck gesture state if the user switches tabs/windows mid-gesture.
-- **preventDefault after gesture check** — Only call `preventDefault()` when the gesture actually activates (e.g., panel is selected), not unconditionally.
+- **preventDefault after gesture check (TouchEvent/PointerEvent)** — Only call `preventDefault()` when the gesture actually activates (e.g., panel is selected), not unconditionally.
+- **preventDefault two-level guard (WheelEvent)** — Wheel events need a stricter two-level guard: (1) is a panel selected? (2) are there actual pan or zoom deltas? If either check fails, do NOT call `preventDefault()`. Without Level 2, single-finger mouse scroll over canvas with a panel selected blocks page scrolling. Also guard `ctrlKey + deltaY`: if `ctrlKey` is true but all deltas are zero, skip `preventDefault()` to avoid blocking browser zoom.
 - See `references/interaction.md` for the full dual-input path patterns, wheel event handling, pointer capture gotchas, and blur safety net.
 
 ### File Input Handlers
@@ -265,6 +292,7 @@ showToast(message, type, duration) {
 - Mock browser APIs by intercepting `document.createElement` and `localStorage` (bind original, always restore)
 - Mock `requestAnimationFrame`/`cancelAnimationFrame` with a callback collector + `flushRAF()` for deterministic debounce testing — see `references/testing-unit.md`
 - Use Proxy-based wrapper for Canvas 2D context mocking instead of `Object.defineProperty` — see `references/testing-unit.md`
+- For render order verification, wrap `ctx.stroke()`/`ctx.strokeRect()` to capture canvas state at call time (context method wrapping) — see `references/testing-unit.md`
 - `DragEvent.dataTransfer` cannot be mocked in constructor — test listener presence via `preventDefault()` tracking
 - Mock `window.Worker` with `Object.defineProperty` + setter for `onmessage` to capture the handler, then fire synthetic messages. Override timeout config (e.g., `INFERENCE_TIMEOUT_MS = 50`) to test timeout paths without waiting. See `references/web-workers.md`
 - Document-level listeners leak across tests — use describe-level `afterEach` cleanup, never `beforeEach` + per-test setup

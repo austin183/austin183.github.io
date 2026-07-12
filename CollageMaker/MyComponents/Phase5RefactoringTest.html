@@ -785,8 +785,8 @@
                 };
                 mockBase.undoManager = mockUndoManager;
                 const undoMethods = createUndoMethods(mockBase, {
-                    onRenderScheduled: () => { renderCalled = true; },
-                    onCropPreviewRender: () => { cropPreviewCalled = true; }
+                    getOnRenderScheduled: () => () => { renderCalled = true; },
+                    getOnCropPreviewRender: () => () => { cropPreviewCalled = true; }
                 });
                 const mockVm = { canUndo: false, canRedo: false };
                 undoMethods._performUndo(mockVm);

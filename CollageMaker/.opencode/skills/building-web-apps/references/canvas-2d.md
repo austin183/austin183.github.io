@@ -36,6 +36,24 @@ Without DPR scaling, canvas content appears blurry on Retina displays.
 6. Selection highlight (white border with shadow)
 ```
 
+## Same-Panel Overlap Guard
+
+When multiple visual overlays can target the same panel (e.g., hex drag target + selection border), Canvas 2D anti-aliasing produces artifacts where different border styles (dashed vs. solid) are drawn at identical coordinates.
+
+**Fix: skip the lower-priority overlay when it would overlap:**
+
+```javascript
+// Skip hex drag target if it matches the selected panel
+if (hexDragTargetId && panels && hexDragTargetId !== selectedPanelId) {
+    panelRenderer.drawHexDragTarget(ctx, targetPanel);
+}
+```
+
+**General rule:** When multiple overlays can target the same element, draw the highest-priority overlay last and skip lower-priority overlays when they would overlap.
+
+**File Reference:**
+- `MyESModules/Rendering/CollageAssembler.js` — hex drag target guard
+
 ## CoreGraphics → Canvas 2D Mapping
 
 | CoreGraphics | Canvas 2D |

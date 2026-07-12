@@ -41,17 +41,25 @@ You will be provided with a set of requirements and optionally a perspective on 
    - `references/testing.md` — Mocha/Chai and Playwright patterns
    - `references/midiestro-pattern.md` — The proven Midiestro3D pattern
 
-4. **Design Solution**:
-   - Create implementation approach based on your assigned perspective
-   - Consider trade-offs and architectural decisions
-   - Follow existing patterns where appropriate
-   - Reference specific skill files when your plan touches their domain
-   - Test Scenarios at the unit, integration, and end to end level
+4. **Design Solution** (BDD-First):
+    - Think outside-in: start with user-visible behavior before technical details
+    - Create implementation approach based on your assigned perspective
+    - Consider trade-offs and architectural decisions
+    - Follow existing patterns where appropriate
+    - Reference specific skill files when your plan touches their domain
 
-5. **Detail the Plan**:
-   - Provide step-by-step implementation strategy
-   - Identify dependencies and sequencing
-   - Anticipate potential challenges, especially Canvas 2D clipping traps, Vue reactivity gotchas, and ES module import issues
+5. **Specify Behavior** (Given-When-Then):
+    - Organize scenarios at three levels:
+      - **User Behavior**: end-to-end interactions (e.g., "Given images loaded, When user presses Cmd+S, Then JPEG download begins")
+      - **Component Behavior**: module contracts (e.g., "Given keydown event with metaKey, When parseKeyShortcut called, Then returns normalized key object")
+      - **Pure Function Behavior**: input/output pairs (e.g., "Given focus at {x:0.1}, When saliencyCrop shifts, Then clamped to bounds")
+    - Use concrete values, not abstract descriptions
+    - Express each scenario as: **Given** [initial state] → **When** [action] → **Then** [observable outcome]
+
+6. **Detail the Plan**:
+    - Provide step-by-step implementation strategy
+    - Identify dependencies and sequencing
+    - Anticipate potential challenges, especially Canvas 2D clipping traps, Vue reactivity gotchas, and ES module import issues
 
 ## Required Output
 

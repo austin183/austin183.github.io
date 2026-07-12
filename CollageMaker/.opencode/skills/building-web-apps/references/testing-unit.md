@@ -7,6 +7,7 @@
 - RAF Mocking
 - Canvas Dimension Interception
 - Canvas 2D Context Mocking
+- Canvas Render Order Testing via Context Method Wrapping
 - Test State, Not Just Actions
 - Tolerance Precision in Positioning Tests
 - Testing Default Behavior Explicitly
@@ -316,6 +317,66 @@ function createMockCtx(width = 1920, height = 1080) {
 - Intercept properties via `set`/`get` traps, methods via `get` trap returning wrapped functions
 - **Intercept methods on returned objects too** — e.g., `addColorStop` is on `CanvasGradient`
 - Use offscreen `<canvas>` elements as image sources instead of `new Image()` (since `Image.complete` is read-only)
+
+### Canvas Render Order Testing via Context Method Wrapping
+
+When you need to verify the **order** in which a rendering pipeline draws different visual elements, and you can't inject a spy (e.g., the assembler creates its renderer internally), wrap canvas context methods to capture state at call time:
+
+```javascript
+let callLog = [];
+const origStroke = ctx.stroke.bind(ctx);
+const origStrokeRect = ctx.strokeRect.bind(ctx);
+
+ctx.stroke = function () {
+    callLog.push({
+        method: 'stroke',
+        lineDash: ctx.getLineDash().join(','),
+        strokeStyle: ctx.strokeStyle,
+        shadowColor: ctx.shadowColor,
+        globalAlpha: ctx.globalAlpha
+    });
+    return origStroke();
+};
+
+ctx.strokeRect = function () {
+    callLog.push({
+        method: 'strokeRect',
+        lineDash: ctx.getLineDash().join(','),
+        strokeStyle: ctx.strokeStyle,
+        shadowColor: ctx.shadowColor,
+        globalAlpha: ctx.globalAlpha
+    });
+    return origStrokeRect.apply(ctx, arguments);
+};
+```
+
+After rendering, filter by distinguishing properties and verify ordering by index:
+
+```javascript
+const hexDragCalls = callLog.filter(c => c.strokeStyle === '#4285f4');
+const selectionCalls = callLog.filter(c => c.strokeStyle === '#ffffff');
+const firstHexIndex = callLog.indexOf(hexDragCalls[0]);
+const firstSelectionIndex = callLog.indexOf(selectionCalls[0]);
+expect(firstHexIndex).to.be.lessThan(firstSelectionIndex);
+```
+
+**Always restore original methods in `afterEach`** to prevent test pollution.
+
+**Pick stable distinguishing properties** — each rendering method sets unique canvas properties. Use these as identifiers:
+
+| Overlay | strokeStyle | lineDash | globalAlpha | shadowColor |
+|---------|------------|----------|-------------|-------------|
+| Hex drag target | `#4285f4` | `6,4` | `0.8` | — |
+| Selection border | `#ffffff` | — | — | `rgba(0, 0, 0, 0.4)` |
+| Hover border | `rgba(100, 160, 255, 0.7)` | — | — | — |
+
+**Canvas properties persist between calls** — `strokeStyle`, `lineDash`, `shadowColor` etc. remain set until explicitly changed. The captured state at `stroke()` time reflects what the rendering method set, not what was active when the wrapper was installed.
+
+**When to use this pattern:**
+- You need to verify render order in a rendering pipeline
+- The renderer creates internal dependencies that can't be easily mocked
+- You need to verify that specific canvas state is set at draw time
+- You want to test visual layering without screenshot comparison
 
 ### Test State, Not Just Actions
 

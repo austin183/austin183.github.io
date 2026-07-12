@@ -5,13 +5,15 @@
  * Each method accepts an explicit `vm` parameter (Vue instance) —
  * no `this` dependency, enabling clean callback injection.
  *
- * Optional render callbacks allow the undo methods to trigger
- * re-renders after state changes without importing render logic.
+ * Render callbacks are provided as provider functions (getOnRenderScheduled,
+ * getOnCropPreviewRender) that return the actual callback at call time.
+ * This prevents stale callback references if the caller replaces render
+ * method references after factory creation.
  */
 
 export function createUndoMethods(base, callbacks = {}) {
-    const onRenderScheduled = callbacks.onRenderScheduled || (() => {});
-    const onCropPreviewRender = callbacks.onCropPreviewRender || (() => {});
+    const getOnRenderScheduled = callbacks.getOnRenderScheduled || (() => () => {});
+    const getOnCropPreviewRender = callbacks.getOnCropPreviewRender || (() => () => {});
 
     /**
      * Updates the canUndo/canRedo reactive state.
@@ -21,6 +23,18 @@ export function createUndoMethods(base, callbacks = {}) {
         if (!base.undoManager) return;
         vm.canUndo = base.undoManager.canUndo();
         vm.canRedo = base.undoManager.canRedo();
+    }
+
+    /**
+     * Safely invokes a provider function. Guards against providers that
+     * return non-callable values and catches callback exceptions to prevent
+     * undo/redo from crashing.
+     */
+    function _invokeProvider(provider, vm) {
+        const callback = provider();
+        if (typeof callback === 'function') {
+            callback(vm);
+        }
     }
 
     /**
@@ -34,8 +48,8 @@ export function createUndoMethods(base, callbacks = {}) {
         if (!hadUndo) return;
 
         _updateUndoState(vm);
-        onRenderScheduled(vm);
-        onCropPreviewRender(vm);
+        _invokeProvider(getOnRenderScheduled, vm);
+        _invokeProvider(getOnCropPreviewRender, vm);
     }
 
     /**
@@ -49,8 +63,8 @@ export function createUndoMethods(base, callbacks = {}) {
         if (!hadRedo) return;
 
         _updateUndoState(vm);
-        onRenderScheduled(vm);
-        onCropPreviewRender(vm);
+        _invokeProvider(getOnRenderScheduled, vm);
+        _invokeProvider(getOnCropPreviewRender, vm);
     }
 
     return {

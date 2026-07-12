@@ -65,19 +65,20 @@ export function createCollageAssembler() {
                 }
             }
 
+            // 4b. Hex drag target highlight (before selection so selection is on top)
+            // Skip if target is the same as selected panel to avoid compositing artifacts
+            if (hexDragTargetId && panels && hexDragTargetId !== selectedPanelId) {
+                const targetPanel = panels.find(p => p.id === hexDragTargetId);
+                if (targetPanel) {
+                    panelRenderer.drawHexDragTarget(ctx, targetPanel);
+                }
+            }
+
             // 5. Selection highlight
             if (selectedPanelId && panels) {
                 const selectedPanel = panels.find(p => p.id === selectedPanelId);
                 if (selectedPanel) {
                     panelRenderer.drawSelectionBorder(ctx, selectedPanel);
-                }
-            }
-
-            // 5b. Hex drag target highlight (between selection and debug overlay)
-            if (hexDragTargetId && panels) {
-                const targetPanel = panels.find(p => p.id === hexDragTargetId);
-                if (targetPanel) {
-                    panelRenderer.drawHexDragTarget(ctx, targetPanel);
                 }
             }
 
