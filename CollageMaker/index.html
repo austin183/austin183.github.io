@@ -20,7 +20,12 @@
     <div id="app">
         <!-- Toolbar -->
         <div id="toolbar" class="collage-toolbar">
-            <h2 class="app-title">CollageMaker</h2>
+            <div class="app-title-group">
+                <h2 class="app-title">CollageMaker</h2>
+                <a href="/index.html" target="_blank" rel="noopener noreferrer" class="home-link" title="Go to home page" aria-label="Go to home page">
+                    <span class="material-icons home-icon">home</span>
+                </a>
+            </div>
             <div class="toolbar-actions">
                 <button id="addImagesBtn" class="pure-button pure-button-primary" @click="triggerFilePicker">
                     <span class="material-icons" style="vertical-align: middle; margin-right: 4px;">add_photo_alternate</span>
@@ -47,28 +52,71 @@
 
         <!-- Three-Panel Layout -->
         <div id="mainLayout" class="main-layout">
-            <!-- Left Sidebar: Image Library -->
+            <!-- Left Sidebar: Image Library + Layout -->
             <div id="sidebar-left" class="sidebar sidebar-left">
-                <h3>Image Library ({{ images.length }})</h3>
-                <div id="librarySearch" class="library-search">
-                    <input type="text" v-model="searchQuery" placeholder="Search by filename..." class="pure-input-rounded">
-                </div>
-                <div id="imageLibrary" class="image-library">
-                    <div v-if="filteredImages.length === 0" class="empty-library">
-                        <span class="material-icons" style="font-size: 48px; opacity: 0.4;">image</span>
-                        <p>No images yet</p>
-                        <p class="hint">Drag &amp; drop images here or click "Add Images"</p>
-                    </div>
-                    <div v-for="(image, index) in filteredImages" :key="image.id"
-                         class="image-item"
-                         :class="{ selected: selectedImageId === image.id }"
-                         @click="selectImage(index)">
-                        <div class="image-number">{{ index + 1 }}</div>
-                        <img :src="image.thumbnail" :alt="image.filename" class="image-thumb">
-                        <div class="image-name" :title="image.filename">{{ truncateFilename(image.filename) }}</div>
-                        <button class="remove-btn" @click.stop="removeImage(index)" title="Remove">
-                            <span class="material-icons">close</span>
+                <div class="sidebar-scroll-container">
+                    <div class="sidebar-section" v-for="section in leftSidebarSections" :key="'left-' + section.id">
+                        <button class="sidebar-section-header" @click="toggleLeftSection(section.id)" :aria-expanded="expandedLeftSections[section.id]" :aria-controls="'left-section-content-' + section.id">
+                            <span class="section-chevron" :class="{ expanded: expandedLeftSections[section.id] }">▶</span>
+                            <span>{{ section.label }}
+                                <span v-if="section.id === 'library'" class="section-count">({{ images.length }})</span>
+                            </span>
                         </button>
+                        <div class="sidebar-section-content" :id="'left-section-content-' + section.id" v-show="expandedLeftSections[section.id]">
+                            <!-- Image Library Section -->
+                            <template v-if="section.id === 'library'">
+                                <div class="library-search">
+                                    <input type="text" v-model="searchQuery" placeholder="Search by filename..." class="pure-input-rounded">
+                                </div>
+                                <div class="image-library">
+                                    <div v-if="filteredImages.length === 0" class="empty-library">
+                                        <span class="material-icons" style="font-size: 48px; opacity: 0.4;">image</span>
+                                        <p>No images yet</p>
+                                        <p class="hint">Drag &amp; drop images here or click "Add Images"</p>
+                                    </div>
+                                    <div v-for="(image, index) in filteredImages" :key="image.id"
+                                         class="image-item"
+                                         :class="{ selected: selectedImageId === image.id }"
+                                         @click="selectImage(index)">
+                                        <div class="image-number">{{ index + 1 }}</div>
+                                        <img :src="image.thumbnail" :alt="image.filename" class="image-thumb">
+                                        <div class="image-name" :title="image.filename">{{ truncateFilename(image.filename) }}</div>
+                                        <button class="remove-btn" @click.stop="removeImage(index)" title="Remove">
+                                            <span class="material-icons">close</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Layout Section (moved from right sidebar) -->
+                            <template v-if="section.id === 'layout'">
+                                <div class="detail-section">
+                                    <label for="layoutStyleSelect">Layout Style</label>
+                                    <select id="layoutStyleSelect" v-model="layoutStyle" class="pure-input-rounded" @change="onLayoutStyleChange">
+                                        <option v-for="style in layoutStyles" :key="style.value" :value="style.value">{{ style.label }}</option>
+                                    </select>
+                                </div>
+                                <div class="detail-section" v-show="layoutStyle !== 'hexagonal'">
+                                    <label for="gutterSlider">Gutter: {{ gutter }}px</label>
+                                    <input type="range" id="gutterSlider" v-model.number="gutter" min="0" max="20" step="1" class="fullRange" @input="onGutterChange">
+                                </div>
+                                <div class="detail-section" v-if="layoutStyle === 'diagonalSlices'">
+                                    <label for="sliceAngleSlider">Slice Angle: {{ sliceAngle }}&deg;</label>
+                                    <input type="range" id="sliceAngleSlider" v-model.number="sliceAngle" min="-75" max="75" step="1" class="fullRange" @input="onSliceAngleChange">
+                                </div>
+                                <div class="detail-section" v-if="layoutStyle === 'hexagonal'">
+                                    <label for="hexSpacingSlider">Hex Spacing: {{ hexSpacing }}px</label>
+                                    <input type="range" id="hexSpacingSlider" v-model.number="hexSpacing" min="0" max="30" step="1" class="fullRange" @input="onHexSpacingChange">
+                                </div>
+                                <div class="detail-section" v-if="layoutStyle === 'hexagonal'">
+                                    <label for="hexSizeSlider">Hexagon Size: {{ Math.round(hexSizeMultiplier * 100) }}%</label>
+                                    <input type="range" id="hexSizeSlider" v-model.number="hexSizeMultiplier" min="0.5" max="2" step="0.05" class="fullRange" @input="onHexSizeMultiplierChange">
+                                </div>
+                                <div class="layout-shortcut-hint">
+                                    Shortcuts: Alt+1 Uniform · Alt+2 Hero · Alt+3 Mosaic · Alt+4 Slices · Alt+5 Hex
+                                </div>
+                            </template>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -105,35 +153,6 @@
                             <span>{{ section.label }}</span>
                         </button>
                         <div class="sidebar-section-content" :id="'section-content-' + section.id" v-show="expandedSections[section.id]">
-                            <!-- Layout Section -->
-                            <template v-if="section.id === 'layout'">
-                                <div class="detail-section">
-                                    <label for="layoutStyleSelect">Layout Style</label>
-                                    <select id="layoutStyleSelect" v-model="layoutStyle" class="pure-input-rounded" @change="onLayoutStyleChange">
-                                        <option v-for="style in layoutStyles" :key="style.value" :value="style.value">{{ style.label }}</option>
-                                    </select>
-                                </div>
-                                <div class="detail-section" v-show="layoutStyle !== 'hexagonal'">
-                                    <label for="gutterSlider">Gutter: {{ gutter }}px</label>
-                                    <input type="range" id="gutterSlider" v-model.number="gutter" min="0" max="20" step="1" class="fullRange" @input="onGutterChange">
-                                </div>
-                                <div class="detail-section" v-if="layoutStyle === 'diagonalSlices'">
-                                    <label for="sliceAngleSlider">Slice Angle: {{ sliceAngle }}&deg;</label>
-                                    <input type="range" id="sliceAngleSlider" v-model.number="sliceAngle" min="-75" max="75" step="1" class="fullRange" @input="onSliceAngleChange">
-                                </div>
-                                <div class="detail-section" v-if="layoutStyle === 'hexagonal'">
-                                    <label for="hexSpacingSlider">Hex Spacing: {{ hexSpacing }}px</label>
-                                    <input type="range" id="hexSpacingSlider" v-model.number="hexSpacing" min="0" max="30" step="1" class="fullRange" @input="onHexSpacingChange">
-                                </div>
-                                <div class="detail-section" v-if="layoutStyle === 'hexagonal'">
-                                    <label for="hexSizeSlider">Hexagon Size: {{ Math.round(hexSizeMultiplier * 100) }}%</label>
-                                    <input type="range" id="hexSizeSlider" v-model.number="hexSizeMultiplier" min="0.5" max="2" step="0.05" class="fullRange" @input="onHexSizeMultiplierChange">
-                                </div>
-                                <div class="layout-shortcut-hint">
-                                    Shortcuts: Alt+1 Uniform · Alt+2 Hero · Alt+3 Mosaic · Alt+4 Slices · Alt+5 Hex
-                                </div>
-                            </template>
-
                             <!-- Title Section -->
                             <template v-if="section.id === 'title'">
                                 <div class="detail-section">
@@ -170,10 +189,18 @@
                                     </div>
                                 </div>
                                 <div class="detail-section">
+                                    <label for="titleFontOpacitySlider">Font Opacity: {{ Math.round(titleStyle.fontOpacity * 100) }}%</label>
+                                    <input type="range" id="titleFontOpacitySlider" v-model.number="titleStyle.fontOpacity" min="0" max="1" step="0.01" :aria-valuenow="Math.round(titleStyle.fontOpacity * 100) + '%'" aria-valuemin="0%" aria-valuemax="100%" class="fullRange" @input="onTitleFontOpacityChange">
+                                </div>
+                                <div class="detail-section">
                                     <label for="titleBgColorPicker">Background Color</label>
                                     <div class="color-picker-row">
                                         <input type="color" id="titleBgColorPicker" v-model="titleStyle.backgroundColor" @input="onTitleBackgroundColorChange">
                                     </div>
+                                </div>
+                                <div class="detail-section">
+                                    <label for="titleBgOpacitySlider">Bg Opacity: {{ Math.round(titleStyle.bgOpacity * 100) }}%</label>
+                                    <input type="range" id="titleBgOpacitySlider" v-model.number="titleStyle.bgOpacity" min="0" max="1" step="0.01" :aria-valuenow="Math.round(titleStyle.bgOpacity * 100) + '%'" aria-valuemin="0%" aria-valuemax="100%" class="fullRange" @input="onTitleBgOpacityChange">
                                 </div>
                                 <div class="detail-section">
                                     <label>
@@ -191,11 +218,21 @@
                                             <span class="material-icons" style="font-size: 18px;">format_align_center</span>
                                         </button>
                                         <button class="segment-btn" :class="{ active: titleStyle.alignment === 'right' }" @click="titleStyle.alignment = 'right'; onTitleAlignmentChange()">
-                                            <span class="material-icons" style="font-size: 18px;">format_align_right</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            </template>
+                                             <span class="material-icons" style="font-size: 18px;">format_align_right</span>
+                                         </button>
+                                     </div>
+                                 </div>
+                                  <div class="detail-section">
+                                      <label for="titleWidthSlider">Width: {{ titleStyle.titleBoxWidth ? Math.round(titleStyle.titleBoxWidth) : 'Auto' }}</label>
+                                      <input type="range" id="titleWidthSlider" v-model.number="titleStyle.titleBoxWidth" min="100" max="1920" step="1" :aria-valuenow="(titleStyle.titleBoxWidth ? Math.round(titleStyle.titleBoxWidth) + 'px' : 'Auto')" aria-valuemin="100px" aria-valuemax="1920px" class="fullRange" @input="onTitleWidthChange">
+                                  </div>
+                                  <div class="detail-section">
+                                      <button class="pure-button reset-title-btn" @click="resetTitlePosition">
+                                          <span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 4px;" aria-hidden="true">restart_alt</span>
+                                          Reset Position
+                                      </button>
+                                  </div>
+                              </template>
 
                             <!-- Crop Section -->
                             <template v-if="section.id === 'crop'">
@@ -337,8 +374,8 @@
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
+                                    </div>
+                                </div>
 
     <script src="../src/js/themeSwitcher.js"></script>
     <script type="module">

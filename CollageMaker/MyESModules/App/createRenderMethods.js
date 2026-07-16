@@ -45,11 +45,13 @@ export function createRenderMethods(base) {
                 },
                 selectedPanelId: vm.selectedPanelId,
                 hoveredPanelId: vm.hoveredPanelId,
-                hexDragTargetId: vm.hexDragTargetId,
+                dragTargetId: vm.dragTargetId,
                 backgroundState: _buildBackgroundState(vm),
                 overlayState: _buildOverlayState(vm),
                 titleStyle: vm.titleStyle,
-                titleRuns: vm.titleRuns
+                titleRuns: vm.titleRuns,
+                titleHoverTarget: vm.titleHoverTarget || null,
+                titleInteractionMode: vm.titleInteractionMode || null
             });
 
             ctx.restore();
@@ -92,6 +94,9 @@ export function createRenderMethods(base) {
     function _regenerateAndRender(vm) {
         if (vm.layoutManager) {
             vm.layoutManager.regenerate();
+        }
+        if (vm.autoExpandLayoutOnImages) {
+            vm.autoExpandLayoutOnImages();
         }
         _scheduleRender(vm);
     }

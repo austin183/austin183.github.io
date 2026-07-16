@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Swap Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Panel Swap Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Phase 2.1 — PanelSwap Refactoring (swap in all layouts)</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { swapPanelAssignments, createPanelSwapHandler, adaptCropToPanelAspect } from '../MyESModules/Interaction/PanelSwap.js';
+        import { LayoutStyle } from '../MyESModules/Models/LayoutStyle.js';
+        import { geometryBoundingRect } from '../MyESModules/Models/PanelGeometry.js';
+        import { createDefaultCrop } from '../MyESModules/Models/CropInfo.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // swapPanelAssignments — pure function (no changes from existing)
+        // Characterization tests + new geometry-type tests
+        // ============================================================
+        describe('PanelSwap — swapPanelAssignments', () => {
+            it('swaps imageIndex between two panels', () => {
+                const state = {
+                    panels: [
+                        { id: 'panel-0', imageIndex: 0, geometry: { type: 'path', points: [], boundingRect: {} } },
+                        { id: 'panel-1', imageIndex: 1, geometry: { type: 'path', points: [], boundingRect: {} } },
+                        { id: 'panel-2', imageIndex: 2, geometry: { type: 'path', points: [], boundingRect: {} } }
+                    ],
+                    panelAssignments: new Map([['panel-0', 0], ['panel-1', 1], ['panel-2', 2]])
+                };
+
+                swapPanelAssignments(state, 'panel-0', 'panel-1');
+
+                expect(state.panels[0].imageIndex).to.equal(1);
+                expect(state.panels[1].imageIndex).to.equal(0);
+                expect(state.panels[2].imageIndex).to.equal(2);
+                expect(state.panelAssignments.get('panel-0')).to.equal(1);
+                expect(state.panelAssignments.get('panel-1')).to.equal(0);
+                expect(state.panelAssignments.get('panel-2')).to.equal(2);
+            });
+
+            it('2.1.UT.1 — swaps imageIndex between rect geometry panels', () => {
+                const state = {
+                    panels: [
+                        { id: 'panel-0', imageIndex: 0, geometry: { type: 'rect', rect: { x: 0, y: 0, width: 960, height: 1080 } } },
+                        { id: 'panel-1', imageIndex: 1, geometry: { type: 'rect', rect: { x: 960, y: 0, width: 960, height: 1080 } } }
+                    ],
+                    panelAssignments: new Map([['panel-0', 0], ['panel-1', 1]])
+                };
+
+                swapPanelAssignments(state, 'panel-0', 'panel-1');
+
+                expect(state.panels[0].imageIndex).to.equal(1);
+                expect(state.panels[1].imageIndex).to.equal(0);
+                expect(state.panelAssignments.get('panel-0')).to.equal(1);
+                expect(state.panelAssignments.get('panel-1')).to.equal(0);
+            });
+
+            it('2.1.UT.2 — swaps imageIndex between path geometry panels', () => {
+                const state = {
+                    panels: [
+                        { id: 'hex-0', imageIndex: 0, geometry: { type: 'path', points: [[100,50],[200,50],[250,150],[200,250],[100,250],[50,150]] } },
+                        { id: 'hex-1', imageIndex: 1, geometry: { type: 'path', points: [[300,50],[400,50],[450,150],[400,250],[300,250],[250,150]] } }
+                    ],
+                    panelAssignments: new Map([['hex-0', 0], ['hex-1', 1]])
+                };
+
+                swapPanelAssignments(state, 'hex-0', 'hex-1');
+
+                expect(state.panels[0].imageIndex).to.equal(1);
+                expect(state.panels[1].imageIndex).to.equal(0);
+                expect(state.panelAssignments.get('hex-0')).to.equal(1);
+                expect(state.panelAssignments.get('hex-1')).to.equal(0);
+            });
+
+            it('2.1.UT.3 — swaps between mixed geometry panels (rect + path)', () => {
+                const state = {
+                    panels: [
+                        { id: 'rect-panel', imageIndex: 0, geometry: { type: 'rect', rect: { x: 0, y: 0, width: 960, height: 1080 } } },
+                        { id: 'path-panel', imageIndex: 1, geometry: { type: 'path', points: [[100,50],[200,50],[250,150],[200,250],[100,250],[50,150]] } }
+                    ],
+                    panelAssignments: new Map([['rect-panel', 0], ['path-panel', 1]])
+                };
+
+                swapPanelAssignments(state, 'rect-panel', 'path-panel');
+
+                expect(state.panels[0].imageIndex).to.equal(1);
+                expect(state.panels[1].imageIndex).to.equal(0);
+                expect(state.panelAssignments.get('rect-panel')).to.equal(1);
+                expect(state.panelAssignments.get('path-panel')).to.equal(0);
+            });
+
+            it('returns false when source and target are the same', () => {
+                const state = {
+                    panels: [{ id: 'panel-0', imageIndex: 0 }],
+                    panelAssignments: new Map([['panel-0', 0]])
+                };
+
+                const result = swapPanelAssignments(state, 'panel-0', 'panel-0');
+                expect(result).to.be.false;
+                expect(state.panels[0].imageIndex).to.equal(0);
+            });
+
+            it('returns false when source panel not found', () => {
+                const state = {
+                    panels: [{ id: 'panel-0', imageIndex: 0 }],
+                    panelAssignments: new Map([['panel-0', 0]])
+                };
+
+                const result = swapPanelAssignments(state, 'nonexistent', 'panel-0');
+                expect(result).to.be.false;
+            });
+
+            it('returns false when target panel not found', () => {
+                const state = {
+                    panels: [{ id: 'panel-0', imageIndex: 0 }],
+                    panelAssignments: new Map([['panel-0', 0]])
+                };
+
+                const result = swapPanelAssignments(state, 'panel-0', 'nonexistent');
+                expect(result).to.be.false;
+            });
+
+            it('supports multiple swaps (undo-friendly)', () => {
+                const state = {
+                    panels: [
+                        { id: 'panel-0', imageIndex: 0 },
+                        { id: 'panel-1', imageIndex: 1 }
+                    ],
+                    panelAssignments: new Map([['panel-0', 0], ['panel-1', 1]])
+                };
+
+                // Swap
+                swapPanelAssignments(state, 'panel-0', 'panel-1');
+                expect(state.panels[0].imageIndex).to.equal(1);
+
+                // Swap back (simulates undo)
+                swapPanelAssignments(state, 'panel-0', 'panel-1');
+                expect(state.panels[0].imageIndex).to.equal(0);
+                expect(state.panels[1].imageIndex).to.equal(1);
+            });
+        });
+
+        // ============================================================
+        // swapPanelAssignments — crop preservation (swap crops with images)
+        // ============================================================
+        describe('PanelSwap — swapPanelAssignments with crops', () => {
+            it('swaps crop sourceRect values between panels when crops are provided', () => {
+                const panels = [
+                    { id: 'panel-0', imageIndex: 0, geometry: { type: 'rect', rect: { x: 0, y: 0, width: 400, height: 300 } } },
+                    { id: 'panel-1', imageIndex: 1, geometry: { type: 'rect', rect: { x: 400, y: 0, width: 400, height: 300 } } }
+                ];
+                const crops = new Map([
+                    ['panel-0', { panelId: 'panel-0', sourceRect: { x: 100, y: 50, width: 200, height: 150 }, destination: { x: 0, y: 0, width: 400, height: 300 } }],
+                    ['panel-1', { panelId: 'panel-1', sourceRect: { x: 300, y: 200, width: 400, height: 300 }, destination: { x: 400, y: 0, width: 400, height: 300 } }]
+                ]);
+                const images = [
+                    { width: 1000, height: 800 },
+                    { width: 1200, height: 900 }
+                ];
+                const state = {
+                    panels,
+                    panelAssignments: new Map([['panel-0', 0], ['panel-1', 1]]),
+                    crops
+                };
+
+                swapPanelAssignments(state, 'panel-0', 'panel-1', crops, images);
+
+                // panel-0 now has image 1, so it should get panel-1's old sourceRect
+                const crop0 = crops.get('panel-0');
+                expect(crop0.sourceRect.x).to.equal(300);
+                expect(crop0.sourceRect.y).to.equal(200);
+                expect(crop0.sourceRect.width).to.equal(400);
+                expect(crop0.sourceRect.height).to.equal(300);
+                // destination stays with the panel
+                expect(crop0.destination.x).to.equal(0);
+
+                // panel-1 now has image 0, so it should get panel-0's old sourceRect
+                const crop1 = crops.get('panel-1');
+                expect(crop1.sourceRect.x).to.equal(100);
+                expect(crop1.sourceRect.y).to.equal(50);
+                expect(crop1.sourceRect.width).to.equal(200);
+                expect(crop1.sourceRect.height).to.equal(150);
+                expect(crop1.destination.x).to.equal(400);
+            });
+
+            it('creates default crops for panels missing a crop before swapping', () => {
+                const panels = [
+                    { id: 'panel-0', imageIndex: 0, geometry: { type: 'rect', rect: { x: 0, y: 0, width: 400, height: 300 } } },
+                    { id: 'panel-1', imageIndex: 1, geometry: { type: 'rect', rect: { x: 400, y: 0, width: 400, height: 300 } } }
+                ];
+                const crops = new Map([
+                    ['panel-0', { panelId: 'panel-0', sourceRect: { x: 100, y: 50, width: 200, height: 150 }, destination: { x: 0, y: 0, width: 400, height: 300 } }]
+                    // panel-1 has no crop
+                ]);
+                const images = [
+                    { width: 1000, height: 800 },
+                    { width: 1200, height: 900 }
+                ];
+                const state = {
+                    panels,
+                    panelAssignments: new Map([['panel-0', 0], ['panel-1', 1]]),
+                    crops
+                };
+
+                swapPanelAssignments(state, 'panel-0', 'panel-1', crops, images);
+
+                // Both panels should now have crops
+                expect(crops.has('panel-0')).to.be.true;
+                expect(crops.has('panel-1')).to.be.true;
+
+                // panel-1's default crop (for image 1) should have been swapped to panel-0
+                // panel-0's custom crop should have been swapped to panel-1
+                const crop1 = crops.get('panel-1');
+                expect(crop1.sourceRect.x).to.equal(100);
+                expect(crop1.sourceRect.y).to.equal(50);
+            });
+
+            it('clamps sourceRect to new image bounds when image is smaller than crop', () => {
+                const panels = [
+                    { id: 'panel-0', imageIndex: 0, geometry: { type: 'rect', rect: { x: 0, y: 0, width: 400, height: 300 } } },
+                    { id: 'panel-1', imageIndex: 1, geometry: { type: 'rect', rect: { x: 400, y: 0, width: 400, height: 300 } } }
+                ];
+                // panel-0 has a crop that extends far into a large image
+                const crops = new Map([
+                    ['panel-0', { panelId: 'panel-0', sourceRect: { x: 500, y: 400, width: 600, height: 500 }, destination: { x: 0, y: 0, width: 400, height: 300 } }],
+                    ['panel-1', { panelId: 'panel-1', sourceRect: { x: 0, y: 0, width: 100, height: 80 }, destination: { x: 400, y: 0, width: 400, height: 300 } }]
+                ]);
+                // Image 1 is SMALL — only 200x150 pixels
+                const images = [
+                    { width: 2000, height: 1500 },
+                    { width: 200, height: 150 }
+                ];
+                const state = {
+                    panels,
+                    panelAssignments: new Map([['panel-0', 0], ['panel-1', 1]]),
+                    crops
+                };
+
+                swapPanelAssignments(state, 'panel-0', 'panel-1', crops, images);
+
+                // panel-0 now has image 1 (200x150), its sourceRect was {x:0,y:0,w:100,h:80} — fits fine
+                const crop0 = crops.get('panel-0');
+                expect(crop0.sourceRect.width).to.be.at.most(200);
+                expect(crop0.sourceRect.height).to.be.at.most(150);
+                expect(crop0.sourceRect.x).to.be.at.least(0);
+                expect(crop0.sourceRect.y).to.be.at.least(0);
+
+                // panel-1 now has image 0 (2000x1500), its sourceRect was {x:500,y:400,w:600,h:500} — fits fine in large image
+                const crop1 = crops.get('panel-1');
+                expect(crop1.sourceRect.x + crop1.sourceRect.width).to.be.at.most(2000);
+                expect(crop1.sourceRect.y + crop1.sourceRect.height).to.be.at.most(1500);
+            });
+
+            it('does not modify crops when crops argument is not provided (backward compat)', () => {
+                const panels = [
+                    { id: 'panel-0', imageIndex: 0, geometry: { type: 'rect', rect: { x: 0, y: 0, width: 400, height: 300 } } },
+                    { id: 'panel-1', imageIndex: 1, geometry: { type: 'rect', rect: { x: 400, y: 0, width: 400, height: 300 } } }
+                ];
+                const crops = new Map([
+                    ['panel-0', { panelId: 'panel-0', sourceRect: { x: 100, y: 50, width: 200, height: 150 }, destination: { x: 0, y: 0, width: 400, height: 300 } }],
+                    ['panel-1', { panelId: 'panel-1', sourceRect: { x: 300, y: 200, width: 400, height: 300 }, destination: { x: 400, y: 0, width: 400, height: 300 } }]
+                ]);
+                const state = {
+                    panels,
+                    panelAssignments: new Map([['panel-0', 0], ['panel-1', 1]]),
+                    crops
+                };
+
+                // Call without crops/images — backward compatible signature
+                swapPanelAssignments(state, 'panel-0', 'panel-1');
+
+                // Crops should NOT have been modified
+                const crop0 = crops.get('panel-0');
+                expect(crop0.sourceRect.x).to.equal(100);
+                expect(crop0.sourceRect.y).to.equal(50);
+
+                const crop1 = crops.get('panel-1');
+                expect(crop1.sourceRect.x).to.equal(300);
+                expect(crop1.sourceRect.y).to.equal(200);
+            });
+
+            it('swap is symmetric — swapping crops twice restores original state', () => {
+                const panels = [
+                    { id: 'panel-0', imageIndex: 0, geometry: { type: 'rect', rect: { x: 0, y: 0, width: 400, height: 300 } } },
+                    { id: 'panel-1', imageIndex: 1, geometry: { type: 'rect', rect: { x: 400, y: 0, width: 400, height: 300 } } }
+                ];
+                const crops = new Map([
+                    ['panel-0', { panelId: 'panel-0', sourceRect: { x: 100, y: 50, width: 200, height: 150 }, destination: { x: 0, y: 0, width: 400, height: 300 } }],
+                    ['panel-1', { panelId: 'panel-1', sourceRect: { x: 300, y: 200, width: 400, height: 300 }, destination: { x: 400, y: 0, width: 400, height: 300 } }]
+                ]);
+                const images = [
+                    { width: 1000, height: 800 },
+                    { width: 1200, height: 900 }
+                ];
+                const state = {
+                    panels,
+                    panelAssignments: new Map([['panel-0', 0], ['panel-1', 1]]),
+                    crops
+                };
+
+                // First swap
+                swapPanelAssignments(state, 'panel-0', 'panel-1', crops, images);
+
+                // Second swap (simulates undo)
+                swapPanelAssignments(state, 'panel-0', 'panel-1', crops, images);
+
+                // Crops should be restored to original
+                const crop0 = crops.get('panel-0');
+                expect(crop0.sourceRect.x).to.equal(100);
+                expect(crop0.sourceRect.y).to.equal(50);
+                expect(crop0.sourceRect.width).to.equal(200);
+                expect(crop0.sourceRect.height).to.equal(150);
+
+                const crop1 = crops.get('panel-1');
+                expect(crop1.sourceRect.x).to.equal(300);
+                expect(crop1.sourceRect.y).to.equal(200);
+                expect(crop1.sourceRect.width).to.equal(400);
+                expect(crop1.sourceRect.height).to.equal(300);
+            });
+
+            it('handles path geometry panels (hexagonal) with crops', () => {
+                const panels = [
+                    { id: 'hex-0', imageIndex: 0, geometry: { type: 'path', points: [[100,50],[200,50],[250,150],[200,250],[100,250],[50,150]], boundingRect: { x: 50, y: 50, width: 200, height: 200 } } },
+                    { id: 'hex-1', imageIndex: 1, geometry: { type: 'path', points: [[300,50],[400,50],[450,150],[400,250],[300,250],[250,150]], boundingRect: { x: 250, y: 50, width: 200, height: 200 } } }
+                ];
+                const crops = new Map([
+                    ['hex-0', { panelId: 'hex-0', sourceRect: { x: 100, y: 100, width: 200, height: 200 }, destination: { x: 50, y: 50, width: 200, height: 200 } }],
+                    ['hex-1', { panelId: 'hex-1', sourceRect: { x: 500, y: 300, width: 300, height: 300 }, destination: { x: 250, y: 50, width: 200, height: 200 } }]
+                ]);
+                const images = [
+                    { width: 1000, height: 800 },
+                    { width: 1200, height: 900 }
+                ];
+                const state = {
+                    panels,
+                    panelAssignments: new Map([['hex-0', 0], ['hex-1', 1]]),
+                    crops
+                };
+
+                swapPanelAssignments(state, 'hex-0', 'hex-1', crops, images);
+
+                // hex-0 gets hex-1's crop sourceRect
+                const crop0 = crops.get('hex-0');
+                expect(crop0.sourceRect.x).to.equal(500);
+                expect(crop0.sourceRect.y).to.equal(300);
+                // destination stays with panel
+                expect(crop0.destination.x).to.equal(50);
+
+                // hex-1 gets hex-0's crop sourceRect
+                const crop1 = crops.get('hex-1');
+                expect(crop1.sourceRect.x).to.equal(100);
+                expect(crop1.sourceRect.y).to.equal(100);
+                expect(crop1.destination.x).to.equal(250);
+            });
+        });
+
+        // ============================================================
+        // adaptCropToPanelAspect — pure function (aspect ratio correction)
+        // ============================================================
+        describe('PanelSwap — adaptCropToPanelAspect', () => {
+            it('returns the same sourceRect when aspect ratios match', () => {
+                const sourceRect = { x: 100, y: 50, width: 200, height: 150 };
+                const imageSize = { width: 1000, height: 800 };
+                const panelSize = { x: 0, y: 0, width: 400, height: 300 }; // 4:3 same as 200:150
+
+                const result = adaptCropToPanelAspect(sourceRect, imageSize, panelSize);
+
+                expect(result.width).to.equal(200);
+                expect(result.height).to.equal(150);
+                expect(result.x).to.equal(100);
+                expect(result.y).to.equal(50);
+            });
+
+            it('resizes sourceRect to match new panel aspect ratio — wide panel to tall panel', () => {
+                // Old panel was 2:1 (wide), new panel is 1:2 (tall)
+                const sourceRect = { x: 200, y: 100, width: 400, height: 200 }; // 2:1 aspect
+                const imageSize = { width: 1000, height: 800 };
+                const panelSize = { x: 0, y: 0, width: 300, height: 600 }; // 1:2 aspect
+
+                const result = adaptCropToPanelAspect(sourceRect, imageSize, panelSize);
+
+                // New aspect ratio should be 1:2 (panel aspect)
+                expect(result.width / result.height).to.be.closeTo(0.5, 0.01);
+                // Center should be approximately preserved (clamping may shift it)
+                const newCenterX = result.x + result.width / 2;
+                const newCenterY = result.y + result.height / 2;
+                expect(newCenterX).to.be.closeTo(400, 200);
+                expect(newCenterY).to.be.closeTo(200, 300); // clamping can shift center
+                // Must be within image bounds
+                expect(result.x).to.be.at.least(0);
+                expect(result.y).to.be.at.least(0);
+                expect(result.x + result.width).to.be.at.most(1000);
+                expect(result.y + result.height).to.be.at.most(800);
+            });
+
+            it('resizes sourceRect to match new panel aspect ratio — tall panel to wide panel', () => {
+                // Old panel was 1:2 (tall), new panel is 2:1 (wide)
+                const sourceRect = { x: 200, y: 100, width: 200, height: 400 }; // 1:2 aspect
+                const imageSize = { width: 1000, height: 800 };
+                const panelSize = { x: 0, y: 0, width: 600, height: 300 }; // 2:1 aspect
+
+                const result = adaptCropToPanelAspect(sourceRect, imageSize, panelSize);
+
+                // New aspect ratio should be 2:1 (panel aspect)
+                expect(result.width / result.height).to.be.closeTo(2, 0.1);
+                // Center should be preserved (old center was 300, 300)
+                const newCenterX = result.x + result.width / 2;
+                const newCenterY = result.y + result.height / 2;
+                expect(newCenterX).to.be.closeTo(300, 100);
+                expect(newCenterY).to.be.closeTo(300, 100);
+                // Must be within image bounds
+                expect(result.x).to.be.at.least(0);
+                expect(result.y).to.be.at.least(0);
+                expect(result.x + result.width).to.be.at.most(1000);
+                expect(result.y + result.height).to.be.at.most(800);
+            });
+
+            it('clamps sourceRect to image bounds when center is near edge', () => {
+                // Crop center near bottom-right corner of image
+                const sourceRect = { x: 800, y: 600, width: 200, height: 200 }; // center at 900, 700
+                const imageSize = { width: 1000, height: 800 };
+                const panelSize = { x: 0, y: 0, width: 400, height: 300 }; // 4:3 aspect
+
+                const result = adaptCropToPanelAspect(sourceRect, imageSize, panelSize);
+
+                // Must be within image bounds
+                expect(result.x).to.be.at.least(0);
+                expect(result.y).to.be.at.least(0);
+                expect(result.x + result.width).to.be.at.most(1000);
+                expect(result.y + result.height).to.be.at.most(800);
+                // Aspect ratio should match panel
+                expect(result.width / result.height).to.be.closeTo(4 / 3, 0.01);
+            });
+
+            it('handles degenerate case — zero-sized panel', () => {
+                const sourceRect = { x: 100, y: 50, width: 200, height: 150 };
+                const imageSize = { width: 1000, height: 800 };
+                const panelSize = { x: 0, y: 0, width: 0, height: 0 };
+
+                const result = adaptCropToPanelAspect(sourceRect, imageSize, panelSize);
+
+                // Should return a safe zero rect
+                expect(result.width).to.equal(0);
+                expect(result.height).to.equal(0);
+            });
+
+            it('handles degenerate case — zero-sized image', () => {
+                const sourceRect = { x: 100, y: 50, width: 200, height: 150 };
+                const imageSize = { width: 0, height: 0 };
+                const panelSize = { x: 0, y: 0, width: 400, height: 300 };
+
+                const result = adaptCropToPanelAspect(sourceRect, imageSize, panelSize);
+
+                expect(result.width).to.equal(0);
+                expect(result.height).to.equal(0);
+            });
+        });
+
+        // ============================================================
+        // swapPanelAssignments — crop aspect ratio correction on swap
+        // ============================================================
+        describe('PanelSwap — swapPanelAssignments with different panel aspect ratios', () => {
+            it('corrects sourceRect aspect ratio when swapping between different panel sizes (Hero layout)', () => {
+                // Hero layout: panel-0 is tall/thin, panel-1 is short/wide
+                const panels = [
+                    { id: 'panel-0', imageIndex: 0, geometry: { type: 'rect', rect: { x: 0, y: 0, width: 480, height: 1080 } } },   // 480:1080 = 0.444 (tall)
+                    { id: 'panel-1', imageIndex: 1, geometry: { type: 'rect', rect: { x: 480, y: 0, width: 720, height: 540 } } }    // 720:540 = 1.333 (wide)
+                ];
+                // panel-0 crop has tall aspect (matching panel-0)
+                // panel-1 crop has wide aspect (matching panel-1)
+                const crops = new Map([
+                    ['panel-0', { panelId: 'panel-0', sourceRect: { x: 100, y: 50, width: 200, height: 450 }, destination: { x: 0, y: 0, width: 480, height: 1080 } }],  // 200:450 = 0.444
+                    ['panel-1', { panelId: 'panel-1', sourceRect: { x: 300, y: 200, width: 600, height: 450 }, destination: { x: 480, y: 0, width: 720, height: 540 } }]   // 600:450 = 1.333
+                ]);
+                const images = [
+                    { width: 1920, height: 1080 },
+                    { width: 1280, height: 720 }
+                ];
+                const state = {
+                    panels,
+                    panelAssignments: new Map([['panel-0', 0], ['panel-1', 1]]),
+                    crops
+                };
+
+                swapPanelAssignments(state, 'panel-0', 'panel-1', crops, images);
+
+                // panel-0 (tall) now has image 1, crop should have tall aspect ratio
+                const crop0 = crops.get('panel-0');
+                const aspect0 = crop0.sourceRect.width / crop0.sourceRect.height;
+                expect(aspect0).to.be.closeTo(480 / 1080, 0.05); // ~0.444 tall aspect
+                // Must be within image 1 bounds
+                expect(crop0.sourceRect.x).to.be.at.least(0);
+                expect(crop0.sourceRect.y).to.be.at.least(0);
+                expect(crop0.sourceRect.x + crop0.sourceRect.width).to.be.at.most(1280);
+                expect(crop0.sourceRect.y + crop0.sourceRect.height).to.be.at.most(720);
+
+                // panel-1 (wide) now has image 0, crop should have wide aspect ratio
+                const crop1 = crops.get('panel-1');
+                const aspect1 = crop1.sourceRect.width / crop1.sourceRect.height;
+                expect(aspect1).to.be.closeTo(720 / 540, 0.05); // ~1.333 wide aspect
+                // Must be within image 0 bounds
+                expect(crop1.sourceRect.x).to.be.at.least(0);
+                expect(crop1.sourceRect.y).to.be.at.least(0);
+                expect(crop1.sourceRect.x + crop1.sourceRect.width).to.be.at.most(1920);
+                expect(crop1.sourceRect.y + crop1.sourceRect.height).to.be.at.most(1080);
+            });
+        });
+
+        // ============================================================
+        // createPanelSwapHandler — factory tests
+        // ============================================================
+        describe('PanelSwap — createPanelSwapHandler', () => {
+            it('2.1.UT.4 — factory returns handler with expected methods', () => {
+                const handler = createPanelSwapHandler({
+                    canvasId: 'testCanvas',
+                    state: {
+                        panels: [],
+                        panelAssignments: new Map(),
+                        layoutStyle: LayoutStyle.HERO
+                    },
+                    onPanelSelected: () => {},
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: () => {},
+                    onTargetHovered: () => {}
+                });
+
+                expect(handler).to.be.an('object');
+                expect(handler.attach).to.be.a('function');
+                expect(handler.detach).to.be.a('function');
+                expect(handler._clearDragState).to.be.a('function');
+                expect(handler._hitTestPanel).to.be.a('function');
+                expect(handler._pointInPanel).to.be.a('function');
+            });
+
+            // ============================================================
+            // DOM-based interaction tests
+            // ============================================================
+            let canvas;
+
+            beforeEach(() => {
+                canvas = document.createElement('canvas');
+                canvas.id = 'swap-test-canvas';
+                canvas.width = 1920;
+                canvas.height = 1080;
+                canvas.style.cssText = 'width: 960px; height: 540px; position: fixed; top: 0px; left: 0px; z-index: -1;';
+                document.body.appendChild(canvas);
+            });
+
+            afterEach(() => {
+                if (canvas && canvas.parentNode) {
+                    canvas.parentNode.removeChild(canvas);
+                }
+            });
+
+            function createTestState(layoutStyle) {
+                return {
+                    panels: [
+                        { id: 'panel-0', imageIndex: 0, geometry: { type: 'rect', rect: { x: 0, y: 0, width: 480, height: 540 } } },
+                        { id: 'panel-1', imageIndex: 1, geometry: { type: 'rect', rect: { x: 480, y: 0, width: 480, height: 540 } } },
+                        { id: 'panel-2', imageIndex: 2, geometry: { type: 'rect', rect: { x: 960, y: 0, width: 480, height: 540 } } },
+                        { id: 'panel-3', imageIndex: 3, geometry: { type: 'rect', rect: { x: 1440, y: 0, width: 480, height: 540 } } }
+                    ],
+                    panelAssignments: new Map([
+                        ['panel-0', 0], ['panel-1', 1], ['panel-2', 2], ['panel-3', 3]
+                    ]),
+                    layoutStyle: layoutStyle,
+                    _multiTouchGestureActive: false
+                };
+            }
+
+            it('2.1.CB.2 — pointerdown on panel sets dragSourceId in uniform layout (no hex guard)', () => {
+                const state = createTestState(LayoutStyle.UNIFORM);
+                let selectedPanelId = null;
+
+                const handler = createPanelSwapHandler({
+                    canvasId: 'swap-test-canvas',
+                    state: state,
+                    onPanelSelected: (id) => { selectedPanelId = id; },
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: () => {},
+                    onTargetHovered: () => {}
+                });
+                handler.attach();
+
+                // Pointer down on panel-0
+                const down = new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                });
+                canvas.dispatchEvent(down);
+
+                // Click-to-select should fire (no drag movement)
+                const up = new PointerEvent('pointerup', {
+                    clientX: 100, clientY: 200, bubbles: true
+                });
+                canvas.dispatchEvent(up);
+
+                expect(selectedPanelId).to.equal('panel-0');
+
+                handler.detach();
+            });
+
+            it('2.1.CB.3 — pointerdown on panel sets dragSourceId in hexagonal layout (no regression)', () => {
+                const state = createTestState(LayoutStyle.HEXAGONAL);
+                let selectedPanelId = null;
+
+                const handler = createPanelSwapHandler({
+                    canvasId: 'swap-test-canvas',
+                    state: state,
+                    onPanelSelected: (id) => { selectedPanelId = id; },
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: () => {},
+                    onTargetHovered: () => {}
+                });
+                handler.attach();
+
+                const down = new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                });
+                canvas.dispatchEvent(down);
+
+                const up = new PointerEvent('pointerup', {
+                    clientX: 100, clientY: 200, bubbles: true
+                });
+                canvas.dispatchEvent(up);
+
+                expect(selectedPanelId).to.equal('panel-0');
+
+                handler.detach();
+            });
+
+            it('2.CB.1 — drag from one panel to another in hero layout performs swap', () => {
+                const state = createTestState(LayoutStyle.HERO);
+                let swapInfo = null;
+
+                const handler = createPanelSwapHandler({
+                    canvasId: 'swap-test-canvas',
+                    state: state,
+                    onPanelSelected: () => {},
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: (info) => { swapInfo = info; },
+                    onTargetHovered: () => {}
+                });
+                handler.attach();
+
+                // Pointer down on panel-0 (CSS x=100 is within panel-0 rect)
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                }));
+
+                // Move to trigger drag threshold
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 300, clientY: 200, bubbles: true
+                }));
+
+                // Move over panel-1 (CSS x=350 is within panel-1 rect: 240-480)
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 350, clientY: 200, bubbles: true
+                }));
+
+                // Pointer up over panel-1
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    clientX: 350, clientY: 200, bubbles: true
+                }));
+
+                expect(swapInfo).to.not.be.null;
+                expect(swapInfo.sourceId).to.equal('panel-0');
+                expect(swapInfo.targetId).to.equal('panel-1');
+                // Verify swap actually happened
+                expect(state.panels[0].imageIndex).to.equal(1);
+                expect(state.panels[1].imageIndex).to.equal(0);
+
+                handler.detach();
+            });
+
+            it('2.CB.5 — pointerdown skipped when _multiTouchGestureActive is true', () => {
+                const state = createTestState(LayoutStyle.HERO);
+                state._multiTouchGestureActive = true;
+                let selectedPanelId = null;
+
+                const handler = createPanelSwapHandler({
+                    canvasId: 'swap-test-canvas',
+                    state: state,
+                    onPanelSelected: (id) => { selectedPanelId = id; },
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: () => {},
+                    onTargetHovered: () => {}
+                });
+                handler.attach();
+
+                // Pointer down should be ignored
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                }));
+
+                // Pointer up — since no dragSourceId was set, nothing happens
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    clientX: 100, clientY: 200, bubbles: true
+                }));
+
+                expect(selectedPanelId).to.be.null;
+
+                handler.detach();
+            });
+
+            it('onTargetHovered callback fires with panel ID during drag', () => {
+                const state = createTestState(LayoutStyle.HERO);
+                let targetHoveredIds = [];
+
+                const handler = createPanelSwapHandler({
+                    canvasId: 'swap-test-canvas',
+                    state: state,
+                    onPanelSelected: () => {},
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: () => {},
+                    onTargetHovered: (id) => { targetHoveredIds.push(id); }
+                });
+                handler.attach();
+
+                // Down on panel-0
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                }));
+
+                // Move to trigger drag
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 300, clientY: 200, bubbles: true
+                }));
+
+                // Move over panel-1
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 500, clientY: 200, bubbles: true
+                }));
+
+                expect(targetHoveredIds).to.include('panel-1');
+
+                handler.detach();
+            });
+
+            it('onTargetHovered callback fires with null on drag end', () => {
+                const state = createTestState(LayoutStyle.HERO);
+                let targetHoveredIds = [];
+
+                const handler = createPanelSwapHandler({
+                    canvasId: 'swap-test-canvas',
+                    state: state,
+                    onPanelSelected: () => {},
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: () => {},
+                    onTargetHovered: (id) => { targetHoveredIds.push(id); }
+                });
+                handler.attach();
+
+                // Start drag on panel-0
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                }));
+
+                // Move to trigger drag
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 300, clientY: 200, bubbles: true
+                }));
+
+                // End drag
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    clientX: 300, clientY: 200, bubbles: true
+                }));
+
+                expect(targetHoveredIds).to.include(null);
+
+                handler.detach();
+            });
+
+            it('canvas cursor is set to grabbing during drag', () => {
+                const state = createTestState(LayoutStyle.HERO);
+
+                const handler = createPanelSwapHandler({
+                    canvasId: 'swap-test-canvas',
+                    state: state,
+                    onPanelSelected: () => {},
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: () => {},
+                    onTargetHovered: () => {},
+                    onDragStart: () => {},
+                    onDragEnd: () => {}
+                });
+                handler.attach();
+
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                }));
+
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 300, clientY: 200, bubbles: true
+                }));
+
+                expect(canvas.style.cursor).to.equal('grabbing');
+
+                handler.detach();
+            });
+
+            it('canvas cursor is cleared on drag end', () => {
+                const state = createTestState(LayoutStyle.HERO);
+
+                const handler = createPanelSwapHandler({
+                    canvasId: 'swap-test-canvas',
+                    state: state,
+                    onPanelSelected: () => {},
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: () => {},
+                    onTargetHovered: () => {},
+                    onDragStart: () => {},
+                    onDragEnd: () => {}
+                });
+                handler.attach();
+
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                }));
+
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 300, clientY: 200, bubbles: true
+                }));
+
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    clientX: 300, clientY: 200, bubbles: true
+                }));
+
+                expect(canvas.style.cursor).to.equal('');
+
+                handler.detach();
+            });
+
+            it('global pointerup cleans up drag state when released outside canvas', () => {
+                const state = createTestState(LayoutStyle.HERO);
+                let targetHoveredIds = [];
+
+                const handler = createPanelSwapHandler({
+                    canvasId: 'swap-test-canvas',
+                    state: state,
+                    onPanelSelected: () => {},
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: () => {},
+                    onTargetHovered: (id) => { targetHoveredIds.push(id); },
+                    onDragStart: () => {},
+                    onDragEnd: () => {}
+                });
+                handler.attach();
+
+                // Start drag
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                }));
+
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 300, clientY: 200, bubbles: true
+                }));
+
+                expect(canvas.style.cursor).to.equal('grabbing');
+
+                // Simulate pointerup on window (outside canvas)
+                window.dispatchEvent(new PointerEvent('pointerup', {
+                    clientX: 9999, clientY: 9999, bubbles: true
+                }));
+
+                expect(canvas.style.cursor).to.equal('');
+                expect(targetHoveredIds).to.include(null);
+
+                handler.detach();
+            });
+
+            it('click (no drag) selects panel without swapping', () => {
+                const state = createTestState(LayoutStyle.HERO);
+                let selectedPanelId = null;
+                let swapPerformed = false;
+
+                const handler = createPanelSwapHandler({
+                    canvasId: 'swap-test-canvas',
+                    state: state,
+                    onPanelSelected: (id) => { selectedPanelId = id; },
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: () => { swapPerformed = true; },
+                    onTargetHovered: () => {}
+                });
+                handler.attach();
+
+                // Click on panel-0 (no movement)
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                }));
+
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    clientX: 100, clientY: 200, bubbles: true
+                }));
+
+                expect(selectedPanelId).to.equal('panel-0');
+                expect(swapPerformed).to.be.false;
+
+                handler.detach();
+            });
+
+            it('drag swap preserves crop coordinates — crops follow images between panels', () => {
+                const state = createTestState(LayoutStyle.HERO);
+                // Add crops and images to state
+                state.crops = new Map([
+                    ['panel-0', { panelId: 'panel-0', sourceRect: { x: 100, y: 50, width: 200, height: 150 }, destination: { x: 0, y: 0, width: 480, height: 540 } }],
+                    ['panel-1', { panelId: 'panel-1', sourceRect: { x: 500, y: 300, width: 400, height: 300 }, destination: { x: 480, y: 0, width: 480, height: 540 } }]
+                ]);
+                state.images = [
+                    { width: 1920, height: 1080 },
+                    { width: 1280, height: 720 },
+                    { width: 800, height: 600 },
+                    { width: 640, height: 480 }
+                ];
+
+                const handler = createPanelSwapHandler({
+                    canvasId: 'swap-test-canvas',
+                    state: state,
+                    onPanelSelected: () => {},
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: () => {},
+                    onTargetHovered: () => {}
+                });
+                handler.attach();
+
+                // Drag from panel-0 to panel-1
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 300, clientY: 200, bubbles: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 350, clientY: 200, bubbles: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    clientX: 350, clientY: 200, bubbles: true
+                }));
+
+                // Verify imageIndex swap happened
+                expect(state.panels[0].imageIndex).to.equal(1);
+                expect(state.panels[1].imageIndex).to.equal(0);
+
+                // Verify crops were swapped and adapted to panel aspect ratio
+                // Panels are 480x540 (aspect 8:9 ≈ 0.889)
+                const panelAspect = 480 / 540;
+                const crop0 = state.crops.get('panel-0');
+                const crop1 = state.crops.get('panel-1');
+
+                // Both crops should match panel aspect ratio (no skew)
+                expect(crop0.sourceRect.width / crop0.sourceRect.height).to.be.closeTo(panelAspect, 0.05);
+                expect(crop1.sourceRect.width / crop1.sourceRect.height).to.be.closeTo(panelAspect, 0.05);
+
+                // Crops should be within image bounds
+                // panel-0 now has image 1 (1280x720)
+                expect(crop0.sourceRect.x).to.be.at.least(0);
+                expect(crop0.sourceRect.y).to.be.at.least(0);
+                expect(crop0.sourceRect.x + crop0.sourceRect.width).to.be.at.most(1280);
+                expect(crop0.sourceRect.y + crop0.sourceRect.height).to.be.at.most(720);
+                // panel-1 now has image 0 (1920x1080)
+                expect(crop1.sourceRect.x).to.be.at.least(0);
+                expect(crop1.sourceRect.y).to.be.at.least(0);
+                expect(crop1.sourceRect.x + crop1.sourceRect.width).to.be.at.most(1920);
+                expect(crop1.sourceRect.y + crop1.sourceRect.height).to.be.at.most(1080);
+
+                handler.detach();
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

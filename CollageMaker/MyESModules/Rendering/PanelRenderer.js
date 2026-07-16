@@ -94,12 +94,12 @@ export function createPanelRenderer() {
         },
 
         /**
-         * Draws a dashed blue highlight border on a panel during hex drag-and-drop.
+         * Draws a dashed blue highlight border on a panel during drag-and-drop.
          * Indicates the target panel that will receive the swapped image.
          * @param {CanvasRenderingContext2D} ctx
          * @param {Object} panel - ImagePanel
          */
-        drawHexDragTarget(ctx, panel) {
+        drawDragTarget(ctx, panel) {
             this._drawPanelBorder(ctx, panel, {
                 strokeStyle: '#4285f4',
                 lineWidth: 3,
@@ -113,7 +113,7 @@ export function createPanelRenderer() {
 
         /**
          * Draws a styled border around a panel geometry.
-         * Shared by drawSelectionBorder, drawHoverBorder, and drawHexDragTarget.
+         * Shared by drawSelectionBorder, drawHoverBorder, and drawDragTarget.
          * @param {CanvasRenderingContext2D} ctx
          * @param {Object} panel - ImagePanel
          * @param {Object} config - Style configuration

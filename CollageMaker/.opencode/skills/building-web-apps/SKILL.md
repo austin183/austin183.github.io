@@ -1,6 +1,6 @@
 ---
 name: building-web-apps
-description: Build static web apps with Vue 3 Options API, Canvas 2D rendering, ES modules, and CDN-loaded libraries. Covers factory testability patterns (callback injection, provider functions, DOM ID injection, module extraction, service locator safety), extensibility patterns (strategy/registry), canvas clearing for exports, config-based rendering helpers, render order testing via context method wrapping, toast notifications, accessibility (ARIA live regions, custom button keyboard activation, aria-busy loading states, reduced motion, interactive canvas roles), drag-and-drop cleanup, test-driven refactoring (characterization tests), multi-touch and trackpad gestures (TouchEvent, PointerEvent, WheelEvent paths, pointerType guards, wheel event pan/zoom), and web edge cases (DPR, CORS). No build step, no bundler. Use when working on CollageMaker web app features, rendering, state management, testing, or architectural refactoring.
+description: Build static web apps with Vue 3 Options API, Canvas 2D rendering, ES modules, and CDN-loaded libraries. Covers factory testability patterns (callback injection, provider functions, DOM ID injection, module extraction, service locator safety), extensibility patterns (strategy/registry), canvas clearing for exports, config-based rendering helpers, render order testing via context method wrapping, toast notifications, accessibility (ARIA live regions, custom button keyboard activation, aria-busy loading states, reduced motion, interactive canvas roles), drag-and-drop cleanup, drag boundary clamping (VISIBLE_MIN pattern), test-driven refactoring (characterization tests), multi-touch and trackpad gestures (TouchEvent, PointerEvent, WheelEvent paths, pointerType guards, wheel event pan/zoom), destination-out compositing for shape cutouts, and web edge cases (DPR, CORS). No build step, no bundler. Use when working on CollageMaker web app features, rendering, state management, testing, or architectural refactoring.
 ---
 
 # Building Web Apps
@@ -20,7 +20,7 @@ Consult these files for verified patterns and gotchas:
 - `references/testing-unit.md` — Mocha/Chai unit tests, mocking patterns, integration testing, characterization tests before refactor
 - `references/testing-e2e.md` — Playwright E2E, page load strategy, pointer/Touch/Drag event testing
 - `references/testing-strategy.md` — Testing approach, gotchas, deferred features, assertion density
-- `references/interaction.md` — Keyboard shortcut patterns: three-layer architecture, modifier matching, focus suppression, preventDefault ordering, pointer handler coordination, global pointerup drag cleanup, multi-touch and trackpad gestures (TouchEvent/PointerEvent dual path, pointerType guards, wheel event pan/zoom, setPointerCapture gotchas, releasePointerCapture hygiene, blur safety net, touch-action CSS)
+- `references/interaction.md` — Keyboard shortcut patterns: three-layer architecture, modifier matching, focus suppression, preventDefault ordering, pointer handler coordination, global pointerup drag cleanup, VISIBLE_MIN drag boundary clamping, multi-touch and trackpad gestures (TouchEvent/PointerEvent dual path, pointerType guards, wheel event pan/zoom, setPointerCapture gotchas, releasePointerCapture hygiene, blur safety net, touch-action CSS)
 - `references/midiestro-pattern.md` — Entry point pattern, shared infrastructure, directory structure
 - `references/css-layout.md` — Flex column chain, `min-height: 0` requirement, responsive sidebar config, CSS computed value naming, mobile safe areas
 - `references/memory-management.md` — Disposing HTMLImageElement references, URL.createObjectURL cleanup, lifecycle cleanup ordering, canvas GPU memory release, visual state cleanup, image disposal when replacing references
@@ -34,6 +34,7 @@ Consult these files for verified patterns and gotchas:
 - Named exports only, no default exports
 - Barrel exports in `MyESModules/index.js`
 - Relative imports with `.js` extension
+- **Destructured parameter scoping** — When a function destructures its parameter, the original variable name is not accessible inside the function body. Destructure all needed properties explicitly. See `references/es-modules.md`
 
 ### Factory Functions
 - Create instances via factory functions, not classes
@@ -155,6 +156,7 @@ export function loadImageFromFile(file) {
 - Factory decomposition: `createCollageApp()` assembles data/methods/lifecycle/services
 - Reactive state in Vue `data()` return value
 - State managers receive Vue instance reference
+- **Range inputs with null default** — `v-model.number` on `<input type="range">` coerces `null` to the `min` attribute. Use `:value` with a fallback and `@input` handler instead. See `references/vue-options-api.md`
 - See `references/vue-options-api.md` for provide() timing and array mutation patterns
 
 ### Canvas 2D
@@ -175,23 +177,22 @@ export function loadImageFromFile(file) {
 
 ### Pointer Handler Coordination
 
-When multiple pointer event handlers attach to the same canvas, use **layout-gated delegation** to prevent conflicting event processing:
+When multiple pointer event handlers attach to the same canvas, use **gesture-active flag coordination** to prevent conflicting event processing:
 
 ```javascript
-// GestureHandler — general-purpose, skips hexagonal layout
+// PanelSwapHandler — always active, skips if multi-touch gesture active
 _onPointerDown(e) {
-    if (state.layoutStyle === LayoutStyle.HEXAGONAL) return;
-    // ... rest of handler
+    if (state._multiTouchGestureActive) return;
+    // ... panel swap handling (works in all layouts)
 }
 
-// HexDragHandler — hex-specific, skips non-hexagonal layouts
-_onPointerDown(e) {
-    if (state.layoutStyle !== LayoutStyle.HEXAGONAL) return;
-    // ... hex-specific handling
-}
+// MultiTouchHandler — sets flag on gesture start/end
+state._multiTouchGestureActive = true;  // on gesture start
+state._multiTouchGestureActive = false; // on gesture end
 ```
 
-- **Both handlers always attached** — no attach/detach cycles on layout change; O(1) layout check at pointerdown time
+- **GestureHandler no longer handles pointerdown** — swap handler's `_onPointerUp` handles click-to-select; GestureHandler provides hover-only
+- **Both handlers always attached** — no attach/detach cycles on layout change; O(1) flag check at pointerdown time
 - **Drag threshold distinguishes click from drag** — 10 CSS pixels of movement triggers drag mode; below threshold, treat as click
 - **CSS pixel threshold** — device-independent, feels consistent on high-DPR displays
 - **Global pointerup for drag cleanup** — Always add a `window.addEventListener('pointerup', ...)` listener alongside the element-level listener. If the user releases the pointer outside the element (off-screen drag, tab switch), the element-level `pointerup` never fires and drag state gets stuck. See `references/interaction.md` for the pattern.

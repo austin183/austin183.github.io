@@ -136,13 +136,12 @@
                 renderCount = 0;
             });
 
-            it('3.5.4.1 — pointerdown from touch triggers panel selection', () => {
-                // Use a point clearly inside the top-left panel (not on boundary)
-                // For uniform 2x2 grid: top-left panel covers logical (0,0) to (960,540)
-                // CSS coords (240, 135) → logical (480, 270) — center of top-left panel
+            it('3.5.4.1 — pointerdown from touch does NOT trigger panel selection (handled by swap handler)', () => {
+                // GestureHandler no longer handles pointerdown — the swap handler
+                // handles click-to-select via pointerup. Verify GestureHandler ignores pointerdown.
                 const rect = canvas.getBoundingClientRect();
-                const cssX = rect.width * 0.25;  // 240 in CSS pixels
-                const cssY = rect.height * 0.25; // 135 in CSS pixels
+                const cssX = rect.width * 0.25;
+                const cssY = rect.height * 0.25;
                 const event = createPointerEvent('pointerdown', {
                     pointerType: 'touch',
                     clientX: rect.left + cssX,
@@ -150,8 +149,8 @@
                 });
                 canvas.dispatchEvent(event);
 
-                // Should have triggered onPanelSelected
-                expect(selectedPanelId).to.not.be.null;
+                // GestureHandler should NOT have triggered onPanelSelected
+                expect(selectedPanelId).to.be.null;
             });
 
             it('3.5.4.2 — pointermove from touch triggers hover', () => {
@@ -205,7 +204,7 @@
                     isPrimary: true
                 });
                 expect(event.isPrimary).to.be.true;
-                // Event should be processed (not filtered out)
+                // GestureHandler no longer handles pointerdown — verify it's ignored
                 const rect = canvas.getBoundingClientRect();
                 const cssX = rect.width * 0.25;
                 const cssY = rect.height * 0.25;
@@ -216,7 +215,8 @@
                     clientY: rect.top + cssY
                 });
                 canvas.dispatchEvent(touchEvent);
-                expect(selectedPanelId).to.not.be.null;
+                // GestureHandler should NOT have triggered onPanelSelected
+                expect(selectedPanelId).to.be.null;
             });
 
             it('3.5.4.5 — Multi-touch secondary pointer ignored gracefully', () => {

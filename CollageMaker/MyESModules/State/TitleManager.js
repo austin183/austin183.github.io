@@ -362,6 +362,66 @@ export function createTitleManager(state, onChange) {
         showBackground(showBackground) {
             state.titleStyle.showBackground = showBackground;
             notify();
+        },
+
+        /**
+         * Sets the font opacity for the title (0.0 to 1.0).
+         * Clamps value to valid range.
+         * @param {number} opacity - Opacity value between 0 and 1
+         */
+        setFontOpacity(opacity) {
+            state.titleStyle.fontOpacity = Math.max(0, Math.min(1, opacity));
+            notify();
+        },
+
+        /**
+         * Sets the background opacity for the title (0.0 to 1.0).
+         * Clamps value to valid range.
+         * @param {number} opacity - Opacity value between 0 and 1
+         */
+        setBgOpacity(opacity) {
+            state.titleStyle.bgOpacity = Math.max(0, Math.min(1, opacity));
+            notify();
+        },
+
+        /**
+         * Sets the title box width. When width > 0, text alignment is computed
+         * within the configured width. When width <= 0, resets to auto-fit.
+         * @param {number} width - Width in pixels (positive) or 0/negative for auto
+         */
+        setWidth(width) {
+            state.titleStyle.titleBoxWidth = width > 0 ? width : null;
+            notify();
+        },
+
+        /**
+         * Sets the title box position. When both x and y are set, the title
+         * renders at the specified coordinates instead of the default
+         * bottom-center position.
+         * @param {number} x - Horizontal position in logical canvas pixels
+         * @param {number} y - Vertical baseline position in logical canvas pixels
+         */
+        setPosition(x, y) {
+            state.titleStyle.titleBoxX = x;
+            state.titleStyle.titleBoxY = y;
+            notify();
+        },
+
+        /**
+         * Resets the title box position and width to default values.
+         * This restores the title to the default bottom-center rendering.
+         * Idempotent — no-op if values are already at defaults.
+         */
+        resetPosition() {
+            if (state.titleStyle.titleBoxX === null &&
+                state.titleStyle.titleBoxY === null &&
+                state.titleStyle.titleBoxWidth === null) {
+                return;
+            }
+            state.titleStyle.titleBoxX = null;
+            state.titleStyle.titleBoxY = null;
+            state.titleStyle.titleBoxWidth = null;
+            notify();
         }
     };
 }

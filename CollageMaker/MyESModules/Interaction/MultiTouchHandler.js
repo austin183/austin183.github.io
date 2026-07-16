@@ -14,7 +14,7 @@
  * Pure math functions are exported for unit testing without DOM dependencies.
  */
 
-import { LayoutStyle } from '../Models/LayoutStyle.js';
+
 
 /**
  * Computes the midpoint between two touch points.
@@ -148,6 +148,7 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
         if (!panelId) return false;
 
         gestureActive = true;
+        state._multiTouchGestureActive = true;
         initialMidpoint = computeTouchMidpoint(t1, t2);
         initialDistance = computeTouchDistance(t1, t2);
         return true;
@@ -202,6 +203,7 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
 
     function endGesture() {
         gestureActive = false;
+        state._multiTouchGestureActive = false;
         activeTouchIds = null;
         initialMidpoint = null;
         initialDistance = 0;
@@ -260,11 +262,6 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
     function _onPointerDown(e) {
         // Skip touch pointers — delegate to TouchEvent path
         if (e.pointerType === 'touch') return;
-
-        // In hexagonal layout, skip pointer-based two-finger gestures to avoid
-        // conflict with HexDragHandler. Users can still use wheel events (trackpad)
-        // or touch events (touchscreen) for pan/zoom.
-        if (state.layoutStyle === LayoutStyle.HEXAGONAL) return;
 
         activePointers.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
 
@@ -341,6 +338,7 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
             endGesture();
         }
         pointerGestureActive = false;
+        state._multiTouchGestureActive = false;
         // Release capture for any remaining pointers
         if (canvas && canvas.releasePointerCapture) {
             for (const pid of activePointers.keys()) {
@@ -430,6 +428,7 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
                     pointerGestureActive = false;
                     activePointers.clear();
                 }
+                state._multiTouchGestureActive = false;
             };
             handleVisibilityChange = () => {
                 if (document.hidden) {
@@ -445,6 +444,7 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
             handlerAttached = false;
             gestureActive = false;
             pointerGestureActive = false;
+            state._multiTouchGestureActive = false;
             activeTouchIds = null;
             activePointers.clear();
 

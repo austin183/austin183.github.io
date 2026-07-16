@@ -1660,30 +1660,164 @@
             });
 
             // ----------------------------------------------------------
-            // Phase 2: Pointer Coordination — Issue #3
-            // MultiTouchHandler skips pointer events in hexagonal layout
-            // to avoid conflict with HexPanelSwap.
+            // Phase 2: Pointer Coordination — Gesture-Active Flag
+            // MultiTouchHandler sets _multiTouchGestureActive on state
+            // to signal to PanelSwap handler that a gesture is in progress.
             // ----------------------------------------------------------
 
-            it('pointer events skipped in hexagonal layout', () => {
+            it('2.2.UT.4 — _multiTouchGestureActive flag set on gesture start (touch)', () => {
                 const canvas = document.createElement('canvas');
-                canvas.id = 'mt-hex-ptr-test1';
+                canvas.id = 'mt-gesture-flag1';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                const state = { selectedPanelId: 'panel-0', _multiTouchGestureActive: false };
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-gesture-flag1',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {}, getPanelImage: () => ({ width: 1920, height: 1080 }) },
+                    state: state,
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Two-finger touch start
+                const touches = makeTouchList([makeTouch(1, 100, 100), makeTouch(2, 200, 200)]);
+                canvas.dispatchEvent(createMockTouchEvent('touchstart', {
+                    touches: touches, targetTouches: touches, changedTouches: touches
+                }));
+
+                expect(state._multiTouchGestureActive).to.be.true;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('2.2.UT.5 — _multiTouchGestureActive flag cleared on gesture end (touch)', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-gesture-flag2';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                const state = { selectedPanelId: 'panel-0', _multiTouchGestureActive: false };
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-gesture-flag2',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {}, getPanelImage: () => ({ width: 1920, height: 1080 }) },
+                    state: state,
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Start gesture
+                const touches = makeTouchList([makeTouch(1, 100, 100), makeTouch(2, 200, 200)]);
+                canvas.dispatchEvent(createMockTouchEvent('touchstart', {
+                    touches: touches, targetTouches: touches, changedTouches: touches
+                }));
+                expect(state._multiTouchGestureActive).to.be.true;
+
+                // End gesture (one finger lifted)
+                const endTouches = makeTouchList([makeTouch(1, 100, 100)]);
+                canvas.dispatchEvent(createMockTouchEvent('touchend', {
+                    touches: endTouches, targetTouches: endTouches,
+                    changedTouches: makeTouchList([makeTouch(2, 200, 200)])
+                }));
+
+                expect(state._multiTouchGestureActive).to.be.false;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('2.2.UT.4b — _multiTouchGestureActive flag set on gesture start (pointer)', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-gesture-flag3';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                const state = { selectedPanelId: 'panel-0', _multiTouchGestureActive: false };
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-gesture-flag3',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {}, getPanelImage: () => ({ width: 1920, height: 1080 }) },
+                    state: state,
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Two-pointer down
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100, pointerType: 'mouse'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200, pointerType: 'mouse'
+                }));
+
+                expect(state._multiTouchGestureActive).to.be.true;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('2.2.UT.5b — _multiTouchGestureActive flag cleared on pointer gesture end', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-gesture-flag4';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                const state = { selectedPanelId: 'panel-0', _multiTouchGestureActive: false };
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-gesture-flag4',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {}, getPanelImage: () => ({ width: 1920, height: 1080 }) },
+                    state: state,
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Start gesture
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100, pointerType: 'mouse'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200, pointerType: 'mouse'
+                }));
+                expect(state._multiTouchGestureActive).to.be.true;
+
+                // End gesture (one pointer up)
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    pointerId: 1, clientX: 100, clientY: 100, pointerType: 'mouse'
+                }));
+
+                expect(state._multiTouchGestureActive).to.be.false;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('2.2.UT.6 — pointerdown no longer guards on hex layout (works in all layouts)', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-gesture-flag5';
                 canvas.style.width = '400px';
                 canvas.style.height = '300px';
                 document.body.appendChild(canvas);
 
                 let prevented = false;
-                let adjustCalled = false;
 
                 const handler = createMultiTouchHandler({
-                    canvasId: 'mt-hex-ptr-test1',
-                    cropManager: {
-                        adjustCrop: () => { adjustCalled = true; },
-                        zoomCrop: () => {},
-                        getPanelImage: () => ({ width: 1920, height: 1080 })
-                    },
+                    canvasId: 'mt-gesture-flag5',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {}, getPanelImage: () => ({ width: 1920, height: 1080 }) },
                     state: {
                         selectedPanelId: 'panel-0',
+                        _multiTouchGestureActive: false,
                         layoutStyle: LayoutStyle.HEXAGONAL
                     },
                     onCropPreviewRender: () => {},
@@ -1691,58 +1825,13 @@
                 });
                 handler.attach();
 
-                // First pointer down — should return early in hex layout
-                const p1 = new PointerEvent('pointerdown', {
-                    pointerId: 1, clientX: 100, clientY: 100,
-                    pointerType: 'mouse', bubbles: true, cancelable: true
-                });
-                p1.preventDefault = () => { prevented = true; };
-                canvas.dispatchEvent(p1);
-
-                // Second pointer down — should also be skipped
-                const p2 = new PointerEvent('pointerdown', {
-                    pointerId: 2, clientX: 200, clientY: 200,
-                    pointerType: 'mouse', bubbles: true, cancelable: true
-                });
-                p2.preventDefault = () => { prevented = true; };
-                canvas.dispatchEvent(p2);
-
-                // In hexagonal layout, pointer events should be ignored entirely
-                expect(prevented).to.be.false;
-                expect(adjustCalled).to.be.false;
-
-                handler.detach();
-                document.body.removeChild(canvas);
-            });
-
-            it('pointer events processed normally in non-hex layout (regression guard)', () => {
-                const canvas = document.createElement('canvas');
-                canvas.id = 'mt-hex-ptr-test2';
-                canvas.style.width = '400px';
-                canvas.style.height = '300px';
-                document.body.appendChild(canvas);
-
-                let prevented = false;
-
-                const handler = createMultiTouchHandler({
-                    canvasId: 'mt-hex-ptr-test2',
-                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {} },
-                    state: {
-                        selectedPanelId: 'panel-0',
-                        layoutStyle: LayoutStyle.UNIFORM
-                    },
-                    onCropPreviewRender: () => {},
-                    onRenderScheduled: () => {}
-                });
-                handler.attach();
-
-                // First pointer down — no gesture yet
+                // First pointer down — should NOT return early anymore
                 canvas.dispatchEvent(new PointerEvent('pointerdown', {
                     pointerId: 1, clientX: 100, clientY: 100,
                     pointerType: 'mouse', bubbles: true, cancelable: true
                 }));
 
-                // Second pointer down — should start gesture in non-hex layout
+                // Second pointer down — should start gesture even in hex layout
                 const p2 = new PointerEvent('pointerdown', {
                     pointerId: 2, clientX: 200, clientY: 200,
                     pointerType: 'mouse', bubbles: true, cancelable: true
@@ -1756,111 +1845,36 @@
                 document.body.removeChild(canvas);
             });
 
-            it('pointer events skipped in hexagonal layout even with two fingers', () => {
+            it('_multiTouchGestureActive cleared on detach', () => {
                 const canvas = document.createElement('canvas');
-                canvas.id = 'mt-hex-ptr-test3';
+                canvas.id = 'mt-gesture-flag6';
                 canvas.style.width = '400px';
                 canvas.style.height = '300px';
-                canvas.style.position = 'absolute';
-                canvas.style.left = '0px';
-                canvas.style.top = '0px';
                 document.body.appendChild(canvas);
 
-                let adjustCalled = false;
-                let zoomCalled = false;
+                const state = { selectedPanelId: 'panel-0', _multiTouchGestureActive: false };
 
                 const handler = createMultiTouchHandler({
-                    canvasId: 'mt-hex-ptr-test3',
-                    cropManager: {
-                        adjustCrop: () => { adjustCalled = true; },
-                        zoomCrop: () => { zoomCalled = true; },
-                        getPanelImage: () => ({ width: 1920, height: 1080 })
-                    },
-                    state: {
-                        selectedPanelId: 'panel-0',
-                        layoutStyle: LayoutStyle.HEXAGONAL
-                    },
+                    canvasId: 'mt-gesture-flag6',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {}, getPanelImage: () => ({ width: 1920, height: 1080 }) },
+                    state: state,
                     onCropPreviewRender: () => {},
                     onRenderScheduled: () => {}
                 });
                 handler.attach();
 
-                // Two pointer downs
-                canvas.dispatchEvent(new PointerEvent('pointerdown', {
-                    pointerId: 1, clientX: 100, clientY: 100,
-                    pointerType: 'mouse', bubbles: true, cancelable: true
+                // Start gesture
+                const touches = makeTouchList([makeTouch(1, 100, 100), makeTouch(2, 200, 200)]);
+                canvas.dispatchEvent(createMockTouchEvent('touchstart', {
+                    touches: touches, targetTouches: touches, changedTouches: touches
                 }));
-                canvas.dispatchEvent(new PointerEvent('pointerdown', {
-                    pointerId: 2, clientX: 200, clientY: 200,
-                    pointerType: 'mouse', bubbles: true, cancelable: true
-                }));
+                expect(state._multiTouchGestureActive).to.be.true;
 
-                // Attempt pointer move — should not trigger gesture
-                canvas.dispatchEvent(new PointerEvent('pointermove', {
-                    pointerId: 1, clientX: 160, clientY: 160,
-                    pointerType: 'mouse', bubbles: true, cancelable: true
-                }));
-                canvas.dispatchEvent(new PointerEvent('pointermove', {
-                    pointerId: 2, clientX: 260, clientY: 260,
-                    pointerType: 'mouse', bubbles: true, cancelable: true
-                }));
-
-                expect(adjustCalled).to.be.false;
-                expect(zoomCalled).to.be.false;
-
+                // Detach should clear the flag
                 handler.detach();
-                document.body.removeChild(canvas);
-            });
 
-            it('pointer move and up are safe in hexagonal layout (no errors from skipped down)', () => {
-                const canvas = document.createElement('canvas');
-                canvas.id = 'mt-hex-ptr-test4';
-                canvas.style.width = '400px';
-                canvas.style.height = '300px';
-                canvas.style.position = 'absolute';
-                canvas.style.left = '0px';
-                canvas.style.top = '0px';
-                document.body.appendChild(canvas);
+                expect(state._multiTouchGestureActive).to.be.false;
 
-                const handler = createMultiTouchHandler({
-                    canvasId: 'mt-hex-ptr-test4',
-                    cropManager: {
-                        adjustCrop: () => {},
-                        zoomCrop: () => {},
-                        getPanelImage: () => ({ width: 1920, height: 1080 })
-                    },
-                    state: {
-                        selectedPanelId: 'panel-0',
-                        layoutStyle: LayoutStyle.HEXAGONAL
-                    },
-                    onCropPreviewRender: () => {},
-                    onRenderScheduled: () => {}
-                });
-                handler.attach();
-
-                // pointerdown skipped (hex layout) — no pointer added to activePointers
-                canvas.dispatchEvent(new PointerEvent('pointerdown', {
-                    pointerId: 1, clientX: 100, clientY: 100,
-                    pointerType: 'mouse', bubbles: true, cancelable: true
-                }));
-
-                // pointermove should not error (pointerGestureActive is false)
-                expect(() => {
-                    canvas.dispatchEvent(new PointerEvent('pointermove', {
-                        pointerId: 1, clientX: 160, clientY: 160,
-                        pointerType: 'mouse', bubbles: true, cancelable: true
-                    }));
-                }).to.not.throw();
-
-                // pointerup should not error (pointer was never added to activePointers)
-                expect(() => {
-                    canvas.dispatchEvent(new PointerEvent('pointerup', {
-                        pointerId: 1, clientX: 160, clientY: 160,
-                        pointerType: 'mouse', bubbles: true, cancelable: true
-                    }));
-                }).to.not.throw();
-
-                handler.detach();
                 document.body.removeChild(canvas);
             });
 

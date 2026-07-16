@@ -32,7 +32,7 @@ export function createCollageAssembler() {
          * @param {Object} options.canvasSize - { width, height }
          * @param {string} [options.selectedPanelId] - Panel ID to highlight
          * @param {string} [options.hoveredPanelId] - Panel ID to show hover border
-         * @param {string} [options.hexDragTargetId] - Panel ID to highlight during hex drag-and-drop
+         * @param {string} [options.dragTargetId] - Panel ID to highlight during drag-and-drop
          * @param {Object} [options.backgroundState] - Background state for BackgroundRenderer
          * @param {Object} [options.overlayState] - Overlay state for OverlayRenderer
          * @param {Object} [options.titleStyle] - Title style for TitleRenderer
@@ -40,7 +40,7 @@ export function createCollageAssembler() {
          * @param {boolean} [options.showDebugOverlay] - Show saliency debug markers
          * @param {Map} [options.focusPoints] - Map of imageIndex -> focusPoint { x, y }
          */
-        render(ctx, { panels, images, crops, panelAssignments, backgroundColor, canvasSize, selectedPanelId, hoveredPanelId, hexDragTargetId, backgroundState, overlayState, titleStyle, titleRuns, showDebugOverlay, focusPoints }) {
+        render(ctx, { panels, images, crops, panelAssignments, backgroundColor, canvasSize, selectedPanelId, hoveredPanelId, dragTargetId, backgroundState, overlayState, titleStyle, titleRuns, showDebugOverlay, focusPoints, titleHoverTarget, titleInteractionMode }) {
             const w = canvasSize.width;
             const h = canvasSize.height;
 
@@ -65,12 +65,12 @@ export function createCollageAssembler() {
                 }
             }
 
-            // 4b. Hex drag target highlight (before selection so selection is on top)
+            // 4b. Drag target highlight (before selection so selection is on top)
             // Skip if target is the same as selected panel to avoid compositing artifacts
-            if (hexDragTargetId && panels && hexDragTargetId !== selectedPanelId) {
-                const targetPanel = panels.find(p => p.id === hexDragTargetId);
+            if (dragTargetId && panels && dragTargetId !== selectedPanelId) {
+                const targetPanel = panels.find(p => p.id === dragTargetId);
                 if (targetPanel) {
-                    panelRenderer.drawHexDragTarget(ctx, targetPanel);
+                    panelRenderer.drawDragTarget(ctx, targetPanel);
                 }
             }
 
@@ -94,7 +94,10 @@ export function createCollageAssembler() {
 
             // 8. Title
             if (titleStyle && titleRuns) {
-                renderTitle(ctx, w, h, titleStyle, titleRuns);
+                renderTitle(ctx, w, h, titleStyle, titleRuns, {
+                    hoverTarget: titleHoverTarget || null,
+                    interactionMode: titleInteractionMode || null
+                });
             }
         },
 

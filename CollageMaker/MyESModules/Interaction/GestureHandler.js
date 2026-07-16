@@ -6,7 +6,6 @@
  */
 
 import { isRectGeometry } from '../Models/PanelGeometry.js';
-import { LayoutStyle } from '../Models/LayoutStyle.js';
 
 /**
  * Creates a gesture handler for the main preview canvas.
@@ -23,7 +22,7 @@ export function createGestureHandler({ canvasId, state, onPanelSelected, onHover
     let lastHoveredPanelId = null;
 
     // Placeholder for bound handlers (set after handler object is created)
-    let onPointerDown, onPointerMove, onPointerLeave;
+    let onPointerMove, onPointerLeave;
 
     const handler = {
         /**
@@ -36,7 +35,6 @@ export function createGestureHandler({ canvasId, state, onPanelSelected, onHover
             const canvas = document.getElementById(canvasId);
             if (!canvas) return;
 
-            canvas.addEventListener('pointerdown', onPointerDown);
             canvas.addEventListener('pointermove', onPointerMove);
             canvas.addEventListener('pointerleave', onPointerLeave);
         },
@@ -51,7 +49,6 @@ export function createGestureHandler({ canvasId, state, onPanelSelected, onHover
             const canvas = document.getElementById(canvasId);
             if (!canvas) return;
 
-            canvas.removeEventListener('pointerdown', onPointerDown);
             canvas.removeEventListener('pointermove', onPointerMove);
             canvas.removeEventListener('pointerleave', onPointerLeave);
         },
@@ -135,22 +132,6 @@ export function createGestureHandler({ canvasId, state, onPanelSelected, onHover
         },
 
         // Private event handlers
-        _onPointerDown(e) {
-            // Skip pointerdown for hexagonal layout — HexDragHandler handles it
-            if (state.layoutStyle === LayoutStyle.HEXAGONAL) return;
-
-            const coords = this.screenToCanvas(e);
-            if (!coords) return;
-
-            const canvas = document.getElementById(canvasId);
-            const canvasWidth = canvas.getBoundingClientRect().width;
-            const canvasHeight = canvas.getBoundingClientRect().height;
-
-            const panelId = this.hitTestPanel(coords.x, coords.y, canvasWidth, canvasHeight);
-            onPanelSelected(panelId);
-            onRenderScheduled();
-        },
-
         _onPointerMove(e) {
             const coords = this.screenToCanvas(e);
             if (!coords) return;
@@ -179,7 +160,6 @@ export function createGestureHandler({ canvasId, state, onPanelSelected, onHover
     };
 
     // Bind event handlers now that handler object exists
-    onPointerDown = (e) => handler._onPointerDown(e);
     onPointerMove = (e) => handler._onPointerMove(e);
     onPointerLeave = () => handler._onPointerLeave();
 

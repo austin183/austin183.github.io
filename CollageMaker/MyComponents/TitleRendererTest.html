@@ -21,7 +21,7 @@
     <script>mocha.setup('bdd');</script>
 
     <script type="module">
-        import { render } from '../MyESModules/Rendering/TitleRenderer.js';
+        import { render, computeBounds } from '../MyESModules/Rendering/TitleRenderer.js';
 
         const { expect } = chai;
 
@@ -41,7 +41,14 @@
                 fillText: [],
                 fillRect: [],
                 measureText: [],
-                textBaseline: []
+                textBaseline: [],
+                globalAlpha: [],
+                save: [],
+                restore: [],
+                strokeRect: [],
+                strokeStyle: [],
+                lineWidth: [],
+                setLineDash: []
             };
 
             // Create a proxy to intercept property assignments and method calls
@@ -51,8 +58,14 @@
                         calls.font.push(value);
                     } else if (prop === 'fillStyle') {
                         calls.fillStyle.push(value);
+                    } else if (prop === 'strokeStyle') {
+                        calls.strokeStyle.push(value);
+                    } else if (prop === 'lineWidth') {
+                        calls.lineWidth.push(value);
                     } else if (prop === 'textBaseline') {
                         calls.textBaseline.push(value);
+                    } else if (prop === 'globalAlpha') {
+                        calls.globalAlpha.push(value);
                     }
                     target[prop] = value;
                     return true;
@@ -88,6 +101,30 @@
                             return metrics;
                         };
                     }
+                    if (prop === 'save') {
+                        return function() {
+                            calls.save.push({});
+                            return target.save.call(target);
+                        };
+                    }
+                    if (prop === 'restore') {
+                        return function() {
+                            calls.restore.push({});
+                            return target.restore.call(target);
+                        };
+                    }
+                    if (prop === 'strokeRect') {
+                        return function(x, y, w, h) {
+                            calls.strokeRect.push({ x, y, w, h });
+                            return target.strokeRect.call(target, x, y, w, h);
+                        };
+                    }
+                    if (prop === 'setLineDash') {
+                        return function(dash) {
+                            calls.setLineDash.push([...dash]);
+                            return target.setLineDash.call(target, dash);
+                        };
+                    }
                     return target[prop];
                 }
             });
@@ -102,7 +139,12 @@
             fontColor = '#FFFFFF',
             alignment = 'center',
             showBackground = false,
-            backgroundColor = '#000000'
+            backgroundColor = '#000000',
+            fontOpacity = 1.0,
+            bgOpacity = 1.0,
+            titleBoxWidth = null,
+            titleBoxX = null,
+            titleBoxY = null
         } = {}) {
             return {
                 fontSize,
@@ -110,7 +152,12 @@
                 fontColor,
                 alignment,
                 showBackground,
-                backgroundColor
+                backgroundColor,
+                fontOpacity,
+                bgOpacity,
+                titleBoxWidth,
+                titleBoxX,
+                titleBoxY
             };
         }
 
@@ -435,6 +482,416 @@
                 // Width should be 'A' width + 2*padding
                 const textWidth = calls.measureText[0].width;
                 expect(bg.w).to.be.closeTo(textWidth + 24, 1);
+            });
+        });
+
+        // ============================================================
+        // Section 2.4: Opacity Rendering (Phase 3)
+        // ============================================================
+        describe('Section 2.4 — Opacity Rendering (Phase 3)', () => {
+            it('2.4.1 — Font opacity 0.5: globalAlpha set to 0.5 before fillText, restored after', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({ fontOpacity: 0.5 });
+                const runs = [makeTitleRun({ text: 'Hello' })];
+                render(ctx, 1920, 1080, style, runs);
+
+                expect(calls.globalAlpha.length).to.be.at.least(1);
+                expect(calls.globalAlpha).to.include(0.5);
+                // save() and restore() should be called around the text drawing
+                expect(calls.save.length).to.be.at.least(1);
+                expect(calls.restore.length).to.be.at.least(1);
+            });
+
+            it('2.4.2 — Font opacity 1.0 (default): globalAlpha set to 1.0', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({ fontOpacity: 1.0 });
+                const runs = [makeTitleRun({ text: 'Hello' })];
+                render(ctx, 1920, 1080, style, runs);
+
+                expect(calls.globalAlpha.length).to.be.at.least(1);
+                expect(calls.globalAlpha).to.include(1.0);
+            });
+
+            it('2.4.3 — Font opacity 0.0: globalAlpha set to 0.0 (invisible text)', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({ fontOpacity: 0.0 });
+                const runs = [makeTitleRun({ text: 'Hello' })];
+                render(ctx, 1920, 1080, style, runs);
+
+                expect(calls.globalAlpha).to.include(0.0);
+                // Text should still be drawn (fillText called) even at 0 opacity
+                expect(calls.fillText.length).to.equal(1);
+            });
+
+            it('2.4.4 — Background opacity 0.3: globalAlpha set to 0.3 before fillRect for bg', () => {
+                const { ctx, calls } = createMockCtx(800, 600);
+                const style = makeTitleStyle({
+                    showBackground: true,
+                    bgOpacity: 0.3,
+                    backgroundColor: '#000000'
+                });
+                const runs = [makeTitleRun({ text: 'Hello' })];
+                render(ctx, 800, 600, style, runs);
+
+                expect(calls.globalAlpha).to.include(0.3);
+                // Background fillRect should be called
+                expect(calls.fillRect.length).to.be.at.least(1);
+            });
+
+            it('2.4.5 — Background opacity 0.0 with showBackground: bg drawn with alpha 0', () => {
+                const { ctx, calls } = createMockCtx(800, 600);
+                const style = makeTitleStyle({
+                    showBackground: true,
+                    bgOpacity: 0.0
+                });
+                const runs = [makeTitleRun({ text: 'Hello' })];
+                render(ctx, 800, 600, style, runs);
+
+                // Background should still be drawn (fillRect called) even at 0 opacity
+                expect(calls.globalAlpha).to.include(0.0);
+                expect(calls.fillRect.length).to.be.at.least(1);
+            });
+
+            it('2.4.6 — No alpha leakage: after render, no pending globalAlpha changes', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({
+                    fontOpacity: 0.5,
+                    showBackground: true,
+                    bgOpacity: 0.3
+                });
+                const runs = [makeTitleRun({ text: 'Hello' })];
+                render(ctx, 1920, 1080, style, runs);
+
+                // Verify save/restore are balanced
+                expect(calls.save.length).to.equal(calls.restore.length);
+                // After render, the real context should have globalAlpha back to 1.0
+                // (because restore() was called)
+                expect(ctx.globalAlpha).to.equal(1.0);
+            });
+
+            it('2.4.7 — Both opacities at different values: two separate save/restore blocks', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({
+                    fontOpacity: 0.5,
+                    showBackground: true,
+                    bgOpacity: 0.3
+                });
+                const runs = [makeTitleRun({ text: 'Hello' })];
+                render(ctx, 1920, 1080, style, runs);
+
+                // Should have at least 2 save/restore pairs (one for bg, one for text)
+                expect(calls.save.length).to.be.at.least(2);
+                expect(calls.restore.length).to.be.at.least(2);
+                // Both opacity values should appear
+                expect(calls.globalAlpha).to.include(0.5);
+                expect(calls.globalAlpha).to.include(0.3);
+            });
+
+            it('2.4.8 — Opacity with underline: underline drawn inside font alpha block', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({ fontOpacity: 0.5 });
+                const runs = [makeTitleRun({ text: 'Hi', underline: true })];
+                render(ctx, 1920, 1080, style, runs);
+
+                // Underline fillRect should be drawn (within the font alpha save/restore block)
+                const underlines = calls.fillRect.filter(r => r.h === 2);
+                expect(underlines.length).to.equal(1);
+                // globalAlpha 0.5 should be set
+                expect(calls.globalAlpha).to.include(0.5);
+            });
+
+            it('2.4.9 — Missing opacity fields default to 1.0', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                // Style without opacity fields
+                const style = {
+                    fontSize: 36,
+                    fontFamily: 'Arial',
+                    fontColor: '#FFFFFF',
+                    alignment: 'center',
+                    showBackground: false,
+                    backgroundColor: '#000000'
+                };
+                const runs = [makeTitleRun({ text: 'Hello' })];
+                render(ctx, 1920, 1080, style, runs);
+
+                // Should not crash and should render normally
+                expect(calls.fillText.length).to.equal(1);
+                // globalAlpha should default to 1.0
+                if (calls.globalAlpha.length > 0) {
+                    expect(calls.globalAlpha).to.include(1.0);
+                }
+            });
+        });
+
+        // ============================================================
+        // Section 2.5: Width and Alignment Within Box (Phase 4)
+        // ============================================================
+        describe('Section 2.5 — Width and Alignment Within Box (Phase 4)', () => {
+            it('2.5.1 — computeBounds with auto width (null): boxWidth = textWidth + 2*PADDING', () => {
+                const style = {
+                    fontSize: 36,
+                    fontFamily: 'Arial',
+                    alignment: 'center',
+                    titleBoxWidth: null
+                };
+                const runs = [makeTitleRun({ text: 'Hello' })];
+                const bounds = computeBounds(style, runs, 1920, 1080);
+
+                expect(bounds).to.have.property('boxWidth');
+                expect(bounds).to.have.property('textWidth');
+                expect(bounds).to.have.property('contentStartX');
+                // With auto width, boxWidth should be textWidth + 2*PADDING (24)
+                expect(bounds.boxWidth).to.be.closeTo(bounds.textWidth + 24, 1);
+            });
+
+            it('2.5.2 — computeBounds with custom width 500, left alignment: contentStartX = 0', () => {
+                const style = {
+                    fontSize: 36,
+                    fontFamily: 'Arial',
+                    alignment: 'left',
+                    titleBoxWidth: 500
+                };
+                const runs = [makeTitleRun({ text: 'Hi' })];
+                const bounds = computeBounds(style, runs, 1920, 1080);
+
+                expect(bounds.boxWidth).to.equal(500);
+                expect(bounds.contentStartX).to.equal(0);
+            });
+
+            it('2.5.3 — computeBounds with custom width 500, center alignment: contentStartX = (500 - textWidth)/2', () => {
+                const style = {
+                    fontSize: 36,
+                    fontFamily: 'Arial',
+                    alignment: 'center',
+                    titleBoxWidth: 500
+                };
+                const runs = [makeTitleRun({ text: 'Hi' })];
+                const bounds = computeBounds(style, runs, 1920, 1080);
+
+                expect(bounds.boxWidth).to.equal(500);
+                expect(bounds.contentStartX).to.be.closeTo((500 - bounds.textWidth) / 2, 0.5);
+            });
+
+            it('2.5.4 — computeBounds with custom width 500, right alignment: contentStartX = 500 - textWidth', () => {
+                const style = {
+                    fontSize: 36,
+                    fontFamily: 'Arial',
+                    alignment: 'right',
+                    titleBoxWidth: 500
+                };
+                const runs = [makeTitleRun({ text: 'Hi' })];
+                const bounds = computeBounds(style, runs, 1920, 1080);
+
+                expect(bounds.boxWidth).to.equal(500);
+                expect(bounds.contentStartX).to.be.closeTo(500 - bounds.textWidth, 0.5);
+            });
+
+            it('2.5.5 — computeBounds baselineY = height - MARGIN', () => {
+                const style = {
+                    fontSize: 36,
+                    fontFamily: 'Arial',
+                    alignment: 'center',
+                    titleBoxWidth: null
+                };
+                const runs = [makeTitleRun({ text: 'Test' })];
+                const bounds = computeBounds(style, runs, 1920, 1080);
+
+                expect(bounds.baselineY).to.equal(1080 - 40); // MARGIN = 40
+            });
+
+            it('2.5.6 — computeBounds height = fontSize + 2*PADDING', () => {
+                const style = {
+                    fontSize: 48,
+                    fontFamily: 'Arial',
+                    alignment: 'center',
+                    titleBoxWidth: null
+                };
+                const runs = [makeTitleRun({ text: 'Test' })];
+                const bounds = computeBounds(style, runs, 1920, 1080);
+
+                expect(bounds.height).to.equal(48 + 24); // fontSize + 2*PADDING
+            });
+
+            it('2.5.7 — computeBounds with multiple runs: textWidth sums all run widths', () => {
+                const style = {
+                    fontSize: 36,
+                    fontFamily: 'Arial',
+                    alignment: 'center',
+                    titleBoxWidth: null
+                };
+                const runs = [
+                    makeTitleRun({ text: 'Hello' }),
+                    makeTitleRun({ text: ' ', bold: true }),
+                    makeTitleRun({ text: 'World' })
+                ];
+                const bounds = computeBounds(style, runs, 1920, 1080);
+
+                // textWidth should be the sum of all measured run widths
+                expect(bounds.textWidth).to.be.greaterThan(0);
+                // And boxWidth should be textWidth + 2*PADDING for auto
+                expect(bounds.boxWidth).to.be.closeTo(bounds.textWidth + 24, 1);
+            });
+
+            it('2.5.8 — computeBounds guards against empty runs', () => {
+                const style = {
+                    fontSize: 36,
+                    fontFamily: 'Arial',
+                    alignment: 'center',
+                    titleBoxWidth: null
+                };
+                const bounds = computeBounds(style, [], 1920, 1080);
+
+                expect(bounds.textWidth).to.equal(0);
+                expect(bounds.boxWidth).to.equal(24); // 0 + 2*PADDING
+            });
+
+            it('2.5.9 — render with custom width: background rect uses boxWidth', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({
+                    showBackground: true,
+                    alignment: 'center',
+                    titleBoxWidth: 400
+                });
+                const runs = [makeTitleRun({ text: 'Hi' })];
+                render(ctx, 1920, 1080, style, runs);
+
+                // Background fillRect should be called with boxWidth (400)
+                expect(calls.fillRect.length).to.be.at.least(1);
+                const bg = calls.fillRect[0];
+                expect(bg.w).to.equal(400);
+            });
+
+            it('2.5.10 — render with auto width: background rect uses textWidth + 2*PADDING', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({
+                    showBackground: true,
+                    alignment: 'center',
+                    titleBoxWidth: null
+                });
+                const runs = [makeTitleRun({ text: 'Hello' })];
+                render(ctx, 1920, 1080, style, runs);
+
+                expect(calls.fillRect.length).to.be.at.least(1);
+                const bg = calls.fillRect[0];
+                // Background width should be textWidth + 2*PADDING
+                const textWidth = calls.measureText[0].width;
+                expect(bg.w).to.be.closeTo(textWidth + 24, 1);
+            });
+
+            it('2.5.11 — render with custom width + left alignment: text at box left edge', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({
+                    alignment: 'left',
+                    titleBoxWidth: 400
+                });
+                const runs = [makeTitleRun({ text: 'Hi' })];
+                render(ctx, 1920, 1080, style, runs);
+
+                expect(calls.fillText.length).to.equal(1);
+                // With left alignment and no custom position, box is centered
+                // boxLeft = (1920 - 400) / 2 = 760, textOffset = 0
+                // textStartX = 760 + 0 = 760
+                expect(calls.fillText[0].x).to.be.closeTo(760, 1);
+            });
+
+            it('2.5.12 — render with custom width + right alignment: text at box right edge', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({
+                    alignment: 'right',
+                    titleBoxWidth: 400
+                });
+                const runs = [makeTitleRun({ text: 'Hi' })];
+                render(ctx, 1920, 1080, style, runs);
+
+                expect(calls.fillText.length).to.equal(1);
+                // boxLeft = (1920 - 400) / 2 = 760
+                // textOffset = 400 - textWidth
+                // textStartX = 760 + (400 - textWidth) = 1160 - textWidth
+                const textWidth = calls.measureText[0].width;
+                expect(calls.fillText[0].x).to.be.closeTo(1160 - textWidth, 1);
+            });
+
+            it('2.5.13 — render with custom position: title renders at custom X/Y', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({
+                    alignment: 'center',
+                    titleBoxWidth: 400,
+                    titleBoxX: 100,
+                    titleBoxY: 500
+                });
+                const runs = [makeTitleRun({ text: 'Hi' })];
+                render(ctx, 1920, 1080, style, runs);
+
+                expect(calls.fillText.length).to.equal(1);
+                // Custom position: boxLeft = 100, textOffset = (400 - textWidth)/2
+                // textStartX = 100 + (400 - textWidth)/2
+                const textWidth = calls.measureText[0].width;
+                expect(calls.fillText[0].x).to.be.closeTo(100 + (400 - textWidth) / 2, 1);
+                // Y should be at custom position (baselineY = 500)
+                expect(calls.fillText[0].y).to.equal(500);
+            });
+
+            it('2.5.14 — render without custom position: title centered at bottom (backward compat)', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({
+                    alignment: 'center',
+                    titleBoxWidth: null,
+                    titleBoxX: null,
+                    titleBoxY: null
+                });
+                const runs = [makeTitleRun({ text: 'Hello' })];
+                render(ctx, 1920, 1080, style, runs);
+
+                expect(calls.fillText.length).to.equal(1);
+                // Y should be at default bottom margin
+                expect(calls.fillText[0].y).to.equal(1080 - 40); // height - MARGIN
+                // X should be centered: (width - textWidth) / 2
+                const textWidth = calls.measureText[0].width;
+                expect(calls.fillText[0].x).to.be.closeTo((1920 - textWidth) / 2, 1);
+            });
+
+            it('2.5.15 — render with interaction outline: strokeRect drawn when hovering', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({
+                    alignment: 'center',
+                    titleBoxWidth: 400
+                });
+                const runs = [makeTitleRun({ text: 'Hi' })];
+                const interactionState = { hoverTarget: 'body' };
+                render(ctx, 1920, 1080, style, runs, interactionState);
+
+                // strokeRect should be called for the interaction outline
+                expect(calls.strokeRect).to.have.property('length');
+                expect(calls.strokeRect.length).to.be.at.least(1);
+            });
+
+            it('2.5.16 — render without interaction state: no strokeRect', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({
+                    alignment: 'center',
+                    titleBoxWidth: 400
+                });
+                const runs = [makeTitleRun({ text: 'Hi' })];
+                render(ctx, 1920, 1080, style, runs, null);
+
+                // No strokeRect should be called
+                expect(calls.strokeRect).to.have.property('length');
+                expect(calls.strokeRect.length).to.equal(0);
+            });
+
+            it('2.5.17 — render with interaction mode (dragging): solid outline', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({
+                    alignment: 'center',
+                    titleBoxWidth: 400
+                });
+                const runs = [makeTitleRun({ text: 'Hi' })];
+                const interactionState = { interactionMode: 'drag' };
+                render(ctx, 1920, 1080, style, runs, interactionState);
+
+                expect(calls.strokeRect.length).to.be.at.least(1);
+                // strokeStyle should be solid blue (#3b82f6) when dragging
+                expect(calls.strokeStyle).to.include('#3b82f6');
             });
         });
     </script>

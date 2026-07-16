@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TitleInteraction Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — TitleInteraction Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Phase 6 — Title Canvas Interaction (drag to move, edge-drag to resize)</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createTitleInteraction } from '../MyESModules/Interaction/TitleInteraction.js';
+        import { computeBounds } from '../MyESModules/Rendering/TitleRenderer.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // Helpers
+        // ============================================================
+
+        function makeTitleRun({ text = 'Hello World', bold = false, italic = false, underline = false } = {}) {
+            return { text, bold, italic, underline };
+        }
+
+        function makeTitleStyle({
+            fontSize = 36,
+            fontFamily = 'Arial',
+            alignment = 'center',
+            titleBoxWidth = 400,
+            titleBoxX = 500,
+            titleBoxY = 900
+        } = {}) {
+            return { fontSize, fontFamily, alignment, titleBoxWidth, titleBoxX, titleBoxY };
+        }
+
+        function createTestState(titleStyle, titleRuns) {
+            return {
+                titleStyle: titleStyle || makeTitleStyle(),
+                titleRuns: titleRuns || [makeTitleRun()],
+                panels: [],
+                panelAssignments: new Map(),
+                _multiTouchGestureActive: false,
+                titleInteractionMode: null,
+                titleHoverTarget: null
+            };
+        }
+
+        // Create a canvas element for DOM-based tests
+        function createTestCanvas() {
+            const canvas = document.createElement('canvas');
+            canvas.id = 'title-interaction-test-canvas';
+            canvas.width = 1920;
+            canvas.height = 1080;
+            canvas.style.cssText = 'width: 960px; height: 540px; position: fixed; top: 0px; left: 0px; z-index: -1;';
+            document.body.appendChild(canvas);
+            return canvas;
+        }
+
+        // ============================================================
+        // Section 6.3: Hit Testing
+        // ============================================================
+        describe('TitleInteraction — Hit Testing', () => {
+            let canvas;
+
+            beforeEach(() => {
+                canvas = createTestCanvas();
+            });
+
+            afterEach(() => {
+                if (canvas && canvas.parentNode) {
+                    canvas.parentNode.removeChild(canvas);
+                }
+            });
+
+            it('6.3.1 — Hit test on title body returns body target', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Canvas CSS: 960x540, logical: 1920x1080
+                // Title box: logical (500, 900) with width 400, height ~60 (fontSize 36 + padding 24)
+                // Logical box Y top: 900 - 36 - 12 = 852, bottom: 900 + 12 = 912
+                // CSS coords: x = 500/2 = 250, y_top = 852/2 = 426
+                // Center of box in CSS: x=250+100=350, y=426+30=456
+                const result = handler._hitTestTitle(350, 456, 960, 540);
+
+                expect(result.hit).to.be.true;
+                expect(result.target).to.equal('body');
+
+                handler.detach();
+            });
+
+            it('6.3.2 — Hit test on left edge returns left-edge target', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Left edge of title box in CSS coords
+                // Logical left: 500, CSS left: 250
+                // Within EDGE_THRESHOLD (8 CSS px) of left edge
+                const result = handler._hitTestTitle(253, 456, 960, 540);
+
+                expect(result.hit).to.be.true;
+                expect(result.target).to.equal('left-edge');
+
+                handler.detach();
+            });
+
+            it('6.3.3 — Hit test on right edge returns right-edge target', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Right edge of title box in CSS coords
+                // Logical right: 500 + 400 = 900, CSS right: 450
+                // Within EDGE_THRESHOLD (8 CSS px) of right edge
+                const result = handler._hitTestTitle(447, 456, 960, 540);
+
+                expect(result.hit).to.be.true;
+                expect(result.target).to.equal('right-edge');
+
+                handler.detach();
+            });
+
+            it('6.3.4 — Hit test outside title box returns no hit', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Point far from title box
+                const result = handler._hitTestTitle(100, 100, 960, 540);
+
+                expect(result.hit).to.be.false;
+
+                handler.detach();
+            });
+
+            it('6.3.5 — Hit test with no title text returns no hit', () => {
+                const state = createTestState(
+                    makeTitleStyle(),
+                    []
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => [],
+                    getState: () => ({ runs: [], style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                const result = handler._hitTestTitle(350, 456, 960, 540);
+
+                expect(result.hit).to.be.false;
+
+                handler.detach();
+            });
+        });
+
+        // ============================================================
+        // Phase 2: SIZE_CONSTANTS usage
+        // ============================================================
+        describe('Phase 2 — SIZE_CONSTANTS usage', () => {
+            let canvas;
+
+            beforeEach(() => {
+                canvas = createTestCanvas();
+            });
+
+            afterEach(() => {
+                if (canvas && canvas.parentNode) {
+                    canvas.parentNode.removeChild(canvas);
+                }
+            });
+
+            it('2.T.5 — Hit test uses SIZE_CONSTANTS defaultCanvasWidth (1920) not hardcoded', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Hit test at the far right edge of canvas (CSS: 960 = logical 1920)
+                // If SIZE_CONSTANTS.defaultCanvasWidth (1920) is used, the scale factor is correct
+                // and the hit test should work at the edge
+                const result = handler._hitTestTitle(959, 456, 960, 540);
+                // At the far right edge, it should not hit the title box at x=500,w=400
+                // (logical right edge of box = 900, CSS = 450)
+                expect(result.hit).to.be.false;
+
+                handler.detach();
+            });
+
+            it('2.T.5b — Hit test scale factors use SIZE_CONSTANTS aspect ratio', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 960, titleBoxY: 900, titleBoxWidth: 200 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Title box: logical (960, 900), width 200
+                // With SIZE_CONSTANTS: scaleX = 960/1920 = 0.5, scaleY = 540/1080 = 0.5
+                // CSS box: left = 960*0.5 = 480, right = 1160*0.5 = 580
+                // Center CSS: x = 530, y = 441
+                const result = handler._hitTestTitle(530, 441, 960, 540);
+                expect(result.hit).to.be.true;
+
+                handler.detach();
+            });
+        });
+
+        // ============================================================
+        // Phase 2: Drag VISIBLE_MIN clamping
+        // ============================================================
+        describe('Phase 2 — Drag VISIBLE_MIN clamping', () => {
+            let canvas;
+
+            beforeEach(() => {
+                canvas = createTestCanvas();
+            });
+
+            afterEach(() => {
+                if (canvas && canvas.parentNode) {
+                    canvas.parentNode.removeChild(canvas);
+                }
+            });
+
+            it('2.T.1 — Drag left: clamped to -boxWidth + VISIBLE_MIN (not 0)', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 100, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                let positionCalls = [];
+                const titleManager = {
+                    setPosition: (x, y) => { positionCalls.push({ x, y }); state.titleStyle.titleBoxX = x; state.titleStyle.titleBoxY = y; },
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Pointer down on title body (CSS: x=150, y=441)
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 150, clientY: 441, button: 0, bubbles: true
+                }));
+
+                // Drag far left — should clamp to -boxWidth + VISIBLE_MIN = -400 + 50 = -350
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: -500, clientY: 441, bubbles: true
+                }));
+
+                const lastPos = positionCalls[positionCalls.length - 1];
+                // With VISIBLE_MIN=50, left clamp is -350 (not 0)
+                expect(lastPos.x).to.equal(-350);
+                expect(lastPos.x).to.be.at.least(-350);
+
+                handler.detach();
+            });
+
+            it('2.T.2 — Drag right: clamped to canvasWidth - VISIBLE_MIN (not canvasWidth - boxWidth)', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 1300, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                let positionCalls = [];
+                const titleManager = {
+                    setPosition: (x, y) => { positionCalls.push({ x, y }); state.titleStyle.titleBoxX = x; state.titleStyle.titleBoxY = y; },
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // CSS box: left=650, top=426, right=850, bottom=456
+                // Center of box in CSS: x=750, y=441
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 750, clientY: 441, button: 0, bubbles: true
+                }));
+
+                // Drag far right — should clamp to 1920 - 50 = 1870 (not 1920 - 400 = 1520)
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 2000, clientY: 441, bubbles: true
+                }));
+
+                const lastPos = positionCalls[positionCalls.length - 1];
+                // With VISIBLE_MIN=50, right clamp is 1870 (not 1520)
+                expect(lastPos.x).to.equal(1870);
+                expect(lastPos.x).to.be.at.most(1870);
+
+                handler.detach();
+            });
+
+            it('2.T.3 — Drag within bounds: no clamping applied', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 960, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                let positionCalls = [];
+                const titleManager = {
+                    setPosition: (x, y) => { positionCalls.push({ x, y }); state.titleStyle.titleBoxX = x; state.titleStyle.titleBoxY = y; },
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // CSS box: left=480, top=426, right=680, bottom=456
+                // Center: x=580, y=441
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 580, clientY: 441, button: 0, bubbles: true
+                }));
+
+                // Drag 100px left (CSS: 580 -> 480, logical: 960 -> 760)
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 480, clientY: 441, bubbles: true
+                }));
+
+                const lastPos = positionCalls[positionCalls.length - 1];
+                // Within bounds, no clamping — should be 960 - 200 = 760
+                expect(lastPos.x).to.equal(760);
+
+                handler.detach();
+            });
+
+            it('2.T.4 — Y-axis clamping preserved: top clamp at fontSize + 12', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400, fontSize: 36 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                let positionCalls = [];
+                const titleManager = {
+                    setPosition: (x, y) => { positionCalls.push({ x, y }); state.titleStyle.titleBoxX = x; state.titleStyle.titleBoxY = y; },
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 350, clientY: 441, button: 0, bubbles: true
+                }));
+
+                // Drag far up — should clamp to fontSize + 12 = 36 + 12 = 48
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 350, clientY: 0, bubbles: true
+                }));
+
+                const lastPos = positionCalls[positionCalls.length - 1];
+                expect(lastPos.y).to.equal(48);
+
+                handler.detach();
+            });
+
+            it('2.T.4b — Y-axis clamping preserved: bottom clamp at canvasHeight - 12', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 100, titleBoxWidth: 400, fontSize: 36 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                let positionCalls = [];
+                const titleManager = {
+                    setPosition: (x, y) => { positionCalls.push({ x, y }); state.titleStyle.titleBoxX = x; state.titleStyle.titleBoxY = y; },
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // CSS box for y=100: boxTop = (100 - 36 - 12)/2 = 26
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 350, clientY: 31, button: 0, bubbles: true
+                }));
+
+                // Drag far down — should clamp to 1080 - 12 = 1068
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 350, clientY: 600, bubbles: true
+                }));
+
+                const lastPos = positionCalls[positionCalls.length - 1];
+                expect(lastPos.y).to.equal(1068);
+
+                handler.detach();
+            });
+        });
+
+        // ============================================================
+        // Section 6.3: Drag Behavior
+        // ============================================================
+        describe('TitleInteraction — Drag Behavior', () => {
+            let canvas;
+
+            beforeEach(() => {
+                canvas = createTestCanvas();
+            });
+
+            afterEach(() => {
+                if (canvas && canvas.parentNode) {
+                    canvas.parentNode.removeChild(canvas);
+                }
+            });
+
+            it('6.3.6 — Drag clamps X to left boundary with VISIBLE_MIN', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 100, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                let positionCalls = [];
+                const titleManager = {
+                    setPosition: (x, y) => { positionCalls.push({ x, y }); state.titleStyle.titleBoxX = x; state.titleStyle.titleBoxY = y; },
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Title box: logical (100, 900), width 400, height ~60
+                // CSS box: left=50, top=426, right=250, bottom=456
+                // Center of box in CSS: x=150, y=441
+                // Pointer down on title body
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 150, clientY: 441, button: 0, bubbles: true
+                }));
+
+                // Drag far left (should clamp to -boxWidth + VISIBLE_MIN = -350)
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: -500, clientY: 441, bubbles: true
+                }));
+
+                // Verify X was clamped to >= -350 (at least 50px visible)
+                const lastPos = positionCalls[positionCalls.length - 1];
+                expect(lastPos.x).to.be.at.least(-350);
+
+                handler.detach();
+            });
+
+            it('6.3.7 — Drag clamps X to right boundary with VISIBLE_MIN', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 1300, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                let positionCalls = [];
+                const titleManager = {
+                    setPosition: (x, y) => { positionCalls.push({ x, y }); state.titleStyle.titleBoxX = x; state.titleStyle.titleBoxY = y; },
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Title box: logical (1300, 900), width 400, height ~60
+                // CSS box: left=650, top=426, right=850, bottom=456
+                // Center of box in CSS: x=750, y=441
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 750, clientY: 441, button: 0, bubbles: true
+                }));
+
+                // Drag far right (should clamp to canvasWidth - VISIBLE_MIN = 1870)
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 2000, clientY: 441, bubbles: true
+                }));
+
+                const lastPos = positionCalls[positionCalls.length - 1];
+                // With VISIBLE_MIN=50, right clamp is 1920 - 50 = 1870
+                expect(lastPos.x).to.be.at.most(1870);
+
+                handler.detach();
+            });
+
+            it('6.3.8 — Resize clamps width to minimum (textWidth)', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                let widthCalls = [];
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: (w) => { widthCalls.push(w); state.titleStyle.titleBoxWidth = w; },
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Pointer down on right edge
+                // Logical right: 500 + 400 = 900, CSS right: 450
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 447, clientY: 456, button: 0, bubbles: true
+                }));
+
+                // Drag far left to shrink width to near zero
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 100, clientY: 456, bubbles: true
+                }));
+
+                // Width should be clamped to at least textWidth (or minimum 100)
+                if (widthCalls.length > 0) {
+                    const minWidth = Math.min(...widthCalls);
+                    expect(minWidth).to.be.at.least(100);
+                }
+
+                handler.detach();
+            });
+
+            it('Drag interaction updates titleInteractionMode state', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Pointer down on title body
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 350, clientY: 456, button: 0, bubbles: true
+                }));
+
+                // Move to trigger drag threshold
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 400, clientY: 456, bubbles: true
+                }));
+
+                expect(state.titleInteractionMode).to.equal('drag');
+
+                handler.detach();
+            });
+
+            it('Resize-right interaction updates titleInteractionMode to resize-right', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Pointer down on right edge
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 447, clientY: 456, button: 0, bubbles: true
+                }));
+
+                // Move to trigger drag threshold
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 500, clientY: 456, bubbles: true
+                }));
+
+                expect(state.titleInteractionMode).to.equal('resize-right');
+
+                handler.detach();
+            });
+        });
+
+        // ============================================================
+        // Section 6.3: Resize Behavior
+        // ============================================================
+        describe('TitleInteraction — Resize Behavior', () => {
+            let canvas;
+
+            beforeEach(() => {
+                canvas = createTestCanvas();
+            });
+
+            afterEach(() => {
+                if (canvas && canvas.parentNode) {
+                    canvas.parentNode.removeChild(canvas);
+                }
+            });
+
+            it('Resize-right: pointer moves right increases width', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                let widthCalls = [];
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: (w) => { widthCalls.push(w); state.titleStyle.titleBoxWidth = w; },
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Pointer down on right edge (CSS x=447)
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 447, clientY: 456, button: 0, bubbles: true
+                }));
+
+                // Move right to increase width
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 500, clientY: 456, bubbles: true
+                }));
+
+                expect(widthCalls.length).to.be.at.least(1);
+                // Width should have increased from 400
+                expect(widthCalls[widthCalls.length - 1]).to.be.greaterThan(400);
+
+                handler.detach();
+            });
+
+            it('Resize-left: pointer moves left increases width and decreases X', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                let positionCalls = [];
+                let widthCalls = [];
+                const titleManager = {
+                    setPosition: (x, y) => { positionCalls.push({ x, y }); state.titleStyle.titleBoxX = x; state.titleStyle.titleBoxY = y; },
+                    setWidth: (w) => { widthCalls.push(w); state.titleStyle.titleBoxWidth = w; },
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Pointer down on left edge (CSS x=253)
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 253, clientY: 456, button: 0, bubbles: true
+                }));
+
+                // Move left to increase width
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 200, clientY: 456, bubbles: true
+                }));
+
+                expect(widthCalls.length).to.be.at.least(1);
+                // Width should have increased from 400
+                expect(widthCalls[widthCalls.length - 1]).to.be.greaterThan(400);
+                // Position X should have decreased from 500
+                if (positionCalls.length > 0) {
+                    expect(positionCalls[positionCalls.length - 1].x).to.be.lessThan(500);
+                }
+
+                handler.detach();
+            });
+        });
+
+        // ============================================================
+        // Section 6.3: Multi-touch Guard
+        // ============================================================
+        describe('TitleInteraction — Multi-touch Guard', () => {
+            let canvas;
+
+            beforeEach(() => {
+                canvas = createTestCanvas();
+            });
+
+            afterEach(() => {
+                if (canvas && canvas.parentNode) {
+                    canvas.parentNode.removeChild(canvas);
+                }
+            });
+
+            it('6.2.6 — Pointer down skipped when _multiTouchGestureActive is true', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+                state._multiTouchGestureActive = true;
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Pointer down on title — should be ignored
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 350, clientY: 456, button: 0, bubbles: true
+                }));
+
+                // Move — should not trigger interaction
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 400, clientY: 456, bubbles: true
+                }));
+
+                expect(state.titleInteractionMode).to.be.null;
+
+                handler.detach();
+            });
+        });
+
+        // ============================================================
+        // Section 6.2: PanelSwap Coordination
+        // ============================================================
+        describe('TitleInteraction — PanelSwap Coordination', () => {
+            let canvas;
+
+            beforeEach(() => {
+                canvas = createTestCanvas();
+            });
+
+            afterEach(() => {
+                if (canvas && canvas.parentNode) {
+                    canvas.parentNode.removeChild(canvas);
+                }
+            });
+
+            it('6.2.7 — PanelSwap pointerdown skipped when titleInteractionMode is set', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+                // Simulate that title interaction is already active
+                state.titleInteractionMode = 'drag';
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // A new pointer down should not start a new interaction
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 350, clientY: 456, button: 0, bubbles: true
+                }));
+
+                // Interaction mode should remain 'drag' (not reset or changed)
+                expect(state.titleInteractionMode).to.equal('drag');
+
+                handler.detach();
+            });
+        });
+
+        // ============================================================
+        // Section 6.3: Attach/Detach Lifecycle
+        // ============================================================
+        describe('TitleInteraction — Attach/Detach Lifecycle', () => {
+            let canvas;
+
+            beforeEach(() => {
+                canvas = createTestCanvas();
+            });
+
+            afterEach(() => {
+                if (canvas && canvas.parentNode) {
+                    canvas.parentNode.removeChild(canvas);
+                }
+            });
+
+            it('6.3.9 — attach() and detach() are idempotent', () => {
+                const state = createTestState(
+                    makeTitleStyle(),
+                    [makeTitleRun()]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                // Attach multiple times should not throw
+                expect(() => {
+                    handler.attach();
+                    handler.attach();
+                }).to.not.throw();
+
+                // Detach multiple times should not throw
+                expect(() => {
+                    handler.detach();
+                    handler.detach();
+                }).to.not.throw();
+            });
+
+            it('Pointer capture is released on pointer up', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                let releasedIds = [];
+                canvas.releasePointerCapture = (pid) => { releasedIds.push(pid); };
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Pointer down
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 350, clientY: 456, button: 0, bubbles: true
+                }));
+
+                // Move to trigger drag
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 400, clientY: 456, bubbles: true
+                }));
+
+                // Pointer up
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    clientX: 400, clientY: 456, bubbles: true
+                }));
+
+                // Interaction state should be cleared
+                expect(state.titleInteractionMode).to.be.null;
+                expect(state.titleHoverTarget).to.be.null;
+
+                handler.detach();
+            });
+
+            it('Global pointerup cleans up interaction state when released outside canvas', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Pointer down on title
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 350, clientY: 456, button: 0, bubbles: true
+                }));
+
+                // Move to trigger drag
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 400, clientY: 456, bubbles: true
+                }));
+
+                expect(state.titleInteractionMode).to.equal('drag');
+
+                // Simulate pointerup on window (outside canvas)
+                window.dispatchEvent(new PointerEvent('pointerup', {
+                    clientX: 9999, clientY: 9999, bubbles: true
+                }));
+
+                // Interaction state should be cleared
+                expect(state.titleInteractionMode).to.be.null;
+
+                handler.detach();
+            });
+        });
+
+        // ============================================================
+        // Section 6.2: Hover Feedback
+        // ============================================================
+        describe('TitleInteraction — Hover Feedback', () => {
+            let canvas;
+
+            beforeEach(() => {
+                canvas = createTestCanvas();
+            });
+
+            afterEach(() => {
+                if (canvas && canvas.parentNode) {
+                    canvas.parentNode.removeChild(canvas);
+                }
+            });
+
+            it('Hover over title body sets cursor to move', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Move cursor over title body (no pointer down first)
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 350, clientY: 456, bubbles: true
+                }));
+
+                expect(state.titleHoverTarget).to.equal('body');
+                expect(canvas.style.cursor).to.equal('grab');
+
+                handler.detach();
+            });
+
+            it('Hover over title edge sets cursor to ew-resize', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Move cursor over right edge
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 447, clientY: 456, bubbles: true
+                }));
+
+                expect(state.titleHoverTarget).to.equal('right-edge');
+                expect(canvas.style.cursor).to.equal('ew-resize');
+
+                handler.detach();
+            });
+
+            it('Hover outside title clears cursor and hover target', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // First hover over title
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 350, clientY: 456, bubbles: true
+                }));
+
+                expect(state.titleHoverTarget).to.equal('body');
+
+                // Then move away
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 100, clientY: 100, bubbles: true
+                }));
+
+                expect(state.titleHoverTarget).to.be.null;
+                expect(canvas.style.cursor).to.equal('');
+
+                handler.detach();
+            });
+        });
+
+        // ============================================================
+        // Section: onInteractionStart / onInteractionEnd callbacks
+        // ============================================================
+        describe('TitleInteraction — Callbacks', () => {
+            let canvas;
+
+            beforeEach(() => {
+                canvas = createTestCanvas();
+            });
+
+            afterEach(() => {
+                if (canvas && canvas.parentNode) {
+                    canvas.parentNode.removeChild(canvas);
+                }
+            });
+
+            it('onInteractionStart is called when drag begins', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                let startCalled = false;
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => { startCalled = true; },
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Pointer down + move to trigger drag
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 350, clientY: 456, button: 0, bubbles: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 400, clientY: 456, bubbles: true
+                }));
+
+                expect(startCalled).to.be.true;
+
+                handler.detach();
+            });
+
+            it('onInteractionEnd is called when drag ends', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                let endCalled = false;
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => { endCalled = true; }
+                });
+
+                handler.attach();
+
+                // Pointer down + move to trigger drag
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 350, clientY: 456, button: 0, bubbles: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 400, clientY: 456, bubbles: true
+                }));
+                // Pointer up
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    clientX: 400, clientY: 456, bubbles: true
+                }));
+
+                expect(endCalled).to.be.true;
+
+                handler.detach();
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

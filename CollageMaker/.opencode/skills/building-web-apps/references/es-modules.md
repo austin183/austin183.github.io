@@ -81,3 +81,16 @@ export { exportToJpeg } from './Export/formats/jpegExporter.js';
 3. **`type="module"` required** — Script tags must have `type="module"` to use import/export
 4. **Top-level await not needed** — All async initialization happens in Vue lifecycle hooks
 5. **Barrel re-exports of missing names** — `export { foo } from './bar.js'` where `bar.js` doesn't export `foo` silently yields `undefined`. Always verify the source module exports the name.
+6. **Destructured parameter scoping** — When a function destructures its parameter object, the original variable name is not accessible inside the function body. Destructure all needed properties explicitly:
+```javascript
+// WRONG — `options` is not defined inside the function
+render(ctx, { panels, images, titleStyle }) {
+    helper(options.someProp); // ReferenceError!
+}
+
+// CORRECT — destructure the needed property too
+render(ctx, { panels, images, titleStyle, someProp }) {
+    helper(someProp); // Works
+}
+```
+JavaScript destructuring creates new bindings for each destructured property. The original parameter name (`options`, `params`, etc.) is not preserved.

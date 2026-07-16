@@ -163,6 +163,50 @@ export function createTitleHandlers(getTitleManager, onRenderScheduled) {
                 titleManager.showBackground(this.titleStyle.showBackground);
             }
             onRenderScheduled(this);
+        },
+
+        /**
+         * Handles title font opacity change.
+         */
+        onTitleFontOpacityChange() {
+            const titleManager = getTitleManager();
+            if (titleManager) {
+                titleManager.setFontOpacity(this.titleStyle.fontOpacity);
+            }
+            onRenderScheduled(this);
+        },
+
+        /**
+         * Handles title background opacity change.
+         */
+        onTitleBgOpacityChange() {
+            const titleManager = getTitleManager();
+            if (titleManager) {
+                titleManager.setBgOpacity(this.titleStyle.bgOpacity);
+            }
+            onRenderScheduled(this);
+        },
+
+        /**
+         * Handles title box width change.
+         */
+        onTitleWidthChange() {
+            const titleManager = getTitleManager();
+            if (titleManager) {
+                titleManager.setWidth(this.titleStyle.titleBoxWidth);
+            }
+            onRenderScheduled(this);
+        },
+
+        /**
+         * Resets the title box position and width to defaults.
+         */
+        resetTitlePosition() {
+            const titleManager = getTitleManager();
+            if (titleManager) {
+                titleManager.resetPosition();
+            }
+            onRenderScheduled(this);
         }
     };
 }

@@ -21,7 +21,7 @@
     <script>mocha.setup('bdd');</script>
 
     <script type="module">
-        import { computeShapeOverlayPoints, drawShapeOverlay } from '../MyESModules/Layout/CropOverlayShape.js';
+        import { computeShapeOverlayPoints, drawShapeOverlay, beginPathFromPoints } from '../MyESModules/Layout/CropOverlayShape.js';
         import { createRectGeometry, createPathGeometry, isRectGeometry } from '../MyESModules/Models/PanelGeometry.js';
 
         const { expect } = chai;
@@ -129,7 +129,7 @@
                 drawShapeOverlay(ctx, [[0, 0]]);
             });
 
-            it('draws a filled and stroked shape', () => {
+            it('draws a stroked shape border (fill is transparent)', () => {
                 const canvas = document.createElement('canvas');
                 canvas.width = 200;
                 canvas.height = 150;
@@ -138,10 +138,209 @@
                 const points = [[20, 20], [180, 20], [180, 130], [20, 130]];
                 drawShapeOverlay(ctx, points);
 
-                // Verify canvas has content (pixel at center should be non-transparent)
+                // Fill is transparent (alpha 0), so center pixel is untouched
+                const centerData = ctx.getImageData(100, 75, 1, 1);
+                expect(centerData.data[3]).to.equal(0);
+
+                // Stroke border should be visible along the edge
+                const edgeData = ctx.getImageData(20, 75, 1, 1);
+                expect(edgeData.data[3]).to.be.greaterThan(0);
+            });
+        });
+
+        // ============================================================
+        // Phase 1.1: beginPathFromPoints helper
+        // ============================================================
+        describe('CropOverlayShape — beginPathFromPoints', () => {
+            it('creates a valid path from an array of points', () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 200;
+                canvas.height = 150;
+                const ctx = canvas.getContext('2d');
+
+                const points = [[10, 10], [190, 10], [190, 140], [10, 140]];
+                beginPathFromPoints(ctx, points);
+
+                // Fill should produce visible pixels
+                ctx.fillStyle = '#ff0000';
+                ctx.fill();
+
                 const imageData = ctx.getImageData(100, 75, 1, 1);
-                // The fill is semi-transparent white, so alpha should be > 0
-                expect(imageData.data[3]).to.be.greaterThan(0);
+                expect(imageData.data[0]).to.equal(255); // Red
+                expect(imageData.data[1]).to.equal(0);   // Green
+                expect(imageData.data[2]).to.equal(0);   // Blue
+                expect(imageData.data[3]).to.equal(255); // Alpha
+            });
+
+            it('handles triangle (3 points)', () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 200;
+                canvas.height = 150;
+                const ctx = canvas.getContext('2d');
+
+                const points = [[100, 10], [10, 140], [190, 140]];
+                beginPathFromPoints(ctx, points);
+
+                ctx.fillStyle = '#00ff00';
+                ctx.fill();
+
+                // Center of triangle should be green
+                const imageData = ctx.getImageData(100, 100, 1, 1);
+                expect(imageData.data[1]).to.equal(255); // Green
+            });
+
+            it('handles hexagon (6 points)', () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 200;
+                canvas.height = 200;
+                const ctx = canvas.getContext('2d');
+
+                const points = [
+                    [100, 10], [170, 50], [170, 130],
+                    [100, 170], [30, 130], [30, 50]
+                ];
+                beginPathFromPoints(ctx, points);
+
+                ctx.fillStyle = '#0000ff';
+                ctx.fill();
+
+                // Center should be blue
+                const imageData = ctx.getImageData(100, 90, 1, 1);
+                expect(imageData.data[2]).to.equal(255); // Blue
+            });
+
+            it('does not crash with null or empty points', () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 200;
+                canvas.height = 150;
+                const ctx = canvas.getContext('2d');
+
+                // Should not throw
+                beginPathFromPoints(ctx, null);
+                beginPathFromPoints(ctx, undefined);
+                beginPathFromPoints(ctx, []);
+                beginPathFromPoints(ctx, [[1, 2]]);
+                beginPathFromPoints(ctx, [[1, 2], [3, 4]]);
+            });
+
+            it('closes the path automatically', () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 200;
+                canvas.height = 150;
+                const ctx = canvas.getContext('2d');
+
+                // Open triangle (3 points, no explicit closePath by caller)
+                const points = [[10, 10], [190, 10], [100, 140]];
+                beginPathFromPoints(ctx, points);
+
+                // Stroke should be a closed shape (all 3 edges)
+                ctx.strokeStyle = '#ff0000';
+                ctx.lineWidth = 4;
+                ctx.stroke();
+
+                // Check midpoints of all 3 edges are drawn
+                const topMid = ctx.getImageData(100, 10, 1, 1);
+                const leftMid = ctx.getImageData(55, 75, 1, 1);
+                const rightMid = ctx.getImageData(145, 75, 1, 1);
+
+                // All edges should have red stroke
+                expect(topMid.data[0]).to.be.greaterThan(200);
+                expect(leftMid.data[0]).to.be.greaterThan(200);
+                expect(rightMid.data[0]).to.be.greaterThan(200);
+            });
+        });
+
+        // ============================================================
+        // Phase 1.2: Enhanced drawShapeOverlay styling
+        // ============================================================
+        describe('CropOverlayShape — drawShapeOverlay enhanced styling', () => {
+            /**
+             * Wrap ctx.fill() and ctx.stroke() to capture canvas state at call time.
+             * drawShapeOverlay uses save()/restore() so state is not visible after return.
+             */
+            function createCaptureCtx() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 200;
+                canvas.height = 150;
+                const ctx = canvas.getContext('2d');
+
+                const captured = { fillStyle: [], strokeStyle: [], lineWidth: [], lineDash: [] };
+
+                const origFill = ctx.fill.bind(ctx);
+                const origStroke = ctx.stroke.bind(ctx);
+
+                ctx.fill = function () {
+                    captured.fillStyle.push(ctx.fillStyle);
+                    captured.lineWidth.push(ctx.lineWidth);
+                    return origFill();
+                };
+
+                ctx.stroke = function () {
+                    captured.strokeStyle.push(ctx.strokeStyle);
+                    captured.lineWidth.push(ctx.lineWidth);
+                    captured.lineDash.push(ctx.getLineDash().join(','));
+                    return origStroke();
+                };
+
+                return { ctx, captured };
+            }
+
+            it('uses solid stroke (no dash)', () => {
+                const { ctx, captured } = createCaptureCtx();
+
+                const points = [[20, 20], [180, 20], [180, 130], [20, 130]];
+                drawShapeOverlay(ctx, points);
+
+                // stroke() should be called with empty lineDash (solid)
+                expect(captured.lineDash).to.include('');
+            });
+
+            it('uses zero fill alpha so the image is fully visible inside the crop shape', () => {
+                const { ctx, captured } = createCaptureCtx();
+
+                const points = [[20, 20], [180, 20], [180, 130], [20, 130]];
+                drawShapeOverlay(ctx, points);
+
+                expect(captured.fillStyle).to.include('rgba(255, 255, 255, 0)');
+            });
+
+            it('uses subtle stroke alpha (0.55) for a thin visible border', () => {
+                const { ctx, captured } = createCaptureCtx();
+
+                const points = [[20, 20], [180, 20], [180, 130], [20, 130]];
+                drawShapeOverlay(ctx, points);
+
+                expect(captured.strokeStyle).to.include('rgba(255, 255, 255, 0.55)');
+            });
+
+            it('uses thin lineWidth of 1', () => {
+                const { ctx, captured } = createCaptureCtx();
+
+                const points = [[20, 20], [180, 20], [180, 130], [20, 130]];
+                drawShapeOverlay(ctx, points);
+
+                // lineWidth should be 1 at both fill and stroke time
+                expect(captured.lineWidth).to.include(1);
+            });
+
+            it('fill does not alter underlying pixels (zero alpha)', () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 200;
+                canvas.height = 150;
+                const ctx = canvas.getContext('2d');
+
+                // Clear to black first
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(0, 0, 200, 150);
+
+                const points = [[20, 20], [180, 20], [180, 130], [20, 130]];
+                drawShapeOverlay(ctx, points);
+
+                // With fill alpha 0, the underlying black pixel should be unchanged
+                const imageData = ctx.getImageData(100, 75, 1, 1);
+                expect(imageData.data[0]).to.equal(0); // R
+                expect(imageData.data[1]).to.equal(0); // G
+                expect(imageData.data[2]).to.equal(0); // B
             });
         });
 

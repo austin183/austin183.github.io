@@ -23,6 +23,7 @@
     <script type="module">
         import { createTitleManager } from '../MyESModules/State/TitleManager.js';
         import { createTitleRun, cloneTitleRun, runsHaveSameFormatting } from '../MyESModules/Models/TitleRun.js';
+        import { createTitleStyle } from '../MyESModules/Models/TitleStyle.js';
 
         const { expect } = chai;
 
@@ -486,6 +487,135 @@
                 tmWithCallback.setAlignment('right');
                 expect(notified).to.be.true;
             });
+
+            // Phase 3: Opacity setters
+            it('setFontOpacity sets value in range', () => {
+                tm.setFontOpacity(0.5);
+                expect(state.titleStyle.fontOpacity).to.equal(0.5);
+            });
+
+            it('setFontOpacity clamps negative to 0', () => {
+                tm.setFontOpacity(-0.5);
+                expect(state.titleStyle.fontOpacity).to.equal(0);
+            });
+
+            it('setFontOpacity clamps above 1 to 1', () => {
+                tm.setFontOpacity(1.5);
+                expect(state.titleStyle.fontOpacity).to.equal(1);
+            });
+
+            it('setBgOpacity sets value in range', () => {
+                tm.setBgOpacity(0.7);
+                expect(state.titleStyle.bgOpacity).to.equal(0.7);
+            });
+
+            it('setBgOpacity clamps negative to 0', () => {
+                tm.setBgOpacity(-0.3);
+                expect(state.titleStyle.bgOpacity).to.equal(0);
+            });
+
+            it('setBgOpacity clamps above 1 to 1', () => {
+                tm.setBgOpacity(2.0);
+                expect(state.titleStyle.bgOpacity).to.equal(1);
+            });
+
+            it('opacity setters trigger notify callback', () => {
+                let notified = 0;
+                const tmWithCallback = createTitleManager(state, () => { notified++; });
+
+                tmWithCallback.setFontOpacity(0.5);
+                expect(notified).to.equal(1);
+
+                tmWithCallback.setBgOpacity(0.3);
+                expect(notified).to.equal(2);
+            });
+
+            // Phase 4: Width setter
+            it('setWidth sets positive value', () => {
+                tm.setWidth(400);
+                expect(state.titleStyle.titleBoxWidth).to.equal(400);
+            });
+
+            it('setWidth nulls zero value', () => {
+                tm.setWidth(0);
+                expect(state.titleStyle.titleBoxWidth).to.be.null;
+            });
+
+            it('setWidth nulls negative value', () => {
+                tm.setWidth(-10);
+                expect(state.titleStyle.titleBoxWidth).to.be.null;
+            });
+
+            it('setWidth triggers notify callback', () => {
+                let notified = false;
+                const tmWithCallback = createTitleManager(state, () => { notified = true; });
+                tmWithCallback.setWidth(500);
+                expect(notified).to.be.true;
+            });
+
+            // Phase 5: Position setters
+            it('setPosition sets titleBoxX and titleBoxY', () => {
+                tm.setPosition(100, 200);
+                expect(state.titleStyle.titleBoxX).to.equal(100);
+                expect(state.titleStyle.titleBoxY).to.equal(200);
+            });
+
+            it('setPosition accepts negative coordinates', () => {
+                tm.setPosition(-50, -10);
+                expect(state.titleStyle.titleBoxX).to.equal(-50);
+                expect(state.titleStyle.titleBoxY).to.equal(-10);
+            });
+
+            it('setPosition accepts zero coordinates', () => {
+                tm.setPosition(0, 0);
+                expect(state.titleStyle.titleBoxX).to.equal(0);
+                expect(state.titleStyle.titleBoxY).to.equal(0);
+            });
+
+            it('setPosition triggers notify callback', () => {
+                let notified = false;
+                const tmWithCallback = createTitleManager(state, () => { notified = true; });
+                tmWithCallback.setPosition(50, 100);
+                expect(notified).to.be.true;
+            });
+
+            it('resetPosition nulls titleBoxX, titleBoxY, and titleBoxWidth', () => {
+                // Set some values first
+                state.titleStyle.titleBoxX = 100;
+                state.titleStyle.titleBoxY = 200;
+                state.titleStyle.titleBoxWidth = 500;
+                tm.resetPosition();
+                expect(state.titleStyle.titleBoxX).to.be.null;
+                expect(state.titleStyle.titleBoxY).to.be.null;
+                expect(state.titleStyle.titleBoxWidth).to.be.null;
+            });
+
+            it('resetPosition is idempotent when already null', () => {
+                state.titleStyle.titleBoxX = null;
+                state.titleStyle.titleBoxY = null;
+                state.titleStyle.titleBoxWidth = null;
+                tm.resetPosition();
+                expect(state.titleStyle.titleBoxX).to.be.null;
+                expect(state.titleStyle.titleBoxY).to.be.null;
+                expect(state.titleStyle.titleBoxWidth).to.be.null;
+            });
+
+            it('resetPosition skips notify when already at defaults', () => {
+                let notified = false;
+                const tmWithCallback = createTitleManager(state, () => { notified = true; });
+                state.titleStyle.titleBoxX = null;
+                state.titleStyle.titleBoxY = null;
+                state.titleStyle.titleBoxWidth = null;
+                tmWithCallback.resetPosition();
+                expect(notified).to.be.false;
+            });
+
+            it('resetPosition triggers notify callback', () => {
+                let notified = false;
+                const tmWithCallback = createTitleManager(state, () => { notified = true; });
+                tmWithCallback.resetPosition();
+                expect(notified).to.be.true;
+            });
         });
 
         // ============================================================
@@ -525,6 +655,70 @@
                 const a = createTitleRun('A', true, false, false);
                 const b = createTitleRun('A', false, false, false);
                 expect(runsHaveSameFormatting(a, b)).to.be.false;
+            });
+        });
+
+        // ============================================================
+        // TitleStyle Model — Phase 3: Opacity defaults
+        // ============================================================
+        describe('TitleStyle Model — Opacity (Phase 3)', () => {
+            it('createTitleStyle defaults: fontOpacity is 1.0', () => {
+                const style = createTitleStyle();
+                expect(style.fontOpacity).to.equal(1.0);
+            });
+
+            it('createTitleStyle defaults: bgOpacity is 1.0', () => {
+                const style = createTitleStyle();
+                expect(style.bgOpacity).to.equal(1.0);
+            });
+
+            it('createTitleStyle accepts custom fontOpacity', () => {
+                const style = createTitleStyle({ fontOpacity: 0.5 });
+                expect(style.fontOpacity).to.equal(0.5);
+                expect(style.bgOpacity).to.equal(1.0);
+            });
+
+            it('createTitleStyle accepts custom bgOpacity', () => {
+                const style = createTitleStyle({ bgOpacity: 0.3 });
+                expect(style.fontOpacity).to.equal(1.0);
+                expect(style.bgOpacity).to.equal(0.3);
+            });
+
+            it('createTitleStyle accepts both opacity values', () => {
+                const style = createTitleStyle({ fontOpacity: 0.5, bgOpacity: 0.3 });
+                expect(style.fontOpacity).to.equal(0.5);
+                expect(style.bgOpacity).to.equal(0.3);
+            });
+        });
+
+        // ============================================================
+        // TitleStyle Model — Phase 4: Width and Position fields
+        // ============================================================
+        describe('TitleStyle Model — Width and Position (Phase 4)', () => {
+            it('createTitleStyle defaults: titleBoxWidth is null', () => {
+                const style = createTitleStyle();
+                expect(style.titleBoxWidth).to.be.null;
+            });
+
+            it('createTitleStyle defaults: titleBoxX is null', () => {
+                const style = createTitleStyle();
+                expect(style.titleBoxX).to.be.null;
+            });
+
+            it('createTitleStyle defaults: titleBoxY is null', () => {
+                const style = createTitleStyle();
+                expect(style.titleBoxY).to.be.null;
+            });
+
+            it('createTitleStyle accepts custom titleBoxWidth', () => {
+                const style = createTitleStyle({ titleBoxWidth: 600 });
+                expect(style.titleBoxWidth).to.equal(600);
+            });
+
+            it('createTitleStyle accepts custom position', () => {
+                const style = createTitleStyle({ titleBoxX: 100, titleBoxY: 200 });
+                expect(style.titleBoxX).to.equal(100);
+                expect(style.titleBoxY).to.equal(200);
             });
         });
 

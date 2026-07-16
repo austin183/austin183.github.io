@@ -68,6 +68,7 @@ export { createFileDropHandler } from './Interaction/FileDropHandler.js';
 export { createGestureHandler } from './Interaction/GestureHandler.js';
 export { createCropInteraction } from './Interaction/CropInteraction.js';
 export { createKeyboardHandler, parseKeyShortcut, matchesShortcut, KEYBOARD_SHORTCUTS } from './Interaction/KeyboardHandler.js';
+export { createTitleInteraction } from './Interaction/TitleInteraction.js';
 
 // Utils
 export { getBrowserUtils } from './Utils/BrowserUtils.js';

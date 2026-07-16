@@ -59,23 +59,24 @@
                 methods = createCollageMethods(mockBase);
             });
 
-            it('3.1.1 — All sections start collapsed', () => {
+            it('3.1.1 — All right sidebar sections start collapsed', () => {
                 const state = data();
                 expect(state.expandedSections).to.be.an('object');
-                expect(state.expandedSections.layout).to.be.false;
                 expect(state.expandedSections.title).to.be.false;
                 expect(state.expandedSections.crop).to.be.false;
                 expect(state.expandedSections.background).to.be.false;
                 expect(state.expandedSections.overlay).to.be.false;
                 expect(state.expandedSections.export).to.be.false;
+                // layout is no longer in right sidebar (moved to left sidebar)
+                expect(state.expandedSections).to.not.have.property('layout');
             });
 
-            it('3.1.2 — sidebarSections array has 6 sections', () => {
+            it('3.1.2 — sidebarSections array has 5 sections (layout moved to left)', () => {
                 const state = data();
                 expect(state.sidebarSections).to.be.an('array');
-                expect(state.sidebarSections.length).to.equal(6);
+                expect(state.sidebarSections.length).to.equal(5);
                 const ids = state.sidebarSections.map(s => s.id);
-                expect(ids).to.include('layout');
+                expect(ids).to.not.include('layout');
                 expect(ids).to.include('title');
                 expect(ids).to.include('crop');
                 expect(ids).to.include('background');
@@ -101,10 +102,10 @@
 
             it('3.1.5 — toggleSection does not affect other sections', () => {
                 const state = data();
-                state.expandedSections.layout = true;
+                state.expandedSections.title = true;
                 const vm = { ...state };
                 methods.toggleSection.call(vm, 'crop');
-                expect(vm.expandedSections.layout).to.be.true;
+                expect(vm.expandedSections.title).to.be.true;
                 expect(vm.expandedSections.crop).to.be.true;
             });
 
@@ -122,6 +123,69 @@
                 methods.autoExpandCropOnSelect.call(vm, null);
                 // Deselecting should NOT collapse the crop section (user control)
                 expect(vm.expandedSections.crop).to.be.true;
+            });
+
+            // ---- Left sidebar section tests ----
+
+            it('3.1.8 — leftSidebarSections has 2 entries: layout first, library second', () => {
+                const state = data();
+                expect(state.leftSidebarSections).to.be.an('array');
+                expect(state.leftSidebarSections.length).to.equal(2);
+                const ids = state.leftSidebarSections.map(s => s.id);
+                expect(ids).to.deep.equal(['layout', 'library']);
+            });
+
+            it('3.1.9 — expandedLeftSections: library expanded, layout collapsed by default', () => {
+                const state = data();
+                expect(state.expandedLeftSections.library).to.be.true;
+                expect(state.expandedLeftSections.layout).to.be.false;
+            });
+
+            it('3.1.10 — toggleLeftSection expands a collapsed section', () => {
+                const state = data();
+                const vm = { ...state };
+                methods.toggleLeftSection.call(vm, 'layout');
+                expect(vm.expandedLeftSections.layout).to.be.true;
+            });
+
+            it('3.1.11 — toggleLeftSection collapses an expanded section', () => {
+                const state = data();
+                const vm = { ...state };
+                methods.toggleLeftSection.call(vm, 'library');
+                expect(vm.expandedLeftSections.library).to.be.false;
+            });
+
+            it('3.1.12 — toggleLeftSection does not affect right sidebar sections', () => {
+                const state = data();
+                state.expandedSections.crop = true;
+                const vm = { ...state };
+                methods.toggleLeftSection.call(vm, 'layout');
+                expect(vm.expandedSections.crop).to.be.true;
+                expect(vm.expandedLeftSections.layout).to.be.true;
+            });
+
+            it('3.1.13 — autoExpandLayoutOnImages expands layout when images > 1', () => {
+                const state = data();
+                state.images = [{ id: 'img1' }, { id: 'img2' }];
+                const vm = { ...state };
+                methods.autoExpandLayoutOnImages.call(vm);
+                expect(vm.expandedLeftSections.layout).to.be.true;
+            });
+
+            it('3.1.14 — autoExpandLayoutOnImages does not expand layout when images <= 1', () => {
+                const state = data();
+                state.images = [{ id: 'img1' }];
+                const vm = { ...state };
+                methods.autoExpandLayoutOnImages.call(vm);
+                expect(vm.expandedLeftSections.layout).to.be.false;
+            });
+
+            it('3.1.15 — autoExpandLayoutOnImages does not expand layout when no images', () => {
+                const state = data();
+                state.images = [];
+                const vm = { ...state };
+                methods.autoExpandLayoutOnImages.call(vm);
+                expect(vm.expandedLeftSections.layout).to.be.false;
             });
         });
 

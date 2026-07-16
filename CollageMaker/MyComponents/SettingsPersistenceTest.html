@@ -227,6 +227,73 @@
             });
         });
 
+        // ============================================================
+        // Phase 1: Title fields round-trip (Plan 2026-07-15-review-fixes CI-1)
+        // ============================================================
+        describe('Phase 1 — Title fields round-trip', () => {
+            beforeEach(() => {
+                localStorage.removeItem(STORAGE_KEY);
+            });
+
+            it('1.T.1 — Round-trip includes all 7 new title fields', () => {
+                const original = {
+                    titleFontOpacity: 0.5,
+                    titleBgOpacity: 0.8,
+                    titleBoxWidth: 500,
+                    titleBoxX: 100,
+                    titleBoxY: 850,
+                    titleShowBackground: true,
+                    titleBackgroundColor: '#FF0000'
+                };
+                save(original);
+                const loaded = load();
+                expect(loaded.titleFontOpacity).to.equal(0.5);
+                expect(loaded.titleBgOpacity).to.equal(0.8);
+                expect(loaded.titleBoxWidth).to.equal(500);
+                expect(loaded.titleBoxX).to.equal(100);
+                expect(loaded.titleBoxY).to.equal(850);
+                expect(loaded.titleShowBackground).to.equal(true);
+                expect(loaded.titleBackgroundColor).to.equal('#FF0000');
+            });
+
+            it('1.T.2 — titleBackgroundColor does not collide with backgroundColor', () => {
+                const original = {
+                    backgroundColor: '#ffffff',
+                    titleBackgroundColor: '#FF0000'
+                };
+                save(original);
+                const loaded = load();
+                expect(loaded.backgroundColor).to.equal('#ffffff');
+                expect(loaded.titleBackgroundColor).to.equal('#FF0000');
+            });
+
+            it('1.T.3 — Null position/width values preserved through round-trip', () => {
+                const original = {
+                    titleBoxWidth: null,
+                    titleBoxX: null,
+                    titleBoxY: null
+                };
+                save(original);
+                const loaded = load();
+                expect(loaded.titleBoxWidth).to.equal(null);
+                expect(loaded.titleBoxX).to.equal(null);
+                expect(loaded.titleBoxY).to.equal(null);
+            });
+
+            it('1.T.4 — Falsy values (0, false) preserved through round-trip', () => {
+                const original = {
+                    titleFontOpacity: 0,
+                    titleBgOpacity: 0,
+                    titleShowBackground: false
+                };
+                save(original);
+                const loaded = load();
+                expect(loaded.titleFontOpacity).to.equal(0);
+                expect(loaded.titleBgOpacity).to.equal(0);
+                expect(loaded.titleShowBackground).to.equal(false);
+            });
+        });
+
         // Run mocha after all tests are defined
         window.addEventListener('load', () => {
             mocha.run();

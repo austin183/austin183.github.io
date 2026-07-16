@@ -18,6 +18,7 @@
 - pointer capture testing pattern
 - Window blur / visibilitychange safety net
 - touch-action: none CSS
+- VISIBLE_MIN drag boundary clamping
 
 ## Three-Layer Architecture
 
@@ -127,32 +128,41 @@ try {
 
 ### Problem
 
-When two pointer event handlers (e.g., `GestureHandler` for panel selection, `HexDragHandler` for hex panel swap) both attach listeners to the same canvas, pointer events fire on both handlers simultaneously. This causes:
+When two pointer event handlers (e.g., `GestureHandler` for hover, `PanelSwapHandler` for drag-and-drop swap) both attach listeners to the same canvas, pointer events fire on both handlers simultaneously. This causes:
 - Double panel selection on click
 - Conflicting drag/click interpretation
 - Unexpected state mutations
 
-### Solution: Layout-Gated Handler Delegation
+### Solution: Gesture-Active Flag Coordination
 
-Each handler checks the current layout at pointerdown time and returns early if it's not responsible:
+The swap handler is always active for all layouts. It coordinates with the multi-touch handler via a `_multiTouchGestureActive` flag on state:
 
 ```javascript
-// GestureHandler — general-purpose, skips hexagonal layout
+// PanelSwapHandler — always active, skips if multi-touch gesture active
 _onPointerDown(e) {
-    if (state.layoutStyle === LayoutStyle.HEXAGONAL) return;
-    // ... rest of handler
+    if (state._multiTouchGestureActive) return;
+    // ... panel swap handling (works in all layouts)
 }
 
-// HexDragHandler — hex-specific, skips non-hexagonal layouts
-_onPointerDown(e) {
-    if (state.layoutStyle !== LayoutStyle.HEXAGONAL) return;
-    // ... hex-specific handling
+// MultiTouchHandler — sets flag on gesture start/end
+function startGesture(t1, t2) {
+    gestureActive = true;
+    state._multiTouchGestureActive = true;  // Signal to swap handler
+    // ...
+}
+
+function endGesture() {
+    gestureActive = false;
+    state._multiTouchGestureActive = false;  // Clear signal
+    // ...
 }
 ```
 
+**GestureHandler no longer handles pointerdown** — the swap handler's `_onPointerUp` handles click-to-select. GestureHandler provides hover-only (pointermove/pointerleave).
+
 ### Key Design Decisions
 
-1. **Both handlers always attached** — no attach/detach cycles on layout change. The layout check is O(1) and happens at pointerdown time.
+1. **Both handlers always attached** — no attach/detach cycles on layout change. The gesture-active flag check is O(1) and happens at pointerdown time.
 
 2. **Drag threshold distinguishes click from drag** — 10 CSS pixels of movement triggers drag mode. Below threshold, the interaction is treated as a click:
 
@@ -213,7 +223,7 @@ _onGlobalPointerUp = () => {
 - Use arrow function property initializers (`_onGlobalPointerUp = () => {...}`) to preserve `this` binding, or bind explicitly.
 
 **File Reference:**
-- `MyESModules/Interaction/HexPanelSwap.js` — global pointerup cleanup
+- `MyESModules/Interaction/PanelSwap.js` — global pointerup cleanup
 
 ## Multi-Touch and Trackpad Gestures
 
@@ -537,6 +547,91 @@ When implementing custom multi-touch or pointer gestures on a canvas element, ad
 - The browser consumes the events before your handlers see them
 
 **Accessibility consideration:** `touch-action: none` disables all default touch gestures. Ensure users have alternative input methods (mouse, keyboard) for any functionality that relies on gestures.
+
+## VISIBLE_MIN Drag Boundary Clamping
+
+### Problem: Stranded UI
+
+When a draggable UI element is clamped to stay fully within its container, users can accidentally drag it to the exact edge where it becomes hard to grab again. If the clamp allows the element to go fully off-screen, the grab handle becomes inaccessible and the element is permanently stranded.
+
+**Anti-pattern — full containment clamping:**
+```javascript
+// Element must stay fully within canvas — grab handle can land at the edge
+newX = Math.max(0, Math.min(newX, containerWidth - elementWidth));
+```
+
+### Solution: VISIBLE_MIN Threshold
+
+Allow the element to extend partially off-screen, but require at least `VISIBLE_MIN` pixels to remain visible at all times:
+
+```javascript
+const VISIBLE_MIN = 50; // px of element that must remain visible at edges
+newX = Math.max(
+    -elementWidth + VISIBLE_MIN,
+    Math.min(newX, containerWidth - VISIBLE_MIN)
+);
+```
+
+**How it works:**
+
+| Direction | Clamp Formula | Result |
+|-----------|--------------|--------|
+| **Left edge** | `Math.max(-elementWidth + VISIBLE_MIN, ...)` | Element can extend left up to `VISIBLE_MIN` pixels visible |
+| **Right edge** | `Math.min(..., containerWidth - VISIBLE_MIN)` | Element's left edge can go right up to `containerWidth - VISIBLE_MIN` |
+
+**Concrete example** (element width = 400px, container = 1920px):
+
+| Before (full containment) | After (VISIBLE_MIN = 50) |
+|--------|-------------------------|
+| Left clamp: `x >= 0` | Left clamp: `x >= -350` (50px of 400px box visible) |
+| Right clamp: `x <= 1520` (1920-400) | Right clamp: `x <= 1870` (1920-50, 50px visible) |
+
+### Choosing VISIBLE_MIN
+
+The `VISIBLE_MIN = 50` value balances:
+- **Enough to grab:** 50px provides sufficient area for mouse or touch re-acquisition
+- **Not too much:** Allows meaningful off-screen positioning for creative layouts
+- **Proportional to hit areas:** If resize handles use `EDGE_THRESHOLD = 8`, then 50px provides ~6x the minimum grab area
+
+### Edge Cases
+
+**Element narrower than VISIBLE_MIN** — If `elementWidth < VISIBLE_MIN` (e.g., 30px element), the left clamp becomes `-30 + 50 = 20`. The element is forced to start at x=20, keeping it fully visible. This is correct — small elements don't need partial visibility.
+
+**Zero or negative width** — Guard with a fallback: `const actualWidth = elementWidth ?? 400;`. A zero or negative width produces nonsensical clamping.
+
+**Asymmetric axes** — VISIBLE_MIN may apply to only one axis. The other axis may use a different positioning model (e.g., text baseline clamping) with its own constraints.
+
+### When to Use
+
+**Use VISIBLE_MIN when:**
+1. The draggable element has a grab handle — users need to re-acquire it
+2. The element can be wider/taller than the container — full containment restricts positioning
+3. Creative positioning is desired — users may want elements partially off-screen
+4. Recovery is impossible otherwise — no reset button or keyboard shortcut to recover off-screen elements
+
+**Do NOT use when:**
+- The element must always be fully visible (form fields, critical controls)
+- The container has scroll/pan behavior (scrolling provides recovery)
+- Keyboard navigation is the primary interaction (focus provides recovery)
+
+### Testing
+
+The VISIBLE_MIN pattern is a pure math function — ideal for TDD with concrete input/output pairs:
+
+```javascript
+// Drag left: clamped to -boxWidth + VISIBLE_MIN
+expect(lastPosition.x).to.equal(-350); // not -400 or 0
+
+// Drag right: clamped to containerWidth - VISIBLE_MIN
+expect(lastPosition.x).to.equal(1870); // not 1520
+
+// Within bounds: no clamping
+expect(lastPosition.x).to.equal(760); // exact drag result
+```
+
+**File Reference:**
+- `MyESModules/Interaction/TitleInteraction.js` — VISIBLE_MIN in `_onPointerMove` drag handler
+- `MyComponents/TitleInteractionTest.html` — drag VISIBLE_MIN clamping tests
 
 ## TouchEvent-Specific Gotchas
 

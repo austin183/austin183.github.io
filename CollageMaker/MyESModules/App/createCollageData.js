@@ -44,6 +44,8 @@ export function createCollageData(base) {
             titleStyle: createTitleStyle(),
             titleSelectionStart: 0,
             titleSelectionEnd: 0,
+            titleHoverTarget: null,
+            titleInteractionMode: null,
 
             // Overlay
             overlayImage: null,
@@ -74,13 +76,22 @@ export function createCollageData(base) {
             // Right sidebar toggle
             rightSidebarOpen: true,
 
-            // Hex drag target (for visual feedback during hex panel swap)
-            hexDragTargetId: null,
+            // Drag target (for visual feedback during panel swap)
+            dragTargetId: null,
 
-            // Collapsible sidebar sections
+            // Left sidebar sections
+            leftSidebarSections: [
+                { id: 'layout', label: 'Layout' },
+                { id: 'library', label: 'Image Library' }
+            ],
+            expandedLeftSections: {
+                library: true,
+                layout: false
+            },
+
+            // Right sidebar sections
             sidebarSections: [
                 { id: 'crop', label: 'Crop' },
-                { id: 'layout', label: 'Layout' },
                 { id: 'background', label: 'Background' },
                 { id: 'overlay', label: 'Overlay' },
                 { id: 'title', label: 'Title' },
@@ -88,7 +99,6 @@ export function createCollageData(base) {
             ],
             expandedSections: {
                 crop: false,
-                layout: false,
                 background: false,
                 overlay: false,
                 title: false,

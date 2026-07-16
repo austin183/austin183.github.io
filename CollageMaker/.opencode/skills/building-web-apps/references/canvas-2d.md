@@ -38,21 +38,21 @@ Without DPR scaling, canvas content appears blurry on Retina displays.
 
 ## Same-Panel Overlap Guard
 
-When multiple visual overlays can target the same panel (e.g., hex drag target + selection border), Canvas 2D anti-aliasing produces artifacts where different border styles (dashed vs. solid) are drawn at identical coordinates.
+When multiple visual overlays can target the same panel (e.g., drag target + selection border), Canvas 2D anti-aliasing produces artifacts where different border styles (dashed vs. solid) are drawn at identical coordinates.
 
 **Fix: skip the lower-priority overlay when it would overlap:**
 
 ```javascript
-// Skip hex drag target if it matches the selected panel
-if (hexDragTargetId && panels && hexDragTargetId !== selectedPanelId) {
-    panelRenderer.drawHexDragTarget(ctx, targetPanel);
+// Skip drag target if it matches the selected panel
+if (dragTargetId && panels && dragTargetId !== selectedPanelId) {
+    panelRenderer.drawDragTarget(ctx, targetPanel);
 }
 ```
 
 **General rule:** When multiple overlays can target the same element, draw the highest-priority overlay last and skip lower-priority overlays when they would overlap.
 
 **File Reference:**
-- `MyESModules/Rendering/CollageAssembler.js` — hex drag target guard
+- `MyESModules/Rendering/CollageAssembler.js` — drag target guard
 
 ## CoreGraphics → Canvas 2D Mapping
 
@@ -152,6 +152,41 @@ drawHoverBorder(ctx, panel) {
 4. **Shadow requires 4 properties** — `shadowColor`, `shadowBlur`, `shadowOffsetX`, `shadowOffsetY`
 5. **`globalAlpha` blends against canvas, not isolated** — pre-fill background before drawing semi-transparent images (see "Semi-Transparent Image Compositing" above)
 
+## Backward-Compatible Renderer Extensions
+
+When adding a new positioning or layout model to an existing renderer, preserve backward compatibility by detecting "legacy mode" at the top of the render function and reusing the flag across all rendering decisions (position, background, outline):
+
+```javascript
+// Detect legacy mode: no custom width or position set
+const isLegacyMode = (titleStyle.titleBoxWidth === null || titleStyle.titleBoxWidth === undefined)
+    && (titleStyle.titleBoxX === null || titleStyle.titleBoxX === undefined);
+```
+
+**Key rules:**
+- **Use `=== null || === undefined`, not truthy/falsy** — `0` could be a valid value in some contexts
+- **Compute the flag once** — reuse `isLegacyMode` across position, background, and outline decisions to ensure consistency
+- **Background rect positioning differs between modes** — In legacy mode, `boxLeft` is at text start and `boxWidth` already includes padding, so background goes at `boxLeft - PADDING`. In box mode, `boxLeft` is at the box edge and `boxWidth` is user-set, so background goes at `boxLeft` directly.
+
+### File Reference
+
+- `MyESModules/Rendering/TitleRenderer.js` — legacy vs. box-based positioning
+
+## Optional Context Parameter for Measurement Functions
+
+Pure measurement functions that need a Canvas 2D context should accept an optional context parameter to avoid offscreen canvas creation in hot paths:
+
+```javascript
+export function computeBounds(titleStyle, titleRuns, width, height, measureCtx) {
+    const ctx = measureCtx || (() => {
+        const offscreen = document.createElement('canvas');
+        return offscreen.getContext('2d');
+    })();
+    // ... measurement using ctx.measureText()
+}
+```
+
+**Why this matters:** Creating offscreen canvases during `pointermove` events causes GC pressure and frame drops. Callers in hot paths (interaction handlers) should pass the render context. Callers in cold paths (initial layout) can omit it.
+
 ## Offscreen Canvas Export
 
 To export at a resolution different from the on-screen preview, create a detached canvas (never appended to the DOM), render into it, then convert to blob:
@@ -196,3 +231,95 @@ The offscreen canvas is a local variable with no DOM attachment — it is auto-c
 ### File Reference
 
 - `MyESModules/Export/ExportManager.js` — Offscreen canvas export
+
+## Canvas `destination-out` Compositing for Shape Cutouts
+
+When you need to cut a shaped hole in a filled region on Canvas 2D (e.g., dark overlay with a shaped "hole" for crop preview), use `globalCompositeOperation = 'destination-out'`:
+
+```javascript
+// 1. Fill entire canvas with dark overlay
+ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+ctx.fillRect(0, 0, cssW, cssH);
+
+// 2. Cut out the shape, clipped to crop rect
+ctx.save();
+try {
+    ctx.globalCompositeOperation = 'destination-out';
+
+    // Clip to crop rectangle first
+    ctx.beginPath();
+    ctx.rect(cropScreenX, cropScreenY, cropScreenW, cropScreenH);
+    ctx.clip();
+
+    // Draw the shape — this erases the dark overlay where the shape is
+    beginPathFromPoints(ctx, shapePoints);
+    ctx.fill();
+} finally {
+    ctx.restore();
+}
+```
+
+### Key Patterns
+
+**Always use `try/finally` for save/restore safety.** If an exception occurs between `ctx.save()` and `ctx.restore()` (e.g., malformed points, invalid path), the canvas state leaks: `globalCompositeOperation` remains `'destination-out'` and the clip region stays active, corrupting all subsequent drawing. The `try/finally` guarantees restoration:
+
+```javascript
+ctx.save();
+try {
+    ctx.globalCompositeOperation = 'destination-out';
+    // ... risky operations ...
+} finally {
+    ctx.restore();
+}
+```
+
+**Clip before composite.** The clip region is persistent until `ctx.restore()`. Set it before the composite operation so the shape cutout is constrained to the crop rectangle.
+
+**Compute shape points once.** When the same shape points are needed for multiple operations (cutout fill, border stroke, decorative overlay), compute them once and reuse:
+
+```javascript
+const shapePoints = computeShapeOverlayPoints(geometry, cropScreen, 0);
+// Reuse for cutout, border, and overlay
+```
+
+### Anti-Aliasing Considerations
+
+Canvas 2D anti-aliasing at the shape edges of a `destination-out` fill produces a semi-transparent fringe (the "halo effect"). This is usually visually acceptable and is further masked by the decorative shape overlay drawn on top with a solid stroke. If the halo is objectionable, slightly increase the shape size (negative padding) to compensate.
+
+### Testing Strategy
+
+Test the shaped overlay approach by wrapping canvas context methods to capture operations:
+
+```javascript
+// Capture clip() and globalCompositeOperation changes
+ctx.clip = function () {
+    captured.clip.push(true);
+    return origClip();
+};
+
+Object.defineProperty(ctx, 'globalCompositeOperation', {
+    get: function () { return this._gco || 'source-over'; },
+    set: function (v) {
+        captured.globalCompositeOperation.push(v);
+        this._gco = v;
+    },
+    configurable: true
+});
+```
+
+Verify:
+- Shaped panels: `clip` called at least once, `globalCompositeOperation` includes `'destination-out'`
+- Rect panels: no `clip` calls, no `'destination-out'` compositing
+- save/restore counts are balanced
+
+### When to Use This Pattern
+
+- When you need to cut a shaped hole in a filled region on Canvas 2D
+- When the shape is defined by polygon points (not a simple rectangle)
+- When the cutout needs to be constrained to a rectangular region
+- For crop previews, mask overlays, and any UI where a shape defines a "visible through" area
+
+### File References
+
+- `MyESModules/App/createCropPreviewRenderer.js` — shaped dark overlay implementation
+- `MyESModules/Layout/CropOverlayShape.js` — `beginPathFromPoints` helper

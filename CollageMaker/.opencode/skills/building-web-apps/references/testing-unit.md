@@ -644,9 +644,9 @@ Before refactoring shared code, add **characterization tests** that capture the 
 
 ```javascript
 // Before refactoring _drawPanelBorder, add tests that lock in current behavior:
-it('drawHexDragTarget sets lineWidth and globalAlpha', () => {
+it('drawDragTarget sets lineWidth and globalAlpha', () => {
     const ctx = createMockCtx();
-    renderer.drawHexDragTarget(ctx, panel);
+    renderer.drawDragTarget(ctx, panel);
     expect(calls.lineWidth).to.include(2);
     expect(calls.globalAlpha).to.include(0.5);
 });

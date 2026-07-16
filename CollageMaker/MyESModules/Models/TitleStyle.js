@@ -21,7 +21,12 @@ export function createTitleStyle(options = {}) {
         fontColor: options.fontColor || '#FFFFFF',
         backgroundColor: options.backgroundColor || '#000000',
         alignment: options.alignment || 'center',
-        showBackground: options.showBackground ?? false
+        showBackground: options.showBackground ?? false,
+        fontOpacity: options.fontOpacity ?? 1.0,
+        bgOpacity: options.bgOpacity ?? 1.0,
+        titleBoxWidth: options.titleBoxWidth ?? null,
+        titleBoxX: options.titleBoxX ?? null,
+        titleBoxY: options.titleBoxY ?? null
     };
 }
 

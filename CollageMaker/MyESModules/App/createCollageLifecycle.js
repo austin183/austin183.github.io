@@ -13,9 +13,10 @@ import { createBackgroundManager } from '../State/BackgroundManager.js';
 import { createTitleManager } from '../State/TitleManager.js';
 import { createGestureHandler } from '../Interaction/GestureHandler.js';
 import { createCropInteraction } from '../Interaction/CropInteraction.js';
-import { createHexDragHandler, swapPanelAssignments } from '../Interaction/HexPanelSwap.js';
+import { createPanelSwapHandler, swapPanelAssignments } from '../Interaction/PanelSwap.js';
 import { createKeyboardHandler } from '../Interaction/KeyboardHandler.js';
 import { createMultiTouchHandler } from '../Interaction/MultiTouchHandler.js';
+import { createTitleInteraction } from '../Interaction/TitleInteraction.js';
 import { createSaliencyAnalyzer } from '../Saliency/SaliencyAnalyzer.js';
 import { load as loadSettings } from '../Persistence/SettingsPersistence.js';
 import { SIZE_CONSTANTS } from '../Models/SizeConstants.js';
@@ -103,8 +104,8 @@ export function createCollageLifecycle(base, domIds = {}) {
             });
             this._gestureHandler.attach();
 
-            // Initialize hex drag handler (panel swap via drag-and-drop for hexagonal layout)
-            this._hexDragHandler = createHexDragHandler({
+            // Initialize panel swap handler (drag-and-drop swap in all layouts)
+            this._panelSwapHandler = createPanelSwapHandler({
                 canvasId: ids.previewCanvas,
                 state: this,
                 onPanelSelected: (panelId) => {
@@ -114,25 +115,24 @@ export function createCollageLifecycle(base, domIds = {}) {
                     this._scheduleRender();
                 },
                 onTargetHovered: (targetId) => {
-                    this.hexDragTargetId = targetId;
+                    this.dragTargetId = targetId;
                 },
                 onSwapPerformed: (swapInfo) => {
                     // Push undo command for the swap
                     if (this.undoManager) {
                         this.undoManager.push({
-                            label: 'Swap Hex Panels',
+                            label: 'Swap Panels',
                             undo: () => {
-                                swapPanelAssignments(this, swapInfo.sourceId, swapInfo.targetId);
+                                swapPanelAssignments(this, swapInfo.sourceId, swapInfo.targetId, this.crops, this.images);
                             },
                             redo: () => {
-                                swapPanelAssignments(this, swapInfo.sourceId, swapInfo.targetId);
+                                swapPanelAssignments(this, swapInfo.sourceId, swapInfo.targetId, this.crops, this.images);
                             }
                         });
                         this._updateUndoState();
                     }
                 }
             });
-            this._hexDragHandler.attach();
 
             // Initialize crop interaction handler
             let cropUndoSnapshot = null;
@@ -192,6 +192,61 @@ export function createCollageLifecycle(base, domIds = {}) {
             });
             this._multiTouchHandler.attach();
 
+            // Initialize title interaction handler (drag to move + edge-drag to resize title box)
+            let titleUndoSnapshot = null;
+            this._titleInteraction = createTitleInteraction({
+                canvasId: ids.previewCanvas,
+                state: this,
+                titleManager: this.titleManager,
+                onRenderScheduled: () => {
+                    this._scheduleRender();
+                },
+                onInteractionStart: () => {
+                    // Capture pre-interaction title state for undo
+                    titleUndoSnapshot = {
+                        titleBoxX: this.titleStyle.titleBoxX,
+                        titleBoxY: this.titleStyle.titleBoxY,
+                        titleBoxWidth: this.titleStyle.titleBoxWidth
+                    };
+                },
+                onInteractionEnd: () => {
+                    // Push undo command for the title interaction
+                    if (titleUndoSnapshot && this.undoManager) {
+                        const postState = {
+                            titleBoxX: this.titleStyle.titleBoxX,
+                            titleBoxY: this.titleStyle.titleBoxY,
+                            titleBoxWidth: this.titleStyle.titleBoxWidth
+                        };
+                        // Only push if something actually changed
+                        if (titleUndoSnapshot.titleBoxX !== postState.titleBoxX ||
+                            titleUndoSnapshot.titleBoxY !== postState.titleBoxY ||
+                            titleUndoSnapshot.titleBoxWidth !== postState.titleBoxWidth) {
+                            this.undoManager.push({
+                                label: 'Move/Resize Title',
+                                undo: () => {
+                                    this.titleStyle.titleBoxX = titleUndoSnapshot.titleBoxX;
+                                    this.titleStyle.titleBoxY = titleUndoSnapshot.titleBoxY;
+                                    this.titleStyle.titleBoxWidth = titleUndoSnapshot.titleBoxWidth;
+                                },
+                                redo: () => {
+                                    this.titleStyle.titleBoxX = postState.titleBoxX;
+                                    this.titleStyle.titleBoxY = postState.titleBoxY;
+                                    this.titleStyle.titleBoxWidth = postState.titleBoxWidth;
+                                }
+                            });
+                            this._updateUndoState();
+                        }
+                    }
+                    titleUndoSnapshot = null;
+                }
+            });
+            this._titleInteraction.attach();
+
+            // Attach panel swap AFTER title interaction so TitleInteraction's
+            // pointerdown fires first and sets titleInteractionMode before
+            // PanelSwap checks it — prevents panel drag starting behind title
+            this._panelSwapHandler.attach();
+
             // Initialize saliency analyzer (AI-based crop focus, deferred feature)
             // onModelsFailed shows a non-blocking toast when ML models can't load
             this._saliencyAnalyzer = createSaliencyAnalyzer({
@@ -205,8 +260,7 @@ export function createCollageLifecycle(base, domIds = {}) {
             // (the element-level @drop handlers in the template handle drops on canvas/library)
             this._dropCleanup = base.dropHandler.setupGlobalDrop(async (files) => {
                 await imageLibrary.addImages(files);
-                layoutManager.regenerate();
-                this._scheduleRender();
+                this._regenerateAndRender();
             });
 
             // Set up keyboard shortcuts via centralized handler
@@ -254,14 +308,17 @@ export function createCollageLifecycle(base, domIds = {}) {
             if (this._gestureHandler) {
                 this._gestureHandler.detach();
             }
-            if (this._hexDragHandler) {
-                this._hexDragHandler.detach();
+            if (this._panelSwapHandler) {
+                this._panelSwapHandler.detach();
             }
             if (this._cropInteraction) {
                 this._cropInteraction.detach();
             }
             if (this._multiTouchHandler) {
                 this._multiTouchHandler.detach();
+            }
+            if (this._titleInteraction) {
+                this._titleInteraction.detach();
             }
 
             // 2. Remove window listeners
@@ -312,6 +369,14 @@ export function createCollageLifecycle(base, domIds = {}) {
                 if (settings.titleFontSize !== undefined) this.titleStyle.fontSize = settings.titleFontSize;
                 if (settings.titleFontColor) this.titleStyle.fontColor = settings.titleFontColor;
                 if (settings.titleAlignment) this.titleStyle.alignment = settings.titleAlignment;
+                // Restore title opacity, position, width, and background fields
+                if (settings.titleFontOpacity !== undefined) this.titleStyle.fontOpacity = settings.titleFontOpacity;
+                if (settings.titleBgOpacity !== undefined) this.titleStyle.bgOpacity = settings.titleBgOpacity;
+                if (settings.titleBoxWidth !== undefined) this.titleStyle.titleBoxWidth = settings.titleBoxWidth;
+                if (settings.titleBoxX !== undefined) this.titleStyle.titleBoxX = settings.titleBoxX;
+                if (settings.titleBoxY !== undefined) this.titleStyle.titleBoxY = settings.titleBoxY;
+                if (settings.titleShowBackground !== undefined) this.titleStyle.showBackground = settings.titleShowBackground;
+                if (settings.titleBackgroundColor) this.titleStyle.backgroundColor = settings.titleBackgroundColor;
 
                 // Export settings
                 if (settings.exportQuality !== undefined) this.exportQuality = settings.exportQuality;

@@ -29,6 +29,14 @@ export function createSettingsHandlers() {
                     titleFontSize: state.titleStyle.fontSize,
                     titleFontColor: state.titleStyle.fontColor,
                     titleAlignment: state.titleStyle.alignment,
+                    // Title opacity, position, width, and background fields
+                    titleFontOpacity: state.titleStyle.fontOpacity,
+                    titleBgOpacity: state.titleStyle.bgOpacity,
+                    titleBoxWidth: state.titleStyle.titleBoxWidth,
+                    titleBoxX: state.titleStyle.titleBoxX,
+                    titleBoxY: state.titleStyle.titleBoxY,
+                    titleShowBackground: state.titleStyle.showBackground,
+                    titleBackgroundColor: state.titleStyle.backgroundColor,
                     exportQuality: state.exportQuality
                 });
             } catch (e) {

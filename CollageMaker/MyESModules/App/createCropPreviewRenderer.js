@@ -7,7 +7,8 @@
  * Uses DOM ID injection to avoid hardcoded getElementById calls.
  */
 
-import { computeShapeOverlayPoints, drawShapeOverlay } from '../Layout/CropOverlayShape.js';
+import { computeShapeOverlayPoints, drawShapeOverlay, beginPathFromPoints } from '../Layout/CropOverlayShape.js';
+import { isRectGeometry } from '../Models/PanelGeometry.js';
 
 /**
  * Default DOM element IDs.
@@ -89,31 +90,64 @@ export function createCropPreviewRenderer(base, domIds = {}) {
             const cropScreenW = sr.width * scale;
             const cropScreenH = sr.height * scale;
 
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-            // Top
-            ctx.fillRect(0, 0, cssW, cropScreenY);
-            // Bottom
-            ctx.fillRect(0, cropScreenY + cropScreenH, cssW, cssH - cropScreenY - cropScreenH);
-            // Left
-            ctx.fillRect(0, cropScreenY, cropScreenX, cropScreenH);
-            // Right
-            ctx.fillRect(cropScreenX + cropScreenW, cropScreenY, cssW - cropScreenX - cropScreenW, cropScreenH);
-
-            // Draw crop border
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 1.5;
-            ctx.strokeRect(cropScreenX, cropScreenY, cropScreenW, cropScreenH);
-
-            // Draw panel shape overlay for non-rectangular layouts
+            // Determine if the selected panel has a non-rectangular shape
             const selectedPanel = vm.panels?.find(p => p.id === vm.selectedPanelId);
-            if (selectedPanel && selectedPanel.geometry) {
+            const isShaped = selectedPanel
+                && selectedPanel.geometry
+                && !isRectGeometry(selectedPanel.geometry);
+
+            if (isShaped) {
+                // For shaped panels: draw dark overlay with a shape-shaped hole
+                // using an evenodd compound path — canvas rect + shape.
+                // This matches how rectangular panels work: the image inside the
+                // crop region is never touched by the overlay.
+                const cropScreen = {
+                    x: cropScreenX, y: cropScreenY,
+                    width: cropScreenW, height: cropScreenH
+                };
                 const shapePoints = computeShapeOverlayPoints(
-                    selectedPanel.geometry,
-                    { x: cropScreenX, y: cropScreenY, width: cropScreenW, height: cropScreenH }
+                    selectedPanel.geometry, cropScreen, 0
                 );
+
                 if (shapePoints) {
-                    drawShapeOverlay(ctx, shapePoints);
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+                    ctx.beginPath();
+                    // Outer: full canvas (everything dark)
+                    ctx.rect(0, 0, cssW, cssH);
+                    // Inner: shape (hole — image shows through)
+                    beginPathFromPoints(ctx, shapePoints, true);
+                    ctx.fill('evenodd');
+
+                    // Draw crop border along shape outline
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1.5;
+                    beginPathFromPoints(ctx, shapePoints);
+                    ctx.stroke();
                 }
+
+                // Draw panel shape overlay (with default padding for visual breathing room)
+                const overlayPoints = computeShapeOverlayPoints(
+                    selectedPanel.geometry, cropScreen
+                );
+                if (overlayPoints) {
+                    drawShapeOverlay(ctx, overlayPoints);
+                }
+            } else {
+                // For rect panels: existing 4-rect approach (unchanged)
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+                // Top
+                ctx.fillRect(0, 0, cssW, cropScreenY);
+                // Bottom
+                ctx.fillRect(0, cropScreenY + cropScreenH, cssW, cssH - cropScreenY - cropScreenH);
+                // Left
+                ctx.fillRect(0, cropScreenY, cropScreenX, cropScreenH);
+                // Right
+                ctx.fillRect(cropScreenX + cropScreenW, cropScreenY, cssW - cropScreenX - cropScreenW, cropScreenH);
+
+                // Draw crop border
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(cropScreenX, cropScreenY, cropScreenW, cropScreenH);
             }
 
             // Draw corner handles (size matches CORNER_HANDLE_SIZE in CropInteraction.js)

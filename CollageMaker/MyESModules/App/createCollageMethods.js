@@ -242,6 +242,18 @@ export function createCollageMethods(base, domIds = {}) {
         onTitleShowBackgroundChange() {
             titleHandlers.onTitleShowBackgroundChange.call(this);
         },
+        onTitleFontOpacityChange() {
+            titleHandlers.onTitleFontOpacityChange.call(this);
+        },
+        onTitleBgOpacityChange() {
+            titleHandlers.onTitleBgOpacityChange.call(this);
+        },
+        onTitleWidthChange() {
+            titleHandlers.onTitleWidthChange.call(this);
+        },
+        resetTitlePosition() {
+            titleHandlers.resetTitlePosition.call(this);
+        },
 
         // Overlay handlers
         handleOverlayImageChange(event) {
@@ -291,11 +303,19 @@ export function createCollageMethods(base, domIds = {}) {
         toggleSection(sectionId) {
             this.expandedSections[sectionId] = !this.expandedSections[sectionId];
         },
+        toggleLeftSection(sectionId) {
+            this.expandedLeftSections[sectionId] = !this.expandedLeftSections[sectionId];
+        },
         autoExpandCropOnSelect(panelId) {
             if (panelId) {
                 this.expandedSections.crop = true;
             }
             // Deselecting (panelId === null) does NOT collapse crop — user control
+        },
+        autoExpandLayoutOnImages() {
+            if (this.images && this.images.length > 1) {
+                this.expandedLeftSections.layout = true;
+            }
         },
 
         // Settings persistence

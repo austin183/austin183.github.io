@@ -113,6 +113,23 @@ Vue refs on certain native form inputs (notably `<input type="color">`) may not 
 
 **Solution:** Don't add duplicate interactive targets for `<input type="color">`. Use descriptive text labels instead. See `references/accessibility.md` — Color Picker Accessibility.
 
+## Range Input with Null Default
+
+`v-model.number` on `<input type="range">` coerces `null` to the `min` attribute value, which is unexpected when `null` represents "auto/unset":
+
+```html
+<!-- WRONG: null coerces to min (100), slider shows 100 when value is "Auto" -->
+<input type="range" v-model.number="titleStyle.titleBoxWidth" min="100" max="1920">
+
+<!-- CORRECT: :value with fallback, @input with explicit handler -->
+<input type="range"
+    :value="titleStyle.titleBoxWidth || 1920"
+    min="100" max="1920"
+    @input="onTitleWidthChange($event.target.value)">
+```
+
+**Why this matters:** The range input DOM element requires a numeric value within `[min, max]`. When Vue binds `null` via `v-model.number`, it coerces to the minimum, making the UI show an incorrect value. Using `:value` with a fallback gives full control over the displayed value, and `@input` with `$event.target.value` passes the raw slider value to the handler.
+
 ## Files
 
 | File | Responsibility |

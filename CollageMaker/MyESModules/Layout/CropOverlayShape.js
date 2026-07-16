@@ -73,15 +73,38 @@ export function drawShapeOverlay(ctx, points) {
     }
     ctx.closePath();
 
-    // Semi-transparent fill to indicate shape boundary
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+    // Transparent fill — the image is fully visible inside the crop shape
+    ctx.fillStyle = 'rgba(255, 255, 255, 0)';
     ctx.fill();
 
-    // Stroke outline
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([4, 3]);
+    // Thin solid stroke — defines the shape boundary without obfuscating the image
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
     ctx.stroke();
 
     ctx.restore();
+}
+
+/**
+ * Begins a path from an array of [x, y] points.
+ * Useful for drawing or clipping shaped overlays without duplicating
+ * the beginPath/moveTo/lineTo/closePath sequence.
+ *
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {Array} points - Array of [x, y] points
+ * @param {boolean} continuePath - If true, skips beginPath() so the
+ *        sub-path can be appended to an existing compound path (e.g.,
+ *        for evenodd fill with a canvas rect + shape hole).
+ */
+export function beginPathFromPoints(ctx, points, continuePath = false) {
+    if (!points || points.length < 3) return;
+    if (!continuePath) {
+        ctx.beginPath();
+    }
+    ctx.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i][0], points[i][1]);
+    }
+    ctx.closePath();
 }
