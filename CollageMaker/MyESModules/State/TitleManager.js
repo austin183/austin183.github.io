@@ -52,7 +52,7 @@ export function createTitleManager(state, onChange) {
      * @private
      */
     function applyFormattingToRange(startIndex, endIndex, formatting) {
-        if (startIndex < 0 || endIndex <= startIndex) return;
+        if (!formatting || startIndex < 0 || endIndex <= startIndex) return;
 
         const runs = state.titleRuns;
         if (!runs || runs.length === 0) return;
@@ -90,9 +90,9 @@ export function createTitleManager(state, onChange) {
             if (insideText.length > 0) {
                 newRuns.push(createTitleRun(
                     insideText,
-                    formatting.bold !== undefined ? formatting.bold : !run.bold,
-                    formatting.italic !== undefined ? formatting.italic : !run.italic,
-                    formatting.underline !== undefined ? formatting.underline : !run.underline
+                    'bold' in formatting ? (formatting.bold !== undefined ? formatting.bold : !run.bold) : run.bold,
+                    'italic' in formatting ? (formatting.italic !== undefined ? formatting.italic : !run.italic) : run.italic,
+                    'underline' in formatting ? (formatting.underline !== undefined ? formatting.underline : !run.underline) : run.underline
                 ));
             }
 
@@ -125,11 +125,15 @@ export function createTitleManager(state, onChange) {
          */
         setText(text) {
             const t = String(text || '');
-            state.titleText = t;
-            if (t.length === 0) {
+            // Enforce maximum 3 lines
+            const lines = t.split('\n');
+            const clampedText = lines.length > 3 ? lines.slice(0, 3).join('\n') : t;
+
+            state.titleText = clampedText;
+            if (clampedText.length === 0) {
                 state.titleRuns = [];
             } else {
-                state.titleRuns = [createTitleRun(t, false, false, false)];
+                state.titleRuns = [createTitleRun(clampedText, false, false, false)];
             }
             notify();
         },
@@ -143,6 +147,13 @@ export function createTitleManager(state, onChange) {
          * @param {boolean} [underline] - Underline flag
          */
         insertChar(index, char, bold = false, italic = false, underline = false) {
+            // Prevent creating a 4th line via newline insertion
+            if (char === '\n') {
+                const currentText = this.getFullText();
+                const lineCount = currentText.split('\n').length;
+                if (lineCount >= 3) return; // Already 3 lines, can't add another
+            }
+
             const runs = state.titleRuns;
             if (!runs || runs.length === 0) {
                 this.setText(char);

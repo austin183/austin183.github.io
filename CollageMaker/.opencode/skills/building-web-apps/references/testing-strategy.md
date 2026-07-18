@@ -51,7 +51,7 @@ Design browser-dependent utilities as pure functions that can be unit tested wit
 5. **Canvas is opaque** — Can't inspect canvas pixels directly in Playwright
 6. **Undo history is crop-only** — Only crop operations push undo commands. Image removal, layout changes, gutter adjustments, and other actions do NOT create undo history. The `#undoBtn` and `#redoBtn` use `:disabled="!canUndo"` / `:disabled="!canRedo"` bindings, so they stay disabled if no undo commands exist on the stack.
 7. **Chai CDN lacks plugins** — No `eventually` for async or `startWith` for strings. Use try/catch and regex.
-8. **TitleManager cross-flag toggling** — `toggleBold()` flips bold+italic+underline. Test actual behavior, not intuitive expectation.
+8. **TitleManager formatting toggles are independent** — `toggleBold()` only affects bold; `toggleItalic()` only affects italic; `toggleUnderline()` only affects underline. Each toggle preserves the other two flags. (Fixed 2026-07-17 Phase 1: `applyFormattingToRange` now uses `'prop' in formatting` instead of `formatting.prop !== undefined` to distinguish "toggle this property" from "preserve this property".)
 9. **Mock restore discipline** — Always restore mocked browser APIs in `finally` blocks. A leaking mock breaks all subsequent tests.
 10. **E2E dev server port** — Full session tests require dev server on port 8000 and are sensitive to Vue mount timing.
 11. **Hit test boundary points** — For a 2x2 grid, (50%, 50%) lands on all four panel boundaries. Use 25% or 75% offsets.

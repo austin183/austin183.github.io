@@ -13,6 +13,7 @@
 - Testing Default Behavior Explicitly
 - Testing Combined Edge Cases
 - Writing Robust Positioning Tests
+- Self-Calibrating Hit Test Coordinates
 - Chai CDN Limitations
 - Integration Testing After Modularization
 - Integration Testing for Registry Dispatchers
@@ -470,6 +471,41 @@ expect(bg.w).to.be.closeTo(textWidth + 24, 0.5);
 - Less brittle when implementation details change slightly
 - Use tolerance of `0.5` for pixel-perfect positioning assertions
 
+### Self-Calibrating Hit Test Coordinates
+
+When testing pointer interactions on elements with **computed layout** (auto-fit widths, dynamic positioning), hardcoding hit test coordinates breaks across browser environments because text measurement (`ctx.measureText()`) varies by font renderer, DPR, and platform.
+
+**Solution:** Import the same pure computation function the production code uses and call it with matching parameters to derive test coordinates:
+
+```javascript
+// BAD — hardcoded coordinates break across environments
+canvas.dispatchEvent(new PointerEvent('pointerdown', {
+    clientX: 533, clientY: 456, // Assumes "Hello World" measures exactly 200px
+    button: 0, bubbles: true
+}));
+
+// GOOD — coordinates derived from actual measurement
+const bounds = computeBounds(titleStyle, runs, 1920, 1080);
+const cssBoxRight = 250 + bounds.boxWidth / 2;
+const hitX = cssBoxRight - 3; // 3px inside right edge
+
+canvas.dispatchEvent(new PointerEvent('pointerdown', {
+    clientX: hitX, clientY: 441,
+    button: 0, bubbles: true
+}));
+```
+
+**Key insight:** The test imports `computeBounds` from the production module and calls it with the same parameters the interaction handler uses internally. This ensures coordinates match whatever the production code computes, regardless of font rendering differences.
+
+**When to use:**
+- Hit testing on elements with computed/auto-fit dimensions
+- Pointer interactions where target position depends on text measurement
+- Any interaction test where the bounding box is computed at runtime rather than fixed
+
+**Distinguish from proportional coordinates** — Proportional coordinates (`rect.left + rect.width * 0.25`) work when the element's bounding rect is known at test time. Self-calibrating coordinates are needed when the element's position depends on internal computations (text measurement, auto-fit layout) that the test cannot observe via `getBoundingClientRect()`.
+
+See `MyComponents/TitleInteractionTest.html` and `MyESModules/Rendering/TitleRenderer.js` (`computeBounds`).
+
 ### Chai CDN Limitations
 
 Chai v4.3.10 loaded via CDN lacks plugins like `chai-as-promised`.
@@ -530,7 +566,7 @@ await ExportManager.export(mockAssembler, mockState, 'png', 0.92);
 
 ## Manager-Specific Testing
 
-**TitleManager** — `toggleBold(start, end)` passes `{ bold: undefined }` to `applyFormattingToRange`, which flips **all three** formatting flags (bold, italic, underline) via the `undefined` fallback. Tests must verify actual cross-flag toggling behavior, not the intuitive "only bold toggles" expectation. See `MyESModules/State/TitleManager.js` lines 91-93.
+**TitleManager** — `toggleBold(start, end)` passes `{ bold: undefined }` to `applyFormattingToRange`. The `'bold' in formatting` check ensures only the requested flag toggles; absent flags are preserved. Tests should verify independent toggling: `toggleBold` only affects bold, `toggleItalic` only affects italic, and `toggleUnderline` only affects underline. See `MyESModules/State/TitleManager.js` lines 91-96.
 
 **ExportManager** — `exportToJpeg` creates an offscreen canvas never appended to the DOM. Use a mock assembler with a `render()` method that records calls. Verify: canvas is NOT in `document.body`, no `<a>` download links remain (cleanup runs in `finally`), and mock assembler received correct canvas size and context.
 

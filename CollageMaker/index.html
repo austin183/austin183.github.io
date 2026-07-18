@@ -157,7 +157,7 @@
                             <template v-if="section.id === 'title'">
                                 <div class="detail-section">
                                     <label for="titleInput">Text</label>
-                                    <input type="text" id="titleInput" v-model="titleText" @input="onTitleTextChange" @select="onTitleSelectionChange" @click="onTitleSelectionChange" @keyup="onTitleSelectionChange" placeholder="Enter title text..." class="pure-input-rounded">
+                                    <textarea id="titleInput" v-model="titleText" @input="onTitleTextChange" @select="onTitleSelectionChange" @click="onTitleSelectionChange" @keyup="onTitleSelectionChange" placeholder="Enter title text (up to 3 lines)..." rows="3" maxlength="200" class="pure-input-rounded title-textarea"></textarea>
                                 </div>
                                 <div class="detail-section">
                                     <div class="formatting-bar">

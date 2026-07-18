@@ -160,19 +160,43 @@
                 expect(runs[1].bold).to.be.true;
             });
 
-            it('3.2.5 — toggleItalic on bold range', () => {
+            it('3.2.5 — toggleBold does not affect italic or underline', () => {
                 tm.setText('Hello');
-                tm.toggleBold(1, 3);  // 'el' becomes bold+italic+underline (undef toggles all)
-                tm.toggleItalic(1, 3); // 'el' flips bold, italic, underline all back to false
+                tm.toggleBold(1, 3);  // 'el' becomes bold only
                 const runs = tm.getRuns();
-                // toggleBold with {bold:undefined} also toggles italic/underline to true
-                // then toggleItalic with {italic:undefined} flips all three back to false
-                // All runs merge back to plain
-                expect(runs.length).to.equal(1);
-                expect(runs[0].text).to.equal('Hello');
-                expect(runs[0].bold).to.be.false;
-                expect(runs[0].italic).to.be.false;
-                expect(runs[0].underline).to.be.false;
+                expect(runs.length).to.equal(3);
+                expect(runs[1].text).to.equal('el');
+                expect(runs[1].bold).to.be.true;
+                expect(runs[1].italic).to.be.false;
+                expect(runs[1].underline).to.be.false;
+            });
+
+            it('3.2.8 — toggleItalic does not affect bold or underline', () => {
+                tm.setText('Hello');
+                tm.toggleItalic(1, 3);
+                const runs = tm.getRuns();
+                expect(runs[1].italic).to.be.true;
+                expect(runs[1].bold).to.be.false;
+                expect(runs[1].underline).to.be.false;
+            });
+
+            it('3.2.9 — toggleUnderline does not affect bold or italic', () => {
+                tm.setText('Hello');
+                tm.toggleUnderline(1, 3);
+                const runs = tm.getRuns();
+                expect(runs[1].underline).to.be.true;
+                expect(runs[1].bold).to.be.false;
+                expect(runs[1].italic).to.be.false;
+            });
+
+            it('3.2.10 — toggleBold on italic range preserves italic', () => {
+                tm.setText('Hello');
+                tm.toggleItalic(1, 3);  // 'el' is italic
+                tm.toggleBold(1, 3);    // 'el' becomes bold+italic (italic preserved)
+                const runs = tm.getRuns();
+                expect(runs[1].bold).to.be.true;
+                expect(runs[1].italic).to.be.true;
+                expect(runs[1].underline).to.be.false;
             });
 
             it('3.2.6 — toggleUnderline single char', () => {

@@ -294,6 +294,7 @@ showToast(message, type, duration) {
 - Mock `requestAnimationFrame`/`cancelAnimationFrame` with a callback collector + `flushRAF()` for deterministic debounce testing — see `references/testing-unit.md`
 - Use Proxy-based wrapper for Canvas 2D context mocking instead of `Object.defineProperty` — see `references/testing-unit.md`
 - For render order verification, wrap `ctx.stroke()`/`ctx.strokeRect()` to capture canvas state at call time (context method wrapping) — see `references/testing-unit.md`
+- For hit testing on computed/auto-fit elements, import the production computation function (e.g., `computeBounds`) to derive coordinates — see `references/testing-unit.md` self-calibrating hit test coordinates
 - `DragEvent.dataTransfer` cannot be mocked in constructor — test listener presence via `preventDefault()` tracking
 - Mock `window.Worker` with `Object.defineProperty` + setter for `onmessage` to capture the handler, then fire synthetic messages. Override timeout config (e.g., `INFERENCE_TIMEOUT_MS = 50`) to test timeout paths without waiting. See `references/web-workers.md`
 - Document-level listeners leak across tests — use describe-level `afterEach` cleanup, never `beforeEach` + per-test setup

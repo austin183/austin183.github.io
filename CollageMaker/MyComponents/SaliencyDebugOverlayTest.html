@@ -1089,8 +1089,9 @@
                     titleStyle: { fontFamily: 'Arial', fontSize: 24 },
                     titleRuns: [{ text: 'Test', bold: false, italic: false, underline: false }]
                 });
-                // clearRect (clear), fillRect (bg), arc (debug markers), stroke (selection)
-                expect(spies.clearRect.calls.length).to.equal(1);
+                // Assembler does not call clearRect (caller's responsibility per CollageAssembler.js:47)
+                // fillRect (bg), arc (debug markers), stroke (selection)
+                expect(spies.clearRect.calls.length).to.equal(0);
                 expect(spies.fillRect.calls.length).to.be.at.least(1); // background
                 expect(spies.arc.calls.length).to.be.at.least(1); // debug
             });

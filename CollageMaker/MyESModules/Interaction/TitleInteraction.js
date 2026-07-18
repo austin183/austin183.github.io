@@ -13,7 +13,7 @@
  * @param {Function} options.onInteractionEnd - Called when drag/resize ends
  * @returns {Object} TitleInteractionHandler
  */
-import { computeBounds } from '../Rendering/TitleRenderer.js';
+import { computeMultiLineBounds, PADDING } from '../Rendering/TitleRenderer.js';
 import { SIZE_CONSTANTS } from '../Models/SizeConstants.js';
 
 export function createTitleInteraction({ canvasId, state, titleManager, onRenderScheduled, onInteractionStart, onInteractionEnd }) {
@@ -112,6 +112,12 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
 
         /**
          * Hit-tests the title bounding box at the given CSS coordinates.
+         * Uses the same position computation as TitleRenderer.render() to ensure
+         * the clickable area matches the rendered area in all modes:
+         * - Legacy mode (no custom position/width): centers text, not box
+         * - Custom width only: centers box
+         * - Custom position: uses explicit position
+         * - Multi-line: uses computed multi-line bounds for Y and height
          * @param {number} cssX - CSS x coordinate
          * @param {number} cssY - CSS y coordinate
          * @param {number} canvasWidth - CSS canvas width
@@ -125,30 +131,53 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
                 return { hit: false };
             }
 
-            const bounds = computeBounds(state.titleStyle, runs, SIZE_CONSTANTS.defaultCanvasWidth, SIZE_CONSTANTS.defaultCanvasHeight);
+            const bounds = computeMultiLineBounds(state.titleStyle, runs, SIZE_CONSTANTS.defaultCanvasWidth, SIZE_CONSTANTS.defaultCanvasHeight);
             const boxWidth = bounds.boxWidth;
-            const boxHeight = bounds.height;
 
-            // Compute the title box position in logical coords
-            const titleBoxX = state.titleStyle.titleBoxX !== null && state.titleStyle.titleBoxX !== undefined
-                ? state.titleStyle.titleBoxX
-                : (SIZE_CONSTANTS.defaultCanvasWidth - boxWidth) / 2; // Default: centered
+            // Determine if legacy mode (no custom position AND no custom width)
+            // Matches TitleRenderer.render() logic exactly
+            const isLegacyMode = (state.titleStyle.titleBoxWidth === null || state.titleStyle.titleBoxWidth === undefined)
+                && (state.titleStyle.titleBoxX === null || state.titleStyle.titleBoxX === undefined);
 
-            const titleBoxY = state.titleStyle.titleBoxY !== null && state.titleStyle.titleBoxY !== undefined
-                ? state.titleStyle.titleBoxY
-                : SIZE_CONSTANTS.defaultCanvasHeight - 40; // Default: bottom margin (MARGIN = 40)
+            // Compute box X position — matches TitleRenderer.render()
+            let effectiveBoxX;
+            if (state.titleStyle.titleBoxX !== null && state.titleStyle.titleBoxX !== undefined) {
+                effectiveBoxX = state.titleStyle.titleBoxX;
+            } else if (state.titleStyle.titleBoxWidth !== null && state.titleStyle.titleBoxWidth !== undefined) {
+                effectiveBoxX = (SIZE_CONSTANTS.defaultCanvasWidth - boxWidth) / 2;
+            } else {
+                // Legacy mode: center text within canvas (not the box)
+                const MARGIN = 40;
+                const textWidth = bounds.textWidth;
+                const alignment = state.titleStyle.alignment || 'center';
+                switch (alignment) {
+                    case 'left':
+                        effectiveBoxX = MARGIN;
+                        break;
+                    case 'right':
+                        effectiveBoxX = SIZE_CONSTANTS.defaultCanvasWidth - MARGIN - textWidth;
+                        break;
+                    case 'center':
+                    default:
+                        effectiveBoxX = (SIZE_CONSTANTS.defaultCanvasWidth - textWidth) / 2;
+                        break;
+                }
+            }
 
-            // Box top-left in logical coords
-            const boxTop = titleBoxY - (state.titleStyle.fontSize || 36) - 12; // baselineY - fontSize - PADDING
-            const boxLeft = titleBoxX;
+            // The hit test area matches the rendered background/outline area.
+            // In legacy mode, background is offset by PADDING from text start.
+            const bgX = isLegacyMode ? effectiveBoxX - PADDING : effectiveBoxX;
+
+            // Box top uses computeMultiLineBounds.y which accounts for multi-line height
+            const boxTop = bounds.y;
 
             // Convert logical box to CSS coords
             const scaleX = canvasWidth / SIZE_CONSTANTS.defaultCanvasWidth;
             const scaleY = canvasHeight / SIZE_CONSTANTS.defaultCanvasHeight;
-            const cssBoxLeft = boxLeft * scaleX;
+            const cssBoxLeft = bgX * scaleX;
             const cssBoxTop = boxTop * scaleY;
             const cssBoxWidth = boxWidth * scaleX;
-            const cssBoxHeight = boxHeight * scaleY;
+            const cssBoxHeight = bounds.height * scaleY;
 
             // Check if point is within the title box
             if (cssX < cssBoxLeft || cssX > cssBoxLeft + cssBoxWidth ||
@@ -202,15 +231,49 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
                 } catch (_) {}
             }
 
-            // Record start state
+            // Record start state — compute box position matching TitleRenderer.render()
             dragStartCoords = { x: coords.x, y: coords.y };
-            dragStartBoxX = state.titleStyle.titleBoxX !== null && state.titleStyle.titleBoxX !== undefined
-                ? state.titleStyle.titleBoxX
-                : (SIZE_CONSTANTS.defaultCanvasWidth - (state.titleStyle.titleBoxWidth ?? 0)) / 2;
+
+            // Compute actual rendered bounds (handles auto-fit and multi-line)
+            const runs = titleManager.getRuns();
+            const bounds = computeMultiLineBounds(state.titleStyle, runs, SIZE_CONSTANTS.defaultCanvasWidth, SIZE_CONSTANTS.defaultCanvasHeight);
+            dragStartBoxWidth = bounds.boxWidth;
+
+            // Compute drag start position matching the renderer's box position logic.
+            // dragStartBoxX is the background/outline X (bgX in renderer terms) so that
+            // setPosition() during drag produces the correct visual result.
+            const isLegacyMode = (state.titleStyle.titleBoxWidth === null || state.titleStyle.titleBoxWidth === undefined)
+                && (state.titleStyle.titleBoxX === null || state.titleStyle.titleBoxX === undefined);
+
+            let effectiveBoxX;
+            if (state.titleStyle.titleBoxX !== null && state.titleStyle.titleBoxX !== undefined) {
+                effectiveBoxX = state.titleStyle.titleBoxX;
+            } else if (state.titleStyle.titleBoxWidth !== null && state.titleStyle.titleBoxWidth !== undefined) {
+                effectiveBoxX = (SIZE_CONSTANTS.defaultCanvasWidth - bounds.boxWidth) / 2;
+            } else {
+                // Legacy mode: center text within canvas (not the box)
+                const MARGIN = 40;
+                const textWidth = bounds.textWidth;
+                const alignment = state.titleStyle.alignment || 'center';
+                switch (alignment) {
+                    case 'left':
+                        effectiveBoxX = MARGIN;
+                        break;
+                    case 'right':
+                        effectiveBoxX = SIZE_CONSTANTS.defaultCanvasWidth - MARGIN - textWidth;
+                        break;
+                    case 'center':
+                    default:
+                        effectiveBoxX = (SIZE_CONSTANTS.defaultCanvasWidth - textWidth) / 2;
+                        break;
+                }
+            }
+            // In legacy mode, the background/outline is offset by PADDING from text start
+            dragStartBoxX = isLegacyMode ? effectiveBoxX - PADDING : effectiveBoxX;
+
             dragStartBoxY = state.titleStyle.titleBoxY !== null && state.titleStyle.titleBoxY !== undefined
                 ? state.titleStyle.titleBoxY
                 : SIZE_CONSTANTS.defaultCanvasHeight - 40;
-            dragStartBoxWidth = state.titleStyle.titleBoxWidth ?? null;
 
             // Determine interaction type from hit target
             interactionType = hit.target === 'body' ? 'drag' :
@@ -279,34 +342,37 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
 
                     // Clamp to canvas bounds with VISIBLE_MIN — keep at least 50px visible
                     const actualBoxWidth = state.titleStyle.titleBoxWidth ?? 400;
-                    const fontSize = state.titleStyle.fontSize || 36;
                     const VISIBLE_MIN = 50; // px of box that must remain visible at edges
+                    // Use multi-line box height for Y clamp (handles multi-line titles)
+                    const runs = titleManager.getRuns();
+                    const bounds = computeMultiLineBounds(state.titleStyle, runs, SIZE_CONSTANTS.defaultCanvasWidth, SIZE_CONSTANTS.defaultCanvasHeight);
+                    const boxHeight = bounds.height;
                     newX = Math.max(-actualBoxWidth + VISIBLE_MIN, Math.min(newX, SIZE_CONSTANTS.defaultCanvasWidth - VISIBLE_MIN));
-                    newY = Math.max(fontSize + 12, Math.min(newY, SIZE_CONSTANTS.defaultCanvasHeight - 12));
+                    newY = Math.max(boxHeight, Math.min(newY, SIZE_CONSTANTS.defaultCanvasHeight - 12));
 
                     titleManager.setPosition(newX, newY);
                 } else if (interactionType === 'resize-right') {
                     // Resize from right: change width, keep X
-                    let newWidth = (dragStartBoxWidth ?? boxWidth) + dxLogical;
-                    // Clamp width
+                    let newWidth = dragStartBoxWidth + dxLogical;
+                    // Clamp width — include padding so background never clips text
                     const runs = titleManager.getRuns();
-                    const bounds = computeBounds(state.titleStyle, runs, SIZE_CONSTANTS.defaultCanvasWidth, SIZE_CONSTANTS.defaultCanvasHeight);
-                    const minWidth = Math.max(100, bounds.textWidth);
+                    const bounds = computeMultiLineBounds(state.titleStyle, runs, SIZE_CONSTANTS.defaultCanvasWidth, SIZE_CONSTANTS.defaultCanvasHeight);
+                    const minWidth = Math.max(100, bounds.textWidth + PADDING * 2);
                     const maxWidth = SIZE_CONSTANTS.defaultCanvasWidth - 80;
                     newWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
 
                     titleManager.setWidth(newWidth);
                 } else if (interactionType === 'resize-left') {
                     // Resize from left: change width AND X
-                    let newWidth = (dragStartBoxWidth ?? boxWidth) - dxLogical;
-                    // Clamp width
+                    let newWidth = dragStartBoxWidth - dxLogical;
+                    // Clamp width — include padding so background never clips text
                     const runs = titleManager.getRuns();
-                    const bounds = computeBounds(state.titleStyle, runs, SIZE_CONSTANTS.defaultCanvasWidth, SIZE_CONSTANTS.defaultCanvasHeight);
-                    const minWidth = Math.max(100, bounds.textWidth);
+                    const bounds = computeMultiLineBounds(state.titleStyle, runs, SIZE_CONSTANTS.defaultCanvasWidth, SIZE_CONSTANTS.defaultCanvasHeight);
+                    const minWidth = Math.max(100, bounds.textWidth + PADDING * 2);
                     const maxWidth = SIZE_CONSTANTS.defaultCanvasWidth - 80;
                     newWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
 
-                    const widthDelta = newWidth - (dragStartBoxWidth ?? boxWidth);
+                    const widthDelta = newWidth - dragStartBoxWidth;
                     let newX = dragStartBoxX - widthDelta;
                     newX = Math.max(0, Math.min(newX, SIZE_CONSTANTS.defaultCanvasWidth - newWidth));
 

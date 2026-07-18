@@ -516,13 +516,13 @@
                     clientX: 350, clientY: 441, button: 0, bubbles: true
                 }));
 
-                // Drag far up — should clamp to fontSize + 12 = 36 + 12 = 48
+                // Drag far up — should clamp to boxHeight = fontSize + PADDING*2 = 36 + 24 = 60
                 canvas.dispatchEvent(new PointerEvent('pointermove', {
                     clientX: 350, clientY: 0, bubbles: true
                 }));
 
                 const lastPos = positionCalls[positionCalls.length - 1];
-                expect(lastPos.y).to.equal(48);
+                expect(lastPos.y).to.equal(60);
 
                 handler.detach();
             });
@@ -1384,6 +1384,545 @@
                 }));
 
                 expect(endCalled).to.be.true;
+
+                handler.detach();
+            });
+        });
+
+        // ============================================================
+        // Phase 2 (Title Changes): Auto-fit resize fix
+        // dragStartBoxWidth should use computed bounds, not hardcoded 400
+        // ============================================================
+        describe('Phase 2 — Auto-fit resize fix', () => {
+            let canvas;
+
+            beforeEach(() => {
+                canvas = createTestCanvas();
+            });
+
+            afterEach(() => {
+                if (canvas && canvas.parentNode) {
+                    canvas.parentNode.removeChild(canvas);
+                }
+            });
+
+            it('2.1.1 — Auto-fit resize starts from computed width, not 400 fallback', () => {
+                // titleBoxWidth = null means auto-fit mode (the default)
+                // Bug: dragStartBoxWidth was null, resize fell back to 400px
+                // Fix: dragStartBoxWidth should be computed from bounds
+                const titleStyle = makeTitleStyle({
+                    titleBoxWidth: null,
+                    titleBoxX: 500,
+                    titleBoxY: 900
+                });
+                const runs = [makeTitleRun({ text: 'Hello World' })];
+                const state = createTestState(titleStyle, runs);
+
+                // Use computeBounds to get the actual auto-fit width in this environment
+                const bounds = computeBounds(titleStyle, runs, 1920, 1080);
+                const autoFitWidth = bounds.boxWidth;
+
+                let widthCalls = [];
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: (w) => { widthCalls.push(w); state.titleStyle.titleBoxWidth = w; },
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // titleBoxX=500, auto-fit width from computeBounds
+                // CSS: box left = 250, right = 250 + autoFitWidth/2
+                // Hit right edge: 3px inside the right edge
+                const cssBoxRight = 250 + autoFitWidth / 2;
+                const hitX = cssBoxRight - 3;
+                // Y=441 is safely inside box (CSS y range: 426-456)
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: hitX, clientY: 441, button: 0, bubbles: true
+                }));
+
+                // Drag right by 50 CSS px (100 logical px)
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: hitX + 50, clientY: 441, bubbles: true
+                }));
+
+                expect(widthCalls.length).to.be.at.least(1);
+                const finalWidth = widthCalls[widthCalls.length - 1];
+                // With fix: starts from autoFitWidth, final = autoFitWidth + 100
+                // Without fix: starts from 400, final = 500
+                // The final width MUST be less than 400 to prove it started from auto-fit
+                expect(finalWidth).to.be.lessThan(400);
+                // Width should have increased by ~100 (the drag delta)
+                expect(finalWidth).to.be.at.least(autoFitWidth + 90);
+
+                handler.detach();
+            });
+
+            it('2.1.2 — Custom width resize starts from the set width', () => {
+                // When titleBoxWidth is a concrete value, dragStartBoxWidth uses it
+                const state = createTestState(
+                    makeTitleStyle({
+                        titleBoxWidth: 600,
+                        titleBoxX: null,
+                        titleBoxY: 900
+                    }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                let widthCalls = [];
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: (w) => { widthCalls.push(w); state.titleStyle.titleBoxWidth = w; },
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Width 600, centered: logical x = (1920-600)/2 = 660
+                // CSS: x = 330, right edge = 330 + 300 = 630
+                // Pointer at x=627 (3px from right edge)
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 627, clientY: 456, button: 0, bubbles: true
+                }));
+
+                // Drag right by 50 CSS px (100 logical px)
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 677, clientY: 456, bubbles: true
+                }));
+
+                if (widthCalls.length > 0) {
+                    const finalWidth = widthCalls[widthCalls.length - 1];
+                    // Starts from 600, adds 100 = 700
+                    expect(finalWidth).to.be.approximately(700, 5);
+                }
+
+                handler.detach();
+            });
+        });
+
+        // ============================================================
+        // Phase 3: Minimum width clamp includes padding
+        // Bug: minWidth = Math.max(100, bounds.textWidth) — no padding
+        // Fix: minWidth = Math.max(100, bounds.textWidth + PADDING * 2)
+        // ============================================================
+        describe('Phase 3 — Minimum width clamp includes padding', () => {
+            let canvas;
+
+            beforeEach(() => {
+                canvas = createTestCanvas();
+            });
+
+            afterEach(() => {
+                if (canvas && canvas.parentNode) {
+                    canvas.parentNode.removeChild(canvas);
+                }
+            });
+
+            it('3.1.1 — Resize-right minWidth includes PADDING * 2', () => {
+                // When shrinking the title box, the minimum width should be
+                // textWidth + PADDING * 2 (24px), not just textWidth.
+                // This ensures the background always has padding on both sides.
+                const state = createTestState(
+                    makeTitleStyle({
+                        titleBoxX: 500,
+                        titleBoxY: 900,
+                        titleBoxWidth: 800  // Wide box to allow shrinking
+                    }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                let widthCalls = [];
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: (w) => { widthCalls.push(w); state.titleStyle.titleBoxWidth = w; },
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Pointer down on right edge
+                // Logical right: 500 + 800 = 1300, CSS right: 650
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 647, clientY: 456, button: 0, bubbles: true
+                }));
+
+                // Drag far left to shrink width to minimum
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 100, clientY: 456, bubbles: true
+                }));
+
+                expect(widthCalls.length).to.be.at.least(1);
+                const finalWidth = widthCalls[widthCalls.length - 1];
+
+                // Compute the actual textWidth in this environment
+                const bounds = computeBounds(state.titleStyle, state.titleRuns, 1920, 1080);
+                const expectedMinWidth = Math.max(100, bounds.textWidth + 24); // 24 = PADDING * 2
+
+                // The final width must be at least textWidth + padding (not just textWidth)
+                expect(finalWidth).to.be.at.least(expectedMinWidth);
+            });
+
+            it('3.1.2 — Resize-left minWidth includes PADDING * 2', () => {
+                // Same constraint applies when resizing from the left edge
+                const state = createTestState(
+                    makeTitleStyle({
+                        titleBoxX: 100,
+                        titleBoxY: 900,
+                        titleBoxWidth: 800  // Wide box to allow shrinking
+                    }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                let widthCalls = [];
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: (w) => { widthCalls.push(w); state.titleStyle.titleBoxWidth = w; },
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Pointer down on left edge
+                // Logical left: 100, CSS left: 50
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 53, clientY: 456, button: 0, bubbles: true
+                }));
+
+                // Drag far right to shrink width to minimum
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 900, clientY: 456, bubbles: true
+                }));
+
+                expect(widthCalls.length).to.be.at.least(1);
+                const finalWidth = widthCalls[widthCalls.length - 1];
+
+                // Compute the actual textWidth in this environment
+                const bounds = computeBounds(state.titleStyle, state.titleRuns, 1920, 1080);
+                const expectedMinWidth = Math.max(100, bounds.textWidth + 24); // 24 = PADDING * 2
+
+                expect(finalWidth).to.be.at.least(expectedMinWidth);
+            });
+
+            it('3.1.3 — Absolute minimum 100px still applies for very short text', () => {
+                // For very short text where textWidth + 24 < 100,
+                // the absolute minimum of 100px should still apply
+                const state = createTestState(
+                    makeTitleStyle({
+                        titleBoxX: 500,
+                        titleBoxY: 900,
+                        titleBoxWidth: 800
+                    }),
+                    [makeTitleRun({ text: 'A' })]  // Very short text
+                );
+
+                let widthCalls = [];
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: (w) => { widthCalls.push(w); state.titleStyle.titleBoxWidth = w; },
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Pointer down on right edge, drag far left
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 647, clientY: 456, button: 0, bubbles: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 100, clientY: 456, bubbles: true
+                }));
+
+                expect(widthCalls.length).to.be.at.least(1);
+                const finalWidth = widthCalls[widthCalls.length - 1];
+
+                // Absolute minimum is 100px regardless of text width
+                expect(finalWidth).to.be.at.least(100);
+            });
+        });
+
+        // ============================================================
+        // Bug fix: Hit test matches renderer position
+        // Ensures clickable area matches rendered area in all modes
+        // ============================================================
+        describe('Bug fix — Hit test matches renderer position', () => {
+            let canvas;
+
+            beforeEach(() => {
+                canvas = createTestCanvas();
+            });
+
+            afterEach(() => {
+                if (canvas && canvas.parentNode) {
+                    canvas.parentNode.removeChild(canvas);
+                }
+            });
+
+            it('Legacy mode (no position, no width) — hit test at centered text position', () => {
+                // Legacy mode: titleBoxX and titleBoxWidth are both null/undefined
+                // Renderer centers TEXT (not box) in canvas
+                // Hit test must match — clicking at centered text position should hit
+                const titleStyle = {
+                    fontSize: 36,
+                    fontFamily: 'Arial',
+                    alignment: 'center',
+                    titleBoxWidth: null,  // No custom width
+                    titleBoxX: undefined,  // No custom position
+                    titleBoxY: undefined
+                };
+                const runs = [makeTitleRun({ text: 'Hello World' })];
+                const state = createTestState(titleStyle, runs);
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // In legacy mode, text is centered: textX = (1920 - textWidth) / 2
+                // Background/outline is at textX - PADDING
+                // Canvas CSS: 960x540, logical: 1920x1080, scale: 0.5
+                // text "Hello World" at 36px Arial is ~108px wide
+                // textX = (1920 - 108) / 2 = 906
+                // bgX = 906 - 12 = 894
+                // CSS bgX = 894 * 0.5 = 447
+                // Box width = textWidth + PADDING*2 = 108 + 24 = 132
+                // CSS box width = 66
+                // CSS center of box = 447 + 33 = 480 (should be very close to canvas center 480)
+                // Y: baseline at 1080-40=1040, box top = 1040-36-12=992, CSS = 496
+                // CSS center Y = 496 + 30 = 526
+                const result = handler._hitTestTitle(480, 526, 960, 540);
+
+                expect(result.hit).to.be.true;
+                expect(result.target).to.equal('body');
+
+                handler.detach();
+            });
+
+            it('Legacy mode left alignment — hit test at left-aligned text position', () => {
+                const titleStyle = {
+                    fontSize: 36,
+                    fontFamily: 'Arial',
+                    alignment: 'left',
+                    titleBoxWidth: null,
+                    titleBoxX: undefined,
+                    titleBoxY: undefined
+                };
+                const runs = [makeTitleRun({ text: 'Hello World' })];
+                const state = createTestState(titleStyle, runs);
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Legacy left: textX = MARGIN = 40
+                // bgX = 40 - 12 = 28
+                // CSS bgX = 28 * 0.5 = 14
+                // Box width ~132, CSS ~66
+                // CSS center of box = 14 + 33 = 47
+                const result = handler._hitTestTitle(47, 526, 960, 540);
+
+                expect(result.hit).to.be.true;
+
+                // Old buggy code would center the box, missing left-aligned text
+                // Old code: boxLeft = (1920 - 132) / 2 = 894, CSS = 447
+                // At CSS x=47, old code would return no hit
+                const resultAtCenter = handler._hitTestTitle(480, 526, 960, 540);
+                expect(resultAtCenter.hit).to.be.false;
+
+                handler.detach();
+            });
+
+            it('Multi-line title — hit test at top line is clickable', () => {
+                // Multi-line: computeMultiLineBounds returns y that accounts for all lines
+                // Hit test must use bounds.y, not the old single-line formula
+                const titleStyle = {
+                    fontSize: 36,
+                    fontFamily: 'Arial',
+                    alignment: 'center',
+                    titleBoxWidth: null,
+                    titleBoxX: undefined,
+                    titleBoxY: undefined
+                };
+                // Two lines of text
+                const runs = [makeTitleRun({ text: 'Line One\nLine Two' })];
+                const state = createTestState(titleStyle, runs);
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Multi-line bounds: lineHeight = 36 * 1.2 = 43.2
+                // baselineY (last line) = 1080 - 40 = 1040
+                // box top = 1040 - (2-1)*43.2 - 36 - 12 = 1040 - 43.2 - 48 = 948.8
+                // CSS box top = 948.8 * 0.5 = 474.4
+                // Box height = 43.2 + 36 + 24 = 103.2, CSS = 51.6
+                // CSS center Y = 474.4 + 25.8 = 500.2
+                // For X: centered text, similar to single-line center
+                // The top line is at: baselineY - lineHeight = 1040 - 43.2 = 996.8
+                // CSS top line center = 996.8 * 0.5 - fontSize/2 = ~470
+                // Test at the top portion of the box (should be clickable)
+                const resultTop = handler._hitTestTitle(480, 485, 960, 540);
+                expect(resultTop.hit).to.be.true;
+
+                // Test at the bottom portion of the box (should also be clickable)
+                const resultBottom = handler._hitTestTitle(480, 520, 960, 540);
+                expect(resultBottom.hit).to.be.true;
+
+                // Old buggy code: boxTop = 1040 - 36 - 12 = 992, CSS = 496
+                // So old code's hit area started at CSS y=496 and was only ~30px tall
+                // The top line at CSS ~470 would NOT be clickable with old code
+                // But with the fix, the full multi-line box is clickable
+
+                handler.detach();
+            });
+
+            it('Legacy mode drag start — no jump on first drag', () => {
+                // When dragging from legacy mode, the title should not jump
+                // because dragStartBoxX must match the rendered bgX position
+                const titleStyle = {
+                    fontSize: 36,
+                    fontFamily: 'Arial',
+                    alignment: 'center',
+                    titleBoxWidth: null,
+                    titleBoxX: undefined,
+                    titleBoxY: undefined
+                };
+                const runs = [makeTitleRun({ text: 'Hello World' })];
+                const state = createTestState(titleStyle, runs);
+
+                let positionCalls = [];
+                const titleManager = {
+                    setPosition: (x, y) => {
+                        positionCalls.push({ x, y });
+                        state.titleStyle.titleBoxX = x;
+                        state.titleStyle.titleBoxY = y;
+                    },
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Click at the center of the title (where it's rendered)
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 480, clientY: 526, button: 0, bubbles: true
+                }));
+
+                // Drag a small amount (10 CSS px = 20 logical px)
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 490, clientY: 526, bubbles: true
+                }));
+
+                expect(positionCalls.length).to.be.at.least(1);
+                const newPos = positionCalls[positionCalls.length - 1];
+
+                // The new position should be close to the original rendered position + delta
+                // Original bgX ~894 (logical), delta = +20, expected ~914
+                // Old buggy code: dragStartBoxX = (1920 - 0) / 2 = 960 (centering box of width 0!)
+                // which would give newPos ~980 — a huge jump
+                // With fix: dragStartBoxX = bgX ~894, newPos ~914 — smooth movement
+                // The position should be within 50px of the expected centered position
+                expect(newPos.x).to.be.within(800, 1100);
 
                 handler.detach();
             });
