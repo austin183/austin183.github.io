@@ -7,9 +7,10 @@
  * @param {Function} getImageLibrary - Function that returns ImageLibrary instance
  * @param {Function} onRegenerate - Callback to trigger layout regeneration and render
  * @param {string} [fileInputId='fileInput'] - DOM ID of the file input element
+ * @param {Function} [onImageLoadingProgress] - Optional progress callback(current, total)
  * @returns {Object} File handlers object
  */
-export function createFileHandlers(getImageLibrary, onRegenerate, fileInputId = 'fileInput') {
+export function createFileHandlers(getImageLibrary, onRegenerate, fileInputId = 'fileInput', onImageLoadingProgress = null) {
     let activeCleanup = null;
 
     return {
@@ -33,7 +34,27 @@ export function createFileHandlers(getImageLibrary, onRegenerate, fileInputId = 
             const files = input ? input.files : null;
             if (files && files.length > 0) {
                 const imageLibrary = getImageLibrary();
-                await imageLibrary.addImages(files);
+                const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+                let progressStarted = false;
+
+                try {
+                    if (onImageLoadingProgress && imageFiles.length > 0) {
+                        onImageLoadingProgress(this, 0, imageFiles.length);
+                        progressStarted = true;
+                    }
+
+                    await imageLibrary.addImages(files, (current, total) => {
+                        if (onImageLoadingProgress) {
+                            onImageLoadingProgress(this, current, total);
+                        }
+                    });
+                } finally {
+                    if (progressStarted && onImageLoadingProgress) {
+                        // Signal completion by passing current === total
+                        onImageLoadingProgress(this, imageFiles.length, imageFiles.length);
+                    }
+                }
+
                 // Use injected callback for DIP compliance
                 onRegenerate(this);
                 // Reset input so re-selecting the same file works

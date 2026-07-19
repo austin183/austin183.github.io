@@ -171,12 +171,32 @@ const isLegacyMode = (titleStyle.titleBoxWidth === null || titleStyle.titleBoxWi
 
 - `MyESModules/Rendering/TitleRenderer.js` — legacy vs. box-based positioning
 
-## Optional Context Parameter for Measurement Functions
+## Shared Offscreen Canvas for Text Measurement
 
-Pure measurement functions that need a Canvas 2D context should accept an optional context parameter to avoid offscreen canvas creation in hot paths:
+Measurement functions that need `CanvasRenderingContext2D.measureText()` should accept an optional `measureCtx` parameter. When called in a hot path (e.g., `pointermove` during drag), **create a single shared offscreen canvas at factory init time** and pass its context to all measurement calls:
 
 ```javascript
-export function computeBounds(titleStyle, titleRuns, width, height, measureCtx) {
+// In factory function (e.g., createTitleInteraction):
+const measureCanvas = document.createElement('canvas');
+measureCanvas.width = 1;
+measureCanvas.height = 1;
+const measureCtx = measureCanvas.getContext('2d');
+
+// Pass to all measurement calls:
+const bounds = computeMultiLineBounds(style, runs, width, height, measureCtx);
+```
+
+**Why this matters:** Without a shared canvas, each `measureText()` call creates a new offscreen canvas and 2D context. During a 1-second drag at 60fps, that's 60 canvases — all immediately garbage-collected. The shared canvas eliminates this allocation entirely.
+
+**Key details:**
+- **1x1 sizing** — `measureText()` only needs the context, not the drawing surface. `width = 1; height = 1` minimizes allocation.
+- **No race conditions** — JavaScript is single-threaded. Each `measureText()` call sets `ctx.font` before measuring, preventing state leakage.
+- **Factory-scoped** — The shared canvas lives in the factory closure, not globally. Each handler instance gets its own canvas.
+- **Backward compatible** — The `measureCtx` parameter is optional. Callers that omit it still work (they create per-call canvases).
+
+**Measurement function signature:**
+```javascript
+export function computeMultiLineBounds(style, runs, width, height, measureCtx) {
     const ctx = measureCtx || (() => {
         const offscreen = document.createElement('canvas');
         return offscreen.getContext('2d');
@@ -185,7 +205,32 @@ export function computeBounds(titleStyle, titleRuns, width, height, measureCtx) 
 }
 ```
 
-**Why this matters:** Creating offscreen canvases during `pointermove` events causes GC pressure and frame drops. Callers in hot paths (interaction handlers) should pass the render context. Callers in cold paths (initial layout) can omit it.
+**Testing the pattern:** Wrap `document.createElement` to count canvas creations. After factory init (which creates the shared canvas), reset the counter. Simulate hot-path calls — expect zero new canvases:
+
+```javascript
+let createCanvasCalls = 0;
+const origCreateElement = document.createElement.bind(document);
+document.createElement = function (tagName) {
+    if (tagName.toLowerCase() === 'canvas') createCanvasCalls++;
+    return origCreateElement(tagName);
+};
+
+const handler = createTitleInteraction({...}); // Factory creates shared canvas
+createCanvasCalls = 0; // Reset after init
+
+// Simulate drag — should create 0 new canvases
+for (let i = 0; i < 20; i++) {
+    canvas.dispatchEvent(new PointerEvent('pointermove', {...}));
+}
+expect(createCanvasCalls).to.equal(0);
+
+document.createElement = origCreateElement; // Restore
+```
+
+**When to apply:**
+1. A measurement function accepts an optional context parameter
+2. The function is called in a hot path (`pointermove`, animation frame)
+3. The caller has a stable factory scope to hold the shared resource
 
 ## Offscreen Canvas Export
 

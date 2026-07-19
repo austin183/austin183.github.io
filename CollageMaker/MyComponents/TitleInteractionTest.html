@@ -22,7 +22,7 @@
 
     <script type="module">
         import { createTitleInteraction } from '../MyESModules/Interaction/TitleInteraction.js';
-        import { computeBounds } from '../MyESModules/Rendering/TitleRenderer.js';
+        import { computeMultiLineBounds } from '../MyESModules/Rendering/TitleRenderer.js';
 
         const { expect } = chai;
 
@@ -1418,8 +1418,8 @@
                 const runs = [makeTitleRun({ text: 'Hello World' })];
                 const state = createTestState(titleStyle, runs);
 
-                // Use computeBounds to get the actual auto-fit width in this environment
-                const bounds = computeBounds(titleStyle, runs, 1920, 1080);
+                // Use computeMultiLineBounds to get the actual auto-fit width in this environment
+                const bounds = computeMultiLineBounds(titleStyle, runs, 1920, 1080);
                 const autoFitWidth = bounds.boxWidth;
 
                 let widthCalls = [];
@@ -1585,7 +1585,7 @@
                 const finalWidth = widthCalls[widthCalls.length - 1];
 
                 // Compute the actual textWidth in this environment
-                const bounds = computeBounds(state.titleStyle, state.titleRuns, 1920, 1080);
+                const bounds = computeMultiLineBounds(state.titleStyle, state.titleRuns, 1920, 1080);
                 const expectedMinWidth = Math.max(100, bounds.textWidth + 24); // 24 = PADDING * 2
 
                 // The final width must be at least textWidth + padding (not just textWidth)
@@ -1637,7 +1637,7 @@
                 const finalWidth = widthCalls[widthCalls.length - 1];
 
                 // Compute the actual textWidth in this environment
-                const bounds = computeBounds(state.titleStyle, state.titleRuns, 1920, 1080);
+                const bounds = computeMultiLineBounds(state.titleStyle, state.titleRuns, 1920, 1080);
                 const expectedMinWidth = Math.max(100, bounds.textWidth + 24); // 24 = PADDING * 2
 
                 expect(finalWidth).to.be.at.least(expectedMinWidth);

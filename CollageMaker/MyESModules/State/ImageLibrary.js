@@ -16,14 +16,23 @@ export function createImageLibrary(state, onImagesChanged) {
         /**
          * Adds images from an array of File objects.
          * @param {File[]} files
+         * @param {Function} [onProgress] - Optional callback(current, total) fired per-image
          * @returns {Promise<void>}
          */
-        async addImages(files) {
+        async addImages(files, onProgress) {
             const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
             if (imageFiles.length === 0) return;
 
+            let loaded = 0;
             const newItems = await Promise.all(
-                imageFiles.map(file => this._loadImage(file))
+                imageFiles.map(async (file) => {
+                    const item = await this._loadImage(file);
+                    loaded++;
+                    if (typeof onProgress === 'function') {
+                        onProgress(loaded, imageFiles.length);
+                    }
+                    return item;
+                })
             );
 
             const validItems = newItems.filter(item => item !== null);

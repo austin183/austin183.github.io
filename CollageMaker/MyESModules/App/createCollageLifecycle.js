@@ -259,7 +259,17 @@ export function createCollageLifecycle(base, domIds = {}) {
             // Set up global file drop handler for drops outside Vue-managed elements
             // (the element-level @drop handlers in the template handle drops on canvas/library)
             this._dropCleanup = base.dropHandler.setupGlobalDrop(async (files) => {
-                await imageLibrary.addImages(files);
+                const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+                if (imageFiles.length > 0) {
+                    this.beginImageLoading(imageFiles.length);
+                }
+                try {
+                    await imageLibrary.addImages(files, (current, total) => {
+                        this.updateImageLoadingProgress(current, total);
+                    });
+                } finally {
+                    this.endImageLoading();
+                }
                 this._regenerateAndRender();
             });
 

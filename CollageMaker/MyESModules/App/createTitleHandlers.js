@@ -13,13 +13,32 @@ export function createTitleHandlers(getTitleManager, onRenderScheduled) {
     return {
         /**
          * Handles title text change.
+         * Shows a toast if the text was truncated (exceeded 3 lines).
          */
         onTitleTextChange() {
             const titleManager = getTitleManager();
             if (titleManager) {
-                titleManager.setText(this.titleText);
+                const result = titleManager.setText(this.titleText);
+                if (result && result.truncated && this.showToast) {
+                    this.showToast('Title limited to 3 lines', 'info', 3000);
+                }
             }
             onRenderScheduled(this);
+        },
+
+        /**
+         * Prevents Enter key from creating a 4th line (avoids visual flicker).
+         * Shows a brief toast so the user understands why Enter was blocked.
+         * @param {KeyboardEvent} event
+         */
+        onTitleEnterKey(event) {
+            const lineCount = (this.titleText || '').split('\n').length;
+            if (lineCount >= 3) {
+                event.preventDefault();
+                if (this.showToast) {
+                    this.showToast('Maximum 3 lines reached', 'info', 2000);
+                }
+            }
         },
 
         /**

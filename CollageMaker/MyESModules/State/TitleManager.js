@@ -121,13 +121,16 @@ export function createTitleManager(state, onChange) {
 
         /**
          * Sets the title text (creates a single plain run).
+         * Enforces maximum 3 lines. If text exceeds 3 lines, excess lines are
+         * silently discarded.
          * @param {string} text
+         * @returns {{ truncated: boolean }} Whether the text was truncated
          */
         setText(text) {
             const t = String(text || '');
-            // Enforce maximum 3 lines
             const lines = t.split('\n');
-            const clampedText = lines.length > 3 ? lines.slice(0, 3).join('\n') : t;
+            const wasTruncated = lines.length > 3;
+            const clampedText = wasTruncated ? lines.slice(0, 3).join('\n') : t;
 
             state.titleText = clampedText;
             if (clampedText.length === 0) {
@@ -136,6 +139,7 @@ export function createTitleManager(state, onChange) {
                 state.titleRuns = [createTitleRun(clampedText, false, false, false)];
             }
             notify();
+            return { truncated: wasTruncated };
         },
 
         /**

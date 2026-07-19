@@ -13,7 +13,7 @@
  * @param {Function} options.onInteractionEnd - Called when drag/resize ends
  * @returns {Object} TitleInteractionHandler
  */
-import { computeMultiLineBounds, PADDING } from '../Rendering/TitleRenderer.js';
+import { computeMultiLineBounds, PADDING, MARGIN } from '../Rendering/TitleRenderer.js';
 import { SIZE_CONSTANTS } from '../Models/SizeConstants.js';
 
 export function createTitleInteraction({ canvasId, state, titleManager, onRenderScheduled, onInteractionStart, onInteractionEnd }) {
@@ -27,8 +27,16 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
     let dragStartBoxWidth = null; // Logical pixels
     let capturedPointerId = undefined;
 
-    const DRAG_THRESHOLD = 3;   // CSS pixels — minimum movement to trigger drag
-    const EDGE_THRESHOLD = 8;   // CSS pixels — resize handle hit area
+    const DRAG_THRESHOLD = 3;         // CSS pixels — minimum movement to trigger drag
+    const EDGE_THRESHOLD_FINE = 8;    // CSS pixels — mouse/pen resize handle hit area
+    const EDGE_THRESHOLD_COARSE = 16; // CSS pixels — touch resize handle hit area (WCAG)
+
+    // Shared offscreen canvas for text measurement — avoids creating
+    // a new canvas per pointermove during drag/resize operations
+    const measureCanvas = document.createElement('canvas');
+    measureCanvas.width = 1;
+    measureCanvas.height = 1;
+    const measureCtx = measureCanvas.getContext('2d');
 
     // Placeholder for bound handlers (set after handler object is created)
     let onPointerDown, onPointerMove, onPointerUp, onGlobalPointerUp;
@@ -122,16 +130,17 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
          * @param {number} cssY - CSS y coordinate
          * @param {number} canvasWidth - CSS canvas width
          * @param {number} canvasHeight - CSS canvas height
+         * @param {string} [pointerType] - Pointer type ('mouse', 'touch', 'pen') for dynamic edge threshold
          * @returns {{ hit: boolean, target: string | null }}
          * @private
          */
-        _hitTestTitle(cssX, cssY, canvasWidth, canvasHeight) {
+        _hitTestTitle(cssX, cssY, canvasWidth, canvasHeight, pointerType) {
             const runs = titleManager.getRuns();
             if (!runs || runs.length === 0) {
                 return { hit: false };
             }
 
-            const bounds = computeMultiLineBounds(state.titleStyle, runs, SIZE_CONSTANTS.defaultCanvasWidth, SIZE_CONSTANTS.defaultCanvasHeight);
+            const bounds = computeMultiLineBounds(state.titleStyle, runs, SIZE_CONSTANTS.defaultCanvasWidth, SIZE_CONSTANTS.defaultCanvasHeight, measureCtx);
             const boxWidth = bounds.boxWidth;
 
             // Determine if legacy mode (no custom position AND no custom width)
@@ -147,7 +156,6 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
                 effectiveBoxX = (SIZE_CONSTANTS.defaultCanvasWidth - boxWidth) / 2;
             } else {
                 // Legacy mode: center text within canvas (not the box)
-                const MARGIN = 40;
                 const textWidth = bounds.textWidth;
                 const alignment = state.titleStyle.alignment || 'center';
                 switch (alignment) {
@@ -185,14 +193,15 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
                 return { hit: false };
             }
 
-            // Check edge proximity (in CSS pixels)
+            // Check edge proximity (in CSS pixels) with dynamic threshold based on pointer type
             const distToLeft = cssX - cssBoxLeft;
             const distToRight = (cssBoxLeft + cssBoxWidth) - cssX;
+            const edgeThreshold = pointerType === 'touch' ? EDGE_THRESHOLD_COARSE : EDGE_THRESHOLD_FINE;
 
-            if (distToLeft <= EDGE_THRESHOLD) {
+            if (distToLeft <= edgeThreshold) {
                 return { hit: true, target: 'left-edge' };
             }
-            if (distToRight <= EDGE_THRESHOLD) {
+            if (distToRight <= edgeThreshold) {
                 return { hit: true, target: 'right-edge' };
             }
 
@@ -220,7 +229,7 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
             const canvasWidth = canvas.getBoundingClientRect().width;
             const canvasHeight = canvas.getBoundingClientRect().height;
 
-            const hit = this._hitTestTitle(coords.x, coords.y, canvasWidth, canvasHeight);
+            const hit = this._hitTestTitle(coords.x, coords.y, canvasWidth, canvasHeight, e.pointerType);
             if (!hit.hit) return;
 
             // Capture pointer so events continue if cursor leaves canvas bounds
@@ -236,7 +245,7 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
 
             // Compute actual rendered bounds (handles auto-fit and multi-line)
             const runs = titleManager.getRuns();
-            const bounds = computeMultiLineBounds(state.titleStyle, runs, SIZE_CONSTANTS.defaultCanvasWidth, SIZE_CONSTANTS.defaultCanvasHeight);
+            const bounds = computeMultiLineBounds(state.titleStyle, runs, SIZE_CONSTANTS.defaultCanvasWidth, SIZE_CONSTANTS.defaultCanvasHeight, measureCtx);
             dragStartBoxWidth = bounds.boxWidth;
 
             // Compute drag start position matching the renderer's box position logic.
@@ -252,7 +261,6 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
                 effectiveBoxX = (SIZE_CONSTANTS.defaultCanvasWidth - bounds.boxWidth) / 2;
             } else {
                 // Legacy mode: center text within canvas (not the box)
-                const MARGIN = 40;
                 const textWidth = bounds.textWidth;
                 const alignment = state.titleStyle.alignment || 'center';
                 switch (alignment) {
@@ -345,7 +353,7 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
                     const VISIBLE_MIN = 50; // px of box that must remain visible at edges
                     // Use multi-line box height for Y clamp (handles multi-line titles)
                     const runs = titleManager.getRuns();
-                    const bounds = computeMultiLineBounds(state.titleStyle, runs, SIZE_CONSTANTS.defaultCanvasWidth, SIZE_CONSTANTS.defaultCanvasHeight);
+                    const bounds = computeMultiLineBounds(state.titleStyle, runs, SIZE_CONSTANTS.defaultCanvasWidth, SIZE_CONSTANTS.defaultCanvasHeight, measureCtx);
                     const boxHeight = bounds.height;
                     newX = Math.max(-actualBoxWidth + VISIBLE_MIN, Math.min(newX, SIZE_CONSTANTS.defaultCanvasWidth - VISIBLE_MIN));
                     newY = Math.max(boxHeight, Math.min(newY, SIZE_CONSTANTS.defaultCanvasHeight - 12));
@@ -356,7 +364,7 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
                     let newWidth = dragStartBoxWidth + dxLogical;
                     // Clamp width — include padding so background never clips text
                     const runs = titleManager.getRuns();
-                    const bounds = computeMultiLineBounds(state.titleStyle, runs, SIZE_CONSTANTS.defaultCanvasWidth, SIZE_CONSTANTS.defaultCanvasHeight);
+                    const bounds = computeMultiLineBounds(state.titleStyle, runs, SIZE_CONSTANTS.defaultCanvasWidth, SIZE_CONSTANTS.defaultCanvasHeight, measureCtx);
                     const minWidth = Math.max(100, bounds.textWidth + PADDING * 2);
                     const maxWidth = SIZE_CONSTANTS.defaultCanvasWidth - 80;
                     newWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
@@ -367,7 +375,7 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
                     let newWidth = dragStartBoxWidth - dxLogical;
                     // Clamp width — include padding so background never clips text
                     const runs = titleManager.getRuns();
-                    const bounds = computeMultiLineBounds(state.titleStyle, runs, SIZE_CONSTANTS.defaultCanvasWidth, SIZE_CONSTANTS.defaultCanvasHeight);
+                    const bounds = computeMultiLineBounds(state.titleStyle, runs, SIZE_CONSTANTS.defaultCanvasWidth, SIZE_CONSTANTS.defaultCanvasHeight, measureCtx);
                     const minWidth = Math.max(100, bounds.textWidth + PADDING * 2);
                     const maxWidth = SIZE_CONSTANTS.defaultCanvasWidth - 80;
                     newWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
@@ -387,7 +395,7 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
             }
 
             // Not interacting — check hover for cursor feedback
-            const hit = this._hitTestTitle(coords.x, coords.y, canvasWidth, canvasHeight);
+            const hit = this._hitTestTitle(coords.x, coords.y, canvasWidth, canvasHeight, e.pointerType);
             if (hit.hit) {
                 state.titleHoverTarget = hit.target;
                 canvas.style.cursor = hit.target === 'body' ? 'grab' : 'ew-resize';

@@ -11,6 +11,7 @@
 - Multi-touch and trackpad gestures
 - TouchEvent / PointerEvent dual-input path
 - PointerType guard (hybrid device protection)
+- PointerType-based dynamic thresholds
 - Unified gesture functions
 - Wheel event handling (macOS trackpad)
 - setPointerCapture / releasePointerCapture lifecycle
@@ -310,6 +311,39 @@ function _onPointerDown(e) {
 - `'pen'` — stylus/pen
 
 **Anti-pattern:** Using `pointerType !== 'touch'` to gate the TouchEvent path. The TouchEvent path has no `pointerType` property — it simply fires for all touch input. The guard belongs **only** in the PointerEvent handler.
+
+## PointerType-Based Dynamic Thresholds
+
+Use `pointerType` on PointerEvent to select between fine and coarse interaction thresholds. This is simpler and more reliable than feature detection or CSS media queries, and it's available on every pointer event.
+
+```javascript
+const EDGE_THRESHOLD_FINE = 8;   // px — mouse/pen precision
+const EDGE_THRESHOLD_COARSE = 16; // px — touch (WCAG 2.5.5 recommends 24px)
+
+function hitTestTitleBox(pointerType, cssX, cssBoxLeft, cssBoxWidth) {
+    const edgeThreshold = pointerType === 'touch' ? EDGE_THRESHOLD_COARSE : EDGE_THRESHOLD_FINE;
+
+    const distToLeft = cssX - cssBoxLeft;
+    const distToRight = (cssBoxLeft + cssBoxWidth) - cssX;
+
+    if (distToLeft <= edgeThreshold) return { hit: true, target: 'left-edge' };
+    if (distToRight <= edgeThreshold) return { hit: true, target: 'right-edge' };
+    return { hit: true, target: 'body' };
+}
+```
+
+**Key points:**
+- `pointerType` is `'mouse'`, `'touch'`, or `'pen'` — covers all pointer input types
+- Touch gets a wider threshold for easier hit detection on coarse pointers
+- Mouse/pen keep a tight threshold for precision
+- **WCAG 2.5.5 gap** — The current `EDGE_THRESHOLD_COARSE = 16` falls short of the WCAG 2.5.5 recommendation of 24x24px touch targets. Consider increasing to 24px for full compliance.
+
+**When to use:**
+- Resize handles, drag edges, or any interaction where pointer precision varies by input type
+- Any UI element where touch users need larger hit areas than mouse users
+
+**File Reference:**
+- `MyESModules/Interaction/TitleInteraction.js` — dynamic threshold in `hitTestTitleBox`
 
 ## Wheel Event Handling (macOS Trackpad)
 

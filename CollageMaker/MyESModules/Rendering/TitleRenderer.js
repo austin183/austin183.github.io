@@ -4,7 +4,7 @@
  * Supports configurable box width, position, and opacity.
  */
 
-const MARGIN = 40;
+export const MARGIN = 40;
 export const PADDING = 12;
 const LINE_HEIGHT_MULTIPLIER = 1.2;
 
@@ -110,7 +110,9 @@ export function splitRunsByNewline(titleRuns) {
         lines.pop();
     }
 
-    // Remove empty leading lines (e.g., from leading \n)
+    // Remove empty leading lines — leading \n characters are silently
+    // consumed. This matches the design intent: title text should not
+    // have invisible blank lines at the top.
     while (lines.length > 1 && lines[0].length === 0) {
         lines.shift();
     }

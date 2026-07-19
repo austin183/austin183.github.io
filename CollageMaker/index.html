@@ -130,6 +130,21 @@
                         <p>Drag &amp; drop images onto this area, or use the "Add Images" button above.</p>
                     </div>
                     <canvas id="previewCanvas" v-show="images.length > 0" role="application" aria-label="Collage preview — select panels to edit, drag to swap images in hexagonal layout"></canvas>
+                    <!-- Progress overlay for image loading -->
+                    <div class="progress-overlay" v-show="imageLoadingProgress.visible"
+                         role="progressbar"
+                         :aria-valuenow="imageLoadingProgress.current"
+                         :aria-valuemax="imageLoadingProgress.total"
+                         aria-label="Loading images">
+                        <div class="progress-bar-track">
+                            <div class="progress-bar-fill"
+                                 :style="{ width: (imageLoadingProgress.total > 0
+                                    ? (imageLoadingProgress.current / imageLoadingProgress.total) * 100
+                                    : 0) + '%' }">
+                            </div>
+                        </div>
+                        <span class="progress-label">{{ imageLoadingProgress.current }} / {{ imageLoadingProgress.total }} images</span>
+                    </div>
                 </div>
             </div>
 
@@ -156,18 +171,18 @@
                             <!-- Title Section -->
                             <template v-if="section.id === 'title'">
                                 <div class="detail-section">
-                                    <label for="titleInput">Text</label>
-                                    <textarea id="titleInput" v-model="titleText" @input="onTitleTextChange" @select="onTitleSelectionChange" @click="onTitleSelectionChange" @keyup="onTitleSelectionChange" placeholder="Enter title text (up to 3 lines)..." rows="3" maxlength="200" class="pure-input-rounded title-textarea"></textarea>
+                                    <label for="titleInput">Title (max 3 lines)</label>
+                                    <textarea id="titleInput" v-model="titleText" @input="onTitleTextChange" @select="onTitleSelectionChange" @click="onTitleSelectionChange" @keyup="onTitleSelectionChange" @keydown.enter="onTitleEnterKey" placeholder="Enter title text..." rows="3" maxlength="200" class="pure-input-rounded title-textarea"></textarea>
                                 </div>
                                 <div class="detail-section">
                                     <div class="formatting-bar">
-                                        <button class="format-btn" :class="{ active: isTitleFormatActive('bold') }" @mousedown.prevent @click="toggleTitleBold" title="Bold" :disabled="titleSelectionStart === titleSelectionEnd">
+                                        <button class="format-btn" :class="{ active: isTitleFormatActive('bold') }" @mousedown.prevent @click="toggleTitleBold" title="Bold" :disabled="titleSelectionStart === titleSelectionEnd" :aria-pressed="isTitleFormatActive('bold')">
                                             <strong>B</strong>
                                         </button>
-                                        <button class="format-btn" :class="{ active: isTitleFormatActive('italic') }" @mousedown.prevent @click="toggleTitleItalic" title="Italic" :disabled="titleSelectionStart === titleSelectionEnd">
+                                        <button class="format-btn" :class="{ active: isTitleFormatActive('italic') }" @mousedown.prevent @click="toggleTitleItalic" title="Italic" :disabled="titleSelectionStart === titleSelectionEnd" :aria-pressed="isTitleFormatActive('italic')">
                                             <em>I</em>
                                         </button>
-                                        <button class="format-btn" :class="{ active: isTitleFormatActive('underline') }" @mousedown.prevent @click="toggleTitleUnderline" title="Underline" :disabled="titleSelectionStart === titleSelectionEnd">
+                                        <button class="format-btn" :class="{ active: isTitleFormatActive('underline') }" @mousedown.prevent @click="toggleTitleUnderline" title="Underline" :disabled="titleSelectionStart === titleSelectionEnd" :aria-pressed="isTitleFormatActive('underline')">
                                             <u>U</u>
                                         </button>
                                     </div>

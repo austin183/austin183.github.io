@@ -870,3 +870,45 @@ input[type="range"].fullRange {
     white-space: pre-wrap;
     word-wrap: break-word;
 }
+
+/* ========================
+ * Image Loading Progress Overlay
+ * ======================== */
+
+.progress-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(0, 0, 0, 0.4);
+    border-radius: var(--radius-small);
+    z-index: 10;
+    gap: 12px;
+    pointer-events: none;
+}
+
+.progress-bar-track {
+    width: 200px;
+    height: 6px;
+    background-color: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background-color: var(--color-primary);
+    border-radius: 3px;
+    transition: width 0.2s ease;
+}
+
+.progress-label {
+    color: white;
+    font-size: var(--font-size-sm);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}

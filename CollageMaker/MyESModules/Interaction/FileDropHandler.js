@@ -55,7 +55,7 @@ export function createFileDropHandler() {
 
                 const files = e.dataTransfer?.files;
                 if (files && files.length > 0) {
-                    onFilesDropped(files);
+                    onFilesDropped(Array.from(files));
                 }
             };
 

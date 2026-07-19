@@ -12,6 +12,13 @@ export function createCollageData(base) {
             // Image library
             images: [],
 
+            // Image loading progress overlay
+            imageLoadingProgress: {
+                visible: false,
+                current: 0,
+                total: 0
+            },
+
             // Layout
             panels: [],
             layoutStyle: LayoutStyle.HERO,

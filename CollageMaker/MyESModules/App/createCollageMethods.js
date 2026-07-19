@@ -55,7 +55,8 @@ export function createCollageMethods(base, domIds = {}) {
     const fileHandlers = createFileHandlers(
         () => base.getImageLibrary(),
         (vm) => renderMethods._regenerateAndRender(vm),
-        ids.fileInput
+        ids.fileInput,
+        (vm, current, total) => vm._setImageLoadingProgress(current, total)
     );
 
     const imagePanelHandlers = createImagePanelHandlers(
@@ -209,6 +210,9 @@ export function createCollageMethods(base, domIds = {}) {
         onTitleTextChange() {
             titleHandlers.onTitleTextChange.call(this);
         },
+        onTitleEnterKey(event) {
+            titleHandlers.onTitleEnterKey.call(this, event);
+        },
         onTitleSelectionChange(event) {
             titleHandlers.onTitleSelectionChange.call(this, event);
         },
@@ -294,6 +298,37 @@ export function createCollageMethods(base, domIds = {}) {
                 this.toast.message = '';
                 this.toast.timer = null;
             }, duration);
+        },
+
+        // Image loading progress
+        beginImageLoading(total) {
+            if (this.imageLoadingProgress.visible) return; // Guard against concurrent loading
+            this.imageLoadingProgress.visible = true;
+            this.imageLoadingProgress.current = 0;
+            this.imageLoadingProgress.total = total;
+        },
+        updateImageLoadingProgress(current, total) {
+            this.imageLoadingProgress.current = current;
+            this.imageLoadingProgress.total = total;
+        },
+        endImageLoading() {
+            this.imageLoadingProgress.visible = false;
+            this.imageLoadingProgress.current = 0;
+            this.imageLoadingProgress.total = 0;
+        },
+        /**
+         * @private
+         * Called by file handler progress callback.
+         */
+        _setImageLoadingProgress(current, total) {
+            if (current === 0) {
+                this.beginImageLoading(total);
+            } else {
+                this.updateImageLoadingProgress(current, total);
+                if (current >= total) {
+                    this.endImageLoading();
+                }
+            }
         },
 
         // Sidebar methods

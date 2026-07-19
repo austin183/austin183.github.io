@@ -1,6 +1,6 @@
 ---
 name: building-web-apps
-description: Build static web apps with Vue 3 Options API, Canvas 2D rendering, ES modules, and CDN-loaded libraries. Covers factory testability patterns (callback injection, provider functions, DOM ID injection, module extraction, service locator safety), extensibility patterns (strategy/registry), canvas clearing for exports, config-based rendering helpers, render order testing via context method wrapping, toast notifications, accessibility (ARIA live regions, custom button keyboard activation, aria-busy loading states, reduced motion, interactive canvas roles), drag-and-drop cleanup, drag boundary clamping (VISIBLE_MIN pattern), test-driven refactoring (characterization tests), multi-touch and trackpad gestures (TouchEvent, PointerEvent, WheelEvent paths, pointerType guards, wheel event pan/zoom), destination-out compositing for shape cutouts, and web edge cases (DPR, CORS). No build step, no bundler. Use when working on CollageMaker web app features, rendering, state management, testing, or architectural refactoring.
+description: Build static web apps with Vue 3 Options API, Canvas 2D rendering, ES modules, and CDN-loaded libraries. Covers factory testability patterns (callback injection, provider functions, DOM ID injection, module extraction, service locator safety, return value notification, handler .call(this) binding), extensibility patterns (strategy/registry), canvas clearing for exports, config-based rendering helpers, shared offscreen canvas for text measurement, render order testing via context method wrapping, async UI state cleanup (try/finally pattern, concurrency guards), toast notifications, accessibility (ARIA live regions, custom button keyboard activation, aria-busy loading states, reduced motion, interactive canvas roles, pointerType dynamic thresholds), drag-and-drop cleanup, drag boundary clamping (VISIBLE_MIN pattern), test-driven refactoring (characterization tests), Vue input patterns (@keydown.enter newline prevention), multi-touch and trackpad gestures (TouchEvent, PointerEvent, WheelEvent paths, pointerType guards, wheel event pan/zoom), destination-out compositing for shape cutouts, and web edge cases (DPR, CORS). No build step, no bundler. Use when working on CollageMaker web app features, rendering, state management, testing, or architectural refactoring.
 ---
 
 # Building Web Apps
@@ -14,17 +14,17 @@ description: Build static web apps with Vue 3 Options API, Canvas 2D rendering, 
 Consult these files for verified patterns and gotchas:
 
 - `references/vue-options-api.md` — Vue 3 Options API factory decomposition, provide() timing, @mousedown.prevent, $refs on native form inputs, array mutation patterns for reactivity
-- `references/canvas-2d.md` — Canvas 2D rendering, DPR scaling, semi-transparent compositing, config-based rendering helpers, offscreen export
+- `references/canvas-2d.md` — Canvas 2D rendering, DPR scaling, semi-transparent compositing, config-based rendering helpers, shared offscreen canvas for measurement, offscreen export
 - `references/es-modules.md` — ES module conventions and barrel exports
 - `references/rich-text-runs.md` — Run-based text formatting, merge/split algorithm
 - `references/testing-unit.md` — Mocha/Chai unit tests, mocking patterns, integration testing, characterization tests before refactor
 - `references/testing-e2e.md` — Playwright E2E, page load strategy, pointer/Touch/Drag event testing
 - `references/testing-strategy.md` — Testing approach, gotchas, deferred features, assertion density
-- `references/interaction.md` — Keyboard shortcut patterns: three-layer architecture, modifier matching, focus suppression, preventDefault ordering, pointer handler coordination, global pointerup drag cleanup, VISIBLE_MIN drag boundary clamping, multi-touch and trackpad gestures (TouchEvent/PointerEvent dual path, pointerType guards, wheel event pan/zoom, setPointerCapture gotchas, releasePointerCapture hygiene, blur safety net, touch-action CSS)
+- `references/interaction.md` — Keyboard shortcut patterns: three-layer architecture, modifier matching, focus suppression, preventDefault ordering, pointer handler coordination, global pointerup drag cleanup, VISIBLE_MIN drag boundary clamping, multi-touch and trackpad gestures (TouchEvent/PointerEvent dual path, pointerType guards, pointerType-based dynamic thresholds, wheel event pan/zoom, setPointerCapture gotchas, releasePointerCapture hygiene, blur safety net, touch-action CSS)
 - `references/midiestro-pattern.md` — Entry point pattern, shared infrastructure, directory structure
 - `references/css-layout.md` — Flex column chain, `min-height: 0` requirement, responsive sidebar config, CSS computed value naming, mobile safe areas
 - `references/memory-management.md` — Disposing HTMLImageElement references, URL.createObjectURL cleanup, lifecycle cleanup ordering, canvas GPU memory release, visual state cleanup, image disposal when replacing references
-- `references/manager-patterns.md` — Action-based vs. direct mutation state managers, when to use each pattern, undo/redo integration
+- `references/manager-patterns.md` — Action-based vs. direct mutation state managers, when to use each pattern, undo/redo integration, return value pattern for side-effect notification
 - `references/web-workers.md` — Web Worker lifecycle, timeout guard pattern, clearing timeouts on every exit path, mock Worker pattern for testing
 - `references/accessibility.md` — ARIA patterns for segmented controls (radiogroup), color picker accessibility, custom button keyboard activation (Enter + Space), aria-busy loading states, prefers-reduced-motion, ARIA live regions (toast notifications), interactive canvas role selection
 
@@ -75,6 +75,7 @@ export function createCollageMethods(base) {
 - Internal functions are pure closures over `base` (services) accepting explicit `vm` parameter — no `this` dependency
 - Callbacks are created at factory time, capturing the internal function reference
 - **Do NOT use `() => this._scheduleRender()` as callback** — at factory creation time, `this` is not the Vue instance
+- **Handler binding convention** — All handlers from extracted modules use `.call(this, ...)` in `createCollageMethods.js` to bind the Vue instance as `this`. This gives handlers access to `this.titleText`, `this.showToast`, etc. Always follow this convention for new handlers — verify by checking existing handler bindings before adding new ones.
 
 **DOM ID Injection** — Accept DOM element IDs as factory configuration instead of hardcoding `document.getElementById()`:
 ```javascript
@@ -90,6 +91,27 @@ export function createCollageLifecycle(base, domIds = {}) {
 **Internal vs. Module Extraction** — Callback injection is the *primary* DIP improvement. Module extraction is the *secondary* SRP improvement. If internal functions have clear boundaries AND the file exceeds ~400 lines, extraction is worthwhile: it yields independent testability, clearer module boundaries, and reduced cognitive load (the composition layer becomes a wiring diagram rather than intertwined logic). If the file stays under ~400 lines and functions are tightly coupled to Vue internals, skip extraction to avoid unnecessary import complexity.
 
 **Callback Wiring in Extracted Modules** — When extracted modules depend on each other, accept callback objects as factory parameters instead of importing sibling modules. This prevents circular dependencies and preserves one-way dependency flow: `Composition → Extracted Modules`.
+
+**Return Value for Side-Effect Notification** — When a manager method performs a mutation that may trigger a side effect (e.g., truncation, clipping), return a result object describing what happened. The caller decides what to do with it. This cleanly separates state mutation from notification:
+```javascript
+// Manager: mutates state, returns metadata — knows nothing about toasts
+setText(text) {
+    const wasTruncated = lines.length > 3;
+    // ... clamp state ...
+    return { truncated: wasTruncated };
+}
+
+// Handler: uses return value to decide on user feedback
+onTitleTextChange() {
+    const result = titleManager.setText(this.titleText);
+    if (result && result.truncated && this.showToast) {
+        this.showToast('Title limited to 3 lines', 'info', 3000);
+    }
+}
+```
+- Manager stays focused on state — no knowledge of UI feedback mechanisms
+- Handler owns notification decisions — can adapt feedback per context
+- See `references/manager-patterns.md` for the full pattern
 
 **Provider Functions vs. Direct Callbacks** — Choose based on whether the referenced objects are stable:
 
@@ -157,6 +179,20 @@ export function loadImageFromFile(file) {
 - Reactive state in Vue `data()` return value
 - State managers receive Vue instance reference
 - **Range inputs with null default** — `v-model.number` on `<input type="range">` coerces `null` to the `min` attribute. Use `:value` with a fallback and `@input` handler instead. See `references/vue-options-api.md`
+- **`@keydown.enter` for textarea newline prevention** — Use `@keydown.enter` (not `@input`) to intercept Enter before Vue's `v-model` processes it. The `@input` event fires after the model update, which is too late for prevention. Useful for enforcing line limits:
+```html
+<textarea @keydown.enter="onTitleEnterKey" v-model="titleText" rows="3">
+```
+```javascript
+onTitleEnterKey(event) {
+    const lineCount = (this.titleText || '').split('\n').length;
+    if (lineCount >= 3) {
+        event.preventDefault(); // Block 4th line
+        this.showToast('Maximum 3 lines reached', 'info', 2000);
+    }
+}
+```
+- **Always pair Enter prevention with user feedback** — Blocking Enter without explanation feels like a bug. Show a brief toast so the user understands why the key was suppressed.
 - See `references/vue-options-api.md` for provide() timing and array mutation patterns
 
 ### Canvas 2D
@@ -166,6 +202,7 @@ export function loadImageFromFile(file) {
 - In `dispose()`, set `canvas.width = 0; canvas.height = 0` to force GPU memory release
 - **Pre-fill background before `globalAlpha`** — Canvas blends against existing pixels, not isolated layers. Always `fillRect` with background color before drawing semi-transparent images. Isolate alpha with `save()`/`restore()`.
 - **Config-based rendering helpers** — When multiple methods share the same save/restore + property-setting pattern, extract a shared helper accepting a style config object. Guard optional config properties with `!== undefined` (not truthy checks) because `0` and `''` are valid canvas values.
+- **Shared offscreen canvas for measurement** — Create a single 1x1 offscreen canvas at factory init for `measureText()` in hot paths. See `references/canvas-2d.md`
 - See `references/canvas-2d.md` for offscreen export, clearing patterns, compositing, and config-based helpers
 
 ### Interaction & Keyboard Shortcuts
@@ -233,6 +270,39 @@ handleFileInputChange() {
 ```
 - Decouples the handler from the event object — Vue template `@change="handleFileInputChange"` still works (Vue passes event, handler ignores it)
 - More testable — mock `document.getElementById` instead of constructing events
+
+### Async UI State Cleanup
+
+When an async operation shows a UI element (loading overlay, progress bar, spinner) at the start and hides it at the end, use **try/finally** to guarantee cleanup even if the operation throws:
+
+```javascript
+// CORRECT — endImageLoading() always runs
+this.beginImageLoading(total);
+try {
+    await imageLibrary.addImages(files, onProgress);
+} finally {
+    this.endImageLoading();
+}
+```
+
+- **`finally` always runs** — whether the `await` resolves, rejects, or the function returns early. It is the only JavaScript construct that guarantees cleanup across all exit paths.
+- **Idempotent cleanup is safe** — if the normal path already called `endImageLoading()` via a progress callback, the `finally` call is harmless (no-op when already hidden).
+- **Error path is the key benefit** — if `addImages()` throws (e.g., corrupt images), the progress callback never reaches completion. Without `finally`, the overlay stays visible forever.
+
+**Concurrency guard** — pair with an early-return guard to prevent state corruption from rapid successive operations:
+
+```javascript
+beginImageLoading(total) {
+    if (this.imageLoadingProgress.visible) return; // Already loading — skip
+    this.imageLoadingProgress.visible = true;
+    this.imageLoadingProgress.current = 0;
+    this.imageLoadingProgress.total = total;
+},
+```
+
+**Distinction from timeout cleanup** — The Web Workers "clear timeouts on every exit path" pattern handles **scheduled callbacks** (explicit `clearTimeout()` on each path). The try/finally pattern handles **paired state changes** (guaranteeing the "end" always follows the "begin" across async boundaries). See "Web Workers" section for the timeout pattern.
+
+**When to use:** Any async operation that shows/hides a UI element, or any paired begin/end state changes around async work.
 
 ### Toast Notifications
 
@@ -341,6 +411,7 @@ See `references/memory-management.md` for patterns on disposing image references
 - **Clear timeouts on every exit path** — ready, failed, error, and dispose. A stale callback on a disposed object causes errors or memory leaks.
 - **Guard the timeout callback** — `if (this.isDisposed || !this.worker) return;` prevents stale invocations.
 - **Dispose must null the timeout ID** — `clearTimeout(this.inferenceTimeoutId); this.inferenceTimeoutId = null;`
+- **Timeout cleanup vs. try/finally** — This pattern handles *scheduled callbacks* (explicit `clearTimeout()` on each path). For *paired UI state changes* across async boundaries (e.g., show/hide loading overlay), use try/finally instead. See "Async UI State Cleanup" section.
 - See `references/web-workers.md` for the full pattern and mock Worker testing strategy.
 
 ## Web-Specific Edge Cases
@@ -364,6 +435,7 @@ See `references/memory-management.md` for patterns on disposing image references
     - [ ] Confirm all state mutation patterns are intentional and documented (action vs. direct)
     - [ ] Verify services are looked up inside callbacks, not captured outside (stale reference risk)
     - [ ] Check optional chaining consistency on all `base` service locator access across modules
+    - **Run world-review after tests pass but before marking a feature complete** — Tests verify *specified* behavior; world-review catches UX gaps that unit tests miss (e.g., blocking a key without feedback feels like a bug, placeholder text not announced by screen readers). It is the last quality gate before shipping.
 7. **When refactoring to new patterns, update dependent code** — check all imports that may be affected by API changes; ensure backward compatibility where possible
 8. Verify: run `node scripts/run-tests.js`, check dev server, confirm no regressions
 
