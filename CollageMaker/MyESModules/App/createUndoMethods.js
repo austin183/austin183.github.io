@@ -5,6 +5,10 @@
  * Each method accepts an explicit `vm` parameter (Vue instance) —
  * no `this` dependency, enabling clean callback injection.
  *
+ * The `base` parameter must provide `getUndoManager()` which returns the
+ * UndoManager instance (or null if not yet registered). This follows the
+ * CollageBase lazy-service getter pattern.
+ *
  * Render callbacks are provided as provider functions (getOnRenderScheduled,
  * getOnCropPreviewRender) that return the actual callback at call time.
  * This prevents stale callback references if the caller replaces render
@@ -20,9 +24,10 @@ export function createUndoMethods(base, callbacks = {}) {
      * @param {Object} vm — Vue instance with reactive state
      */
     function _updateUndoState(vm) {
-        if (!base.undoManager) return;
-        vm.canUndo = base.undoManager.canUndo();
-        vm.canRedo = base.undoManager.canRedo();
+        const um = base.getUndoManager();
+        if (!um) return;
+        vm.canUndo = um.canUndo();
+        vm.canRedo = um.canRedo();
     }
 
     /**
@@ -42,9 +47,10 @@ export function createUndoMethods(base, callbacks = {}) {
      * @param {Object} vm — Vue instance with reactive state
      */
     function _performUndo(vm) {
-        if (!base.undoManager || !base.undoManager.canUndo()) return;
+        const um = base.getUndoManager();
+        if (!um || !um.canUndo()) return;
 
-        const hadUndo = base.undoManager.undo();
+        const hadUndo = um.undo();
         if (!hadUndo) return;
 
         _updateUndoState(vm);
@@ -57,9 +63,10 @@ export function createUndoMethods(base, callbacks = {}) {
      * @param {Object} vm — Vue instance with reactive state
      */
     function _performRedo(vm) {
-        if (!base.undoManager || !base.undoManager.canRedo()) return;
+        const um = base.getUndoManager();
+        if (!um || !um.canRedo()) return;
 
-        const hadRedo = base.undoManager.redo();
+        const hadRedo = um.redo();
         if (!hadRedo) return;
 
         _updateUndoState(vm);

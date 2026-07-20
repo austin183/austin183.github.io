@@ -85,6 +85,7 @@ body {
     font-weight: 500;
     cursor: pointer;
     transition: background-color var(--transition-fast);
+    min-height: 44px;
 }
 
 .pure-button-primary:hover {
@@ -100,6 +101,7 @@ body {
     font-size: var(--font-size-sm);
     cursor: pointer;
     transition: background-color var(--transition-fast);
+    min-height: 44px;
 }
 
 .pure-button:hover:not(:disabled) {
@@ -249,7 +251,7 @@ body {
     background: none;
     border: none;
     cursor: pointer;
-    padding: 2px;
+    padding: var(--space-2);
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -257,6 +259,8 @@ body {
     opacity: 0.5;
     transition: opacity var(--transition-fast), background-color var(--transition-fast);
     flex-shrink: 0;
+    min-width: 44px;
+    min-height: 44px;
 }
 
 .remove-btn:hover {
@@ -366,8 +370,8 @@ body.drag-over .canvas-container {
     top: var(--space-3);
     right: var(--space-3);
     z-index: 200;
-    min-width: 40px;
-    min-height: 40px;
+    min-width: 44px;
+    min-height: 44px;
     padding: var(--space-2);
     background-color: var(--color-surface-variant);
     border: none;
@@ -421,8 +425,8 @@ body.drag-over .canvas-container {
 
 .toolbar-icon-btn {
     padding: var(--space-2);
-    min-width: 32px;
-    min-height: 32px;
+    min-width: 44px;
+    min-height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -497,6 +501,7 @@ body.drag-over .canvas-container {
     color: var(--color-text-primary);
     cursor: pointer;
     transition: background-color var(--transition-fast);
+    min-height: 44px;
 }
 
 .reset-crop-btn:hover {
@@ -570,6 +575,7 @@ body.drag-over .canvas-container {
     display: flex;
     align-items: center;
     justify-content: center;
+    min-height: 44px;
 }
 
 .segment-btn:last-child {
@@ -597,8 +603,8 @@ body.drag-over .canvas-container {
 
 .color-picker-row input[type="color"] {
     flex: 1;
-    height: 36px;
-    min-height: 36px;
+    height: 44px;
+    min-height: 44px;
     padding: 0;
     border: 1px solid var(--color-surface-variant);
     border-radius: var(--radius-small);
@@ -622,8 +628,8 @@ body.drag-over .canvas-container {
 }
 
 .format-btn {
-    width: 32px;
-    height: 32px;
+    width: 44px;
+    height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -684,6 +690,7 @@ body.drag-over .canvas-container {
     background-color: var(--color-background);
     border: 1px solid var(--color-surface-variant);
     color: var(--color-error);
+    min-height: 44px;
 }
 
 .remove-bg-btn:hover,
@@ -702,6 +709,7 @@ body.drag-over .canvas-container {
     justify-content: center;
     font-size: var(--font-size-sm);
     padding: var(--space-2) var(--space-4);
+    min-height: 44px;
 }
 
 .export-status {

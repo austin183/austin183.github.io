@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CropInteraction Pointer Capture Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — CropInteraction Pointer Capture Tests</h1>
+    <p class="test-plan-ref">Covers: Phase 2 — CropInteraction Pointer Capture (H-5, H-6)</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createCropInteraction } from '../MyESModules/Interaction/CropInteraction.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // Helpers
+        // ============================================================
+
+        /**
+         * Create a crop preview canvas element in the DOM.
+         */
+        function createCropCanvas() {
+            const canvas = document.createElement('canvas');
+            canvas.id = 'cropPointerTestCanvas';
+            canvas.style.width = '200px';
+            canvas.style.height = '150px';
+            canvas.width = 400;
+            canvas.height = 300;
+            canvas.style.position = 'fixed';
+            canvas.style.top = '0px';
+            canvas.style.left = '0px';
+            document.body.appendChild(canvas);
+            return canvas;
+        }
+
+        function removeCropCanvas() {
+            const canvas = document.getElementById('cropPointerTestCanvas');
+            if (canvas && canvas.parentNode) {
+                canvas.parentNode.removeChild(canvas);
+            }
+        }
+
+        /**
+         * Create a mock crop manager with test data.
+         */
+        function createMockCropManager() {
+            const mockImageEl = document.createElement('canvas');
+            mockImageEl.width = 800;
+            mockImageEl.height = 600;
+            const ctx = mockImageEl.getContext('2d');
+            ctx.fillStyle = '#ff0000';
+            ctx.fillRect(0, 0, 800, 600);
+
+            return {
+                getCrop: () => ({
+                    sourceRect: { x: 10, y: 10, width: 100, height: 100 }
+                }),
+                getPanelImage: () => ({
+                    image: mockImageEl,
+                    width: 800,
+                    height: 600
+                }),
+                setSourceRect: () => {}
+            };
+        }
+
+        // ============================================================
+        // Phase 2: Pointer Capture — setPointerCapture protection
+        // ============================================================
+        describe('Phase 2 — CropInteraction Pointer Capture', () => {
+            let canvas;
+            let capturedIds;
+            let releasedIds;
+
+            beforeEach(() => {
+                canvas = createCropCanvas();
+                capturedIds = [];
+                releasedIds = [];
+                canvas.setPointerCapture = (pid) => { capturedIds.push(pid); };
+                canvas.releasePointerCapture = (pid) => { releasedIds.push(pid); };
+            });
+
+            afterEach(() => {
+                removeCropCanvas();
+            });
+
+            it('2.T.1 — _onPointerDown calls setPointerCapture when supported', () => {
+                const cropManager = createMockCropManager();
+                let renderScheduled = false;
+                let dragStarted = false;
+                let dragEnded = false;
+
+                const handler = createCropInteraction({
+                    canvasId: 'cropPointerTestCanvas',
+                    cropManager,
+                    panelId: 'panel-0',
+                    onRenderScheduled: () => { renderScheduled = true; },
+                    onCropPreviewRender: () => {},
+                    onDragStart: () => { dragStarted = true; },
+                    onDragEnd: () => { dragEnded = true; }
+                });
+
+                handler.attach();
+
+                // Fire pointerdown on the canvas (within crop region — top-left area)
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 15,
+                    clientY: 15,
+                    button: 0,
+                    bubbles: true
+                }));
+
+                expect(capturedIds).to.have.lengthOf(1);
+                // Pointer ID should be captured
+
+                handler.detach();
+            });
+
+            it('2.T.2 — _onPointerDown does NOT throw when setPointerCapture is missing', () => {
+                // Remove setPointerCapture to simulate unsupported browser
+                canvas.setPointerCapture = undefined;
+
+                const cropManager = createMockCropManager();
+
+                const handler = createCropInteraction({
+                    canvasId: 'cropPointerTestCanvas',
+                    cropManager,
+                    panelId: 'panel-0',
+                    onRenderScheduled: () => {},
+                    onCropPreviewRender: () => {}
+                });
+
+                handler.attach();
+
+                expect(() => {
+                    canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                        clientX: 15,
+                        clientY: 15,
+                        button: 0,
+                        bubbles: true
+                    }));
+                }).to.not.throw();
+
+                handler.detach();
+            });
+
+            it('2.T.3 — _onPointerDown does NOT throw when setPointerCapture throws', () => {
+                // Simulate a browser where setPointerCapture exists but throws
+                canvas.setPointerCapture = () => {
+                    throw new DOMException('Pointer capture failed', 'InvalidAccessError');
+                };
+
+                const cropManager = createMockCropManager();
+
+                const handler = createCropInteraction({
+                    canvasId: 'cropPointerTestCanvas',
+                    cropManager,
+                    panelId: 'panel-0',
+                    onRenderScheduled: () => {},
+                    onCropPreviewRender: () => {}
+                });
+
+                handler.attach();
+
+                expect(() => {
+                    canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                        clientX: 15,
+                        clientY: 15,
+                        button: 0,
+                        bubbles: true
+                    }));
+                }).to.not.throw();
+
+                handler.detach();
+            });
+
+            it('2.T.4 — _onPointerUp releases pointer capture', () => {
+                const cropManager = createMockCropManager();
+                let dragEnded = false;
+
+                const handler = createCropInteraction({
+                    canvasId: 'cropPointerTestCanvas',
+                    cropManager,
+                    panelId: 'panel-0',
+                    onRenderScheduled: () => {},
+                    onCropPreviewRender: () => {},
+                    onDragEnd: () => { dragEnded = true; }
+                });
+
+                handler.attach();
+
+                // Start a drag (within crop region — top-left area)
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 15,
+                    clientY: 15,
+                    button: 0,
+                    bubbles: true
+                }));
+
+                // Move to trigger drag
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 25,
+                    clientY: 25,
+                    bubbles: true
+                }));
+
+                // Release
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    clientX: 25,
+                    clientY: 25,
+                    bubbles: true
+                }));
+
+                // releasePointerCapture should have been called
+                expect(releasedIds).to.have.lengthOf.at.least(1);
+                expect(dragEnded).to.be.true;
+
+                handler.detach();
+            });
+
+            it('2.T.5 — detach() releases any captured pointer', () => {
+                const cropManager = createMockCropManager();
+
+                const handler = createCropInteraction({
+                    canvasId: 'cropPointerTestCanvas',
+                    cropManager,
+                    panelId: 'panel-0',
+                    onRenderScheduled: () => {},
+                    onCropPreviewRender: () => {}
+                });
+
+                handler.attach();
+
+                // Start a drag (which captures pointer) — within crop region
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 15,
+                    clientY: 15,
+                    button: 0,
+                    bubbles: true
+                }));
+
+                // Verify capture happened
+                expect(capturedIds).to.have.lengthOf.at.least(1);
+
+                // Clear released tracking to isolate detach release
+                releasedIds = [];
+
+                // Detach while pointer is still captured (simulates abrupt cleanup)
+                handler.detach();
+
+                // releasePointerCapture should have been called during detach
+                expect(releasedIds).to.have.lengthOf.at.least(1);
+            });
+
+            it('2.T.6 — detach() does NOT throw when releasePointerCapture is missing', () => {
+                // Remove releasePointerCapture to simulate unsupported browser
+                canvas.releasePointerCapture = undefined;
+
+                const cropManager = createMockCropManager();
+
+                const handler = createCropInteraction({
+                    canvasId: 'cropPointerTestCanvas',
+                    cropManager,
+                    panelId: 'panel-0',
+                    onRenderScheduled: () => {},
+                    onCropPreviewRender: () => {}
+                });
+
+                handler.attach();
+
+                // Start a drag — within crop region
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 15,
+                    clientY: 15,
+                    button: 0,
+                    bubbles: true
+                }));
+
+                expect(() => {
+                    handler.detach();
+                }).to.not.throw();
+            });
+
+            it('2.T.7 — detach() does NOT throw when releasePointerCapture throws', () => {
+                canvas.releasePointerCapture = () => {
+                    throw new DOMException('Release failed', 'InvalidAccessError');
+                };
+
+                const cropManager = createMockCropManager();
+
+                const handler = createCropInteraction({
+                    canvasId: 'cropPointerTestCanvas',
+                    cropManager,
+                    panelId: 'panel-0',
+                    onRenderScheduled: () => {},
+                    onCropPreviewRender: () => {}
+                });
+
+                handler.attach();
+
+                // Start a drag — within crop region
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 15,
+                    clientY: 15,
+                    button: 0,
+                    bubbles: true
+                }));
+
+                expect(() => {
+                    handler.detach();
+                }).to.not.throw();
+            });
+
+            it('2.T.8 — Drag state still set even when setPointerCapture is missing', () => {
+                // Remove setPointerCapture to simulate unsupported browser
+                canvas.setPointerCapture = undefined;
+
+                const cropManager = createMockCropManager();
+                let dragStarted = false;
+
+                const handler = createCropInteraction({
+                    canvasId: 'cropPointerTestCanvas',
+                    cropManager,
+                    panelId: 'panel-0',
+                    onRenderScheduled: () => {},
+                    onCropPreviewRender: () => {},
+                    onDragStart: () => { dragStarted = true; }
+                });
+
+                handler.attach();
+
+                // Fire pointerdown — within crop region
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 15,
+                    clientY: 15,
+                    button: 0,
+                    bubbles: true
+                }));
+
+                // Drag should still start even without pointer capture
+                expect(dragStarted).to.be.true;
+
+                // Verify drag works by moving
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 25,
+                    clientY: 25,
+                    bubbles: true
+                }));
+
+                // Should not throw during move
+                expect(() => {
+                    canvas.dispatchEvent(new PointerEvent('pointermove', {
+                        clientX: 30,
+                        clientY: 30,
+                        bubbles: true
+                    }));
+                }).to.not.throw();
+
+                handler.detach();
+            });
+
+            it('2.T.9 — pointercancel resets drag state and releases capture', () => {
+                const cropManager = createMockCropManager();
+                let dragEnded = false;
+
+                const handler = createCropInteraction({
+                    canvasId: 'cropPointerTestCanvas',
+                    cropManager,
+                    panelId: 'panel-0',
+                    onRenderScheduled: () => {},
+                    onCropPreviewRender: () => {},
+                    onDragEnd: () => { dragEnded = true; }
+                });
+
+                handler.attach();
+
+                // Start a drag (within crop region)
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 15,
+                    clientY: 15,
+                    button: 0,
+                    bubbles: true
+                }));
+
+                // Move to trigger drag
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 25,
+                    clientY: 25,
+                    bubbles: true
+                }));
+
+                // Fire pointercancel (simulates OS gesture interruption)
+                canvas.dispatchEvent(new PointerEvent('pointercancel', {
+                    clientX: 25,
+                    clientY: 25,
+                    bubbles: true
+                }));
+
+                // Capture should be released
+                expect(releasedIds).to.have.lengthOf.at.least(1);
+                // Drag state should be reset (dragEnded fires because isDragging was true)
+                expect(dragEnded).to.be.true;
+
+                handler.detach();
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

@@ -39,13 +39,13 @@
 
         <h2>Why Web?</h2>
         <p>
-            The layout math was pure computation. Swift's <code>CGSize</code> and <code>CGRect</code> map directly to plain JavaScript objects with <code>width</code>, <code>height</code>, <code>x</code>, and <code>y</code> properties. No platform dependencies, no framework bindings — just math. The five layout strategies could be ported as pure functions that take a configuration object and return an array of panel geometries.
+            An app is only as good as its deployment strategy, and having a project on github to compile for a very narrow set of computers is a bad deployment strategy.  Putting the application on my website makes it so people who want to use it have immediate access.
         </p>
         <p>
-            More importantly, the web port was an opportunity to build it right from the start. The macOS prototype was exploratory — I was learning SwiftUI, testing agents, and iterating by hand. The web version would have test-driven development, accessibility, and clean architecture from line one.
+            I also like the transparency of implementation that comes wit javascript and web apps.  It feels like the universal common denominator for computer programming.
         </p>
 
-        <h2>Phase 1: Core Architecture</h2>
+        <h2>Initializing the Project</h2>
         <p>
             July 1st, 2026. One session, 31 files. The entire foundation went up in a single agent run: Vue 3 app shell, five data models, five layout strategies ported from Swift, three canvas rendering modules, state management, image loading, and a component registry for dependency injection. The Vue 3 Options API factory decomposition pattern carried over from my Midiestro3D project — <code>createCollageData</code>, <code>createCollageMethods</code>, <code>createCollageLifecycle</code>, and <code>createCollageServices</code> as separate factory functions, assembled into a Vue app config.
         </p>

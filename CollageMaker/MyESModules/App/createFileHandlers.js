@@ -8,9 +8,10 @@
  * @param {Function} onRegenerate - Callback to trigger layout regeneration and render
  * @param {string} [fileInputId='fileInput'] - DOM ID of the file input element
  * @param {Function} [onImageLoadingProgress] - Optional progress callback(current, total)
+ * @param {Function} [onImageFailures] - Optional callback(vm, failedCount, totalCount) when images fail to load
  * @returns {Object} File handlers object
  */
-export function createFileHandlers(getImageLibrary, onRegenerate, fileInputId = 'fileInput', onImageLoadingProgress = null) {
+export function createFileHandlers(getImageLibrary, onRegenerate, fileInputId = 'fileInput', onImageLoadingProgress = null, onImageFailures = null) {
     let activeCleanup = null;
 
     return {
@@ -43,11 +44,18 @@ export function createFileHandlers(getImageLibrary, onRegenerate, fileInputId = 
                         progressStarted = true;
                     }
 
-                    await imageLibrary.addImages(files, (current, total) => {
-                        if (onImageLoadingProgress) {
-                            onImageLoadingProgress(this, current, total);
+                    await imageLibrary.addImages(files,
+                        (current, total) => {
+                            if (onImageLoadingProgress) {
+                                onImageLoadingProgress(this, current, total);
+                            }
+                        },
+                        (failedCount, totalCount) => {
+                            if (typeof onImageFailures === 'function') {
+                                onImageFailures(this, failedCount, totalCount);
+                            }
                         }
-                    });
+                    );
                 } finally {
                     if (progressStarted && onImageLoadingProgress) {
                         // Signal completion by passing current === total

@@ -52,6 +52,7 @@ export function createCollageLifecycle(base, domIds = {}) {
 
             // Initialize undo manager
             this.undoManager = createUndoManager();
+            base.setUndoManager(this.undoManager);
 
             // Initialize layout manager
             const layoutManager = createLayoutManager(this, base.assembler);
@@ -264,9 +265,14 @@ export function createCollageLifecycle(base, domIds = {}) {
                     this.beginImageLoading(imageFiles.length);
                 }
                 try {
-                    await imageLibrary.addImages(files, (current, total) => {
-                        this.updateImageLoadingProgress(current, total);
-                    });
+                    await imageLibrary.addImages(files,
+                        (current, total) => {
+                            this.updateImageLoadingProgress(current, total);
+                        },
+                        (failedCount, totalCount) => {
+                            this.showToast(`${failedCount} of ${totalCount} image(s) failed to load`, 'error', 5000);
+                        }
+                    );
                 } finally {
                     this.endImageLoading();
                 }

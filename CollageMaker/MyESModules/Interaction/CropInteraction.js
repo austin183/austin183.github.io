@@ -25,6 +25,7 @@ export function createCropInteraction({ canvasId, cropManager, panelId, onRender
     let cropStart = { x: 0, y: 0, width: 0, height: 0 };
     let resizeCorner = null; // 'tl', 'tr', 'bl', 'br'
     let handlerAttached = false;
+    let lastPointerId = undefined;
 
     // Corner handle size in CSS pixels
     const CORNER_HANDLE_SIZE = 12;
@@ -55,6 +56,11 @@ export function createCropInteraction({ canvasId, cropManager, panelId, onRender
         detach() {
             if (!handlerAttached) return;
             handlerAttached = false;
+
+            // Release any captured pointer on detach
+            if (canvas && canvas.releasePointerCapture && lastPointerId !== undefined) {
+                try { canvas.releasePointerCapture(lastPointerId); } catch (_) {}
+            }
 
             if (canvas) {
                 canvas.removeEventListener('pointerdown', onPointerDown);
@@ -190,7 +196,18 @@ export function createCropInteraction({ canvasId, cropManager, panelId, onRender
         _onPointerDown(e) {
             if (!panelId) return;
             e.preventDefault();
-            canvas.setPointerCapture(e.pointerId);
+
+            // Track pointer ID for cleanup in detach()
+            lastPointerId = e.pointerId;
+
+            // Protect setPointerCapture — not all browsers support it
+            if (canvas && canvas.setPointerCapture) {
+                try {
+                    canvas.setPointerCapture(e.pointerId);
+                } catch (_) {
+                    // setPointerCapture not supported — pointer events still work
+                }
+            }
 
             const rect = canvas.getBoundingClientRect();
             const screenX = e.clientX - rect.left;
@@ -261,6 +278,11 @@ export function createCropInteraction({ canvasId, cropManager, panelId, onRender
         },
 
         _onPointerUp(e) {
+            // Release pointer capture to prevent stuck pointer state
+            if (canvas && canvas.releasePointerCapture) {
+                try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+            }
+
             if (isDragging || isResizing) {
                 if (onDragEnd) onDragEnd();
                 onRenderScheduled();

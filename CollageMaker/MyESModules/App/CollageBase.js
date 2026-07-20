@@ -24,6 +24,7 @@ export function initializeCollageBase() {
     let imageLibrary = null;
     let backgroundManager = null;
     let titleManager = null;
+    let undoManager = null;
 
     return {
         assembler,
@@ -70,6 +71,13 @@ export function initializeCollageBase() {
         },
         setTitleManager(manager) {
             titleManager = manager;
+        },
+
+        getUndoManager() {
+            return undoManager;
+        },
+        setUndoManager(manager) {
+            undoManager = manager;
         },
 
         // Static data

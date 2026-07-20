@@ -17,9 +17,10 @@ export function createImageLibrary(state, onImagesChanged) {
          * Adds images from an array of File objects.
          * @param {File[]} files
          * @param {Function} [onProgress] - Optional callback(current, total) fired per-image
+         * @param {Function} [onFailures] - Optional callback(failedCount, totalCount) fired when some images fail
          * @returns {Promise<void>}
          */
-        async addImages(files, onProgress) {
+        async addImages(files, onProgress, onFailures) {
             const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
             if (imageFiles.length === 0) return;
 
@@ -37,8 +38,15 @@ export function createImageLibrary(state, onImagesChanged) {
 
             const validItems = newItems.filter(item => item !== null);
             const failedCount = newItems.length - validItems.length;
-            if (failedCount > 0) {
+if (failedCount > 0) {
                 console.warn(`ImageLibrary: ${failedCount} of ${newItems.length} image(s) failed to load`);
+                if (typeof onFailures === 'function') {
+                    try {
+                        onFailures(failedCount, newItems.length);
+                    } catch (err) {
+                        console.error('ImageLibrary: onFailures callback error:', err);
+                    }
+                }
             }
             if (validItems.length === 0) return;
 
@@ -58,18 +66,6 @@ export function createImageLibrary(state, onImagesChanged) {
             disposeImageItem(imageItem); // Centralized disposal logic
 
             // Remove from array
-            state.images.splice(index, 1);
-            onImagesChanged();
-        },
-
-        /**
-          * Removes an image at the given index (legacy, no cleanup).
-          * @param {number} index
-          * @deprecated Use disposeImage instead for proper cleanup
-          */
-        removeImage(index) {
-            console.warn('ImageLibrary.removeImage() is deprecated. Use disposeImage() for proper memory cleanup.');
-            if (index < 0 || index >= state.images.length) return;
             state.images.splice(index, 1);
             onImagesChanged();
         },

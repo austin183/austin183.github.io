@@ -225,10 +225,37 @@
         });
 
         // ============================================================
-        // Phase 4.5: ImageLibrary.removeImage() Deprecation
+        // Phase 4.5 / Phase 7: ImageLibrary.removeImage() Removal
         // ============================================================
-        describe('Phase 4.5 — ImageLibrary.removeImage() Deprecation', () => {
-            it('P4.5.1 — removeImage still works but logs a warning', async () => {
+        describe('Phase 7 — ImageLibrary.removeImage() Removed', () => {
+            it('P7.1 — removeImage no longer exists on ImageLibrary', async () => {
+                const { createImageLibrary } = await import('../MyESModules/State/ImageLibrary.js');
+
+                const state = { images: [] };
+                const lib = createImageLibrary(state, () => {});
+
+                expect(lib.removeImage).to.be.undefined;
+            });
+
+            it('P7.2 — disposeImage still removes and disposes image', async () => {
+                const { createImageLibrary } = await import('../MyESModules/State/ImageLibrary.js');
+                const { createImageItem } = await import('../MyESModules/Models/ImageItem.js');
+
+                const img = { src: 'data:test' };
+                const item = createImageItem({ image: img, filename: 'a.png', width: 100, height: 100 });
+                const state = { images: [item] };
+                let changed = false;
+                const lib = createImageLibrary(state, () => { changed = true; });
+
+                lib.disposeImage(0);
+
+                expect(changed).to.be.true;
+                expect(state.images).to.have.lengthOf(0);
+                // Verify disposal actually happened — image reference should be nulled
+                expect(item.image).to.be.null;
+            });
+
+            it('P7.3 — disposeImage guards against out-of-range index', async () => {
                 const { createImageLibrary } = await import('../MyESModules/State/ImageLibrary.js');
                 const { createImageItem } = await import('../MyESModules/Models/ImageItem.js');
 
@@ -236,19 +263,13 @@
                 let changed = false;
                 const lib = createImageLibrary(state, () => { changed = true; });
 
-                let warned = false;
-                const origWarn = console.warn;
-                console.warn = (msg) => {
-                    if (msg.includes('deprecated')) warned = true;
-                };
+                lib.disposeImage(-1);
+                expect(changed).to.be.false;
+                expect(state.images).to.have.lengthOf(1);
 
-                lib.removeImage(0);
-
-                console.warn = origWarn;
-
-                expect(changed).to.be.true;
-                expect(state.images).to.have.lengthOf(0);
-                expect(warned).to.be.true;
+                lib.disposeImage(5);
+                expect(changed).to.be.false;
+                expect(state.images).to.have.lengthOf(1);
             });
         });
 

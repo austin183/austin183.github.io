@@ -107,8 +107,9 @@
                 getCropManager: () => cropManager,
                 getBackgroundManager: () => null,
                 getTitleManager: () => null,
-                assembler: { render: () => {} },
-                undoManager: null
+                getUndoManager: () => null,
+                setUndoManager: () => {},
+                assembler: { render: () => {} }
             };
         }
 

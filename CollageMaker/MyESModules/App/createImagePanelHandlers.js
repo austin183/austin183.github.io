@@ -1,5 +1,6 @@
 /**
  * Image panel handlers - Handles image selection and removal.
+ * Uses injected callback for DIP compliance — no direct this._scheduleRender().
  */
 
 /**
@@ -7,9 +8,10 @@
  * @param {Function} getImageLibrary - Function that returns ImageLibrary instance
  * @param {Function} getLayoutManager - Function that returns LayoutManager instance
  * @param {Function} getCanvasRenderer - Function that returns CanvasRenderer instance
+ * @param {Function} [onRenderScheduled] - Optional callback to schedule a canvas render
  * @returns {Object} Image panel handlers object
  */
-export function createImagePanelHandlers(getImageLibrary, getLayoutManager, getCanvasRenderer) {
+export function createImagePanelHandlers(getImageLibrary, getLayoutManager, getCanvasRenderer, onRenderScheduled) {
     return {
         /**
          * Selects an image from the library.
@@ -31,7 +33,9 @@ export function createImagePanelHandlers(getImageLibrary, getLayoutManager, getC
             const layoutManager = getLayoutManager();
             if (imageLibrary) imageLibrary.disposeImage(index);
             if (layoutManager) layoutManager.regenerate();
-            this._scheduleRender();
+            if (typeof onRenderScheduled === 'function') {
+                onRenderScheduled(this);
+            }
         },
 
         /**
@@ -42,7 +46,9 @@ export function createImagePanelHandlers(getImageLibrary, getLayoutManager, getC
             const layoutManager = getLayoutManager();
             if (imageLibrary) imageLibrary.clearAll();
             if (layoutManager) layoutManager.regenerate();
-            this._scheduleRender();
+            if (typeof onRenderScheduled === 'function') {
+                onRenderScheduled(this);
+            }
         },
 
         /**
@@ -68,7 +74,9 @@ export function createImagePanelHandlers(getImageLibrary, getLayoutManager, getC
             // Deselect and regenerate
             this.selectedPanelId = null;
             if (layoutManager) layoutManager.regenerate();
-            this._scheduleRender();
+            if (typeof onRenderScheduled === 'function') {
+                onRenderScheduled(this);
+            }
         }
     };
 }

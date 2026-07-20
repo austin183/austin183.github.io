@@ -56,13 +56,17 @@ export function createCollageMethods(base, domIds = {}) {
         () => base.getImageLibrary(),
         (vm) => renderMethods._regenerateAndRender(vm),
         ids.fileInput,
-        (vm, current, total) => vm._setImageLoadingProgress(current, total)
+        (vm, current, total) => vm._setImageLoadingProgress(current, total),
+        (vm, failedCount, totalCount) => {
+            vm.showToast(`${failedCount} of ${totalCount} image(s) failed to load`, 'error', 5000);
+        }
     );
 
     const imagePanelHandlers = createImagePanelHandlers(
         () => base.getImageLibrary(),
         () => base.getLayoutManager(),
-        () => base.getCanvasRenderer()
+        () => base.getCanvasRenderer(),
+        (vm) => renderMethods._scheduleRender(vm)
     );
 
     const layoutHandlers = createLayoutHandlers(

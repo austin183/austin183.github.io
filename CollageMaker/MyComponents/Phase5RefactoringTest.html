@@ -43,6 +43,7 @@
         // ============================================================
 
         function createMockBase() {
+            let undoManager = null;
             return {
                 assembler: { render: () => {} },
                 dropHandler: { setupGlobalDrop: () => () => {} },
@@ -58,7 +59,8 @@
                 setBackgroundManager: () => {},
                 getTitleManager: () => null,
                 setTitleManager: () => {},
-                undoManager: null,
+                getUndoManager: () => undoManager,
+                setUndoManager: (m) => { undoManager = m; },
                 layoutStyleOptions: []
             };
         }
@@ -435,7 +437,7 @@
                     canUndo: false,
                     canRedo: false
                 };
-                // mockBase.undoManager is null
+                // mockBase.getUndoManager() returns null
                 expect(() => {
                     methods._performUndo.call(mockVm);
                 }).to.not.throw();
@@ -740,7 +742,7 @@
             it('5.8.3 — _updateUndoState is a no-op when no undo manager', () => {
                 const undoMethods = createUndoMethods(mockBase);
                 const mockVm = { canUndo: false, canRedo: false };
-                // mockBase.undoManager is null
+                // mockBase.getUndoManager() returns null
                 expect(() => {
                     undoMethods._updateUndoState(mockVm);
                 }).to.not.throw();
@@ -751,7 +753,7 @@
                     canUndo: () => true,
                     canRedo: () => false
                 };
-                mockBase.undoManager = mockUndoManager;
+                mockBase.setUndoManager(mockUndoManager);
                 const undoMethods = createUndoMethods(mockBase);
                 const mockVm = { canUndo: false, canRedo: false };
                 undoMethods._updateUndoState(mockVm);
@@ -783,7 +785,7 @@
                     canRedo: () => false,
                     undo: () => true
                 };
-                mockBase.undoManager = mockUndoManager;
+                mockBase.setUndoManager(mockUndoManager);
                 const undoMethods = createUndoMethods(mockBase, {
                     getOnRenderScheduled: () => () => { renderCalled = true; },
                     getOnCropPreviewRender: () => () => { cropPreviewCalled = true; }
@@ -871,7 +873,7 @@
                     canUndo: () => true,
                     canRedo: () => true
                 };
-                mockBase.undoManager = mockUndoManager;
+                mockBase.setUndoManager(mockUndoManager);
                 const mockVm = { canUndo: false, canRedo: false };
                 methods._updateUndoState.call(mockVm);
                 expect(mockVm.canUndo).to.be.true;

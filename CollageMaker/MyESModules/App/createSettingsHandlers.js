@@ -2,21 +2,24 @@
  * Settings handlers - Handles settings persistence.
  */
 
-import { save as saveSettings, load as loadSettings } from '../Persistence/SettingsPersistence.js';
+import { save as defaultSave, load as loadSettings } from '../Persistence/SettingsPersistence.js';
 
 /**
  * Creates settings handlers.
+ * @param {Function} [saveFn] - Save function (injected for testability, defaults to SettingsPersistence.save)
  * @returns {Object} Settings handlers object
  */
-export function createSettingsHandlers() {
+export function createSettingsHandlers(saveFn) {
+    const save = typeof saveFn === 'function' ? saveFn : defaultSave;
     return {
         /**
          * Saves current settings to localStorage.
+         * Shows a toast notification if storage quota is exceeded.
          * @param {Object} state - Vue reactive state
          */
         _saveSettings(state) {
             try {
-                saveSettings({
+                const success = save({
                     layoutStyle: state.layoutStyle,
                     gutter: state.gutter,
                     sliceAngle: state.sliceAngle,
@@ -39,6 +42,9 @@ export function createSettingsHandlers() {
                     titleBackgroundColor: state.titleStyle.backgroundColor,
                     exportQuality: state.exportQuality
                 });
+                if (success === false && typeof state.showToast === 'function') {
+                    state.showToast('Settings not saved — storage full', 'error', 5000);
+                }
             } catch (e) {
                 console.warn('Failed to save settings:', e);
             }

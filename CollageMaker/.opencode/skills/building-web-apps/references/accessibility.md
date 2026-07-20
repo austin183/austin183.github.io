@@ -8,6 +8,7 @@
 - Reduced Motion Preference
 - ARIA Live Regions (Toast Notifications)
 - ARIA Role Selection for Interactive Canvases
+- Touch Target Sizing (WCAG 2.5.8)
 
 ## Segmented Controls with Radiogroup
 
@@ -215,10 +216,65 @@ Using `role="img"` on a canvas that accepts pointer interactions misleads screen
 **File Reference:**
 - `index.html` — canvas ARIA role
 
+## Touch Target Sizing (WCAG 2.5.8)
+
+WCAG 2.1 SC 2.5.8 (Target Size: Minimum) requires interactive touch targets to be at least **44x44 CSS pixels**. Elevates to Level AA in WCAG 2.2.
+
+### Choosing the sizing property
+
+| Button type | Properties | Why |
+|---|---|---|
+| **Text buttons** (`.pure-button`, `.segment-btn`, `.export-btn`) | `min-height: 44px` | Grows if content exceeds minimum (font zoom, accessibility overrides) |
+| **Icon-only buttons** (`.toolbar-icon-btn`, `#themeToggle`, `.remove-btn`) | `min-width: 44px` + `min-height: 44px` | No text content to drive size — both dimensions need minimums |
+| **Fixed-size buttons** (`.format-btn` in formatting bars) | `width: 44px` + `height: 44px` | Uniform sizing critical for visual alignment in rows |
+
+### Circular buttons
+
+For `border-radius: 50%` buttons, maintain a perfect circle:
+
+```css
+.remove-btn {
+    min-width: 44px;
+    min-height: 44px; /* Equal to min-width = square aspect ratio */
+    border-radius: 50%;
+    padding: var(--space-2); /* Equal padding on all sides */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0; /* Prevent flex container from squishing into oval */
+}
+```
+
+### Native form controls with custom styling
+
+Standard native controls (checkboxes, radios, range sliders) fall under the WCAG "Unavoidable" exception. **Custom-styled controls are NOT exempt.**
+
+**`<input type="color">`** — Typically renders at 32-36px. Override with:
+```css
+input[type="color"] {
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+}
+```
+
+**`<input type="file">`** — The `::-webkit-file-upload-button` pseudo-element has limited height control. Increasing it causes cross-browser rendering inconsistencies. Defer if problematic.
+
+### Verification
+
+Manual: DevTools → Elements → Computed tab → verify `min-width`/`min-height` >= 44px.
+
+Automated (Playwright):
+```javascript
+const style = await page.locator('#themeToggle').evaluate(el => getComputedStyle(el));
+expect(parseInt(style.minWidth)).toBeGreaterThanOrEqual(44);
+expect(parseInt(style.minHeight)).toBeGreaterThanOrEqual(44);
+```
+
 ## File Reference
 
 - `index.html` — Export format selector, color pickers, export button, toast notification template
-- `Style.css` — `.color-swatch`, `.export-spinner`, `.toast-notification` styles, `prefers-reduced-motion` media query
+- `Style.css` — `.color-swatch`, `.export-spinner`, `.toast-notification` styles, `prefers-reduced-motion` media query, touch target sizing
 - `MyESModules/App/createCollageData.js` — toast reactive state, `isExporting` state
 - `MyESModules/App/createCollageMethods.js` — `showToast()` method
 - `MyComponents/Phase2FollowUpTest.html` — Custom button keyboard activation tests

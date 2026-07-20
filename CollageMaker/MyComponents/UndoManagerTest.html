@@ -313,7 +313,7 @@
 
                 let renderCalled = false;
                 let cropCalled = false;
-                const base = { undoManager: testUM };
+                const base = { getUndoManager: () => testUM };
                 const methods = createUndoMethods(base, {
                     getOnRenderScheduled: () => (vm) => { renderCalled = true; },
                     getOnCropPreviewRender: () => (vm) => { cropCalled = true; }
@@ -333,7 +333,7 @@
                 testUM.redo = () => false;
 
                 let callCount = 0;
-                const base = { undoManager: testUM };
+                const base = { getUndoManager: () => testUM };
                 const methods = createUndoMethods(base, {
                     getOnRenderScheduled: () => (vm) => { callCount++; }
                 });
@@ -358,7 +358,7 @@
                 testUM.canRedo = () => false;
                 testUM.redo = () => false;
 
-                const base = { undoManager: testUM };
+                const base = { getUndoManager: () => testUM };
                 const methods = createUndoMethods(base);
 
                 expect(() => {
@@ -375,7 +375,7 @@
                 testUM.redo = () => { testUM._redoStack.pop(); return true; };
 
                 let renderCalled = false;
-                const base = { undoManager: testUM };
+                const base = { getUndoManager: () => testUM };
                 const methods = createUndoMethods(base, {
                     getOnRenderScheduled: () => (vm) => { renderCalled = true; }
                 });
@@ -393,7 +393,7 @@
                 testUM.redo = () => false;
 
                 let receivedVm = null;
-                const base = { undoManager: testUM };
+                const base = { getUndoManager: () => testUM };
                 const methods = createUndoMethods(base, {
                     getOnRenderScheduled: () => (vm) => { receivedVm = vm; }
                 });
@@ -411,7 +411,7 @@
                 testUM.canRedo = () => false;
                 testUM.redo = () => false;
 
-                const base = { undoManager: testUM };
+                const base = { getUndoManager: () => testUM };
                 const methods = createUndoMethods(base, {
                     getOnRenderScheduled: () => null,  // invalid: returns non-function
                     getOnCropPreviewRender: () => 42    // invalid: returns non-function

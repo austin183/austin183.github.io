@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Undo Wiring Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Undo Wiring Tests (Phase 1: CR-1 fix)</h1>
+    <p class="test-plan-ref">Covers: Plan 2026-07-19-pre-merge-review-fixes-plan.md Phase 1 — Wire up UndoManager</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { initializeCollageBase } from '../MyESModules/App/CollageBase.js';
+        import { createUndoManager } from '../MyESModules/State/UndoManager.js';
+        import { createUndoMethods } from '../MyESModules/App/createUndoMethods.js';
+
+        const { expect } = chai;
+
+        describe('CollageBase — undo manager getter/setter', () => {
+            let base;
+
+            beforeEach(() => {
+                base = initializeCollageBase();
+            });
+
+            it('1.2.2 — getUndoManager() returns null before setUndoManager', () => {
+                expect(base.getUndoManager()).to.be.null;
+            });
+
+            it('1.2.1 — getUndoManager() returns the manager after setUndoManager', () => {
+                const um = createUndoManager();
+                base.setUndoManager(um);
+                expect(base.getUndoManager()).to.equal(um);
+            });
+
+            it('1.2.1b — setUndoManager can be called multiple times', () => {
+                const um1 = createUndoManager();
+                const um2 = createUndoManager();
+                base.setUndoManager(um1);
+                expect(base.getUndoManager()).to.equal(um1);
+                base.setUndoManager(um2);
+                expect(base.getUndoManager()).to.equal(um2);
+            });
+
+            it('1.2.1c — getUndoManager returns null after setting null', () => {
+                const um = createUndoManager();
+                base.setUndoManager(um);
+                base.setUndoManager(null);
+                expect(base.getUndoManager()).to.be.null;
+            });
+        });
+
+        describe('createUndoMethods — with base.getUndoManager() getter pattern', () => {
+            function makeMockUndoManager() {
+                const undoStack = [];
+                const redoStack = [];
+                return {
+                    canUndo: () => undoStack.length > 0,
+                    canRedo: () => redoStack.length > 0,
+                    push(cmd) {
+                        undoStack.push(cmd);
+                        redoStack.length = 0;
+                    },
+                    undo() {
+                        if (undoStack.length === 0) return false;
+                        const cmd = undoStack.pop();
+                        cmd.undo();
+                        redoStack.push(cmd);
+                        return true;
+                    },
+                    redo() {
+                        if (redoStack.length === 0) return false;
+                        const cmd = redoStack.pop();
+                        cmd.redo();
+                        undoStack.push(cmd);
+                        return true;
+                    }
+                };
+            }
+
+            it('1.T.1 — _performUndo executes undo and fires render callbacks when getter returns UndoManager', () => {
+                const um = makeMockUndoManager();
+                const state = { value: 42 };
+                um.push({
+                    label: 'test',
+                    undo: () => { state.value = 0; },
+                    redo: () => { state.value = 42; }
+                });
+
+                let renderCalled = false;
+                let cropCalled = false;
+                const base = {
+                    getUndoManager: () => um
+                };
+
+                const methods = createUndoMethods(base, {
+                    getOnRenderScheduled: () => (vm) => { renderCalled = true; },
+                    getOnCropPreviewRender: () => (vm) => { cropCalled = true; }
+                });
+
+                const vm = {};
+                methods._performUndo(vm);
+
+                expect(state.value).to.equal(0);
+                expect(renderCalled).to.be.true;
+                expect(cropCalled).to.be.true;
+            });
+
+            it('1.T.2 — _performUndo returns silently when getter returns null', () => {
+                const base = {
+                    getUndoManager: () => null
+                };
+
+                const methods = createUndoMethods(base);
+                const vm = { canUndo: true, canRedo: false };
+
+                expect(() => {
+                    methods._performUndo(vm);
+                }).to.not.throw();
+
+                // vm state should be unchanged
+                expect(vm.canUndo).to.be.true;
+                expect(vm.canRedo).to.be.false;
+            });
+
+            it('1.T.3 — _performRedo executes redo and fires render callbacks when getter returns UndoManager', () => {
+                const um = makeMockUndoManager();
+                const state = { value: 0 };
+
+                // Push a command, then undo it to put it on the redo stack
+                um.push({
+                    label: 'test',
+                    undo: () => { state.value = 0; },
+                    redo: () => { state.value = 42; }
+                });
+                state.value = 42;
+                um.undo(); // Now value=0, command on redo stack
+                expect(state.value).to.equal(0);
+
+                let renderCalled = false;
+                const base = {
+                    getUndoManager: () => um
+                };
+
+                const methods = createUndoMethods(base, {
+                    getOnRenderScheduled: () => (vm) => { renderCalled = true; }
+                });
+
+                const vm = {};
+                methods._performRedo(vm);
+
+                expect(state.value).to.equal(42);
+                expect(renderCalled).to.be.true;
+            });
+
+            it('1.T.3b — _performRedo returns silently when getter returns null', () => {
+                const base = {
+                    getUndoManager: () => null
+                };
+
+                const methods = createUndoMethods(base);
+                const vm = { canUndo: false, canRedo: true };
+
+                expect(() => {
+                    methods._performRedo(vm);
+                }).to.not.throw();
+
+                expect(vm.canUndo).to.be.false;
+                expect(vm.canRedo).to.be.true;
+            });
+
+            it('1.3.1 — _updateUndoState sets canUndo/canRedo from UndoManager', () => {
+                const um = makeMockUndoManager();
+                um.push({ label: 'test', undo: () => {}, redo: () => {} });
+
+                const base = {
+                    getUndoManager: () => um
+                };
+
+                const methods = createUndoMethods(base);
+                const vm = {};
+
+                methods._updateUndoState(vm);
+
+                expect(vm.canUndo).to.be.true;
+                expect(vm.canRedo).to.be.false;
+            });
+
+            it('1.3.2 — _updateUndoState does nothing when getter returns null', () => {
+                const base = {
+                    getUndoManager: () => null
+                };
+
+                const methods = createUndoMethods(base);
+                const vm = { canUndo: true, canRedo: true };
+
+                expect(() => {
+                    methods._updateUndoState(vm);
+                }).to.not.throw();
+
+                // vm properties should be unchanged
+                expect(vm.canUndo).to.be.true;
+                expect(vm.canRedo).to.be.true;
+            });
+
+            it('1.T.1b — _performUndo updates canUndo/canRedo on vm after undo', () => {
+                const um = makeMockUndoManager();
+                um.push({
+                    label: 'test',
+                    undo: () => {},
+                    redo: () => {}
+                });
+
+                const base = {
+                    getUndoManager: () => um
+                };
+
+                const methods = createUndoMethods(base);
+                const vm = { canUndo: true, canRedo: false };
+
+                methods._performUndo(vm);
+
+                expect(vm.canUndo).to.be.false;
+                expect(vm.canRedo).to.be.true;
+            });
+
+            it('1.T.3c — _performRedo updates canUndo/canRedo on vm after redo', () => {
+                const um = makeMockUndoManager();
+                um.push({
+                    label: 'test',
+                    undo: () => {},
+                    redo: () => {}
+                });
+                um.undo(); // Put on redo stack
+
+                const base = {
+                    getUndoManager: () => um
+                };
+
+                const methods = createUndoMethods(base);
+                const vm = { canUndo: false, canRedo: true };
+
+                methods._performRedo(vm);
+
+                expect(vm.canUndo).to.be.true;
+                expect(vm.canRedo).to.be.false;
+            });
+
+            it('1.T.4 — real UndoManager via getter: full undo cycle', () => {
+                const um = createUndoManager();
+                const state = { value: 0 };
+
+                um.push({
+                    label: 'set',
+                    undo: () => { state.value = 0; },
+                    redo: () => { state.value = 1; }
+                });
+                state.value = 1;
+
+                const base = {
+                    getUndoManager: () => um
+                };
+
+                let renderCount = 0;
+                const methods = createUndoMethods(base, {
+                    getOnRenderScheduled: () => (vm) => { renderCount++; }
+                });
+
+                const vm = {};
+
+                // Undo
+                methods._performUndo(vm);
+                expect(state.value).to.equal(0);
+                expect(renderCount).to.equal(1);
+
+                // Redo
+                methods._performRedo(vm);
+                expect(state.value).to.equal(1);
+                expect(renderCount).to.equal(2);
+
+                // Undo again
+                methods._performUndo(vm);
+                expect(state.value).to.equal(0);
+                expect(renderCount).to.equal(3);
+            });
+        });
+    </script>
+
+    <script>
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>
