@@ -255,7 +255,7 @@ export function createCollageLifecycle(base, domIds = {}) {
             // onModelsFailed shows a non-blocking toast when ML models can't load
             this._saliencyAnalyzer = createSaliencyAnalyzer({
                 onModelsFailed: (errorMsg) => {
-                    this.showToast('AI features unavailable — using default focus', 'info', 5000);
+                    this.showToast('Saliency Analyzer unavailable — using default focus', 'info', 5000);
                 }
             });
             this._saliencyAnalyzer.initModels();
