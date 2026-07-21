@@ -115,6 +115,9 @@ export function createCollageLifecycle(base, domIds = {}) {
                 onRenderScheduled: () => {
                     this._scheduleRender();
                 },
+                onCropPreviewRender: () => {
+                    this._scheduleCropPreviewRender();
+                },
                 onTargetHovered: (targetId) => {
                     this.dragTargetId = targetId;
                 },

@@ -979,6 +979,42 @@
 
                 handler.detach();
             });
+
+            it('swap triggers onCropPreviewRender callback so crop editor updates', () => {
+                const state = createTestState(LayoutStyle.HERO);
+                let cropPreviewRenderCalled = false;
+                let renderScheduledCalled = false;
+
+                const handler = createPanelSwapHandler({
+                    canvasId: 'swap-test-canvas',
+                    state: state,
+                    onPanelSelected: () => {},
+                    onRenderScheduled: () => { renderScheduledCalled = true; },
+                    onSwapPerformed: () => {},
+                    onCropPreviewRender: () => { cropPreviewRenderCalled = true; },
+                    onTargetHovered: () => {}
+                });
+                handler.attach();
+
+                // Drag from panel-0 to panel-1
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 300, clientY: 200, bubbles: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 350, clientY: 200, bubbles: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    clientX: 350, clientY: 200, bubbles: true
+                }));
+
+                expect(renderScheduledCalled).to.be.true;
+                expect(cropPreviewRenderCalled).to.be.true;
+
+                handler.detach();
+            });
         });
 
         // Run mocha after all tests are defined

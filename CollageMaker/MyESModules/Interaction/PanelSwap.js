@@ -249,12 +249,13 @@ export function swapPanelAssignments(state, sourceId, targetId, crops, images) {
  * @param {Function} options.onPanelSelected - Called with panelId when a panel is selected
  * @param {Function} options.onRenderScheduled - Call to trigger a canvas re-render
  * @param {Function} options.onSwapPerformed - Called after a successful swap for undo tracking
+ * @param {Function} options.onCropPreviewRender - Call to re-render the crop preview canvas
  * @param {Function} [options.onTargetHovered] - Called with target panelId (or null) during drag
  * @param {Function} [options.onDragStart] - Called when drag begins (for cursor feedback)
  * @param {Function} [options.onDragEnd] - Called when drag ends (for cursor feedback)
  * @returns {Object} PanelSwapHandler
  */
-export function createPanelSwapHandler({ canvasId, state, onPanelSelected, onRenderScheduled, onSwapPerformed, onTargetHovered, onDragStart, onDragEnd }) {
+export function createPanelSwapHandler({ canvasId, state, onPanelSelected, onRenderScheduled, onSwapPerformed, onCropPreviewRender, onTargetHovered, onDragStart, onDragEnd }) {
     let handlerAttached = false;
     let isDragging = false;
     let dragSourceId = null;
@@ -461,6 +462,9 @@ export function createPanelSwapHandler({ canvasId, state, onPanelSelected, onRen
                         }
 
                         onRenderScheduled();
+                        if (onCropPreviewRender) {
+                            onCropPreviewRender();
+                        }
                     }
                 }
             } else {
