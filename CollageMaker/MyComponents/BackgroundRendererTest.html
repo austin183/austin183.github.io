@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BackgroundRenderer Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — BackgroundRenderer Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Section 1 (BackgroundRenderer) — all P1 tests</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { render } from '../MyESModules/Rendering/BackgroundRenderer.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // Mock context factory — wraps a real canvas context and
+        // records every method call for inspection.
+        // ============================================================
+        function createMockCtx(width = 1920, height = 1080) {
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+
+            const calls = {
+                fillStyle: [],
+                fillRect: [],
+                createLinearGradient: [],
+                addColorStop: [],
+                drawImage: [],
+                globalAlpha: [],
+                save: [],
+                restore: []
+            };
+
+            // Intercept fillStyle assignments
+            Object.defineProperty(ctx, 'fillStyle', {
+                set(value) {
+                    calls.fillStyle.push(value);
+                    // We can't actually set fillStyle on a detached context,
+                    // so we just track it
+                },
+                get() {
+                    return calls.fillStyle[calls.fillStyle.length - 1] || '#000000';
+                }
+            });
+
+            // Intercept fillRect
+            const origFillRect = ctx.fillRect.bind(ctx);
+            ctx.fillRect = function(x, y, w, h) {
+                calls.fillRect.push({ x, y, w, h });
+                origFillRect(x, y, w, h);
+            };
+
+            // Intercept createLinearGradient (and addColorStop on returned gradients)
+            const origCreateLinearGradient = ctx.createLinearGradient.bind(ctx);
+            ctx.createLinearGradient = function(x1, y1, x2, y2) {
+                calls.createLinearGradient.push({ x1, y1, x2, y2 });
+                const gradient = origCreateLinearGradient(x1, y1, x2, y2);
+                const origAddColorStop = gradient.addColorStop.bind(gradient);
+                gradient.addColorStop = function(offset, color) {
+                    calls.addColorStop.push({ offset, color });
+                    return origAddColorStop(offset, color);
+                };
+                return gradient;
+            };
+
+            // Intercept drawImage
+            const origDrawImage = ctx.drawImage.bind(ctx);
+            ctx.drawImage = function() {
+                calls.drawImage.push(Array.from(arguments));
+                origDrawImage.apply(ctx, arguments);
+            };
+
+            // Intercept globalAlpha
+            Object.defineProperty(ctx, 'globalAlpha', {
+                set(value) {
+                    calls.globalAlpha.push(value);
+                },
+                get() {
+                    return calls.globalAlpha[calls.globalAlpha.length - 1] ?? 1.0;
+                }
+            });
+
+            // Intercept save
+            const origSave = ctx.save.bind(ctx);
+            ctx.save = function() {
+                calls.save.push(true);
+                origSave();
+            };
+
+            // Intercept restore
+            const origRestore = ctx.restore.bind(ctx);
+            ctx.restore = function() {
+                calls.restore.push(true);
+                origRestore();
+            };
+
+            return { ctx, calls, canvas };
+        }
+
+        // ============================================================
+        // Section 1.1: Solid Backgrounds
+        // ============================================================
+        describe('Section 1.1 — Solid Backgrounds', () => {
+            it('1.1.1 — Solid Hex Color fills with the specified color', () => {
+                const { ctx, calls } = createMockCtx();
+                render(ctx, 1920, 1080, { type: 'solid', color1: '#FF0000' });
+                expect(calls.fillStyle).to.deep.equal(['#FF0000']);
+                expect(calls.fillRect.length).to.equal(1);
+                expect(calls.fillRect[0]).to.deep.equal({ x: 0, y: 0, w: 1920, h: 1080 });
+            });
+
+            it('1.1.2 — Default color when color1 is null', () => {
+                const { ctx, calls } = createMockCtx();
+                render(ctx, 1920, 1080, { type: 'solid', color1: null });
+                expect(calls.fillStyle).to.deep.equal(['#000000']);
+                expect(calls.fillRect.length).to.equal(1);
+            });
+
+            it('1.1.3 — Default color when color1 is undefined', () => {
+                const { ctx, calls } = createMockCtx();
+                render(ctx, 1920, 1080, { type: 'solid' });
+                expect(calls.fillStyle).to.deep.equal(['#000000']);
+                expect(calls.fillRect.length).to.equal(1);
+            });
+
+            it('1.1.4 — Default color when color1 is empty string', () => {
+                const { ctx, calls } = createMockCtx();
+                render(ctx, 1920, 1080, { type: 'solid', color1: '' });
+                expect(calls.fillStyle).to.deep.equal(['#000000']);
+                expect(calls.fillRect.length).to.equal(1);
+            });
+
+            it('1.1.5 — Invalid color string: passes through without crashing', () => {
+                const { ctx, calls } = createMockCtx();
+                expect(() => {
+                    render(ctx, 1920, 1080, { type: 'solid', color1: 'not-a-color' });
+                }).to.not.throw();
+                expect(calls.fillStyle).to.deep.equal(['not-a-color']);
+                expect(calls.fillRect.length).to.equal(1);
+            });
+
+            it('1.1.6 — fillRect covers full canvas dimensions', () => {
+                const { ctx, calls } = createMockCtx(800, 600);
+                render(ctx, 800, 600, { type: 'solid', color1: '#CCCCCC' });
+                expect(calls.fillRect[0]).to.deep.equal({ x: 0, y: 0, w: 800, h: 600 });
+            });
+        });
+
+        // ============================================================
+        // Section 1.2: Gradient Backgrounds
+        // ============================================================
+        describe('Section 1.2 — Gradient Backgrounds', () => {
+            it('1.2.1 — Linear Gradient 0° (Right)', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                render(ctx, 1920, 1080, {
+                    type: 'gradient', color1: '#000000', color2: '#FFFFFF', angle: 0
+                });
+                expect(calls.createLinearGradient.length).to.equal(1);
+                const g = calls.createLinearGradient[0];
+                // halfDiag = sqrt(1920^2 + 1080^2) / 2 = 1101.45
+                // 0°: cos=1, sin≈0 => horizontal line through center
+                // x1 = 960 - 1101.45 = -141.45, y1 = 540
+                // x2 = 960 + 1101.45 = 2061.45, y2 = 540
+                expect(g.x1).to.be.closeTo(-141.45, 0.01);
+                expect(g.y1).to.be.closeTo(540, 0.01);
+                expect(g.x2).to.be.closeTo(2061.45, 0.01);
+                expect(g.y2).to.be.closeTo(540, 0.01);
+                expect(calls.fillRect.length).to.equal(1);
+            });
+
+            it('1.2.2 — Linear Gradient 90° (Down)', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                render(ctx, 1920, 1080, {
+                    type: 'gradient', color1: '#000000', color2: '#FFFFFF', angle: 90
+                });
+                const g = calls.createLinearGradient[0];
+                // 90°: cos≈0, sin=1 => vertical line through center
+                // x1 = 960, y1 = 540 - 1101.45 = -561.45
+                // x2 = 960, y2 = 540 + 1101.45 = 1641.45
+                expect(g.x1).to.be.closeTo(960, 0.01);
+                expect(g.y1).to.be.closeTo(-561.45, 0.01);
+                expect(g.x2).to.be.closeTo(960, 0.01);
+                expect(g.y2).to.be.closeTo(1641.45, 0.01);
+            });
+
+            it('1.2.3 — Linear Gradient 180° (Left)', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                render(ctx, 1920, 1080, {
+                    type: 'gradient', color1: '#000000', color2: '#FFFFFF', angle: 180
+                });
+                const g = calls.createLinearGradient[0];
+                // 180°: cos=-1, sin≈0 => reversed horizontal
+                // x1 = 960 + 1101.45 = 2061.45, y1 = 540
+                // x2 = 960 - 1101.45 = -141.45, y2 = 540
+                expect(g.x1).to.be.closeTo(2061.45, 0.01);
+                expect(g.y1).to.be.closeTo(540, 0.01);
+                expect(g.x2).to.be.closeTo(-141.45, 0.01);
+                expect(g.y2).to.be.closeTo(540, 0.01);
+            });
+
+            it('1.2.4 — Linear Gradient 270° (Up)', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                render(ctx, 1920, 1080, {
+                    type: 'gradient', color1: '#000000', color2: '#FFFFFF', angle: 270
+                });
+                const g = calls.createLinearGradient[0];
+                // 270°: cos≈0, sin=-1 => reversed vertical
+                // x1 = 960, y1 = 540 + 1101.45 = 1641.45
+                // x2 = 960, y2 = 540 - 1101.45 = -561.45
+                expect(g.x1).to.be.closeTo(960, 0.01);
+                expect(g.y1).to.be.closeTo(1641.45, 0.01);
+                expect(g.x2).to.be.closeTo(960, 0.01);
+                expect(g.y2).to.be.closeTo(-561.45, 0.01);
+            });
+
+            it('1.2.5 — Linear Gradient 45° (Diagonal)', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                render(ctx, 1920, 1080, {
+                    type: 'gradient', color1: '#000000', color2: '#FFFFFF', angle: 45
+                });
+                const g = calls.createLinearGradient[0];
+                // halfDiag = 1101.45, cos(45°) = sin(45°) = 0.7071
+                // offset = 1101.45 * 0.7071 = 778.85
+                // x1 = 960 - 778.85 = 181.15
+                // y1 = 540 - 778.85 = -238.85
+                // x2 = 960 + 778.85 = 1738.85
+                // y2 = 540 + 778.85 = 1318.85
+                expect(g.x1).to.be.closeTo(181.15, 0.01);
+                expect(g.y1).to.be.closeTo(-238.85, 0.01);
+                expect(g.x2).to.be.closeTo(1738.85, 0.01);
+                expect(g.y2).to.be.closeTo(1318.85, 0.01);
+            });
+
+            it('1.2.6 — Gradient with single color: uses default for color2', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                render(ctx, 1920, 1080, {
+                    type: 'gradient', color1: '#FF0000', color2: null, angle: 90
+                });
+                expect(calls.createLinearGradient.length).to.equal(1);
+                expect(calls.addColorStop).to.deep.equal([
+                    { offset: 0, color: '#FF0000' },
+                    { offset: 1, color: '#333333' }
+                ]);
+                expect(calls.fillRect.length).to.equal(1);
+            });
+
+            it('1.2.7 — Gradient uses two color stops at 0 and 1', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                render(ctx, 1920, 1080, {
+                    type: 'gradient', color1: '#FF0000', color2: '#0000FF', angle: 90
+                });
+                expect(calls.createLinearGradient.length).to.equal(1);
+                expect(calls.addColorStop).to.deep.equal([
+                    { offset: 0, color: '#FF0000' },
+                    { offset: 1, color: '#0000FF' }
+                ]);
+                // fillStyle is set to a CanvasGradient (truthy, not a string)
+                expect(calls.fillStyle.length).to.equal(1);
+                expect(typeof calls.fillStyle[0]).to.not.equal('string');
+            });
+
+            it('1.2.8 — Gradient with NaN angle defaults to 0°', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                render(ctx, 1920, 1080, {
+                    type: 'gradient', color1: '#000000', color2: '#FFFFFF', angle: NaN
+                });
+                // NaN || 0 = 0, so angle defaults to 0°
+                const g = calls.createLinearGradient[0];
+                expect(g.y1).to.equal(540);
+                expect(g.y2).to.equal(540);
+            });
+
+            it('1.2.9 — Gradient with null colors falls back to defaults', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                render(ctx, 1920, 1080, {
+                    type: 'gradient', color1: null, color2: null, angle: 90
+                });
+                expect(calls.createLinearGradient.length).to.equal(1);
+                expect(calls.addColorStop).to.deep.equal([
+                    { offset: 0, color: '#000000' },
+                    { offset: 1, color: '#333333' }
+                ]);
+                expect(calls.fillRect.length).to.equal(1);
+            });
+
+            it('1.2.10 — Gradient default angle is 0°', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                render(ctx, 1920, 1080, {
+                    type: 'gradient', color1: '#000000', color2: '#FFFFFF'
+                });
+                const g = calls.createLinearGradient[0];
+                // Default angle 0°: horizontal
+                expect(g.y1).to.equal(540);
+                expect(g.y2).to.equal(540);
+            });
+
+            it('1.2.11 — Gradient on square canvas: symmetric endpoints', () => {
+                const { ctx, calls } = createMockCtx(1000, 1000);
+                render(ctx, 1000, 1000, {
+                    type: 'gradient', color1: '#000000', color2: '#FFFFFF', angle: 45
+                });
+                const g = calls.createLinearGradient[0];
+                // halfDiag = sqrt(1000^2 + 1000^2) / 2 = 707.107
+                // cos(45) = sin(45) = 0.7071
+                // offset = 707.107 * 0.7071 = 500
+                // x1 = 500 - 500 = 0, y1 = 500 - 500 = 0
+                // x2 = 500 + 500 = 1000, y2 = 500 + 500 = 1000
+                expect(g.x1).to.be.closeTo(0, 0.01);
+                expect(g.y1).to.be.closeTo(0, 0.01);
+                expect(g.x2).to.be.closeTo(1000, 0.01);
+                expect(g.y2).to.be.closeTo(1000, 0.01);
+            });
+        });
+
+        // ============================================================
+        // Section 1.3: Image Backgrounds
+        // ============================================================
+        describe('Section 1.3 — Image Backgrounds', () => {
+            // Create a valid image source using an offscreen canvas (not new Image(),
+            // since Image.complete is read-only and can't be mocked).
+            function createTestImage() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 100;
+                canvas.height = 100;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#FF0000';
+                ctx.fillRect(0, 0, 100, 100);
+                return canvas;
+            }
+
+            it('1.3.1 — Opaque image: globalAlpha = 1.0, drawImage covers canvas', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const img = createTestImage();
+                render(ctx, 1920, 1080, { type: 'image', image: img, opacity: 1.0 });
+                expect(calls.globalAlpha).to.deep.equal([1.0]);
+                expect(calls.drawImage.length).to.equal(1);
+                expect(calls.drawImage[0]).to.deep.equal([img, 0, 0, 1920, 1080]);
+            });
+
+            it('1.3.2 — Semi-transparent image: globalAlpha = 0.5', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const img = createTestImage();
+                render(ctx, 1920, 1080, { type: 'image', image: img, opacity: 0.5 });
+                expect(calls.globalAlpha).to.deep.equal([0.5]);
+                expect(calls.drawImage.length).to.equal(1);
+            });
+
+            it('1.3.3 — Transparent image: globalAlpha = 0.0', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const img = createTestImage();
+                render(ctx, 1920, 1080, { type: 'image', image: img, opacity: 0.0 });
+                expect(calls.globalAlpha).to.deep.equal([0.0]);
+                expect(calls.drawImage.length).to.equal(1);
+            });
+
+            it('1.3.4 — Default opacity when not specified', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const img = createTestImage();
+                render(ctx, 1920, 1080, { type: 'image', image: img });
+                expect(calls.globalAlpha).to.deep.equal([1.0]);
+            });
+
+            it('1.3.5 — Image not yet loaded: no crash', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                // A plain Image() with no src is inherently incomplete and won't
+                // draw meaningful pixels, but shouldn't crash
+                const img = new Image();
+                expect(() => {
+                    render(ctx, 1920, 1080, { type: 'image', image: img });
+                }).to.not.throw();
+            });
+
+            it('1.3.6 — Image null: fills black, no drawImage', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                render(ctx, 1920, 1080, { type: 'image', image: null });
+                expect(calls.fillStyle).to.deep.equal(['#000000']);
+                expect(calls.fillRect.length).to.equal(1);
+                expect(calls.drawImage.length).to.equal(0);
+            });
+
+            it('1.3.7 — Image stretched to cover full canvas regardless of aspect ratio', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                // 1:1 image on 16:9 canvas
+                const img = createTestImage();
+                render(ctx, 1920, 1080, { type: 'image', image: img });
+                expect(calls.drawImage[0]).to.deep.equal([img, 0, 0, 1920, 1080]);
+            });
+
+            it('1.3.8 — Context save/restore around image render', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const img = createTestImage();
+                render(ctx, 1920, 1080, { type: 'image', image: img, opacity: 0.5 });
+                expect(calls.save.length).to.equal(1);
+                expect(calls.restore.length).to.equal(1);
+            });
+
+            it('1.3.9 — Opacity out of bounds: passed through without clamping', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const img = createTestImage();
+                // Code uses `state.opacity ?? 1.0` — no explicit clamping
+                // Canvas API may clamp internally, but the value passed is as-is
+                render(ctx, 1920, 1080, { type: 'image', image: img, opacity: 2.0 });
+                expect(calls.globalAlpha).to.deep.equal([2.0]);
+            });
+
+            it('1.3.10 — Negative opacity: passed through without clamping', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const img = createTestImage();
+                render(ctx, 1920, 1080, { type: 'image', image: img, opacity: -0.5 });
+                expect(calls.globalAlpha).to.deep.equal([-0.5]);
+            });
+        });
+
+        // ============================================================
+        // Section 1.4: Render dispatcher and edge cases
+        // ============================================================
+        describe('Section 1.4 — Render dispatcher and edge cases', () => {
+            it('1.4.1 — null bgState: no-op, no crash', () => {
+                const { ctx, calls } = createMockCtx();
+                expect(() => {
+                    render(ctx, 1920, 1080, null);
+                }).to.not.throw();
+                expect(calls.fillStyle.length).to.equal(0);
+                expect(calls.fillRect.length).to.equal(0);
+            });
+
+            it('1.4.2 — undefined bgState: no-op, no crash', () => {
+                const { ctx, calls } = createMockCtx();
+                expect(() => {
+                    render(ctx, 1920, 1080, undefined);
+                }).to.not.throw();
+                expect(calls.fillStyle.length).to.equal(0);
+                expect(calls.fillRect.length).to.equal(0);
+            });
+
+            it('1.4.3 — Empty bgState object: no-op, no crash', () => {
+                const { ctx, calls } = createMockCtx();
+                expect(() => {
+                    render(ctx, 1920, 1080, {});
+                }).to.not.throw();
+                expect(calls.fillStyle.length).to.equal(0);
+                expect(calls.fillRect.length).to.equal(0);
+            });
+
+            it('1.4.4 — Unknown bgState type: falls back to white', () => {
+                const { ctx, calls } = createMockCtx();
+                render(ctx, 1920, 1080, { type: 'unknown' });
+                expect(calls.fillStyle).to.deep.equal(['#ffffff']);
+                expect(calls.fillRect.length).to.equal(1);
+            });
+
+            it('1.4.5 — Solid on small canvas uses correct dimensions', () => {
+                const { ctx, calls } = createMockCtx(100, 50);
+                render(ctx, 100, 50, { type: 'solid', color1: '#FF0000' });
+                expect(calls.fillRect[0]).to.deep.equal({ x: 0, y: 0, w: 100, h: 50 });
+            });
+
+            it('1.4.6 — Gradient on small canvas uses correct dimensions', () => {
+                const { ctx, calls } = createMockCtx(100, 50);
+                render(ctx, 100, 50, {
+                    type: 'gradient', color1: '#000000', color2: '#FFFFFF', angle: 90
+                });
+                expect(calls.createLinearGradient.length).to.equal(1);
+                const g = calls.createLinearGradient[0];
+                // halfDiag = sqrt(100^2 + 50^2) / 2 = 55.90
+                // 90°: x1 = 50, y1 = 25 - 55.90 = -30.90
+                // x2 = 50, y2 = 25 + 55.90 = 80.90
+                expect(g.x1).to.equal(50);
+                expect(g.y1).to.be.closeTo(-30.90, 0.01);
+                expect(g.x2).to.equal(50);
+                expect(g.y2).to.be.closeTo(80.90, 0.01);
+                expect(calls.fillRect[0]).to.deep.equal({ x: 0, y: 0, w: 100, h: 50 });
+            });
+
+            it('1.4.7 — Zero-size canvas: no crash, gradient center at origin', () => {
+                const { ctx, calls } = createMockCtx(0, 0);
+                expect(() => {
+                    render(ctx, 0, 0, { type: 'solid', color1: '#FF0000' });
+                }).to.not.throw();
+                expect(calls.fillRect[0]).to.deep.equal({ x: 0, y: 0, w: 0, h: 0 });
+            });
+
+            it('1.4.8 — Zero-size gradient: halfDiag is 0, endpoints at origin', () => {
+                const { ctx, calls } = createMockCtx(0, 0);
+                render(ctx, 0, 0, {
+                    type: 'gradient', color1: '#000000', color2: '#FFFFFF', angle: 45
+                });
+                const g = calls.createLinearGradient[0];
+                // halfDiag = 0, so all endpoints are at (0, 0)
+                expect(g.x1).to.equal(0);
+                expect(g.y1).to.equal(0);
+                expect(g.x2).to.equal(0);
+                expect(g.y2).to.equal(0);
+            });
+        });
+
+        // ============================================================
+        // Section 1.5: Image Background Compositing (CR-03)
+        // When image opacity < 1.0, the background color/gradient
+        // should be drawn first so transparent areas of the image
+        // show the background, not white canvas.
+        // ============================================================
+        describe('Section 1.5 — Image Background Compositing (CR-03)', () => {
+            function createTestImage() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 100;
+                canvas.height = 100;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#FF0000';
+                ctx.fillRect(0, 0, 100, 100);
+                return canvas;
+            }
+
+            it('1.5.1 — Image bg with solid color: fills color behind image', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const img = createTestImage();
+                render(ctx, 1920, 1080, {
+                    type: 'image',
+                    image: img,
+                    opacity: 0.5,
+                    color1: '#FF0000'
+                });
+                // Should fill background color first, then draw image with alpha
+                expect(calls.fillStyle).to.include('#FF0000');
+                // fillRect should be called: once for bg fill, drawImage for the image
+                expect(calls.fillRect.length).to.be.greaterThanOrEqual(1);
+                expect(calls.fillRect[0]).to.deep.equal({ x: 0, y: 0, w: 1920, h: 1080 });
+                expect(calls.fillStyle[0]).to.equal('#FF0000');
+                expect(calls.globalAlpha).to.deep.equal([0.5]);
+                expect(calls.drawImage.length).to.equal(1);
+            });
+
+            it('1.5.2 — Image bg with gradient: fills gradient behind image', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const img = createTestImage();
+                render(ctx, 1920, 1080, {
+                    type: 'image',
+                    image: img,
+                    opacity: 0.3,
+                    color1: '#000000',
+                    color2: '#FFFFFF',
+                    angle: 90
+                });
+                // Should create gradient and fill, then draw image with alpha
+                expect(calls.createLinearGradient.length).to.be.greaterThanOrEqual(1);
+                expect(calls.globalAlpha).to.deep.equal([0.3]);
+                expect(calls.drawImage.length).to.equal(1);
+            });
+
+            it('1.5.3 — Image bg at 100% opacity: still fills background first', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const img = createTestImage();
+                render(ctx, 1920, 1080, {
+                    type: 'image',
+                    image: img,
+                    opacity: 1.0,
+                    color1: '#0000FF'
+                });
+                // Even at 100%, background should be pre-filled (defensive)
+                expect(calls.fillStyle).to.include('#0000FF');
+                expect(calls.fillRect.length).to.be.greaterThanOrEqual(1);
+                expect(calls.globalAlpha).to.deep.equal([1.0]);
+                expect(calls.drawImage.length).to.equal(1);
+            });
+
+            it('1.5.4 — Image bg at 0% opacity: fills background, draws invisible image', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const img = createTestImage();
+                render(ctx, 1920, 1080, {
+                    type: 'image',
+                    image: img,
+                    opacity: 0.0,
+                    color1: '#00FF00'
+                });
+                // Background fills, image drawn at 0 alpha (invisible)
+                expect(calls.fillStyle).to.include('#00FF00');
+                expect(calls.fillRect.length).to.be.greaterThanOrEqual(1);
+                expect(calls.globalAlpha).to.deep.equal([0.0]);
+                expect(calls.drawImage.length).to.equal(1);
+            });
+
+            it('1.5.5 — Alpha state restored after image render (no leakage)', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const img = createTestImage();
+                render(ctx, 1920, 1080, {
+                    type: 'image',
+                    image: img,
+                    opacity: 0.5,
+                    color1: '#FF0000'
+                });
+                // save/restore should be called to isolate alpha
+                expect(calls.save.length).to.be.greaterThanOrEqual(1);
+                expect(calls.restore.length).to.be.greaterThanOrEqual(1);
+            });
+
+            it('1.5.6 — Image bg with no color1: uses default black background', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const img = createTestImage();
+                render(ctx, 1920, 1080, {
+                    type: 'image',
+                    image: img,
+                    opacity: 0.5
+                });
+                // Should fill with default black
+                expect(calls.fillStyle[0]).to.equal('#000000');
+                expect(calls.fillRect.length).to.be.greaterThanOrEqual(1);
+                expect(calls.drawImage.length).to.equal(1);
+            });
+
+            it('1.5.7 — Image bg with null image: still fills background', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                render(ctx, 1920, 1080, {
+                    type: 'image',
+                    image: null,
+                    color1: '#FF0000'
+                });
+                // No image, but should still fill with background color
+                expect(calls.fillStyle).to.include('#FF0000');
+                expect(calls.fillRect.length).to.be.greaterThanOrEqual(1);
+                expect(calls.drawImage.length).to.equal(0);
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

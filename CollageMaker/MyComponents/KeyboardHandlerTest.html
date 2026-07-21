@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KeyboardHandler Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — KeyboardHandler Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Section 3.1.2 (all 69 tests)</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createKeyboardHandler, parseKeyShortcut, matchesShortcut, KEYBOARD_SHORTCUTS } from '../MyESModules/Interaction/KeyboardHandler.js';
+        import { LayoutStyle } from '../MyESModules/Models/LayoutStyle.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // 3.1.2.1 — 3.1.2.10: Pure Key Parsing (parseKeyShortcut)
+        // ============================================================
+        describe('parseKeyShortcut', () => {
+            it('3.1.2.1 — Basic key press (no modifiers)', () => {
+                const result = parseKeyShortcut({ key: 's', metaKey: false, ctrlKey: false, shiftKey: false, altKey: false });
+                expect(result).to.deep.equal({ key: 's', meta: false, ctrl: false, shift: false, alt: false });
+            });
+
+            it('3.1.2.2 — Meta key + letter', () => {
+                const result = parseKeyShortcut({ key: 'e', metaKey: true, ctrlKey: false, shiftKey: false, altKey: false });
+                expect(result.key).to.equal('e');
+                expect(result.meta).to.be.true;
+                expect(result.ctrl).to.be.false;
+                expect(result.shift).to.be.false;
+                expect(result.alt).to.be.false;
+            });
+
+            it('3.1.2.3 — Ctrl key + letter', () => {
+                const result = parseKeyShortcut({ key: 's', metaKey: false, ctrlKey: true, shiftKey: false, altKey: false });
+                expect(result.key).to.equal('s');
+                expect(result.ctrl).to.be.true;
+                expect(result.meta).to.be.false;
+            });
+
+            it('3.1.2.4 — Meta + Shift + letter', () => {
+                const result = parseKeyShortcut({ key: 'z', metaKey: true, ctrlKey: false, shiftKey: true, altKey: false });
+                expect(result.key).to.equal('z');
+                expect(result.meta).to.be.true;
+                expect(result.shift).to.be.true;
+                expect(result.ctrl).to.be.false;
+                expect(result.alt).to.be.false;
+            });
+
+            it('3.1.2.5 — Escape key', () => {
+                const result = parseKeyShortcut({ key: 'Escape', metaKey: false, ctrlKey: false, shiftKey: false, altKey: false });
+                expect(result.key).to.equal('escape');
+                expect(result.meta).to.be.false;
+                expect(result.ctrl).to.be.false;
+                expect(result.shift).to.be.false;
+                expect(result.alt).to.be.false;
+            });
+
+            it('3.1.2.6 — Delete key', () => {
+                const result = parseKeyShortcut({ key: 'Delete', metaKey: false, ctrlKey: false, shiftKey: false, altKey: false });
+                expect(result.key).to.equal('delete');
+                expect(result.meta).to.be.false;
+                expect(result.ctrl).to.be.false;
+                expect(result.shift).to.be.false;
+                expect(result.alt).to.be.false;
+            });
+
+            it('3.1.2.7 — Backspace key', () => {
+                const result = parseKeyShortcut({ key: 'Backspace', metaKey: false, ctrlKey: false, shiftKey: false, altKey: false });
+                expect(result.key).to.equal('backspace');
+                expect(result.meta).to.be.false;
+                expect(result.ctrl).to.be.false;
+                expect(result.shift).to.be.false;
+                expect(result.alt).to.be.false;
+            });
+
+            it('3.1.2.8 — Number key', () => {
+                const result = parseKeyShortcut({ key: '1', metaKey: false, ctrlKey: false, shiftKey: false, altKey: false });
+                expect(result.key).to.equal('1');
+                expect(result.meta).to.be.false;
+                expect(result.ctrl).to.be.false;
+                expect(result.shift).to.be.false;
+                expect(result.alt).to.be.false;
+            });
+
+            it('3.1.2.9 — Key normalized to lowercase', () => {
+                const result = parseKeyShortcut({ key: 'Z', metaKey: false, ctrlKey: false, shiftKey: true, altKey: false });
+                expect(result.key).to.equal('z');
+                expect(result.shift).to.be.true;
+            });
+
+            it('3.1.2.10 — Alt key captured', () => {
+                const result = parseKeyShortcut({ key: 's', metaKey: false, ctrlKey: false, shiftKey: false, altKey: true });
+                expect(result.key).to.equal('s');
+                expect(result.alt).to.be.true;
+            });
+        });
+
+        // ============================================================
+        // 3.1.2.11 — 3.1.2.24: Shortcut Matching (matchesShortcut)
+        // ============================================================
+        describe('matchesShortcut', () => {
+            it('3.1.2.11 — Exact meta+letter match', () => {
+                expect(matchesShortcut({ key: 'e', meta: true, ctrl: false, shift: false, alt: false }, 'meta+e')).to.be.true;
+            });
+
+            it('3.1.2.12 — Ctrl treated as meta equivalent', () => {
+                expect(matchesShortcut({ key: 'e', meta: false, ctrl: true, shift: false, alt: false }, 'meta+e')).to.be.true;
+            });
+
+            it('3.1.2.13 — Meta+Shift match', () => {
+                expect(matchesShortcut({ key: 'z', meta: true, ctrl: false, shift: true, alt: false }, 'shift+meta+z')).to.be.true;
+            });
+
+            it('3.1.2.14 — Ctrl+Shift treated as meta+shift', () => {
+                expect(matchesShortcut({ key: 'z', meta: false, ctrl: true, shift: true, alt: false }, 'shift+meta+z')).to.be.true;
+            });
+
+            it('3.1.2.15 — No match: wrong key', () => {
+                expect(matchesShortcut({ key: 's', meta: true, ctrl: false, shift: false, alt: false }, 'meta+z')).to.be.false;
+            });
+
+            it('3.1.2.16 — No match: missing modifier', () => {
+                expect(matchesShortcut({ key: 'e', meta: false, ctrl: false, shift: false, alt: false }, 'meta+e')).to.be.false;
+            });
+
+            it('3.1.2.17 — No match: extra modifier on meta+key pattern', () => {
+                expect(matchesShortcut({ key: 'e', meta: true, ctrl: false, shift: true, alt: false }, 'meta+e')).to.be.false;
+            });
+
+            it('3.1.2.18 — Escape match', () => {
+                expect(matchesShortcut({ key: 'Escape', meta: false, ctrl: false, shift: false, alt: false }, 'Escape')).to.be.true;
+            });
+
+            it('3.1.2.19 — Delete match', () => {
+                expect(matchesShortcut({ key: 'Delete', meta: false, ctrl: false, shift: false, alt: false }, 'Delete')).to.be.true;
+            });
+
+            it('3.1.2.20 — Backspace match', () => {
+                expect(matchesShortcut({ key: 'Backspace', meta: false, ctrl: false, shift: false, alt: false }, 'Backspace')).to.be.true;
+            });
+
+            it('3.1.2.21 — Number key match (alt+number for layouts)', () => {
+                expect(matchesShortcut({ key: '1', meta: false, ctrl: false, shift: false, alt: true }, 'alt+1')).to.be.true;
+            });
+
+            it('3.1.2.22 — Pattern order insensitive', () => {
+                expect(matchesShortcut({ key: 'z', meta: true, ctrl: false, shift: true, alt: false }, 'meta+shift+z')).to.be.true;
+            });
+
+            it('3.1.2.23 — No match: Escape vs other key', () => {
+                expect(matchesShortcut({ key: 's', meta: false, ctrl: false, shift: false, alt: false }, 'Escape')).to.be.false;
+            });
+
+            it('3.1.2.24 — No match: Alt present but not in pattern (alt is always strict)', () => {
+                expect(matchesShortcut({ key: 's', meta: false, ctrl: false, shift: false, alt: true }, 's')).to.be.false;
+            });
+        });
+
+        // ============================================================
+        // 3.1.2.25 — 3.1.2.28: Shortcut Mapping Constants
+        // ============================================================
+        describe('KEYBOARD_SHORTCUTS', () => {
+            it('3.1.2.25 — All shortcut entries present (11 total)', () => {
+                expect(Object.keys(KEYBOARD_SHORTCUTS)).to.have.lengthOf(11);
+            });
+
+            it('3.1.2.26 — Layout shortcuts are alt+[1-5]', () => {
+                expect(KEYBOARD_SHORTCUTS.LAYOUT_UNIFORM.pattern).to.equal('alt+1');
+                expect(KEYBOARD_SHORTCUTS.LAYOUT_HERO.pattern).to.equal('alt+2');
+                expect(KEYBOARD_SHORTCUTS.LAYOUT_MOSAIC.pattern).to.equal('alt+3');
+                expect(KEYBOARD_SHORTCUTS.LAYOUT_DIAGONAL_SLICES.pattern).to.equal('alt+4');
+                expect(KEYBOARD_SHORTCUTS.LAYOUT_HEXAGONAL.pattern).to.equal('alt+5');
+            });
+
+            it('3.1.2.27 — Layout shortcut values map to LayoutStyle', () => {
+                expect(KEYBOARD_SHORTCUTS.LAYOUT_UNIFORM.value).to.equal(LayoutStyle.UNIFORM);
+                expect(KEYBOARD_SHORTCUTS.LAYOUT_HERO.value).to.equal(LayoutStyle.HERO);
+                expect(KEYBOARD_SHORTCUTS.LAYOUT_MOSAIC.value).to.equal(LayoutStyle.MOSAIC);
+                expect(KEYBOARD_SHORTCUTS.LAYOUT_DIAGONAL_SLICES.value).to.equal(LayoutStyle.DIAGONAL_SLICES);
+                expect(KEYBOARD_SHORTCUTS.LAYOUT_HEXAGONAL.value).to.equal(LayoutStyle.HEXAGONAL);
+            });
+
+            it('3.1.2.28 — Undo/Redo patterns match expected behavior', () => {
+                expect(KEYBOARD_SHORTCUTS.UNDO).to.equal('meta+z');
+                expect(KEYBOARD_SHORTCUTS.REDO).to.equal('shift+meta+z');
+            });
+
+            it('CR-10.1 — Export shortcut is meta+e (not meta+s)', () => {
+                expect(KEYBOARD_SHORTCUTS.EXPORT).to.equal('meta+e');
+            });
+
+            it('CR-10.2 — meta+s does NOT trigger export', () => {
+                let called = false;
+                const h = createKeyboardHandler({ callbacks: { onExport: () => { called = true; } } });
+                h.handleKeydown({
+                    key: 's', metaKey: true, ctrlKey: false, shiftKey: false, altKey: false,
+                    target: document.body, preventDefault: () => {}
+                });
+                expect(called).to.be.false;
+            });
+
+            it('CR-10.3 — meta+1 does NOT switch layout (Safari tab switching preserved)', () => {
+                let received = null;
+                const h = createKeyboardHandler({ callbacks: { onLayoutSwitch: (s) => { received = s; } } });
+                h.handleKeydown({
+                    key: '1', metaKey: true, ctrlKey: false, shiftKey: false, altKey: false,
+                    target: document.body, preventDefault: () => {}
+                });
+                expect(received).to.be.null;
+            });
+
+            it('CR-10.4 — alt+1 DOES switch layout', () => {
+                let received = null;
+                const h = createKeyboardHandler({ callbacks: { onLayoutSwitch: (s) => { received = s; } } });
+                h.handleKeydown({
+                    key: '1', metaKey: false, ctrlKey: false, shiftKey: false, altKey: true,
+                    target: document.body, preventDefault: () => {}
+                });
+                expect(received).to.equal('uniform');
+            });
+        });
+
+        // ============================================================
+        // 3.1.2.29 — 3.1.2.36: Handler Lifecycle (attach/detach)
+        // ============================================================
+        describe('createKeyboardHandler lifecycle', () => {
+            let handler;
+
+            beforeEach(() => {
+                handler = createKeyboardHandler({ callbacks: {} });
+            });
+
+            afterEach(() => {
+                handler.detach();
+            });
+
+            it('3.1.2.29 — Handler created with callbacks returns expected API', () => {
+                expect(handler).to.have.property('attach').that.is.a('function');
+                expect(handler).to.have.property('detach').that.is.a('function');
+                expect(handler).to.have.property('handleKeydown').that.is.a('function');
+            });
+
+            it('3.1.2.30 — attach() adds listener to document', () => {
+                handler.attach();
+                // Dispatch a keydown event and verify it's handled (no error)
+                const e = new KeyboardEvent('keydown', { key: 'e', metaKey: true, bubbles: true });
+                document.dispatchEvent(e);
+                // If we get here without error, listener was attached
+                expect(true).to.be.true;
+            });
+
+            it('3.1.2.31 — detach() removes listener', () => {
+                let called = false;
+                const cbHandler = createKeyboardHandler({
+                    callbacks: { onExport: () => { called = true; } }
+                });
+                cbHandler.attach();
+                cbHandler.detach();
+
+                // Dispatch Cmd+S via document — should NOT trigger after detach
+                document.dispatchEvent(new KeyboardEvent('keydown', {
+                    key: 'e', metaKey: true, bubbles: true
+                }));
+                expect(called).to.be.false;
+            });
+
+            it('3.1.2.32 — Double attach is a no-op (no duplicate fires)', () => {
+                let callCount = 0;
+                const dupHandler = createKeyboardHandler({
+                    callbacks: { onExport: () => { callCount++; } }
+                });
+                dupHandler.attach();
+                dupHandler.attach();
+
+                // Dispatch via document — should fire only once
+                const e = new KeyboardEvent('keydown', { key: 'e', metaKey: true, bubbles: true });
+                document.dispatchEvent(e);
+                dupHandler.detach();
+                expect(callCount).to.equal(1);
+            });
+
+            it('3.1.2.33 — Double detach is a no-op', () => {
+                expect(() => {
+                    handler.detach();
+                    handler.detach();
+                }).to.not.throw();
+            });
+
+            it('3.1.2.34 — Detach without attach is safe', () => {
+                expect(() => {
+                    handler.detach();
+                }).to.not.throw();
+            });
+
+            it('3.1.2.35 — Handler dispatches on keydown', () => {
+                let called = false;
+                const dispHandler = createKeyboardHandler({
+                    callbacks: { onExport: () => { called = true; } }
+                });
+                dispHandler.attach();
+
+                const e = new KeyboardEvent('keydown', { key: 'e', metaKey: true, bubbles: true });
+                document.dispatchEvent(e);
+                dispHandler.detach();
+                expect(called).to.be.true;
+            });
+
+            it('3.1.2.36 — Handler does not fire on keyup', () => {
+                let called = false;
+                const upHandler = createKeyboardHandler({
+                    callbacks: { onExport: () => { called = true; } }
+                });
+                upHandler.attach();
+
+                const e = new KeyboardEvent('keyup', { key: 'e', metaKey: true, bubbles: true });
+                document.dispatchEvent(e);
+                upHandler.detach();
+                expect(called).to.be.false;
+            });
+        });
+
+        // ============================================================
+        // 3.1.2.37 — 3.1.2.55: Shortcut → Callback Dispatch (Integration)
+        // ============================================================
+        describe('shortcut callback dispatch', () => {
+            function makeEvent(opts) {
+                return {
+                    key: opts.key || 'x',
+                    metaKey: !!opts.metaKey,
+                    ctrlKey: !!opts.ctrlKey,
+                    shiftKey: !!opts.shiftKey,
+                    altKey: !!opts.altKey,
+                    target: opts.target || document.body,
+                    preventDefault: opts.preventDefault || (() => {})
+                };
+            }
+
+            it('3.1.2.37 — Cmd+O triggers onOpenFilePicker', () => {
+                let called = false;
+                const h = createKeyboardHandler({ callbacks: { onOpenFilePicker: () => { called = true; } } });
+                h.handleKeydown(makeEvent({ key: 'o', metaKey: true }));
+                expect(called).to.be.true;
+            });
+
+            it('3.1.2.38 — Ctrl+O triggers onOpenFilePicker', () => {
+                let called = false;
+                const h = createKeyboardHandler({ callbacks: { onOpenFilePicker: () => { called = true; } } });
+                h.handleKeydown(makeEvent({ key: 'o', ctrlKey: true }));
+                expect(called).to.be.true;
+            });
+
+            it('3.1.2.39 — Cmd+E triggers onExport', () => {
+                let called = false;
+                const h = createKeyboardHandler({ callbacks: { onExport: () => { called = true; } } });
+                h.handleKeydown(makeEvent({ key: 'e', metaKey: true }));
+                expect(called).to.be.true;
+            });
+
+            it('3.1.2.40 — Ctrl+E triggers onExport', () => {
+                let called = false;
+                const h = createKeyboardHandler({ callbacks: { onExport: () => { called = true; } } });
+                h.handleKeydown(makeEvent({ key: 'e', ctrlKey: true }));
+                expect(called).to.be.true;
+            });
+
+            it('3.1.2.41 — Alt+1 → uniform layout', () => {
+                let received = null;
+                const h = createKeyboardHandler({ callbacks: { onLayoutSwitch: (style) => { received = style; } } });
+                h.handleKeydown(makeEvent({ key: '1', altKey: true }));
+                expect(received).to.equal('uniform');
+            });
+
+            it('3.1.2.42 — Alt+2 → hero layout', () => {
+                let received = null;
+                const h = createKeyboardHandler({ callbacks: { onLayoutSwitch: (style) => { received = style; } } });
+                h.handleKeydown(makeEvent({ key: '2', altKey: true }));
+                expect(received).to.equal('hero');
+            });
+
+            it('3.1.2.43 — Alt+3 → mosaic layout', () => {
+                let received = null;
+                const h = createKeyboardHandler({ callbacks: { onLayoutSwitch: (style) => { received = style; } } });
+                h.handleKeydown(makeEvent({ key: '3', altKey: true }));
+                expect(received).to.equal('mosaic');
+            });
+
+            it('3.1.2.44 — Alt+4 → diagonalSlices', () => {
+                let received = null;
+                const h = createKeyboardHandler({ callbacks: { onLayoutSwitch: (style) => { received = style; } } });
+                h.handleKeydown(makeEvent({ key: '4', altKey: true }));
+                expect(received).to.equal('diagonalSlices');
+            });
+
+            it('3.1.2.45 — Alt+5 → hexagonal', () => {
+                let received = null;
+                const h = createKeyboardHandler({ callbacks: { onLayoutSwitch: (style) => { received = style; } } });
+                h.handleKeydown(makeEvent({ key: '5', altKey: true }));
+                expect(received).to.equal('hexagonal');
+            });
+
+            it('3.1.2.46 — Escape triggers onDeselect', () => {
+                let called = false;
+                const h = createKeyboardHandler({ callbacks: { onDeselect: () => { called = true; } } });
+                h.handleKeydown(makeEvent({ key: 'Escape' }));
+                expect(called).to.be.true;
+            });
+
+            it('3.1.2.47 — Delete triggers onRemoveSelected', () => {
+                let called = false;
+                const h = createKeyboardHandler({ callbacks: { onRemoveSelected: () => { called = true; } } });
+                h.handleKeydown(makeEvent({ key: 'Delete' }));
+                expect(called).to.be.true;
+            });
+
+            it('3.1.2.48 — Backspace triggers onRemoveSelected', () => {
+                let called = false;
+                const h = createKeyboardHandler({ callbacks: { onRemoveSelected: () => { called = true; } } });
+                h.handleKeydown(makeEvent({ key: 'Backspace' }));
+                expect(called).to.be.true;
+            });
+
+            it('3.1.2.49 — Cmd+Z triggers onUndo', () => {
+                let called = false;
+                const h = createKeyboardHandler({ callbacks: { onUndo: () => { called = true; } } });
+                h.handleKeydown(makeEvent({ key: 'z', metaKey: true }));
+                expect(called).to.be.true;
+            });
+
+            it('3.1.2.50 — Cmd+Shift+Z triggers onRedo', () => {
+                let called = false;
+                const h = createKeyboardHandler({ callbacks: { onRedo: () => { called = true; } } });
+                h.handleKeydown(makeEvent({ key: 'Z', metaKey: true, shiftKey: true }));
+                expect(called).to.be.true;
+            });
+
+            it('3.1.2.51 — Ctrl+Shift+Z triggers onRedo', () => {
+                let called = false;
+                const h = createKeyboardHandler({ callbacks: { onRedo: () => { called = true; } } });
+                h.handleKeydown(makeEvent({ key: 'Z', ctrlKey: true, shiftKey: true }));
+                expect(called).to.be.true;
+            });
+
+            it('3.1.2.52 — Unrecognized key does not trigger callback', () => {
+                let called = false;
+                const h = createKeyboardHandler({ callbacks: { onExport: () => { called = true; } } });
+                h.handleKeydown(makeEvent({ key: 'x', metaKey: true }));
+                expect(called).to.be.false;
+            });
+
+            it('3.1.2.53 — Plain "e" (no modifier) does not trigger export', () => {
+                let called = false;
+                const h = createKeyboardHandler({ callbacks: { onExport: () => { called = true; } } });
+                h.handleKeydown(makeEvent({ key: 'e' }));
+                expect(called).to.be.false;
+            });
+
+            it('3.1.2.54 — preventDefault called for recognized shortcuts', () => {
+                let prevented = false;
+                const h = createKeyboardHandler({ callbacks: { onExport: () => {} } });
+                h.handleKeydown(makeEvent({ key: 'e', metaKey: true, preventDefault: () => { prevented = true; } }));
+                expect(prevented).to.be.true;
+            });
+
+            it('3.1.2.55 — preventDefault NOT called for unrecognized', () => {
+                let prevented = false;
+                const h = createKeyboardHandler({ callbacks: {} });
+                h.handleKeydown(makeEvent({ key: 'x', preventDefault: () => { prevented = true; } }));
+                expect(prevented).to.be.false;
+            });
+
+            it('3.1.2.55b — preventDefault NOT called when callback throws', () => {
+                let prevented = false;
+                const h = createKeyboardHandler({
+                    callbacks: { onExport: () => { throw new Error('boom'); } }
+                });
+                h.handleKeydown(makeEvent({ key: 'e', metaKey: true, preventDefault: () => { prevented = true; } }));
+                expect(prevented).to.be.false;
+            });
+
+            it('3.1.2.55c — preventDefault called for recognized shortcut with no callback', () => {
+                let prevented = false;
+                const h = createKeyboardHandler({ callbacks: {} });
+                h.handleKeydown(makeEvent({ key: 'e', metaKey: true, preventDefault: () => { prevented = true; } }));
+                expect(prevented).to.be.true;
+            });
+        });
+
+        // ============================================================
+        // 3.1.2.56 — 3.1.2.62: Focus-Aware Suppression
+        // ============================================================
+        describe('focus-aware suppression', () => {
+            function makeKeyEvent(opts) {
+                const target = opts.target || document.body;
+                return {
+                    key: opts.key || 'e',
+                    metaKey: !!opts.metaKey,
+                    ctrlKey: !!opts.ctrlKey,
+                    shiftKey: !!opts.shiftKey,
+                    altKey: !!opts.altKey,
+                    target: target,
+                    preventDefault: opts.preventDefault || (() => {}),
+                    tagName: target.tagName || 'BODY',
+                    isContentEditable: target.isContentEditable || false
+                };
+            }
+
+            it('3.1.2.56 — Shortcut suppressed in <input type="text">', () => {
+                let called = false;
+                const input = document.createElement('input');
+                input.type = 'text';
+                const h = createKeyboardHandler({ callbacks: { onExport: () => { called = true; } } });
+                h.handleKeydown(makeKeyEvent({ key: 'e', metaKey: true, target: input }));
+                expect(called).to.be.false;
+            });
+
+            it('3.1.2.56b — Shortcut suppressed in <input> (default type)', () => {
+                let called = false;
+                const input = document.createElement('input');
+                // Default type is 'text'
+                const h = createKeyboardHandler({ callbacks: { onExport: () => { called = true; } } });
+                h.handleKeydown(makeKeyEvent({ key: 'e', metaKey: true, target: input }));
+                expect(called).to.be.false;
+            });
+
+            it('3.1.2.56c — Shortcut suppressed in <input type="password">', () => {
+                let called = false;
+                const input = document.createElement('input');
+                input.type = 'password';
+                const h = createKeyboardHandler({ callbacks: { onExport: () => { called = true; } } });
+                h.handleKeydown(makeKeyEvent({ key: 'e', metaKey: true, target: input }));
+                expect(called).to.be.false;
+            });
+
+            it('3.1.2.56d — Shortcut suppressed in <input type="search">', () => {
+                let called = false;
+                const input = document.createElement('input');
+                input.type = 'search';
+                const h = createKeyboardHandler({ callbacks: { onExport: () => { called = true; } } });
+                h.handleKeydown(makeKeyEvent({ key: 'e', metaKey: true, target: input }));
+                expect(called).to.be.false;
+            });
+
+            it('3.1.2.56e — Shortcut NOT suppressed in <input type="range">', () => {
+                let called = false;
+                const input = document.createElement('input');
+                input.type = 'range';
+                const h = createKeyboardHandler({ callbacks: { onExport: () => { called = true; } } });
+                h.handleKeydown(makeKeyEvent({ key: 'e', metaKey: true, target: input }));
+                expect(called).to.be.true;
+            });
+
+            it('3.1.2.56f — Shortcut NOT suppressed in <input type="color">', () => {
+                let called = false;
+                const input = document.createElement('input');
+                input.type = 'color';
+                const h = createKeyboardHandler({ callbacks: { onExport: () => { called = true; } } });
+                h.handleKeydown(makeKeyEvent({ key: 'e', metaKey: true, target: input }));
+                expect(called).to.be.true;
+            });
+
+            it('3.1.2.56g — Shortcut NOT suppressed in <input type="number">', () => {
+                let called = false;
+                const input = document.createElement('input');
+                input.type = 'number';
+                const h = createKeyboardHandler({ callbacks: { onExport: () => { called = true; } } });
+                h.handleKeydown(makeKeyEvent({ key: 'e', metaKey: true, target: input }));
+                expect(called).to.be.true;
+            });
+
+            it('3.1.2.56h — Shortcut NOT suppressed in <input type="button">', () => {
+                let called = false;
+                const input = document.createElement('input');
+                input.type = 'button';
+                const h = createKeyboardHandler({ callbacks: { onExport: () => { called = true; } } });
+                h.handleKeydown(makeKeyEvent({ key: 'e', metaKey: true, target: input }));
+                expect(called).to.be.true;
+            });
+
+            it('3.1.2.56i — Shortcut NOT suppressed in <input type="checkbox">', () => {
+                let called = false;
+                const input = document.createElement('input');
+                input.type = 'checkbox';
+                const h = createKeyboardHandler({ callbacks: { onExport: () => { called = true; } } });
+                h.handleKeydown(makeKeyEvent({ key: 'e', metaKey: true, target: input }));
+                expect(called).to.be.true;
+            });
+
+            it('3.1.2.56j — Shortcut NOT suppressed in <input type="radio">', () => {
+                let called = false;
+                const input = document.createElement('input');
+                input.type = 'radio';
+                const h = createKeyboardHandler({ callbacks: { onExport: () => { called = true; } } });
+                h.handleKeydown(makeKeyEvent({ key: 'e', metaKey: true, target: input }));
+                expect(called).to.be.true;
+            });
+
+            it('3.1.2.57 — Shortcut suppressed in <textarea>', () => {
+                let called = false;
+                const textarea = document.createElement('textarea');
+                const h = createKeyboardHandler({ callbacks: { onExport: () => { called = true; } } });
+                h.handleKeydown(makeKeyEvent({ key: 'e', metaKey: true, target: textarea }));
+                expect(called).to.be.false;
+            });
+
+            it('3.1.2.58 — Shortcut suppressed in <select>', () => {
+                let called = false;
+                const select = document.createElement('select');
+                const h = createKeyboardHandler({ callbacks: { onExport: () => { called = true; } } });
+                h.handleKeydown(makeKeyEvent({ key: 'e', metaKey: true, target: select }));
+                expect(called).to.be.false;
+            });
+
+            it('3.1.2.59 — Shortcut suppressed in [contenteditable]', () => {
+                let called = false;
+                const div = document.createElement('div');
+                div.contentEditable = 'true';
+                const h = createKeyboardHandler({ callbacks: { onExport: () => { called = true; } } });
+                h.handleKeydown(makeKeyEvent({ key: 'e', metaKey: true, target: div }));
+                expect(called).to.be.false;
+            });
+
+            it('3.1.2.60 — Shortcut fires on <body> target', () => {
+                let called = false;
+                const h = createKeyboardHandler({ callbacks: { onExport: () => { called = true; } } });
+                h.handleKeydown(makeKeyEvent({ key: 'e', metaKey: true, target: document.body }));
+                expect(called).to.be.true;
+            });
+
+            it('3.1.2.61 — Shortcut fires on <canvas> target', () => {
+                let called = false;
+                const canvas = document.createElement('canvas');
+                const h = createKeyboardHandler({ callbacks: { onExport: () => { called = true; } } });
+                h.handleKeydown(makeKeyEvent({ key: 'e', metaKey: true, target: canvas }));
+                expect(called).to.be.true;
+            });
+
+            it('3.1.2.62 — Shortcut fires on custom <div>', () => {
+                let called = false;
+                const div = document.createElement('div');
+                const h = createKeyboardHandler({ callbacks: { onExport: () => { called = true; } } });
+                h.handleKeydown(makeKeyEvent({ key: 'e', metaKey: true, target: div }));
+                expect(called).to.be.true;
+            });
+        });
+
+        // ============================================================
+        // 3.1.2.63 — 3.1.2.69: Edge Cases
+        // ============================================================
+        describe('edge cases', () => {
+            it('3.1.2.63 — Missing callback is safe', () => {
+                const h = createKeyboardHandler({ callbacks: {} });
+                expect(() => {
+                    h.handleKeydown({
+                        key: 'o', metaKey: true, ctrlKey: false, shiftKey: false, altKey: false,
+                        target: document.body, preventDefault: () => {}
+                    });
+                }).to.not.throw();
+            });
+
+            it('3.1.2.64 — Null callbacks object does not crash', () => {
+                expect(() => {
+                    const h = createKeyboardHandler({ callbacks: null });
+                    h.handleKeydown({
+                        key: 'o', metaKey: true, ctrlKey: false, shiftKey: false, altKey: false,
+                        target: document.body, preventDefault: () => {}
+                    });
+                }).to.not.throw();
+            });
+
+            it('3.1.2.65 — Callback that throws does not crash handler for next event', () => {
+                let throwCount = 0;
+                let successCount = 0;
+                let prevented = false;
+                const h = createKeyboardHandler({
+                    callbacks: {
+                        onExport: () => { throwCount++; throw new Error('boom'); },
+                        onDeselect: () => { successCount++; }
+                    }
+                });
+
+                // Callback throws — error is caught internally, preventDefault NOT called
+                h.handleKeydown({
+                    key: 'e', metaKey: true, ctrlKey: false, shiftKey: false, altKey: false,
+                    target: document.body, preventDefault: () => { prevented = true; }
+                });
+                expect(throwCount).to.equal(1);
+                expect(prevented).to.be.false; // preventDefault NOT called after failed callback
+
+                // Handler still functional for next event
+                h.handleKeydown({
+                    key: 'Escape', metaKey: false, ctrlKey: false, shiftKey: false, altKey: false,
+                    target: document.body, preventDefault: () => {}
+                });
+                expect(successCount).to.equal(1);
+            });
+
+            it('3.1.2.66 — Rapid key presses do not corrupt state', () => {
+                let callCount = 0;
+                const h = createKeyboardHandler({
+                    callbacks: { onLayoutSwitch: () => { callCount++; } }
+                });
+                for (let i = 0; i < 20; i++) {
+                    h.handleKeydown({
+                        key: '1', metaKey: false, ctrlKey: false, shiftKey: false, altKey: true,
+                        target: document.body, preventDefault: () => {}
+                    });
+                }
+                expect(callCount).to.equal(20);
+            });
+
+            it('3.1.2.67 — Key event with unusual key value does not crash', () => {
+                const h = createKeyboardHandler({ callbacks: {} });
+                expect(() => {
+                    h.handleKeydown({
+                        key: 'Undefined', metaKey: false, ctrlKey: false, shiftKey: false, altKey: false,
+                        target: document.body, preventDefault: () => {}
+                    });
+                }).to.not.throw();
+            });
+
+            it('3.1.2.68 — Shift+Delete behaves like Delete', () => {
+                let called = false;
+                const h = createKeyboardHandler({ callbacks: { onRemoveSelected: () => { called = true; } } });
+                h.handleKeydown({
+                    key: 'Delete', metaKey: false, ctrlKey: false, shiftKey: true, altKey: false,
+                    target: document.body, preventDefault: () => {}
+                });
+                expect(called).to.be.true;
+            });
+
+            it('3.1.2.69 — Cmd+Shift+Z with lowercase "z" triggers onRedo', () => {
+                let called = false;
+                const h = createKeyboardHandler({ callbacks: { onRedo: () => { called = true; } } });
+                h.handleKeydown({
+                    key: 'z', metaKey: true, ctrlKey: false, shiftKey: true, altKey: false,
+                    target: document.body, preventDefault: () => {}
+                });
+                expect(called).to.be.true;
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

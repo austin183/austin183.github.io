@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SettingsPersistence Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — SettingsPersistence Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Section 6 (SettingsPersistence) — all P0 tests</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { save, load, clear } from '../MyESModules/Persistence/SettingsPersistence.js';
+
+        const { expect } = chai;
+        const STORAGE_KEY = 'collagemaker_settings';
+
+        // ============================================================
+        // Section 6.1: Save/Load Cycle
+        // ============================================================
+        describe('Section 6.1 — Save/Load Cycle', () => {
+            beforeEach(() => {
+                localStorage.removeItem(STORAGE_KEY);
+            });
+
+            it('6.1.1 — save layout style persists to localStorage', () => {
+                const settings = { layoutStyle: 'mosaic' };
+                const result = save(settings);
+                expect(result).to.be.true;
+                const stored = localStorage.getItem(STORAGE_KEY);
+                expect(stored).to.not.be.null;
+                const parsed = JSON.parse(stored);
+                expect(parsed.layoutStyle).to.equal('mosaic');
+            });
+
+            it('6.1.2 — save gutter persists to localStorage', () => {
+                const settings = { gutter: 10 };
+                save(settings);
+                const stored = localStorage.getItem(STORAGE_KEY);
+                const parsed = JSON.parse(stored);
+                expect(parsed.gutter).to.equal(10);
+            });
+
+            it('6.1.3 — load valid settings returns parsed object', () => {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({ layoutStyle: 'mosaic' }));
+                const settings = load();
+                expect(settings.layoutStyle).to.equal('mosaic');
+                // Should also have defaults for missing fields
+                expect(settings.gutter).to.equal(0);
+                expect(settings.theme).to.equal('light');
+            });
+
+            it('6.1.4 — load partial settings merges with defaults', () => {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({ gutter: 10 }));
+                const settings = load();
+                expect(settings.gutter).to.equal(10);
+                // Default fields should be present
+                expect(settings.layoutStyle).to.equal('hero');
+                expect(settings.titleFontFamily).to.equal('Arial');
+                expect(settings.exportQuality).to.equal(0.92);
+            });
+
+            it('6.1.5 — load corrupted JSON returns defaults', () => {
+                localStorage.setItem(STORAGE_KEY, 'invalid-json{{{');
+                const settings = load();
+                expect(settings.layoutStyle).to.equal('hero');
+                expect(settings.gutter).to.equal(0);
+            });
+
+            it('6.1.6 — save returns true on success', () => {
+                const result = save({ layoutStyle: 'hero' });
+                expect(result).to.be.true;
+            });
+
+            it('6.1.7 — save/load round-trip preserves all fields', () => {
+                const original = {
+                    layoutStyle: 'hexagonal',
+                    gutter: 5,
+                    sliceAngle: 60,
+                    hexSpacing: 12,
+                    backgroundStyle: 'gradient',
+                    backgroundColor: '#000000',
+                    gradientColors: ['#FF0000', '#0000FF'],
+                    gradientAngle: 45,
+                    titleFontFamily: 'Georgia',
+                    titleFontSize: 48,
+                    titleFontColor: '#00FF00',
+                    titleAlignment: 'right',
+                    exportQuality: 0.8,
+                    theme: 'dark'
+                };
+                save(original);
+                const loaded = load();
+                expect(loaded.layoutStyle).to.equal('hexagonal');
+                expect(loaded.gutter).to.equal(5);
+                expect(loaded.sliceAngle).to.equal(60);
+                expect(loaded.hexSpacing).to.equal(12);
+                expect(loaded.backgroundStyle).to.equal('gradient');
+                expect(loaded.backgroundColor).to.equal('#000000');
+                expect(loaded.gradientColors).to.deep.equal(['#FF0000', '#0000FF']);
+                expect(loaded.gradientAngle).to.equal(45);
+                expect(loaded.titleFontFamily).to.equal('Georgia');
+                expect(loaded.titleFontSize).to.equal(48);
+                expect(loaded.titleFontColor).to.equal('#00FF00');
+                expect(loaded.titleAlignment).to.equal('right');
+                expect(loaded.exportQuality).to.equal(0.8);
+                expect(loaded.theme).to.equal('dark');
+            });
+        });
+
+        // ============================================================
+        // Section 6.2: Edge Cases
+        // ============================================================
+        describe('Section 6.2 — Edge Cases', () => {
+            beforeEach(() => {
+                localStorage.removeItem(STORAGE_KEY);
+            });
+
+            it('6.2.1 — first run (empty localStorage) returns defaults', () => {
+                const settings = load();
+                expect(settings.layoutStyle).to.equal('hero');
+                expect(settings.gutter).to.equal(0);
+                expect(settings.sliceAngle).to.equal(45);
+                expect(settings.hexSpacing).to.equal(8);
+                expect(settings.backgroundStyle).to.equal('solid');
+                expect(settings.backgroundColor).to.equal('#ffffff');
+                expect(settings.gradientColors).to.deep.equal(['#000000', '#333333']);
+                expect(settings.gradientAngle).to.equal(90);
+                expect(settings.titleFontFamily).to.equal('Arial');
+                expect(settings.titleFontSize).to.equal(36);
+                expect(settings.titleFontColor).to.equal('#FFFFFF');
+                expect(settings.titleAlignment).to.equal('center');
+                expect(settings.exportQuality).to.equal(0.92);
+                expect(settings.theme).to.equal('light');
+            });
+
+            it('6.2.2 — localStorage quota exceeded: caught gracefully', () => {
+                // Mock localStorage to throw QuotaExceededError
+                const originalSetItem = localStorage.setItem;
+                localStorage.setItem = function() {
+                    const e = new Error('Quota exceeded');
+                    e.name = 'QuotaExceededError';
+                    e.code = 22;
+                    throw e;
+                };
+
+                try {
+                    const result = save({ layoutStyle: 'hero' });
+                    expect(result).to.be.false;
+                } finally {
+                    localStorage.setItem = originalSetItem;
+                }
+            });
+
+            it('6.2.3 — load invalid values: defaults fill in missing fields', () => {
+                // Store settings with a non-numeric gutter value
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({ gutter: 'not-a-number' }));
+                const settings = load();
+                // The raw value is preserved (sanitization would happen at the app level)
+                expect(settings.gutter).to.equal('not-a-number');
+                // But defaults still fill in missing fields
+                expect(settings.layoutStyle).to.equal('hero');
+            });
+
+            it('6.2.4 — clearSettings removes from localStorage', () => {
+                save({ layoutStyle: 'mosaic' });
+                expect(localStorage.getItem(STORAGE_KEY)).to.not.be.null;
+                clear();
+                expect(localStorage.getItem(STORAGE_KEY)).to.be.null;
+            });
+
+            it('6.2.5 — clearSettings on empty localStorage does not throw', () => {
+                expect(() => {
+                    clear();
+                }).to.not.throw();
+            });
+
+            it('6.2.6 — save overwrites previous settings', () => {
+                save({ layoutStyle: 'hero', gutter: 0 });
+                save({ layoutStyle: 'mosaic', gutter: 10 });
+                const settings = load();
+                expect(settings.layoutStyle).to.equal('mosaic');
+                expect(settings.gutter).to.equal(10);
+            });
+
+            it('6.2.7 — save with extra unknown fields: preserved on load', () => {
+                const settings = { layoutStyle: 'hero', customField: 'customValue' };
+                save(settings);
+                const loaded = load();
+                expect(loaded.customField).to.equal('customValue');
+                expect(loaded.layoutStyle).to.equal('hero');
+            });
+
+            it('6.2.8 — load after clear returns defaults', () => {
+                save({ layoutStyle: 'mosaic' });
+                clear();
+                const settings = load();
+                expect(settings.layoutStyle).to.equal('hero');
+            });
+
+            it('6.2.9 — load with empty string in localStorage returns defaults', () => {
+                localStorage.setItem(STORAGE_KEY, '');
+                // Empty string is falsy, so load() should return defaults
+                const settings = load();
+                expect(settings.layoutStyle).to.equal('hero');
+            });
+
+            it('6.2.10 — save handles complex nested objects', () => {
+                const settings = {
+                    layoutStyle: 'hero',
+                    gradientColors: ['#FF0000', '#00FF00', '#0000FF']
+                };
+                save(settings);
+                const loaded = load();
+                expect(loaded.gradientColors).to.deep.equal(['#FF0000', '#00FF00', '#0000FF']);
+            });
+        });
+
+        // ============================================================
+        // Phase 1: Title fields round-trip (Plan 2026-07-15-review-fixes CI-1)
+        // ============================================================
+        describe('Phase 1 — Title fields round-trip', () => {
+            beforeEach(() => {
+                localStorage.removeItem(STORAGE_KEY);
+            });
+
+            it('1.T.1 — Round-trip includes all 7 new title fields', () => {
+                const original = {
+                    titleFontOpacity: 0.5,
+                    titleBgOpacity: 0.8,
+                    titleBoxWidth: 500,
+                    titleBoxX: 100,
+                    titleBoxY: 850,
+                    titleShowBackground: true,
+                    titleBackgroundColor: '#FF0000'
+                };
+                save(original);
+                const loaded = load();
+                expect(loaded.titleFontOpacity).to.equal(0.5);
+                expect(loaded.titleBgOpacity).to.equal(0.8);
+                expect(loaded.titleBoxWidth).to.equal(500);
+                expect(loaded.titleBoxX).to.equal(100);
+                expect(loaded.titleBoxY).to.equal(850);
+                expect(loaded.titleShowBackground).to.equal(true);
+                expect(loaded.titleBackgroundColor).to.equal('#FF0000');
+            });
+
+            it('1.T.2 — titleBackgroundColor does not collide with backgroundColor', () => {
+                const original = {
+                    backgroundColor: '#ffffff',
+                    titleBackgroundColor: '#FF0000'
+                };
+                save(original);
+                const loaded = load();
+                expect(loaded.backgroundColor).to.equal('#ffffff');
+                expect(loaded.titleBackgroundColor).to.equal('#FF0000');
+            });
+
+            it('1.T.3 — Null position/width values preserved through round-trip', () => {
+                const original = {
+                    titleBoxWidth: null,
+                    titleBoxX: null,
+                    titleBoxY: null
+                };
+                save(original);
+                const loaded = load();
+                expect(loaded.titleBoxWidth).to.equal(null);
+                expect(loaded.titleBoxX).to.equal(null);
+                expect(loaded.titleBoxY).to.equal(null);
+            });
+
+            it('1.T.4 — Falsy values (0, false) preserved through round-trip', () => {
+                const original = {
+                    titleFontOpacity: 0,
+                    titleBgOpacity: 0,
+                    titleShowBackground: false
+                };
+                save(original);
+                const loaded = load();
+                expect(loaded.titleFontOpacity).to.equal(0);
+                expect(loaded.titleBgOpacity).to.equal(0);
+                expect(loaded.titleShowBackground).to.equal(false);
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Panel Handlers Callback Pattern Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Image Panel Handlers Callback Pattern Tests (Phase 3: H-4 fix)</h1>
+    <p class="test-plan-ref">Covers: Plan 2026-07-19-pre-merge-review-fixes-plan.md Phase 3 — createImagePanelHandlers callback pattern</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createImagePanelHandlers } from '../MyESModules/App/createImagePanelHandlers.js';
+
+        const { expect } = chai;
+
+        // ---- Helpers ----
+
+        function makeMockImageLibrary() {
+            const images = [];
+            let disposedCount = 0;
+            let clearedCount = 0;
+            return {
+                images,
+                get disposedCount() { return disposedCount; },
+                get clearedCount() { return clearedCount; },
+                disposeImage(index) {
+                    if (index >= 0 && index < images.length) {
+                        images.splice(index, 1);
+                        disposedCount++;
+                    }
+                },
+                clearAll() {
+                    images.length = 0;
+                    clearedCount++;
+                }
+            };
+        }
+
+        function makeMockLayoutManager() {
+            let regenerateCount = 0;
+            return {
+                get regenerateCount() { return regenerateCount; },
+                regenerate() { regenerateCount++; }
+            };
+        }
+
+        /**
+         * Build a minimal fake Vue instance with the properties
+         * that createImagePanelHandlers reads via `this`.
+         */
+        function makeFakeVue(images, selectedPanelId) {
+            return {
+                images: images,
+                selectedPanelId: selectedPanelId ?? null,
+                panels: [],
+                selectedImageId: null,
+                _scheduleRender() {
+                    // Legacy path — should NOT be called after refactor
+                    throw new Error('_scheduleRender called directly — callback pattern not followed');
+                }
+            };
+        }
+
+        // ---- Tests ----
+
+        describe('createImagePanelHandlers — callback injection pattern (H-4)', () => {
+            let renderCallback;
+            let library;
+            let layoutManager;
+
+            function setup(onRenderScheduled) {
+                renderCallback = onRenderScheduled || (() => {});
+                library = makeMockImageLibrary();
+                layoutManager = makeMockLayoutManager();
+                return createImagePanelHandlers(
+                    () => library,
+                    () => layoutManager,
+                    () => null, // canvas renderer not needed for these tests
+                    renderCallback
+                );
+            }
+
+            describe('removeImage', () => {
+                it('3.T.1 — fires render callback once after dispose + regenerate', () => {
+                    let callbackCount = 0;
+                    let receivedVm = null;
+                    const handlers = setup((vm) => {
+                        callbackCount++;
+                        receivedVm = vm;
+                    });
+
+                    const img = { id: 'img1', src: 'test.png' };
+                    library.images.push(img);
+                    const vm = makeFakeVue(library.images, null);
+
+                    handlers.removeImage.call(vm, 0);
+
+                    expect(library.disposedCount).to.equal(1);
+                    expect(layoutManager.regenerateCount).to.equal(1);
+                    expect(callbackCount).to.equal(1);
+                    expect(receivedVm).to.equal(vm);
+                });
+
+                it('3.T.1b — render callback receives the Vue instance', () => {
+                    let receivedVm = null;
+                    const handlers = setup((vm) => { receivedVm = vm; });
+
+                    const img = { id: 'img2', src: 'test2.png' };
+                    library.images.push(img);
+                    const vm = makeFakeVue(library.images, null);
+
+                    handlers.removeImage.call(vm, 0);
+
+                    expect(receivedVm).to.equal(vm);
+                    expect(receivedVm.selectedImageId).to.equal(null);
+                });
+            });
+
+            describe('clearAllImages', () => {
+                it('3.T.2 — fires render callback once after clear + regenerate', () => {
+                    let callbackCount = 0;
+                    let receivedVm = null;
+                    const handlers = setup((vm) => {
+                        callbackCount++;
+                        receivedVm = vm;
+                    });
+
+                    library.images.push({ id: 'a' });
+                    library.images.push({ id: 'b' });
+                    const vm = makeFakeVue(library.images, null);
+
+                    handlers.clearAllImages.call(vm);
+
+                    expect(library.clearedCount).to.equal(1);
+                    expect(layoutManager.regenerateCount).to.equal(1);
+                    expect(callbackCount).to.equal(1);
+                    expect(receivedVm).to.equal(vm);
+                });
+            });
+
+            describe('removeSelectedImage', () => {
+                it('3.T.3 — fires render callback once after dispose + regenerate when panel is selected', () => {
+                    let callbackCount = 0;
+                    let receivedVm = null;
+                    const handlers = setup((vm) => {
+                        callbackCount++;
+                        receivedVm = vm;
+                    });
+
+                    const img = { id: 'img3', src: 'test3.png' };
+                    library.images.push(img);
+                    const vm = makeFakeVue(library.images, 'panel-1');
+                    vm.panels = [{ id: 'panel-1', imageId: 'img3' }];
+
+                    handlers.removeSelectedImage.call(vm);
+
+                    expect(library.disposedCount).to.equal(1);
+                    expect(layoutManager.regenerateCount).to.equal(1);
+                    expect(callbackCount).to.equal(1);
+                    expect(receivedVm).to.equal(vm);
+                    // Verify panel was deselected
+                    expect(vm.selectedPanelId).to.equal(null);
+                });
+
+                it('3.T.3b — does nothing when no panel is selected', () => {
+                    let callbackCount = 0;
+                    const handlers = setup((vm) => { callbackCount++; });
+
+                    const vm = makeFakeVue([], null);
+
+                    handlers.removeSelectedImage.call(vm);
+
+                    expect(callbackCount).to.equal(0);
+                    expect(library.disposedCount).to.equal(0);
+                });
+
+                it('3.T.3c — does nothing when selected panel has no image', () => {
+                    let callbackCount = 0;
+                    const handlers = setup((vm) => { callbackCount++; });
+
+                    const vm = makeFakeVue([], 'panel-empty');
+                    vm.panels = [{ id: 'panel-empty', imageId: null }];
+
+                    handlers.removeSelectedImage.call(vm);
+
+                    expect(callbackCount).to.equal(0);
+                    expect(library.disposedCount).to.equal(0);
+                });
+            });
+
+            describe('Missing callback guard', () => {
+                it('3.T.4 — removeImage without render callback does not throw', () => {
+                    const handlers = setup(undefined);
+
+                    const img = { id: 'img4', src: 'test4.png' };
+                    library.images.push(img);
+                    const vm = makeFakeVue(library.images, null);
+
+                    expect(() => {
+                        handlers.removeImage.call(vm, 0);
+                    }).to.not.throw();
+
+                    expect(library.disposedCount).to.equal(1);
+                    expect(layoutManager.regenerateCount).to.equal(1);
+                });
+
+                it('3.T.4b — clearAllImages without render callback does not throw', () => {
+                    const handlers = setup(undefined);
+
+                    library.images.push({ id: 'x' });
+                    const vm = makeFakeVue(library.images, null);
+
+                    expect(() => {
+                        handlers.clearAllImages.call(vm);
+                    }).to.not.throw();
+
+                    expect(library.clearedCount).to.equal(1);
+                });
+
+                it('3.T.4c — removeSelectedImage without render callback does not throw', () => {
+                    const handlers = setup(undefined);
+
+                    const img = { id: 'img5' };
+                    library.images.push(img);
+                    const vm = makeFakeVue(library.images, 'panel-2');
+                    vm.panels = [{ id: 'panel-2', imageId: 'img5' }];
+
+                    expect(() => {
+                        handlers.removeSelectedImage.call(vm);
+                    }).to.not.throw();
+
+                    expect(library.disposedCount).to.equal(1);
+                });
+            });
+
+            describe('selectImage — unchanged (no render callback)', () => {
+                it('3.T.5 — sets selectedImageId for valid index', () => {
+                    const handlers = setup();
+
+                    const img = { id: 'img6', src: 'test6.png' };
+                    library.images.push(img);
+                    const vm = makeFakeVue(library.images, null);
+
+                    handlers.selectImage.call(vm, 0);
+
+                    expect(vm.selectedImageId).to.equal('img6');
+                });
+
+                it('3.T.5b — does nothing for out-of-range index', () => {
+                    const handlers = setup();
+
+                    library.images.push({ id: 'img7' });
+                    const vm = makeFakeVue(library.images, null);
+
+                    handlers.selectImage.call(vm, 99);
+
+                    expect(vm.selectedImageId).to.equal(null);
+                });
+
+                it('3.T.5c — does nothing for negative index', () => {
+                    const handlers = setup();
+
+                    library.images.push({ id: 'img8' });
+                    const vm = makeFakeVue(library.images, null);
+
+                    handlers.selectImage.call(vm, -1);
+
+                    expect(vm.selectedImageId).to.equal(null);
+                });
+            });
+
+            describe('DIP validation — handler is testable in isolation', () => {
+                it('no direct dependency on Vue methods — uses only injected callbacks and `this` state', () => {
+                    // The handler should work with any object that has the expected
+                    // properties (images, selectedPanelId, panels, selectedImageId).
+                    // It should NOT require _scheduleRender or any other Vue method.
+                    let renderFired = false;
+                    const handlers = setup(() => { renderFired = true; });
+
+                    // Add image to the mock library so disposeImage has something to work with
+                    library.images.push({ id: 'plain1' });
+
+                    // Plain object — no Vue, no _scheduleRender
+                    const plainVm = {
+                        images: library.images,
+                        selectedPanelId: null,
+                        panels: [],
+                        selectedImageId: null
+                    };
+
+                    handlers.removeImage.call(plainVm, 0);
+
+                    expect(renderFired).to.be.true;
+                    expect(library.disposedCount).to.equal(1);
+                    expect(layoutManager.regenerateCount).to.equal(1);
+                });
+            });
+
+            describe('Non-function callback guard', () => {
+                it('removeImage with null callback does not throw', () => {
+                    const handlers = setup(null);
+                    library.images.push({ id: 'nf1' });
+                    const vm = makeFakeVue(library.images, null);
+
+                    expect(() => {
+                        handlers.removeImage.call(vm, 0);
+                    }).to.not.throw();
+
+                    expect(library.disposedCount).to.equal(1);
+                });
+
+                it('removeImage with object callback does not throw', () => {
+                    const handlers = setup({});
+                    library.images.push({ id: 'nf2' });
+                    const vm = makeFakeVue(library.images, null);
+
+                    expect(() => {
+                        handlers.removeImage.call(vm, 0);
+                    }).to.not.throw();
+
+                    expect(library.disposedCount).to.equal(1);
+                });
+
+                it('removeImage with number callback does not throw', () => {
+                    const handlers = setup(0);
+                    library.images.push({ id: 'nf3' });
+                    const vm = makeFakeVue(library.images, null);
+
+                    expect(() => {
+                        handlers.removeImage.call(vm, 0);
+                    }).to.not.throw();
+
+                    expect(library.disposedCount).to.equal(1);
+                });
+
+                it('removeImage with string callback does not throw', () => {
+                    const handlers = setup('');
+                    library.images.push({ id: 'nf4' });
+                    const vm = makeFakeVue(library.images, null);
+
+                    expect(() => {
+                        handlers.removeImage.call(vm, 0);
+                    }).to.not.throw();
+
+                    expect(library.disposedCount).to.equal(1);
+                });
+            });
+
+            describe('Callback error resilience', () => {
+                it('removeImage state mutation succeeds even if callback throws', () => {
+                    let callbackFired = false;
+                    const handlers = setup(() => {
+                        callbackFired = true;
+                        throw new Error('render callback failed');
+                    });
+
+                    library.images.push({ id: 'err1' });
+                    const vm = makeFakeVue(library.images, null);
+
+                    // The callback error should propagate, but state should be mutated
+                    expect(() => {
+                        handlers.removeImage.call(vm, 0);
+                    }).to.throw('render callback failed');
+
+                    // State mutation happened before the callback
+                    expect(library.disposedCount).to.equal(1);
+                    expect(layoutManager.regenerateCount).to.equal(1);
+                    expect(callbackFired).to.be.true;
+                });
+
+                it('clearAllImages state mutation succeeds even if callback throws', () => {
+                    const handlers = setup(() => {
+                        throw new Error('render callback failed');
+                    });
+
+                    library.images.push({ id: 'err2' });
+                    const vm = makeFakeVue(library.images, null);
+
+                    expect(() => {
+                        handlers.clearAllImages.call(vm);
+                    }).to.throw('render callback failed');
+
+                    expect(library.clearedCount).to.equal(1);
+                    expect(layoutManager.regenerateCount).to.equal(1);
+                });
+            });
+
+            describe('Empty state edge cases', () => {
+                it('removeImage on empty library does not throw', () => {
+                    const handlers = setup();
+                    const vm = makeFakeVue([], null);
+
+                    expect(() => {
+                        handlers.removeImage.call(vm, 0);
+                    }).to.not.throw();
+                });
+
+                it('clearAllImages on empty library does not throw', () => {
+                    const handlers = setup();
+                    const vm = makeFakeVue([], null);
+
+                    expect(() => {
+                        handlers.clearAllImages.call(vm);
+                    }).to.not.throw();
+                });
+            });
+        });
+    </script>
+
+    <script>
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

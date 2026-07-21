@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ImageLibrary Failure Callback Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — ImageLibrary Failure Callback Tests</h1>
+    <p class="test-plan-ref">Phase 4: Image Load Failure Feedback (H-2) — Tests for onFailures callback in addImages</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createImageLibrary } from '../MyESModules/State/ImageLibrary.js';
+
+        const { expect } = chai;
+
+        // Minimal 1x1 transparent PNG (valid, loads successfully)
+        const VALID_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+        function createValidFile(name = 'valid.png') {
+            const binary = atob(VALID_PNG);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+                bytes[i] = binary.charCodeAt(i);
+            }
+            return new File([bytes], name, { type: 'image/png' });
+        }
+
+        function createState() {
+            return { images: [] };
+        }
+
+        // ============================================================
+        // Mock FileReader to control load success/failure per file
+        // ============================================================
+        let originalFileReader = window.FileReader;
+        let fileReaderResults = {};
+
+        function setupFileReaderMock() {
+            fileReaderResults = {};
+            window.FileReader = class {
+                constructor() { /* no-op */ }
+                set onload(fn) { this._onload = fn; }
+                set onerror(fn) { this._onerror = fn; }
+                readAsDataURL(file) {
+                    const dataUrl = fileReaderResults[file.name];
+                    if (dataUrl === undefined) {
+                        // Default: treat as valid
+                        setTimeout(() => {
+                            this._onload({ target: { result: 'data:image/png;base64,' + VALID_PNG } });
+                        }, 0);
+                    } else if (dataUrl === 'FAIL') {
+                        // Return garbage — Image will fail to decode, triggering img.onerror
+                        setTimeout(() => {
+                            this._onload({ target: { result: 'data:image/png;base64,NOTREALIMAGEDATA' } });
+                        }, 0);
+                    } else {
+                        // Custom data URL
+                        setTimeout(() => {
+                            this._onload({ target: { result: dataUrl } });
+                        }, 0);
+                    }
+                }
+            };
+        }
+
+        function restoreFileReader() {
+            window.FileReader = originalFileReader;
+        }
+
+        // ============================================================
+        // Phase 4: Image Load Failure Feedback (H-2)
+        // ============================================================
+        describe('Phase 4 — ImageLibrary onFailures callback', () => {
+            let state, library, onImagesChanged;
+
+            beforeEach(() => {
+                setupFileReaderMock();
+                onImagesChanged = null;
+                state = createState();
+                library = createImageLibrary(state, () => { onImagesChanged = true; });
+            });
+
+            afterEach(() => {
+                restoreFileReader();
+            });
+
+            it('4.T.1 — calls onFailures when some images fail', async () => {
+                const goodFile = createValidFile('good.png');
+                const badFile = createValidFile('bad.png');
+                fileReaderResults['bad.png'] = 'FAIL';
+
+                const files = [goodFile, badFile];
+                let failArgs = null;
+                const onFailures = (failed, total) => { failArgs = [failed, total]; };
+
+                await library.addImages(files, null, onFailures);
+
+                expect(failArgs).to.not.be.null;
+                expect(failArgs[0]).to.equal(1); // 1 failed
+                expect(failArgs[1]).to.equal(2); // 2 total attempted
+                expect(state.images.length).to.equal(1); // Only good image added
+            });
+
+            it('4.T.2 — does not call onFailures when all succeed', async () => {
+                const files = [createValidFile('a.png'), createValidFile('b.png')];
+
+                let called = false;
+                const onFailures = () => { called = true; };
+
+                await library.addImages(files, null, onFailures);
+
+                expect(called).to.be.false;
+                expect(state.images.length).to.equal(2);
+            });
+
+            it('4.T.3 — no error when onFailures callback is omitted', async () => {
+                const goodFile = createValidFile('good.png');
+                const badFile = createValidFile('bad.png');
+                fileReaderResults['bad.png'] = 'FAIL';
+
+                const files = [goodFile, badFile];
+
+                // Should not throw even without onFailures callback
+                let errorThrown = null;
+                try {
+                    await library.addImages(files, null);
+                } catch (e) {
+                    errorThrown = e;
+                }
+                expect(errorThrown).to.be.null;
+                expect(state.images.length).to.equal(1);
+            });
+
+            it('4.T.4 — calls onFailures with correct count when all fail', async () => {
+                const bad1 = createValidFile('bad1.png');
+                const bad2 = createValidFile('bad2.png');
+                const bad3 = createValidFile('bad3.png');
+                fileReaderResults['bad1.png'] = 'FAIL';
+                fileReaderResults['bad2.png'] = 'FAIL';
+                fileReaderResults['bad3.png'] = 'FAIL';
+
+                const files = [bad1, bad2, bad3];
+                let failArgs = null;
+                const onFailures = (failed, total) => { failArgs = [failed, total]; };
+
+                await library.addImages(files, null, onFailures);
+
+                expect(failArgs).to.not.be.null;
+                expect(failArgs[0]).to.equal(3); // All 3 failed
+                expect(failArgs[1]).to.equal(3); // 3 total attempted
+                expect(state.images.length).to.equal(0); // No images added (all failed)
+            });
+
+            it('4.T.5 — onFailures receives total as attempted image count (not original file count)', async () => {
+                const goodFile = createValidFile('good.png');
+                const badFile = createValidFile('bad.png');
+                fileReaderResults['bad.png'] = 'FAIL';
+
+                // Mix: 2 image files + 1 non-image file
+                const nonImage = new File(['text'], 'readme.txt', { type: 'text/plain' });
+                const files = [goodFile, badFile, nonImage];
+
+                let failArgs = null;
+                const onFailures = (failed, total) => { failArgs = [failed, total]; };
+
+                await library.addImages(files, null, onFailures);
+
+                // Total should be 2 (only image files attempted), not 3
+                expect(failArgs[0]).to.equal(1);
+                expect(failArgs[1]).to.equal(2);
+            });
+
+            it('4.T.7 — onFailures callback error does not prevent images from being added', async () => {
+                const goodFile = createValidFile('good.png');
+                const badFile = createValidFile('bad.png');
+                fileReaderResults['bad.png'] = 'FAIL';
+
+                const files = [goodFile, badFile];
+                const onFailures = () => { throw new Error('callback boom'); };
+
+                // Should not throw — error is caught internally
+                let errorThrown = null;
+                try {
+                    await library.addImages(files, null, onFailures);
+                } catch (e) {
+                    errorThrown = e;
+                }
+                expect(errorThrown).to.be.null;
+                // Good image should still be added despite callback error
+                expect(state.images.length).to.equal(1);
+            });
+
+            it('4.T.6 — progress callback still fires for successful images alongside failures', async () => {
+                const goodFile = createValidFile('good.png');
+                const badFile = createValidFile('bad.png');
+                fileReaderResults['bad.png'] = 'FAIL';
+
+                const files = [goodFile, badFile];
+                const progressCalls = [];
+
+                await library.addImages(files,
+                    (current, total) => { progressCalls.push([current, total]); },
+                    () => {} // onFailures — we just want to verify it doesn't interfere
+                );
+
+                // Progress should have been called for both files (order may vary)
+                expect(progressCalls.length).to.equal(2);
+            });
+        });
+
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

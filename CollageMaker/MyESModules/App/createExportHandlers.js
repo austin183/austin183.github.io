@@ -1,0 +1,71 @@
+/**
+ * Export handlers - Handles export functionality.
+ */
+
+import { ExportManager } from '../Export/ExportManager.js';
+
+/**
+ * Creates export handlers.
+ * @param {Object} assembler - CollageAssembler instance
+ * @returns {Object} Export handlers object
+ */
+export function createExportHandlers(assembler) {
+    return {
+        /**
+         * Triggers collage export as JPEG.
+         */
+        async exportCollage() {
+            if (this.isExporting) return;
+            this.isExporting = true;
+            this.exportStatus = 'Exporting...';
+
+            try {
+                const stateSnapshot = {
+                    panels: this.panels,
+                    images: this.images,
+                    crops: this.crops,
+                    panelAssignments: this.panelAssignments,
+                    backgroundColor: this.backgroundColor,
+                    backgroundState: this._buildBackgroundState ? this._buildBackgroundState() : null,
+                    overlayState: this._buildOverlayState ? this._buildOverlayState() : null,
+                    titleStyle: this.titleStyle,
+                    titleRuns: this.titleRuns
+                };
+
+                // Use ExportManager for extensibility
+                // Validate format — only 'jpeg' and 'png' are supported
+                const format = (this.exportFormat === 'png' ? 'png' : 'jpeg');
+                await ExportManager.export(
+                    assembler,
+                    stateSnapshot,
+                    format,
+                    this.exportQuality
+                );
+
+                this.exportStatus = 'Exported successfully!';
+                setTimeout(() => { this.exportStatus = ''; }, 3000);
+                if (this.showToast) {
+                    this.showToast('Collage exported!', 'success', 3000);
+                }
+            } catch (e) {
+                console.error('Export failed:', e);
+                this.exportStatus = 'Export failed: ' + (e.message || e);
+                // Error messages stay longer so users can read them
+                setTimeout(() => { this.exportStatus = ''; }, 6000);
+                if (this.showToast) {
+                    this.showToast('Export failed: ' + (e.message || e), 'error', 5000);
+                }
+            } finally {
+                this.isExporting = false;
+            }
+        },
+
+        /**
+         * Handles export quality change.
+         */
+        onExportQualityChange() {
+            // State is updated by caller if needed
+        }
+    };
+}
+

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ImageLibrary Memory Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — ImageLibrary Memory Cleanup Tests</h1>
+    <p class="test-plan-ref">Phase 1: Memory & Stability — Tests for disposeImage and clearAll methods</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createImageLibrary } from '../MyESModules/State/ImageLibrary.js';
+        import { createImageItem } from '../MyESModules/Models/ImageItem.js';
+
+        const { expect } = chai;
+
+        // Helper to create a mock image item with a fake image object
+        function createMockImageItem() {
+            return {
+                id: 'mock_img_123',
+                image: { src: 'mock.jpg', naturalWidth: 100, naturalHeight: 100 },
+                filename: 'test.jpg',
+                width: 100,
+                height: 100,
+                thumbnail: 'data:image/jpeg;base64,abc123'
+            };
+        }
+
+        // Helper to create state with images array
+        function makeState(images = []) {
+            return {
+                images: [...images]
+            };
+        }
+
+        // ============================================================
+        // Phase 1.1: disposeImage and clearAll memory cleanup tests
+        // ============================================================
+        describe('Phase 1.1 — ImageLibrary Memory Cleanup', () => {
+            let state, library, onImagesChanged;
+
+            beforeEach(() => {
+                onImagesChanged = { callCount: 0 };
+                const mockCallback = () => { onImagesChanged.callCount++; };
+                state = makeState();
+                library = createImageLibrary(state, mockCallback);
+            });
+
+            it('1.1.1 — disposeImage removes image and clears reference', () => {
+                const imgItem = createMockImageItem();
+                state.images = [imgItem];
+
+                library.disposeImage(0);
+
+                expect(state.images.length).to.equal(0);
+                expect(imgItem.image).to.be.null;
+                expect(onImagesChanged.callCount).to.equal(1);
+            });
+
+            it('1.1.2 — clearAll disposes all images', () => {
+                const img1 = createMockImageItem();
+                const img2 = createMockImageItem();
+                const img3 = createMockImageItem();
+                state.images = [img1, img2, img3];
+
+                library.clearAll();
+
+                expect(state.images.length).to.equal(0);
+                expect(img1.image).to.be.null;
+                expect(img2.image).to.be.null;
+                expect(img3.image).to.be.null;
+                expect(onImagesChanged.callCount).to.equal(1);
+            });
+
+            it('1.1.3 — disposeImage out of bounds is no-op', () => {
+                const imgItem = createMockImageItem();
+                state.images = [imgItem];
+                const initialLength = state.images.length;
+
+                library.disposeImage(-1);
+                expect(state.images.length).to.equal(initialLength);
+                expect(imgItem.image).to.not.be.null;
+
+                library.disposeImage(100);
+                expect(state.images.length).to.equal(initialLength);
+                expect(imgItem.image).to.not.be.null;
+
+                expect(onImagesChanged.callCount).to.equal(0);
+            });
+
+            it('1.1.4 — disposeImage on item without image reference is safe', () => {
+                const imgItem = { id: 'test', image: null, filename: 'test.jpg', width: 100, height: 100 };
+                state.images = [imgItem];
+
+                library.disposeImage(0);
+
+                expect(state.images.length).to.equal(0);
+                expect(onImagesChanged.callCount).to.equal(1);
+            });
+
+            it('1.1.5 — disposeImage does not affect other images', () => {
+                const img1 = createMockImageItem();
+                const img2 = createMockImageItem();
+                const img3 = createMockImageItem();
+                state.images = [img1, img2, img3];
+
+                library.disposeImage(1); // Remove middle
+
+                expect(state.images.length).to.equal(2);
+                expect(state.images[0]).to.equal(img1);
+                expect(state.images[1]).to.equal(img3);
+                expect(img1.image).to.not.be.null;
+                expect(img2.image).to.be.null;
+                expect(img3.image).to.not.be.null;
+            });
+
+            it('1.1.6 — disposeImage after clearAll is safe', () => {
+                const imgItem = createMockImageItem();
+                state.images = [imgItem];
+
+                library.clearAll();
+                expect(state.images.length).to.equal(0);
+
+                // Should not throw
+                library.disposeImage(0);
+                expect(state.images.length).to.equal(0);
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

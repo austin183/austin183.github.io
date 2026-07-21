@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Layout Math Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Layout Math Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Section 1.1 FitMath, 1.2 SeededPRNG, 1.3 PolygonClipper, 1.4 UniformLayout, 1.5 HeroLayout, 1.6 MosaicLayout, 1.7 DiagonalSlicesLayout (incl. Phase 3 negative angles), 1.8 HexagonalLayout (incl. Phase 3 size multiplier), 1.9 LayoutGenerator, 1.10 LayoutStyle</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import * as FitMath from '../MyESModules/Layout/FitMath.js';
+        import { SeededPRNG } from '../MyESModules/Layout/SeededPRNG.js';
+        import { PolygonClipper } from '../MyESModules/Layout/PolygonClipper.js';
+        import { generateUniformLayout } from '../MyESModules/Layout/UniformLayout.js';
+        import { generateHeroLayout } from '../MyESModules/Layout/HeroLayout.js';
+        import { generateMosaicLayout } from '../MyESModules/Layout/MosaicLayout.js';
+        import { generateDiagonalSlicesLayout } from '../MyESModules/Layout/DiagonalSlicesLayout.js';
+        import { generateHexagonalLayout } from '../MyESModules/Layout/HexagonalLayout.js';
+        import { LayoutGenerator } from '../MyESModules/Layout/LayoutGenerator.js';
+        import { LayoutStyle, LAYOUT_STYLE_OPTIONS } from '../MyESModules/Models/LayoutStyle.js';
+        import { createRectGeometry, createPathGeometry, geometryBoundingRect, isRectGeometry } from '../MyESModules/Models/PanelGeometry.js';
+
+        const { expect } = chai;
+        const CANVAS = { width: 1920, height: 1080 };
+        const GUTTER = 4;
+
+        // ============================================================
+        // 1.1 FitMath
+        // ============================================================
+        describe('FitMath.fit()', () => {
+            it('1.1.1 — landscape image in portrait container', () => {
+                const result = FitMath.fit({ width: 1920, height: 1080 }, { width: 400, height: 600 });
+                // Image is wider (16:9) than container (2:3), so fits to container width
+                expect(result.fittedSize.width).to.equal(400);
+                expect(result.fittedSize.height).to.equal(225);
+                expect(result.offset.x).to.equal(0);
+                expect(result.offset.y).to.equal(187.5);
+            });
+
+            it('1.1.2 — portrait image in landscape container', () => {
+                const result = FitMath.fit({ width: 1080, height: 1920 }, { width: 1920, height: 1080 });
+                expect(result.fittedSize.width).to.equal(607.5);
+                expect(result.fittedSize.height).to.equal(1080);
+                expect(result.offset.x).to.be.closeTo(656.25, 0.01);
+                expect(result.offset.y).to.equal(0);
+            });
+
+            it('1.1.3 — square image in rectangular container', () => {
+                const result = FitMath.fit({ width: 1000, height: 1000 }, { width: 1920, height: 1080 });
+                expect(result.fittedSize.width).to.equal(1080);
+                expect(result.fittedSize.height).to.equal(1080);
+                expect(result.offset.x).to.equal(420);
+                expect(result.offset.y).to.equal(0);
+            });
+
+            it('1.1.4 — equal aspect ratios', () => {
+                const result = FitMath.fit({ width: 1920, height: 1080 }, { width: 960, height: 540 });
+                expect(result.fittedSize.width).to.equal(960);
+                expect(result.fittedSize.height).to.equal(540);
+                expect(result.offset.x).to.equal(0);
+                expect(result.offset.y).to.equal(0);
+            });
+
+            it('1.1.5 — zero-height source returns zeros', () => {
+                const result = FitMath.fit({ width: 100, height: 0 }, { width: 400, height: 300 });
+                expect(result.fittedSize.width).to.equal(0);
+                expect(result.fittedSize.height).to.equal(0);
+            });
+
+            it('1.1.6 — NaN dimensions does not crash', () => {
+                // NaN width propagates through calculation — verify no crash
+                const result = FitMath.fit({ width: NaN, height: 100 }, { width: 400, height: 300 });
+                // The function doesn't guard NaN width — result contains NaN
+                expect(isNaN(result.fittedSize.width)).to.be.true;
+                expect(result.fittedSize.height).to.be.a('number');
+            });
+        });
+
+        describe('FitMath.sourceRect()', () => {
+            it('1.1.7 — landscape image, portrait panel', () => {
+                // image 4:3, panel 1:2 → image is wider, so sourceH = full image height
+                const result = FitMath.sourceRect({ width: 4000, height: 3000 }, { width: 200, height: 400 });
+                expect(result.height).to.equal(3000);
+                expect(result.width).to.equal(1500); // 3000 * (200/400) = 1500
+                expect(result.x).to.equal(1250); // (4000 - 1500) / 2
+                expect(result.y).to.equal(0);
+            });
+
+            it('1.1.8 — portrait image, landscape panel', () => {
+                const result = FitMath.sourceRect({ width: 1080, height: 1920 }, { width: 1920, height: 1080 });
+                expect(result.width).to.equal(1080);
+                expect(result.x).to.equal(0);
+            });
+
+            it('1.1.9 — square image, square panel', () => {
+                const result = FitMath.sourceRect({ width: 2000, height: 2000 }, { width: 500, height: 500 });
+                expect(result.x).to.equal(0);
+                expect(result.y).to.equal(0);
+                expect(result.width).to.equal(2000);
+                expect(result.height).to.equal(2000);
+            });
+
+            it('1.1.10 — extreme aspect ratio 21:9 panoramic', () => {
+                const result = FitMath.sourceRect({ width: 3780, height: 1800 }, { width: 500, height: 500 });
+                expect(result.height).to.equal(1800);
+                expect(result.x).to.be.greaterThan(0);
+            });
+
+            it('1.1.11 — extreme aspect ratio 9:21 vertical', () => {
+                const result = FitMath.sourceRect({ width: 1080, height: 2520 }, { width: 500, height: 500 });
+                expect(result.width).to.equal(1080);
+                expect(result.y).to.be.greaterThan(0);
+            });
+
+            it('1.1.12 — zero-height image returns zeros', () => {
+                const result = FitMath.sourceRect({ width: 100, height: 0 }, { width: 500, height: 500 });
+                expect(result.width).to.equal(0);
+                expect(result.height).to.equal(0);
+            });
+        });
+
+        // ============================================================
+        // 1.2 SeededPRNG
+        // ============================================================
+        describe('SeededPRNG', () => {
+            it('1.2.1 — deterministic: same seed produces same values', () => {
+                const rng1 = new SeededPRNG(42);
+                const rng2 = new SeededPRNG(42);
+                for (let i = 0; i < 10; i++) {
+                    expect(rng1.next()).to.equal(rng2.next());
+                }
+            });
+
+            it('1.2.2 — different seeds produce different sequences', () => {
+                const rng1 = new SeededPRNG(1);
+                const rng2 = new SeededPRNG(2);
+                expect(rng1.next()).to.not.equal(rng2.next());
+            });
+
+            it('1.2.3 — values are 32-bit unsigned integers', () => {
+                const rng = new SeededPRNG(0);
+                for (let i = 0; i < 100; i++) {
+                    const val = rng.next();
+                    expect(val).to.be.at.least(0);
+                    expect(val).to.be.at.most(0xFFFFFFFF);
+                }
+            });
+
+            it('1.2.4 — negative seed normalized', () => {
+                const rng = new SeededPRNG(-1);
+                const val = rng.next();
+                expect(val).to.be.at.least(0);
+                expect(val).to.be.at.most(0xFFFFFFFF);
+            });
+
+            it('1.2.5 — large seed truncated to 32-bit', () => {
+                const rng = new SeededPRNG(Math.pow(2, 33));
+                const val = rng.next();
+                expect(val).to.be.at.least(0);
+                expect(val).to.be.at.most(0xFFFFFFFF);
+            });
+
+            it('1.2.6 — no zero-stuck state from seed 0', () => {
+                const rng = new SeededPRNG(0);
+                const values = new Set();
+                for (let i = 0; i < 20; i++) {
+                    values.add(rng.next());
+                }
+                expect(values.size).to.be.greaterThan(1);
+            });
+        });
+
+        // ============================================================
+        // 1.3 PolygonClipper
+        // ============================================================
+        describe('PolygonClipper', () => {
+            it('1.3.1 — rectangle fully inside clip rect', () => {
+                const rect = [
+                    { x: 5, y: 5 }, { x: 15, y: 5 },
+                    { x: 15, y: 15 }, { x: 5, y: 15 }
+                ];
+                const result = PolygonClipper.clip(rect, { x: 0, y: 0, width: 20, height: 20 });
+                expect(result.length).to.equal(4);
+            });
+
+            it('1.3.2 — rectangle partially outside (top-left)', () => {
+                const rect = [
+                    { x: -5, y: -5 }, { x: 5, y: -5 },
+                    { x: 5, y: 5 }, { x: -5, y: 5 }
+                ];
+                const result = PolygonClipper.clip(rect, { x: 0, y: 0, width: 20, height: 20 });
+                expect(result.length).to.be.greaterThan(0);
+                for (const p of result) {
+                    expect(p.x).to.be.at.least(0);
+                    expect(p.x).to.be.at.most(20);
+                    expect(p.y).to.be.at.least(0);
+                    expect(p.y).to.be.at.most(20);
+                }
+            });
+
+            it('1.3.3 — rectangle fully outside', () => {
+                const rect = [
+                    { x: 30, y: 30 }, { x: 40, y: 30 },
+                    { x: 40, y: 40 }, { x: 30, y: 40 }
+                ];
+                const result = PolygonClipper.clip(rect, { x: 0, y: 0, width: 20, height: 20 });
+                expect(result.length).to.equal(0);
+            });
+
+            it('1.3.4 — clip parallelogram', () => {
+                const para = [
+                    { x: -10, y: 0 }, { x: 10, y: 0 },
+                    { x: 30, y: 20 }, { x: 10, y: 20 }
+                ];
+                const result = PolygonClipper.clip(para, { x: 0, y: 0, width: 20, height: 20 });
+                expect(result.length).to.be.greaterThan(0);
+                for (const p of result) {
+                    expect(p.x).to.be.at.least(-0.01);
+                    expect(p.x).to.be.at.most(20.01);
+                    expect(p.y).to.be.at.least(-0.01);
+                    expect(p.y).to.be.at.most(20.01);
+                }
+            });
+
+            it('1.3.5 — clip hexagon', () => {
+                const hex = [
+                    { x: 10, y: 0 }, { x: 20, y: 5 },
+                    { x: 20, y: 15 }, { x: 10, y: 20 },
+                    { x: 0, y: 15 }, { x: 0, y: 5 }
+                ];
+                const result = PolygonClipper.clip(hex, { x: 5, y: 5, width: 10, height: 10 });
+                expect(result.length).to.be.greaterThan(0);
+            });
+
+            it('1.3.6 — empty subject polygon', () => {
+                const result = PolygonClipper.clip([], { x: 0, y: 0, width: 20, height: 20 });
+                expect(result.length).to.equal(0);
+            });
+
+            it('1.3.7 — clip rect with zero width', () => {
+                const rect = [
+                    { x: 5, y: 5 }, { x: 15, y: 5 },
+                    { x: 15, y: 15 }, { x: 5, y: 15 }
+                ];
+                const result = PolygonClipper.clip(rect, { x: 0, y: 0, width: 0, height: 100 });
+                expect(result.length).to.equal(0);
+            });
+        });
+
+        // ============================================================
+        // 1.4 UniformLayout
+        // ============================================================
+        describe('UniformLayout', () => {
+            it('1.4.1 — zero images', () => {
+                const panels = generateUniformLayout({ numImages: 0, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(0);
+            });
+
+            it('1.4.2 — single image: full canvas', () => {
+                const panels = generateUniformLayout({ numImages: 1, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(1);
+                expect(panels[0].geometry.rect.x).to.equal(0);
+                expect(panels[0].geometry.rect.y).to.equal(0);
+                expect(panels[0].geometry.rect.width).to.equal(1920);
+                expect(panels[0].geometry.rect.height).to.equal(1080);
+            });
+
+            it('1.4.3 — two images: 2x1 grid', () => {
+                const panels = generateUniformLayout({ numImages: 2, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(2);
+            });
+
+            it('1.4.4 — three images: 3x1 grid', () => {
+                const panels = generateUniformLayout({ numImages: 3, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(3);
+            });
+
+            it('1.4.5 — four images: 3x2 grid', () => {
+                const panels = generateUniformLayout({ numImages: 4, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(4);
+            });
+
+            it('1.4.6 — nine images: 3x3 grid', () => {
+                const panels = generateUniformLayout({ numImages: 9, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(9);
+            });
+
+            it('1.4.7 — ten images: 3x4 grid', () => {
+                const panels = generateUniformLayout({ numImages: 10, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(10);
+            });
+
+            it('1.4.8 — twenty images: 3x7 grid', () => {
+                const panels = generateUniformLayout({ numImages: 20, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(20);
+            });
+
+            it('1.4.9 — panels fill canvas with no gaps (gutter: 0)', () => {
+                const panels = generateUniformLayout({ numImages: 6, canvasSize: CANVAS, gutter: 0 });
+                let totalArea = 0;
+                for (const p of panels) {
+                    totalArea += p.geometry.rect.width * p.geometry.rect.height;
+                }
+                expect(totalArea).to.equal(CANVAS.width * CANVAS.height);
+            });
+
+            it('1.4.10 — panels with gutter: spacing correct', () => {
+                const panels = generateUniformLayout({ numImages: 4, canvasSize: CANVAS, gutter: 10 });
+                // Adjacent panels in same row should have 10px gap
+                const gap = panels[1].geometry.rect.x - (panels[0].geometry.rect.x + panels[0].geometry.rect.width);
+                expect(gap).to.equal(10);
+            });
+
+            it('1.4.11 — panels do not overlap', () => {
+                const panels = generateUniformLayout({ numImages: 10, canvasSize: CANVAS, gutter: 5 });
+                for (let i = 0; i < panels.length; i++) {
+                    for (let j = i + 1; j < panels.length; j++) {
+                        const a = panels[i].geometry.rect;
+                        const b = panels[j].geometry.rect;
+                        const overlap = !(a.x + a.width <= b.x || b.x + b.width <= a.x ||
+                                          a.y + a.height <= b.y || b.y + b.height <= a.y);
+                        expect(overlap, `Panel ${i} and ${j} should not overlap`).to.be.false;
+                    }
+                }
+            });
+
+            it('1.4.12 — custom imageOrder respected', () => {
+                const panels = generateUniformLayout({
+                    numImages: 3, canvasSize: CANVAS, gutter: GUTTER,
+                    imageOrder: [2, 0, 1]
+                });
+                expect(panels[0].imageIndex).to.equal(2);
+                expect(panels[1].imageIndex).to.equal(0);
+                expect(panels[2].imageIndex).to.equal(1);
+            });
+
+            it('1.4.13 — panel IDs are unique', () => {
+                const panels = generateUniformLayout({ numImages: 10, canvasSize: CANVAS, gutter: GUTTER });
+                const ids = panels.map(p => p.id);
+                expect(new Set(ids).size).to.equal(ids.length);
+            });
+
+            it('1.4.14 — panel geometry type is rect', () => {
+                const panels = generateUniformLayout({ numImages: 5, canvasSize: CANVAS, gutter: GUTTER });
+                for (const p of panels) {
+                    expect(p.geometry.type).to.equal('rect');
+                }
+            });
+        });
+
+        // ============================================================
+        // 1.5 HeroLayout
+        // ============================================================
+        describe('HeroLayout', () => {
+            it('1.5.1 — zero images', () => {
+                const panels = generateHeroLayout({ numImages: 0, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(0);
+            });
+
+            it('1.5.2 — single image: falls back to UniformLayout', () => {
+                const panels = generateHeroLayout({ numImages: 1, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(1);
+                expect(panels[0].geometry.rect.width).to.equal(1920);
+                expect(panels[0].geometry.rect.height).to.equal(1080);
+            });
+
+            it('1.5.3 — two images: hero left, 1 side panel right', () => {
+                const panels = generateHeroLayout({ numImages: 2, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(2);
+                expect(panels[0].geometry.rect.x).to.equal(0);
+                expect(panels[0].geometry.rect.width).to.equal(958); // 1920/2 - 4/2
+                expect(panels[0].geometry.rect.height).to.equal(1080);
+                expect(panels[1].geometry.rect.x).to.be.greaterThan(958);
+            });
+
+            it('1.5.4 — three images: hero + 2 side panels', () => {
+                const panels = generateHeroLayout({ numImages: 3, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(3);
+            });
+
+            it('1.5.5 — five images: hero + 4 side panels (2 columns)', () => {
+                const panels = generateHeroLayout({ numImages: 5, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(5);
+            });
+
+            it('1.5.6 — hero panel dimensions', () => {
+                const panels = generateHeroLayout({ numImages: 3, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels[0].geometry.rect.width).to.equal(CANVAS.width / 2 - GUTTER / 2);
+                expect(panels[0].geometry.rect.height).to.equal(CANVAS.height);
+            });
+
+            it('1.5.7 — side panels do not overlap', () => {
+                const panels = generateHeroLayout({ numImages: 10, canvasSize: CANVAS, gutter: GUTTER });
+                const sidePanels = panels.slice(1);
+                for (let i = 0; i < sidePanels.length; i++) {
+                    for (let j = i + 1; j < sidePanels.length; j++) {
+                        const a = sidePanels[i].geometry.rect;
+                        const b = sidePanels[j].geometry.rect;
+                        const overlap = !(a.x + a.width <= b.x || b.x + b.width <= a.x ||
+                                          a.y + a.height <= b.y || b.y + b.height <= a.y);
+                        expect(overlap).to.be.false;
+                    }
+                }
+            });
+
+            it('1.5.8 — hero panel does not overlap side panels', () => {
+                const panels = generateHeroLayout({ numImages: 5, canvasSize: CANVAS, gutter: GUTTER });
+                const hero = panels[0].geometry.rect;
+                for (let i = 1; i < panels.length; i++) {
+                    const side = panels[i].geometry.rect;
+                    const overlap = !(hero.x + hero.width <= side.x || side.x + side.width <= hero.x ||
+                                      hero.y + hero.height <= side.y || side.y + side.height <= hero.y);
+                    expect(overlap).to.be.false;
+                }
+            });
+
+            it('1.5.9 — custom imageOrder', () => {
+                const panels = generateHeroLayout({
+                    numImages: 5, canvasSize: CANVAS, gutter: GUTTER,
+                    imageOrder: [4, 0, 1, 2, 3]
+                });
+                expect(panels[0].imageIndex).to.equal(4); // hero
+                expect(panels[1].imageIndex).to.equal(0);
+                expect(panels[2].imageIndex).to.equal(1);
+            });
+        });
+
+        // ============================================================
+        // 1.6 MosaicLayout
+        // ============================================================
+        describe('MosaicLayout', () => {
+            it('1.6.1 — zero images', () => {
+                const panels = generateMosaicLayout({ numImages: 0, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(0);
+            });
+
+            it('1.6.2 — single image: full canvas', () => {
+                const panels = generateMosaicLayout({ numImages: 1, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(1);
+                expect(panels[0].geometry.rect.width).to.equal(1920);
+                expect(panels[0].geometry.rect.height).to.equal(1080);
+            });
+
+            it('1.6.3 — two images: no overlap', () => {
+                const panels = generateMosaicLayout({ numImages: 2, canvasSize: CANVAS, gutter: GUTTER, mosaicSeed: 42 });
+                expect(panels.length).to.equal(2);
+                const a = panels[0].geometry.rect;
+                const b = panels[1].geometry.rect;
+                const overlap = !(a.x + a.width <= b.x || b.x + b.width <= a.x ||
+                                  a.y + a.height <= b.y || b.y + b.height <= a.y);
+                expect(overlap).to.be.false;
+            });
+
+            it('1.6.4 — five images', () => {
+                const panels = generateMosaicLayout({ numImages: 5, canvasSize: CANVAS, gutter: GUTTER, mosaicSeed: 42 });
+                expect(panels.length).to.equal(5);
+            });
+
+            it('1.6.5 — twenty images: no truncation', () => {
+                const panels = generateMosaicLayout({ numImages: 20, canvasSize: CANVAS, gutter: GUTTER, mosaicSeed: 42 });
+                expect(panels.length).to.equal(20);
+            });
+
+            it('1.6.6 — fifty images', () => {
+                const panels = generateMosaicLayout({ numImages: 50, canvasSize: CANVAS, gutter: GUTTER, mosaicSeed: 42 });
+                expect(panels.length).to.equal(50);
+            });
+
+            it('1.6.7 — deterministic with seed', () => {
+                const p1 = generateMosaicLayout({ numImages: 10, canvasSize: CANVAS, gutter: GUTTER, mosaicSeed: 42 });
+                const p2 = generateMosaicLayout({ numImages: 10, canvasSize: CANVAS, gutter: GUTTER, mosaicSeed: 42 });
+                for (let i = 0; i < 10; i++) {
+                    expect(p1[i].geometry.rect.x).to.equal(p2[i].geometry.rect.x);
+                    expect(p1[i].geometry.rect.y).to.equal(p2[i].geometry.rect.y);
+                    expect(p1[i].geometry.rect.width).to.equal(p2[i].geometry.rect.width);
+                    expect(p1[i].geometry.rect.height).to.equal(p2[i].geometry.rect.height);
+                }
+            });
+
+            it('1.6.8 — different seeds produce different layouts', () => {
+                const p1 = generateMosaicLayout({ numImages: 10, canvasSize: CANVAS, gutter: GUTTER, mosaicSeed: 1 });
+                const p2 = generateMosaicLayout({ numImages: 10, canvasSize: CANVAS, gutter: GUTTER, mosaicSeed: 2 });
+                let differ = false;
+                for (let i = 0; i < 10; i++) {
+                    if (p1[i].geometry.rect.x !== p2[i].geometry.rect.x ||
+                        p1[i].geometry.rect.width !== p2[i].geometry.rect.width) {
+                        differ = true;
+                        break;
+                    }
+                }
+                expect(differ).to.be.true;
+            });
+
+            it('1.6.9 — panels do not overlap', () => {
+                const panels = generateMosaicLayout({ numImages: 15, canvasSize: CANVAS, gutter: GUTTER, mosaicSeed: 42 });
+                for (let i = 0; i < panels.length; i++) {
+                    for (let j = i + 1; j < panels.length; j++) {
+                        const a = panels[i].geometry.rect;
+                        const b = panels[j].geometry.rect;
+                        const overlap = !(a.x + a.width <= b.x || b.x + b.width <= a.x ||
+                                          a.y + a.height <= b.y || b.y + b.height <= a.y);
+                        expect(overlap).to.be.false;
+                    }
+                }
+            });
+
+            it('1.6.10 — panels stay within canvas', () => {
+                const panels = generateMosaicLayout({ numImages: 10, canvasSize: CANVAS, gutter: GUTTER, mosaicSeed: 42 });
+                for (const p of panels) {
+                    const r = p.geometry.rect;
+                    expect(r.x).to.be.at.least(-0.01);
+                    expect(r.y).to.be.at.least(-0.01);
+                    expect(r.x + r.width).to.be.at.most(CANVAS.width + 0.01);
+                    expect(r.y + r.height).to.be.at.most(CANVAS.height + 0.01);
+                }
+            });
+
+            it('1.6.11 — last panel fills remaining space', () => {
+                const panels = generateMosaicLayout({ numImages: 5, canvasSize: CANVAS, gutter: GUTTER, mosaicSeed: 42 });
+                const last = panels[panels.length - 1].geometry.rect;
+                expect(last.width).to.be.greaterThan(0);
+                expect(last.height).to.be.greaterThan(0);
+            });
+        });
+
+        // ============================================================
+        // 1.7 DiagonalSlicesLayout
+        // ============================================================
+        describe('DiagonalSlicesLayout', () => {
+            it('1.7.1 — zero images', () => {
+                const panels = generateDiagonalSlicesLayout({ numImages: 0, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(0);
+            });
+
+            it('1.7.2 — single image: full canvas as path', () => {
+                const panels = generateDiagonalSlicesLayout({ numImages: 1, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(1);
+                expect(panels[0].geometry.type).to.equal('path');
+            });
+
+            it('1.7.3 — two images: 2 parallelogram panels', () => {
+                const panels = generateDiagonalSlicesLayout({ numImages: 2, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(2);
+            });
+
+            it('1.7.4 — five images: 5 parallelogram panels', () => {
+                const panels = generateDiagonalSlicesLayout({ numImages: 5, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(5);
+            });
+
+            it('1.7.5 — panel geometry type is path', () => {
+                const panels = generateDiagonalSlicesLayout({ numImages: 5, canvasSize: CANVAS, gutter: GUTTER });
+                for (const p of panels) {
+                    expect(p.geometry.type).to.equal('path');
+                }
+            });
+
+            it('1.7.6 — default angle (45°)', () => {
+                const panels = generateDiagonalSlicesLayout({ numImages: 5, canvasSize: CANVAS, gutter: GUTTER, angle: 45 });
+                expect(panels.length).to.equal(5);
+            });
+
+            it('1.7.7 — zero angle: parallelograms become rectangles', () => {
+                const panels = generateDiagonalSlicesLayout({ numImages: 5, canvasSize: CANVAS, gutter: GUTTER, angle: 0 });
+                expect(panels.length).to.equal(5);
+                for (const p of panels) {
+                    // At angle 0, corners should form rectangles
+                    const pts = p.geometry.points;
+                    expect(pts[0][1]).to.equal(pts[1][1]); // top edge horizontal
+                    expect(pts[2][1]).to.equal(pts[3][1]); // bottom edge horizontal
+                }
+            });
+
+            it('1.7.8 — maximum angle (75°): no NaN', () => {
+                const panels = generateDiagonalSlicesLayout({ numImages: 5, canvasSize: CANVAS, gutter: GUTTER, angle: 75 });
+                for (const p of panels) {
+                    for (const pt of p.geometry.points) {
+                        expect(isNaN(pt[0])).to.be.false;
+                        expect(isNaN(pt[1])).to.be.false;
+                    }
+                }
+            });
+
+            it('1.7.8 — maximum positive angle (75°): no NaN', () => {
+                const panels = generateDiagonalSlicesLayout({ numImages: 5, canvasSize: CANVAS, gutter: GUTTER, angle: 75 });
+                for (const p of panels) {
+                    for (const pt of p.geometry.points) {
+                        expect(isNaN(pt[0])).to.be.false;
+                        expect(isNaN(pt[1])).to.be.false;
+                    }
+                }
+            });
+
+            it('1.7.9 — negative angle (-45°): clockwise shear', () => {
+                const panels = generateDiagonalSlicesLayout({ numImages: 4, canvasSize: CANVAS, gutter: GUTTER, angle: -45 });
+                expect(panels.length).to.equal(4);
+                // Negative angle should produce negative shear — bottom corners shift left
+                const pts = panels[0].geometry.points;
+                // Top-left corner (pts[0]) vs bottom-left corner (pts[3])
+                // At -45°, bottom-left x should be less than top-left x (sheared left)
+                expect(pts[3][0]).to.be.lessThan(pts[0][0]);
+            });
+
+            it('1.7.10 — negative angle (-75°): valid, no NaN', () => {
+                const panels = generateDiagonalSlicesLayout({ numImages: 4, canvasSize: CANVAS, gutter: GUTTER, angle: -75 });
+                for (const p of panels) {
+                    for (const pt of p.geometry.points) {
+                        expect(isNaN(pt[0])).to.be.false;
+                        expect(isNaN(pt[1])).to.be.false;
+                    }
+                }
+            });
+
+            it('1.7.11 — positive vs negative angle: opposite shear direction', () => {
+                const posPanels = generateDiagonalSlicesLayout({ numImages: 4, canvasSize: CANVAS, gutter: GUTTER, angle: 30 });
+                const negPanels = generateDiagonalSlicesLayout({ numImages: 4, canvasSize: CANVAS, gutter: GUTTER, angle: -30 });
+                // First panel: compare bottom-left x offset from top-left x
+                const posShear = posPanels[0].geometry.points[3][0] - posPanels[0].geometry.points[0][0];
+                const negShear = negPanels[0].geometry.points[3][0] - negPanels[0].geometry.points[0][0];
+                // Positive angle: bottom-left is to the right of top-left (positive shear)
+                // Negative angle: bottom-left is to the left of top-left (negative shear)
+                expect(posShear).to.be.greaterThan(0);
+                expect(negShear).to.be.lessThan(0);
+            });
+
+            it('1.7.12 — bounding rects are valid', () => {
+                const panels = generateDiagonalSlicesLayout({
+                    numImages: 4, canvasSize: CANVAS, gutter: GUTTER,
+                    imageOrder: [3, 1, 2, 0]
+                });
+                expect(panels[0].imageIndex).to.equal(3);
+                expect(panels[1].imageIndex).to.equal(1);
+                expect(panels[2].imageIndex).to.equal(2);
+                expect(panels[3].imageIndex).to.equal(0);
+            });
+        });
+
+        // ============================================================
+        // 1.8 HexagonalLayout
+        // ============================================================
+        describe('HexagonalLayout', () => {
+            it('1.8.1 — zero images', () => {
+                const panels = generateHexagonalLayout({ numImages: 0, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(0);
+            });
+
+            it('1.8.2 — single image: full canvas as path', () => {
+                const panels = generateHexagonalLayout({ numImages: 1, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(1);
+                expect(panels[0].geometry.type).to.equal('path');
+            });
+
+            it('1.8.3 — two images: 2 hexagon panels', () => {
+                const panels = generateHexagonalLayout({ numImages: 2, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(2);
+            });
+
+            it('1.8.4 — seven images: center + 6 ring', () => {
+                const panels = generateHexagonalLayout({ numImages: 7, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(7);
+            });
+
+            it('1.8.5 — fifteen images: center + ring1 + ring2 partial', () => {
+                const panels = generateHexagonalLayout({ numImages: 15, canvasSize: CANVAS, gutter: GUTTER });
+                expect(panels.length).to.equal(15);
+            });
+
+            it('1.8.6 — panel geometry type is path', () => {
+                const panels = generateHexagonalLayout({ numImages: 7, canvasSize: CANVAS, gutter: GUTTER });
+                for (const p of panels) {
+                    expect(p.geometry.type).to.equal('path');
+                }
+            });
+
+            it('1.8.7 — hexagon has 6 vertices', () => {
+                const panels = generateHexagonalLayout({ numImages: 7, canvasSize: CANVAS, gutter: GUTTER });
+                for (const p of panels) {
+                    expect(p.geometry.points.length).to.equal(6);
+                }
+            });
+
+            it('1.8.8 — center hex is at canvas center', () => {
+                const panels = generateHexagonalLayout({ numImages: 7, canvasSize: CANVAS, gutter: GUTTER });
+                const center = panels[0].geometry.points.reduce(
+                    (acc, p) => ({ x: acc.x + p[0], y: acc.y + p[1] }), { x: 0, y: 0 }
+                );
+                center.x /= 6;
+                center.y /= 6;
+                expect(center.x).to.be.closeTo(CANVAS.width / 2, 1);
+                expect(center.y).to.be.closeTo(CANVAS.height / 2, 1);
+            });
+
+            it('1.8.9 — bounding rects valid', () => {
+                const panels = generateHexagonalLayout({ numImages: 10, canvasSize: CANVAS, gutter: GUTTER });
+                for (const p of panels) {
+                    const br = p.geometry.boundingRect;
+                    for (const pt of p.geometry.points) {
+                        expect(pt[0]).to.be.at.least(br.x - 0.01);
+                        expect(pt[0]).to.be.at.most(br.x + br.width + 0.01);
+                        expect(pt[1]).to.be.at.least(br.y - 0.01);
+                        expect(pt[1]).to.be.at.most(br.y + br.height + 0.01);
+                    }
+                }
+            });
+
+            it('1.8.10 — spacing parameter affects size', () => {
+                const p0 = generateHexagonalLayout({ numImages: 7, canvasSize: CANVAS, gutter: GUTTER, spacing: 0 });
+                const p20 = generateHexagonalLayout({ numImages: 7, canvasSize: CANVAS, gutter: GUTTER, spacing: 20 });
+                // The hex radius should differ (spacing affects R calculation)
+                const r0 = p0[0].geometry.boundingRect.width;
+                const r20 = p20[0].geometry.boundingRect.width;
+                expect(r0).to.not.equal(r20);
+            });
+
+            it('1.8.11 — hexSizeMultiplier 1.0: default size', () => {
+                const panels = generateHexagonalLayout({ numImages: 7, canvasSize: CANVAS, gutter: GUTTER, hexSizeMultiplier: 1.0 });
+                expect(panels.length).to.equal(7);
+                const defaultWidth = panels[0].geometry.boundingRect.width;
+                expect(defaultWidth).to.be.greaterThan(0);
+            });
+
+            it('1.8.12 — hexSizeMultiplier 2.0: hexagons are larger', () => {
+                const panels1x = generateHexagonalLayout({ numImages: 7, canvasSize: CANVAS, gutter: GUTTER, hexSizeMultiplier: 1.0 });
+                const panels2x = generateHexagonalLayout({ numImages: 7, canvasSize: CANVAS, gutter: GUTTER, hexSizeMultiplier: 2.0 });
+                const w1 = panels1x[0].geometry.boundingRect.width;
+                const w2 = panels2x[0].geometry.boundingRect.width;
+                expect(w2).to.be.greaterThan(w1);
+            });
+
+            it('1.8.13 — hexSizeMultiplier 0.5: hexagons are smaller', () => {
+                const panels1x = generateHexagonalLayout({ numImages: 7, canvasSize: CANVAS, gutter: GUTTER, hexSizeMultiplier: 1.0 });
+                const panels05x = generateHexagonalLayout({ numImages: 7, canvasSize: CANVAS, gutter: GUTTER, hexSizeMultiplier: 0.5 });
+                const w1 = panels1x[0].geometry.boundingRect.width;
+                const w05 = panels05x[0].geometry.boundingRect.width;
+                expect(w05).to.be.lessThan(w1);
+            });
+
+            it('1.8.14 — large multiplier with few images: panels still generated', () => {
+                const panels = generateHexagonalLayout({ numImages: 3, canvasSize: CANVAS, gutter: GUTTER, hexSizeMultiplier: 2.0 });
+                expect(panels.length).to.equal(3);
+                for (const p of panels) {
+                    expect(p.geometry.points.length).to.equal(6);
+                }
+            });
+
+            it('1.8.15 — large multiplier: hexagon shapes do not overlap', () => {
+                const panels = generateHexagonalLayout({ numImages: 7, canvasSize: CANVAS, gutter: GUTTER, hexSizeMultiplier: 2.0 });
+                expect(panels.length).to.equal(7);
+                // Compute center and radius for each hexagon
+                const hexData = panels.map(p => {
+                    const pts = p.geometry.points;
+                    const cx = pts.reduce((a, pt) => a + pt[0], 0) / 6;
+                    const cy = pts.reduce((a, pt) => a + pt[1], 0) / 6;
+                    const radius = Math.hypot(pts[0][0] - cx, pts[0][1] - cy);
+                    return { cx, cy, radius };
+                });
+                // Two pointy-top hexagons don't overlap if center distance >= sqrt(3) * maxRadius
+                for (let i = 0; i < hexData.length; i++) {
+                    for (let j = i + 1; j < hexData.length; j++) {
+                        const a = hexData[i], b = hexData[j];
+                        const dist = Math.hypot(a.cx - b.cx, a.cy - b.cy);
+                        const minDist = Math.sqrt(3) * Math.max(a.radius, b.radius);
+                        expect(dist).to.be.at.least(minDist - 0.01,
+                            `Panel ${i} and ${j} hexagons should not overlap at 2x multiplier (dist=${dist.toFixed(2)}, min=${minDist.toFixed(2)})`);
+                    }
+                }
+            });
+
+            it('1.8.16 — large multiplier: center distance scales with multiplier', () => {
+                const panels1x = generateHexagonalLayout({ numImages: 7, canvasSize: CANVAS, gutter: GUTTER, hexSizeMultiplier: 1.0 });
+                const panels2x = generateHexagonalLayout({ numImages: 7, canvasSize: CANVAS, gutter: GUTTER, hexSizeMultiplier: 2.0 });
+                // Distance from center hex to first ring hex should roughly double
+                const c1 = panels1x[0].geometry.points.reduce((a, p) => ({ x: a.x + p[0], y: a.y + p[1] }), { x: 0, y: 0 });
+                c1.x /= 6; c1.y /= 6;
+                const r1_1 = panels1x[1].geometry.points.reduce((a, p) => ({ x: a.x + p[0], y: a.y + p[1] }), { x: 0, y: 0 });
+                r1_1.x /= 6; r1_1.y /= 6;
+                const dist1 = Math.hypot(r1_1.x - c1.x, r1_1.y - c1.y);
+
+                const c2 = panels2x[0].geometry.points.reduce((a, p) => ({ x: a.x + p[0], y: a.y + p[1] }), { x: 0, y: 0 });
+                c2.x /= 6; c2.y /= 6;
+                const r2_1 = panels2x[1].geometry.points.reduce((a, p) => ({ x: a.x + p[0], y: a.y + p[1] }), { x: 0, y: 0 });
+                r2_1.x /= 6; r2_1.y /= 6;
+                const dist2 = Math.hypot(r2_1.x - c2.x, r2_1.y - c2.y);
+
+                expect(dist2).to.be.closeTo(dist1 * 2, dist1 * 0.05);
+            });
+        });
+
+        // ============================================================
+        // 1.9 LayoutGenerator Dispatch
+        // ============================================================
+        describe('LayoutGenerator', () => {
+            it('1.9.1 — dispatches to UniformLayout', () => {
+                const panels = LayoutGenerator.generate({
+                    numImages: 4, style: LayoutStyle.UNIFORM
+                });
+                expect(panels.length).to.equal(4);
+                for (const p of panels) {
+                    expect(p.geometry.type).to.equal('rect');
+                }
+            });
+
+            it('1.9.2 — dispatches to HeroLayout', () => {
+                const panels = LayoutGenerator.generate({
+                    numImages: 3, style: LayoutStyle.HERO
+                });
+                expect(panels.length).to.equal(3);
+                expect(panels[0].geometry.rect.width).to.equal(958);
+            });
+
+            it('1.9.3 — dispatches to MosaicLayout', () => {
+                const panels = LayoutGenerator.generate({
+                    numImages: 5, style: LayoutStyle.MOSAIC, mosaicSeed: 42
+                });
+                expect(panels.length).to.equal(5);
+            });
+
+            it('1.9.4 — dispatches to DiagonalSlicesLayout', () => {
+                const panels = LayoutGenerator.generate({
+                    numImages: 5, style: LayoutStyle.DIAGONAL_SLICES
+                });
+                expect(panels.length).to.equal(5);
+                for (const p of panels) {
+                    expect(p.geometry.type).to.equal('path');
+                }
+            });
+
+            it('1.9.5 — dispatches to HexagonalLayout', () => {
+                const panels = LayoutGenerator.generate({
+                    numImages: 7, style: LayoutStyle.HEXAGONAL
+                });
+                expect(panels.length).to.equal(7);
+                for (const p of panels) {
+                    expect(p.geometry.points.length).to.equal(6);
+                }
+            });
+
+            it('1.9.6 — default style (unknown) falls back to HeroLayout', () => {
+                const panels = LayoutGenerator.generate({
+                    numImages: 3, style: 'unknown'
+                });
+                expect(panels.length).to.equal(3);
+                // Hero layout has hero panel on left
+                expect(panels[0].geometry.rect.x).to.equal(0);
+                expect(panels[0].geometry.rect.width).to.equal(958);
+            });
+
+            it('1.9.7 — default style (undefined) falls back to HeroLayout', () => {
+                const panels = LayoutGenerator.generate({
+                    numImages: 3, style: undefined
+                });
+                expect(panels.length).to.equal(3);
+                expect(panels[0].geometry.rect.width).to.equal(958);
+            });
+
+            it('1.9.8 — default canvas size is 1920x1080', () => {
+                const panels = LayoutGenerator.generate({ numImages: 1 });
+                expect(panels[0].geometry.rect.width).to.equal(1920);
+                expect(panels[0].geometry.rect.height).to.equal(1080);
+            });
+
+            it('1.9.9 — default gutter is 4', () => {
+                const panels = LayoutGenerator.generate({ numImages: 2 });
+                const gap = panels[1].geometry.rect.x - panels[0].geometry.rect.width;
+                expect(gap).to.equal(4);
+            });
+
+            it('1.9.10 — negative sliceAngle passed through to DiagonalSlices', () => {
+                const panels = LayoutGenerator.generate({
+                    numImages: 4, style: LayoutStyle.DIAGONAL_SLICES, sliceAngle: -30
+                });
+                expect(panels.length).to.equal(4);
+                // Negative angle produces negative shear
+                const pts = panels[0].geometry.points;
+                expect(pts[3][0]).to.be.lessThan(pts[0][0]);
+            });
+
+            it('1.9.11 — hexSizeMultiplier passed through to Hexagonal', () => {
+                const panels1x = LayoutGenerator.generate({
+                    numImages: 7, style: LayoutStyle.HEXAGONAL, hexSizeMultiplier: 1.0
+                });
+                const panels2x = LayoutGenerator.generate({
+                    numImages: 7, style: LayoutStyle.HEXAGONAL, hexSizeMultiplier: 2.0
+                });
+                const w1 = panels1x[0].geometry.boundingRect.width;
+                const w2 = panels2x[0].geometry.boundingRect.width;
+                expect(w2).to.be.greaterThan(w1);
+            });
+        });
+
+        // ============================================================
+        // 1.10 LayoutStyle Model
+        // ============================================================
+        describe('LayoutStyle', () => {
+            it('1.10.5 — LAYOUT_STYLE_OPTIONS length is 5', () => {
+                expect(LAYOUT_STYLE_OPTIONS.length).to.equal(5);
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

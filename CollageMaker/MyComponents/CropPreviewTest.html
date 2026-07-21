@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crop Preview Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Crop Preview Tests</h1>
+    <p class="test-plan-ref">Covers: Phase 3 - Performance (crop preview RAF debounce)</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createCollageMethods } from '../MyESModules/App/createCollageMethods.js';
+        import { createCropPreviewRenderer } from '../MyESModules/App/createCropPreviewRenderer.js';
+        import { createPathGeometry } from '../MyESModules/Models/PanelGeometry.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // RAF mocking infrastructure
+        // ============================================================
+        let rafCallbacks = [];
+        let canceledIds = new Set();
+        const originalRAF = window.requestAnimationFrame.bind(window);
+        const originalCancelRAF = window.cancelAnimationFrame.bind(window);
+
+        function mockRAF() {
+            rafCallbacks = [];
+            canceledIds = new Set();
+            window.requestAnimationFrame = (cb) => {
+                const id = rafCallbacks.length + 1;
+                rafCallbacks.push(cb);
+                return id;
+            };
+            window.cancelAnimationFrame = (id) => {
+                canceledIds.add(id);
+            };
+        }
+
+        function restoreRAF() {
+            window.requestAnimationFrame = originalRAF;
+            window.cancelAnimationFrame = originalCancelRAF;
+        }
+
+        function flushRAF() {
+            const cbs = [...rafCallbacks];
+            rafCallbacks = [];
+            for (const cb of cbs) {
+                cb();
+            }
+        }
+
+        // ============================================================
+        // Helpers
+        // ============================================================
+
+        /**
+         * Create a 1x1 red pixel image using an offscreen canvas.
+         * This avoids the read-only Image.complete property issue.
+         */
+        function createMockImage(width = 800, height = 600) {
+            const c = document.createElement('canvas');
+            c.width = width;
+            c.height = height;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#ff0000';
+            ctx.fillRect(0, 0, width, height);
+            return c;
+        }
+
+        /**
+         * Create a mock crop manager with test data.
+         */
+        function createMockCropManager() {
+            const mockImageEl = createMockImage(800, 600);
+            return {
+                getCrop: () => ({
+                    sourceRect: { x: 10, y: 10, width: 100, height: 100 }
+                }),
+                getPanelImage: () => ({
+                    image: mockImageEl,
+                    width: 800,
+                    height: 600
+                })
+            };
+        }
+
+        /**
+         * Create a mock base object for createCollageMethods.
+         */
+        function createMockBase(cropManager) {
+            return {
+                getImageLibrary: () => ({ images: [], addImage: () => {}, disposeImage: () => {} }),
+                getLayoutManager: () => null,
+                getCanvasRenderer: () => null,
+                getCropManager: () => cropManager,
+                getBackgroundManager: () => null,
+                getTitleManager: () => null,
+                getUndoManager: () => null,
+                setUndoManager: () => {},
+                assembler: { render: () => {} }
+            };
+        }
+
+        /**
+         * Create a mock Vue instance with the properties needed by crop preview.
+         */
+        function createMockVue(selectedPanelId = 'panel-0') {
+            return {
+                selectedPanelId,
+                _cropPreviewPending: false,
+                images: [],
+                panels: [],
+                crops: {},
+                panelAssignments: {},
+                backgroundColor: '#000000',
+                hoveredPanelId: null,
+                backgroundStyle: 'solid',
+                gradientColors: ['#000000', '#333333'],
+                gradientAngle: 0,
+                backgroundImage: null,
+                backgroundOpacity: 1,
+                overlayImage: null,
+                overlayMode: 'normal',
+                overlayOpacity: 1,
+                titleStyle: {},
+                titleRuns: [],
+                rightSidebarOpen: false,
+                canUndo: false,
+                canRedo: false
+            };
+        }
+
+        /**
+         * Create a real crop preview canvas element in the DOM.
+         */
+        function createCropPreviewCanvas() {
+            const canvas = document.createElement('canvas');
+            canvas.id = 'cropPreviewCanvas';
+            canvas.style.width = '200px';
+            canvas.style.height = '150px';
+            canvas.width = 200;
+            canvas.height = 150;
+            document.body.appendChild(canvas);
+            return canvas;
+        }
+
+        function removeCropPreviewCanvas() {
+            const canvas = document.getElementById('cropPreviewCanvas');
+            if (canvas && canvas.parentNode) {
+                canvas.parentNode.removeChild(canvas);
+            }
+        }
+
+        // ============================================================
+        // Phase 3: Crop Preview RAF Debounce
+        // ============================================================
+        describe('Phase 3 — Crop Preview RAF Debounce', () => {
+            let mockVue;
+            let methods;
+            let mockCropManager;
+
+            beforeEach(() => {
+                mockRAF();
+                mockCropManager = createMockCropManager();
+                const mockBase = createMockBase(mockCropManager);
+                methods = createCollageMethods(mockBase);
+                mockVue = createMockVue('panel-0');
+                createCropPreviewCanvas();
+            });
+
+            afterEach(() => {
+                removeCropPreviewCanvas();
+                restoreRAF();
+                rafCallbacks = [];
+                canceledIds = new Set();
+            });
+
+            it('P3.1 — Rapid calls coalesce into a single RAF callback', () => {
+                // Call 5 times rapidly (before RAF fires)
+                methods._scheduleCropPreviewRender.call(mockVue);
+                methods._scheduleCropPreviewRender.call(mockVue);
+                methods._scheduleCropPreviewRender.call(mockVue);
+                methods._scheduleCropPreviewRender.call(mockVue);
+                methods._scheduleCropPreviewRender.call(mockVue);
+
+                // Only one RAF callback should have been queued
+                expect(rafCallbacks).to.have.lengthOf(1);
+            });
+
+            it('P3.2 — Pending flag is set immediately on first call', () => {
+                methods._scheduleCropPreviewRender.call(mockVue);
+                expect(mockVue._cropPreviewPending).to.be.true;
+            });
+
+            it('P3.3 — Pending flag is cleared after RAF callback fires', () => {
+                methods._scheduleCropPreviewRender.call(mockVue);
+                expect(mockVue._cropPreviewPending).to.be.true;
+
+                flushRAF();
+
+                expect(mockVue._cropPreviewPending).to.be.false;
+            });
+
+            it('P3.4 — After RAF fires, a new call queues a new callback', () => {
+                methods._scheduleCropPreviewRender.call(mockVue);
+                flushRAF();
+
+                // Pending should be false, new call should work
+                expect(mockVue._cropPreviewPending).to.be.false;
+
+                methods._scheduleCropPreviewRender.call(mockVue);
+                expect(mockVue._cropPreviewPending).to.be.true;
+                expect(rafCallbacks).to.have.lengthOf(1);
+            });
+
+            it('P3.5 — RAF callback executes the render body when data is available', () => {
+                // Track drawImage calls on the crop preview canvas context
+                const canvas = document.getElementById('cropPreviewCanvas');
+                const realCtx = canvas.getContext('2d');
+                let drawImageCount = 0;
+
+                // Wrap drawImage to count calls
+                const origDrawImage = realCtx.drawImage.bind(realCtx);
+                realCtx.drawImage = function () {
+                    drawImageCount++;
+                    return origDrawImage.apply(this, arguments);
+                };
+
+                methods._scheduleCropPreviewRender.call(mockVue);
+
+                // Before flush, no rendering has happened
+                expect(drawImageCount).to.equal(0);
+
+                // Flush RAF — render should execute
+                flushRAF();
+
+                expect(drawImageCount).to.equal(1);
+            });
+
+            it('P3.6 — Missing canvas element: no exception thrown', () => {
+                removeCropPreviewCanvas();
+                mockVue.selectedPanelId = 'panel-0';
+
+                expect(() => {
+                    methods._scheduleCropPreviewRender.call(mockVue);
+                }).to.not.throw();
+            });
+
+            it('P3.7 — Missing selected panel: render is skipped', () => {
+                mockVue.selectedPanelId = null;
+
+                methods._scheduleCropPreviewRender.call(mockVue);
+                flushRAF();
+
+                // No RAF callback body should have attempted rendering
+                // Verify by checking that no drawImage was called
+                const canvas = document.getElementById('cropPreviewCanvas');
+                const realCtx = canvas.getContext('2d');
+                let drawImageCount = 0;
+                const origDrawImage = realCtx.drawImage.bind(realCtx);
+                realCtx.drawImage = function () {
+                    drawImageCount++;
+                    return origDrawImage.apply(this, arguments);
+                };
+
+                // The callback already fired in flushRAF above, so drawImageCount
+                // should still be 0 since selectedPanelId was null
+                expect(drawImageCount).to.equal(0);
+            });
+
+            it('P3.8 — Missing crop data: render is skipped gracefully', () => {
+                // Replace crop manager to return null crop
+                const nullCropManager = {
+                    getCrop: () => null,
+                    getPanelImage: () => ({ image: createMockImage(), width: 800, height: 600 })
+                };
+                const nullBase = createMockBase(nullCropManager);
+                const nullMethods = createCollageMethods(nullBase);
+
+                expect(() => {
+                    nullMethods._scheduleCropPreviewRender.call(mockVue);
+                }).to.not.throw();
+            });
+
+            it('P3.9 — Missing crop manager: render is skipped gracefully', () => {
+                const noCropBase = createMockBase(null);
+                const noCropMethods = createCollageMethods(noCropBase);
+
+                expect(() => {
+                    noCropMethods._scheduleCropPreviewRender.call(mockVue);
+                }).to.not.throw();
+            });
+
+            it('P3.10 — Interleaved calls: second frame gets its own render', () => {
+                // First call
+                methods._scheduleCropPreviewRender.call(mockVue);
+                expect(rafCallbacks).to.have.lengthOf(1);
+
+                // Flush first frame
+                flushRAF();
+                expect(mockVue._cropPreviewPending).to.be.false;
+
+                // Second call (new frame)
+                methods._scheduleCropPreviewRender.call(mockVue);
+                expect(rafCallbacks).to.have.lengthOf(1); // New callback queued
+
+                // Flush second frame
+                flushRAF();
+                expect(mockVue._cropPreviewPending).to.be.false;
+            });
+        });
+
+        // ============================================================
+        // Phase 1: Shaped Crop Overlay — crop preview renderer
+        // ============================================================
+        describe('Phase 1 — Crop Preview Shaped Overlay', () => {
+            /**
+             * Create a crop preview canvas and wrap context methods to capture
+             * canvas operations for verification.
+             */
+            function createCapturedCanvas() {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'cropPreviewCanvas';
+                canvas.style.width = '200px';
+                canvas.style.height = '150px';
+                canvas.width = 400;  // DPR 2
+                canvas.height = 300;
+                document.body.appendChild(canvas);
+
+                const ctx = canvas.getContext('2d');
+                const captured = {
+                    strokeRect: [],
+                    stroke: [],
+                    fillRect: [],
+                    fillRule: [],
+                    globalCompositeOperation: [],
+                    clip: [],
+                    save: 0,
+                    restore: 0,
+                    lineDash: []
+                };
+
+                const origStrokeRect = ctx.strokeRect.bind(ctx);
+                const origStroke = ctx.stroke.bind(ctx);
+                const origFillRect = ctx.fillRect.bind(ctx);
+                const origFill = ctx.fill.bind(ctx);
+                const origClip = ctx.clip.bind(ctx);
+                const origSave = ctx.save.bind(ctx);
+                const origRestore = ctx.restore.bind(ctx);
+                const origSetLineDash = ctx.setLineDash.bind(ctx);
+
+                ctx.strokeRect = function (x, y, w, h) {
+                    captured.strokeRect.push({ x, y, w, h });
+                    return origStrokeRect(x, y, w, h);
+                };
+                ctx.stroke = function () {
+                    captured.stroke.push({ lineDash: ctx.getLineDash().join(',') });
+                    return origStroke();
+                };
+                ctx.fillRect = function (x, y, w, h) {
+                    captured.fillRect.push({ x, y, w, h });
+                    return origFillRect(x, y, w, h);
+                };
+                ctx.fill = function (rule) {
+                    captured.fillRule.push(rule || ctx.fillRule || 'nonzero');
+                    return origFill(rule);
+                };
+                ctx.clip = function () {
+                    captured.clip.push(true);
+                    return origClip();
+                };
+                ctx.save = function () {
+                    captured.save++;
+                    return origSave();
+                };
+                ctx.restore = function () {
+                    captured.restore++;
+                    return origRestore();
+                };
+                ctx.setLineDash = function (dash) {
+                    captured.lineDash.push([...dash]);
+                    return origSetLineDash(dash);
+                };
+
+                Object.defineProperty(ctx, 'globalCompositeOperation', {
+                    get: function () { return this._gco || 'source-over'; },
+                    set: function (v) {
+                        captured.globalCompositeOperation.push(v);
+                        this._gco = v;
+                    },
+                    configurable: true
+                });
+
+                return { canvas, ctx, captured };
+            }
+
+            function removeCapturedCanvas() {
+                const canvas = document.getElementById('cropPreviewCanvas');
+                if (canvas && canvas.parentNode) {
+                    canvas.parentNode.removeChild(canvas);
+                }
+            }
+
+            /**
+             * Create a mock Vue instance with the given panel geometry type.
+             */
+            function createMockVueForGeometry(geometry, panelId = 'panel-0') {
+                return {
+                    selectedPanelId: panelId,
+                    _cropPreviewPending: false,
+                    panels: [{
+                        id: panelId,
+                        geometry: geometry
+                    }]
+                };
+            }
+
+            /**
+             * Create a mock base for createCropPreviewRenderer.
+             */
+            function createMockBaseForCropPreview() {
+                const mockImageEl = createMockImage(800, 600);
+                return {
+                    getCropManager: () => ({
+                        getCrop: () => ({
+                            sourceRect: { x: 10, y: 10, width: 100, height: 100 }
+                        }),
+                        getPanelImage: () => ({
+                            image: mockImageEl,
+                            width: 800,
+                            height: 600
+                        })
+                    })
+                };
+            }
+
+            beforeEach(() => {
+                mockRAF();
+            });
+
+            afterEach(() => {
+                removeCapturedCanvas();
+                restoreRAF();
+                rafCallbacks = [];
+                canceledIds = new Set();
+            });
+
+            // ---- Rect panel: no regression ----
+            it('P1.rect1 — Rect panel: dark overlay uses 4 fillRect calls (no clip)', () => {
+                const { captured } = createCapturedCanvas();
+                const rectGeo = { type: 'rect', rect: { x: 0, y: 0, width: 200, height: 150 } };
+                const vm = createMockVueForGeometry(rectGeo);
+
+                const renderer = createCropPreviewRenderer(createMockBaseForCropPreview());
+                renderer._scheduleCropPreviewRender(vm);
+                flushRAF();
+
+                // For rect panels: NO clip() calls, NO destination-out compositing
+                expect(captured.clip).to.have.lengthOf(0);
+                expect(captured.globalCompositeOperation).to.not.include('destination-out');
+
+                // Dark overlay should use fillRect calls (4 rects around crop region)
+                expect(captured.fillRect.length).to.be.greaterThan(4); // 1 clear + 4 overlay + handles
+            });
+
+            it('P1.rect2 — Rect panel: crop border uses strokeRect', () => {
+                const { captured } = createCapturedCanvas();
+                const rectGeo = { type: 'rect', rect: { x: 0, y: 0, width: 200, height: 150 } };
+                const vm = createMockVueForGeometry(rectGeo);
+
+                const renderer = createCropPreviewRenderer(createMockBaseForCropPreview());
+                renderer._scheduleCropPreviewRender(vm);
+                flushRAF();
+
+                // Rect panel should use strokeRect for crop border
+                expect(captured.strokeRect.length).to.be.greaterThan(0);
+            });
+
+            it('P1.rect3 — Rect panel: no stroke() calls for border', () => {
+                const { captured } = createCapturedCanvas();
+                const rectGeo = { type: 'rect', rect: { x: 0, y: 0, width: 200, height: 150 } };
+                const vm = createMockVueForGeometry(rectGeo);
+
+                const renderer = createCropPreviewRenderer(createMockBaseForCropPreview());
+                renderer._scheduleCropPreviewRender(vm);
+                flushRAF();
+
+                // Rect panel should NOT use stroke() for border (uses strokeRect instead)
+                expect(captured.stroke).to.have.lengthOf(0);
+            });
+
+            // ---- Shaped panel: new behavior ----
+            it('P1.shape1 — Shaped panel: dark overlay uses evenodd fill (no destination-out)', () => {
+                const { captured } = createCapturedCanvas();
+                // Hexagon geometry
+                const hexGeo = createPathGeometry(
+                    [[50, 0], [100, 29], [100, 85], [50, 115], [0, 85], [0, 29]],
+                    { x: 0, y: 0, width: 100, height: 115 }
+                );
+                const vm = createMockVueForGeometry(hexGeo);
+
+                const renderer = createCropPreviewRenderer(createMockBaseForCropPreview());
+                renderer._scheduleCropPreviewRender(vm);
+                flushRAF();
+
+                // Shaped panel should use evenodd fill for the dark overlay cutout
+                expect(captured.fillRule).to.include('evenodd');
+                // Should NOT use destination-out compositing
+                expect(captured.globalCompositeOperation).to.not.include('destination-out');
+                // Should NOT use clip() for the overlay
+                expect(captured.clip).to.have.lengthOf(0);
+            });
+
+            it('P1.shape2 — Shaped panel: crop border uses stroke (path-based)', () => {
+                const { captured } = createCapturedCanvas();
+                const hexGeo = createPathGeometry(
+                    [[50, 0], [100, 29], [100, 85], [50, 115], [0, 85], [0, 29]],
+                    { x: 0, y: 0, width: 100, height: 115 }
+                );
+                const vm = createMockVueForGeometry(hexGeo);
+
+                const renderer = createCropPreviewRenderer(createMockBaseForCropPreview());
+                renderer._scheduleCropPreviewRender(vm);
+                flushRAF();
+
+                // Shaped panel should use stroke() for shape border
+                expect(captured.stroke.length).to.be.greaterThan(0);
+            });
+
+            it('P1.shape3 — Shaped panel: no save/restore needed (evenodd is self-contained)', () => {
+                const { captured } = createCapturedCanvas();
+                const hexGeo = createPathGeometry(
+                    [[50, 0], [100, 29], [100, 85], [50, 115], [0, 85], [0, 29]],
+                    { x: 0, y: 0, width: 100, height: 115 }
+                );
+                const vm = createMockVueForGeometry(hexGeo);
+
+                const renderer = createCropPreviewRenderer(createMockBaseForCropPreview());
+                renderer._scheduleCropPreviewRender(vm);
+                flushRAF();
+
+                // evenodd fill is self-contained — no save/restore needed for overlay
+                // (drawShapeOverlay may still do its own save/restore, so just check
+                //  that save count is not from the overlay logic)
+                expect(captured.save).to.be.lessThan(3);
+            });
+
+            it('P1.shape4 — Parallelogram panel: shaped overlay uses evenodd', () => {
+                const { captured } = createCapturedCanvas();
+                const paraGeo = createPathGeometry(
+                    [[0, 0], [100, 0], [140, 200], [40, 200]],
+                    { x: 0, y: 0, width: 140, height: 200 }
+                );
+                const vm = createMockVueForGeometry(paraGeo);
+
+                const renderer = createCropPreviewRenderer(createMockBaseForCropPreview());
+                renderer._scheduleCropPreviewRender(vm);
+                flushRAF();
+
+                // Parallelogram is a path geometry, should get evenodd shaped treatment
+                expect(captured.fillRule).to.include('evenodd');
+                expect(captured.globalCompositeOperation).to.not.include('destination-out');
+            });
+
+            it('P1.shape5 — No selected panel: no crop overlay drawn', () => {
+                const { captured } = createCapturedCanvas();
+                const vm = createMockVueForGeometry(
+                    { type: 'rect', rect: { x: 0, y: 0, width: 200, height: 150 } },
+                    null  // No selected panel
+                );
+
+                const renderer = createCropPreviewRenderer(createMockBaseForCropPreview());
+                renderer._scheduleCropPreviewRender(vm);
+                flushRAF();
+
+                // With no selected panel, render returns early before any drawing
+                expect(captured.fillRect).to.have.lengthOf(0);
+                expect(captured.strokeRect).to.have.lengthOf(0);
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

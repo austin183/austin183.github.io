@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LayoutGenerator Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — LayoutGenerator Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Phase 3 - Section 3.1 (LayoutGenerator strategy pattern)</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { LayoutGenerator } from '../MyESModules/Layout/LayoutGenerator.js';
+        import { LayoutStyle } from '../MyESModules/Models/LayoutStyle.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // Section 3.1: Strategy Pattern
+        // ============================================================
+        describe('Section 3.1 — LayoutGenerator Strategy Pattern', () => {
+            it('3.1.1 — generate with unknown style defaults to HERO and returns panels', async () => {
+                const result = LayoutGenerator.generate({
+                    numImages: 5,
+                    style: 'unknown-style-xyz'
+                });
+
+                expect(result).to.be.an('array');
+                expect(result.length).to.be.greaterThan(0);
+            });
+
+            it('3.1.2 — registerLayoutStyle allows custom styles', async () => {
+                const customGenerator = function(options) {
+                    return Array.from({ length: options.numImages }, (_, i) => ({
+                        id: `custom-${i}`,
+                        geometry: { type: 'rectangle', x: 0, y: 0, width: 100, height: 100 }
+                    }));
+                };
+                const styleName = 'custom-test-' + Date.now();
+
+                LayoutGenerator.registerLayoutStyle(styleName, customGenerator);
+
+                try {
+                    const result = LayoutGenerator.generate({
+                        numImages: 3,
+                        style: styleName
+                    });
+
+                    expect(result).to.be.an('array');
+                    expect(result.length).to.equal(3);
+                    
+                    // Verify it's different from default HERO by checking IDs
+                    expect(result[0].id).to.include('custom-');
+                } finally {
+                    // Cleanup - remove the custom style
+                    // Note: LAYOUT_GENERATORS is private, so we need to access it via module namespace if needed
+                    // For now, just let it persist as cleanup happens between test files (different test file)
+                }
+            });
+
+            it('3.1.3 — HERO style generates correct number of panels', async () => {
+                const result = LayoutGenerator.generate({
+                    numImages: 5,
+                    style: LayoutStyle.HERO
+                });
+
+                expect(result).to.be.an('array');
+                expect(result.length).to.equal(5);
+            });
+
+            it('3.1.4 — UNIFORM style generates correct number of panels', async () => {
+                const result = LayoutGenerator.generate({
+                    numImages: 6,
+                    style: LayoutStyle.UNIFORM
+                });
+
+                expect(result).to.be.an('array');
+                expect(result.length).to.equal(6);
+            });
+
+            it('3.1.5 — MOSAIC style generates correct number of panels', async () => {
+                const result = LayoutGenerator.generate({
+                    numImages: 4,
+                    style: LayoutStyle.MOSAIC,
+                    mosaicSeed: 12345
+                });
+
+                expect(result).to.be.an('array');
+                expect(result.length).to.equal(4);
+            });
+
+            it('3.1.6 — DIAGONAL_SLICES style generates correct number of panels', async () => {
+                const result = LayoutGenerator.generate({
+                    numImages: 4,
+                    style: LayoutStyle.DIAGONAL_SLICES,
+                    sliceAngle: 90
+                });
+
+                expect(result).to.be.an('array');
+                expect(result.length).to.equal(4);
+            });
+
+            it('3.1.7 — HEXAGONAL style generates correct number of panels', async () => {
+                const result = LayoutGenerator.generate({
+                    numImages: 7,
+                    style: LayoutStyle.HEXAGONAL,
+                    hexSpacing: 10
+                });
+
+                expect(result).to.be.an('array');
+                expect(result.length).to.equal(7);
+            });
+
+            it('3.1.8 — canvasSize option is accepted without error', async () => {
+                const customSize = { width: 800, height: 600 };
+                const result = LayoutGenerator.generate({
+                    numImages: 3,
+                    canvasSize: customSize
+                });
+
+                expect(result).to.be.an('array');
+            });
+
+            it('3.1.9 — gutter option is accepted without error', async () => {
+                const result = LayoutGenerator.generate({
+                    numImages: 4,
+                    gutter: 10
+                });
+
+                expect(result).to.be.an('array');
+            });
+
+            it('3.1.10 — imageOrder option is accepted without error', async () => {
+                const customOrder = [2, 0, 1];
+                const result = LayoutGenerator.generate({
+                    numImages: 3,
+                    imageOrder: customOrder
+                });
+
+                expect(result).to.be.an('array');
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

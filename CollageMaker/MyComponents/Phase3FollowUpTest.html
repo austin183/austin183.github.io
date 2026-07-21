@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phase 3 Follow-Up Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Phase 3 Follow-Up Tests</h1>
+    <p class="test-plan-ref">Covers: CR-FU-01 Sidebar Reorder, CR-FU-07 ARIA Accessibility, CR-FU-05 Panel Swap Visual Feedback</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createCollageData } from '../MyESModules/App/createCollageData.js';
+        import { createPanelSwapHandler } from '../MyESModules/Interaction/PanelSwap.js';
+        import { createPanelRenderer } from '../MyESModules/Rendering/PanelRenderer.js';
+        import { createCollageAssembler } from '../MyESModules/Rendering/CollageAssembler.js';
+        import { LayoutStyle } from '../MyESModules/Models/LayoutStyle.js';
+
+        const { expect } = chai;
+
+        // Minimal base mock for factory initialization
+        function createMockBase() {
+            return {
+                assembler: { render: () => {} },
+                dropHandler: { setupGlobalDrop: () => () => {} },
+                getCanvasRenderer: () => null,
+                setCanvasRenderer: () => {},
+                getLayoutManager: () => null,
+                setLayoutManager: () => {},
+                getCropManager: () => null,
+                setCropManager: () => {},
+                getImageLibrary: () => null,
+                setImageLibrary: () => {},
+                getBackgroundManager: () => null,
+                setBackgroundManager: () => {},
+                getTitleManager: () => null,
+                setTitleManager: () => {},
+                layoutStyleOptions: []
+            };
+        }
+
+        // ============================================================
+        // CR-FU-01: Sidebar Reorder
+        // ============================================================
+        describe('CR-FU-01 — Sidebar Reorder', () => {
+            it('first section is Crop', () => {
+                const state = createCollageData(createMockBase)();
+                expect(state.sidebarSections[0].id).to.equal('crop');
+                expect(state.sidebarSections[0].label).to.equal('Crop');
+            });
+
+            it('all 5 sections present in correct order (layout moved to left sidebar)', () => {
+                const state = createCollageData(createMockBase)();
+                expect(state.sidebarSections.length).to.equal(5);
+                const ids = state.sidebarSections.map(s => s.id);
+                expect(ids).to.deep.equal(['crop', 'background', 'overlay', 'title', 'export']);
+            });
+
+            it('expandedSections keys match sidebarSections ids', () => {
+                const state = createCollageData(createMockBase)();
+                const ids = state.sidebarSections.map(s => s.id);
+                for (const id of ids) {
+                    expect(state.expandedSections).to.have.property(id);
+                }
+            });
+
+            it('leftSidebarSections has layout first and library second', () => {
+                const state = createCollageData(createMockBase)();
+                expect(state.leftSidebarSections).to.be.an('array');
+                expect(state.leftSidebarSections.length).to.equal(2);
+                const ids = state.leftSidebarSections.map(s => s.id);
+                expect(ids).to.deep.equal(['layout', 'library']);
+            });
+
+            it('expandedLeftSections keys match leftSidebarSections ids', () => {
+                const state = createCollageData(createMockBase)();
+                const ids = state.leftSidebarSections.map(s => s.id);
+                for (const id of ids) {
+                    expect(state.expandedLeftSections).to.have.property(id);
+                }
+            });
+        });
+
+        // ============================================================
+        // CR-FU-05: Panel Swap Visual Feedback
+        // ============================================================
+        describe('CR-FU-05 — Panel Swap Visual Feedback', () => {
+            let canvas, state, targetHoveredIds, renderScheduled;
+
+            beforeEach(() => {
+                // Create a real canvas element positioned at origin for coordinate testing
+                canvas = document.createElement('canvas');
+                canvas.id = 'testCanvas';
+                canvas.width = 1920;
+                canvas.height = 1080;
+                canvas.style.cssText = 'width: 960px; height: 540px; position: fixed; top: 0px; left: 0px; z-index: -1;';
+                document.body.appendChild(canvas);
+
+                state = {
+                    panels: [
+                        { id: 'panel-0', imageIndex: 0, geometry: { type: 'rect', rect: { x: 0, y: 0, width: 480, height: 540 } } },
+                        { id: 'panel-1', imageIndex: 1, geometry: { type: 'rect', rect: { x: 480, y: 0, width: 480, height: 540 } } },
+                        { id: 'panel-2', imageIndex: 2, geometry: { type: 'rect', rect: { x: 960, y: 0, width: 480, height: 540 } } },
+                        { id: 'panel-3', imageIndex: 3, geometry: { type: 'rect', rect: { x: 1440, y: 0, width: 480, height: 540 } } }
+                    ],
+                    panelAssignments: new Map([
+                        ['panel-0', 0], ['panel-1', 1], ['panel-2', 2], ['panel-3', 3]
+                    ]),
+                    layoutStyle: LayoutStyle.HERO,
+                    dragTargetId: null,
+                    _multiTouchGestureActive: false
+                };
+
+                targetHoveredIds = [];
+                renderScheduled = false;
+            });
+
+            afterEach(() => {
+                if (canvas && canvas.parentNode) {
+                    canvas.parentNode.removeChild(canvas);
+                }
+            });
+
+            it('onTargetHovered callback fires with panel ID during drag move', () => {
+                const handler = createPanelSwapHandler({
+                    canvasId: 'testCanvas',
+                    state: state,
+                    onPanelSelected: () => {},
+                    onRenderScheduled: () => { renderScheduled = true; },
+                    onSwapPerformed: () => {},
+                    onTargetHovered: (targetId) => { targetHoveredIds.push(targetId); }
+                });
+                handler.attach();
+
+                // Pointer down on panel-0 (canvas-relative: x=100, y=200)
+                const down = new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                });
+                canvas.dispatchEvent(down);
+
+                // Move enough to trigger drag threshold (>10px) then over panel-1
+                const move1 = new PointerEvent('pointermove', {
+                    clientX: 300, clientY: 200, bubbles: true
+                });
+                canvas.dispatchEvent(move1);
+
+                // Move further to be clearly over panel-1 area (CSS x > 240)
+                const move2 = new PointerEvent('pointermove', {
+                    clientX: 500, clientY: 200, bubbles: true
+                });
+                canvas.dispatchEvent(move2);
+
+                expect(targetHoveredIds).to.include('panel-1');
+                expect(renderScheduled).to.be.true;
+
+                handler.detach();
+            });
+
+            it('onTargetHovered callback fires with null on drag end', () => {
+                const handler = createPanelSwapHandler({
+                    canvasId: 'testCanvas',
+                    state: state,
+                    onPanelSelected: () => {},
+                    onRenderScheduled: () => { renderScheduled = true; },
+                    onSwapPerformed: () => {},
+                    onTargetHovered: (targetId) => { targetHoveredIds.push(targetId); }
+                });
+                handler.attach();
+
+                // Start drag on panel-0
+                const down = new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                });
+                canvas.dispatchEvent(down);
+
+                // Move to trigger drag
+                const move = new PointerEvent('pointermove', {
+                    clientX: 300, clientY: 200, bubbles: true
+                });
+                canvas.dispatchEvent(move);
+
+                // End drag
+                const up = new PointerEvent('pointerup', {
+                    clientX: 300, clientY: 200, bubbles: true
+                });
+                canvas.dispatchEvent(up);
+
+                expect(targetHoveredIds).to.include(null);
+
+                handler.detach();
+            });
+
+            it('swap handler works in all layouts (no hex-only guard)', () => {
+                // Test with hero layout — handler should process pointerdown
+                state.layoutStyle = LayoutStyle.HERO;
+                let selectedPanelId = null;
+
+                const handler = createPanelSwapHandler({
+                    canvasId: 'testCanvas',
+                    state: state,
+                    onPanelSelected: (id) => { selectedPanelId = id; },
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: () => {},
+                    onTargetHovered: () => {}
+                });
+                handler.attach();
+
+                // Click on panel-0
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    clientX: 100, clientY: 200, bubbles: true
+                }));
+
+                expect(selectedPanelId).to.equal('panel-0');
+
+                handler.detach();
+            });
+
+            it('canvas cursor is set to grabbing during drag', () => {
+                const handler = createPanelSwapHandler({
+                    canvasId: 'testCanvas',
+                    state: state,
+                    onPanelSelected: () => {},
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: () => {},
+                    onTargetHovered: () => {},
+                    onDragStart: () => {},
+                    onDragEnd: () => {}
+                });
+                handler.attach();
+
+                // Start drag
+                const down = new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                });
+                canvas.dispatchEvent(down);
+
+                // Move to trigger drag
+                const move = new PointerEvent('pointermove', {
+                    clientX: 300, clientY: 200, bubbles: true
+                });
+                canvas.dispatchEvent(move);
+
+                expect(canvas.style.cursor).to.equal('grabbing');
+
+                handler.detach();
+            });
+
+            it('canvas cursor is cleared on drag end', () => {
+                const handler = createPanelSwapHandler({
+                    canvasId: 'testCanvas',
+                    state: state,
+                    onPanelSelected: () => {},
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: () => {},
+                    onTargetHovered: () => {},
+                    onDragStart: () => {},
+                    onDragEnd: () => {}
+                });
+                handler.attach();
+
+                // Start drag
+                const down = new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                });
+                canvas.dispatchEvent(down);
+
+                // Move to trigger drag
+                const move = new PointerEvent('pointermove', {
+                    clientX: 300, clientY: 200, bubbles: true
+                });
+                canvas.dispatchEvent(move);
+
+                // End drag
+                const up = new PointerEvent('pointerup', {
+                    clientX: 300, clientY: 200, bubbles: true
+                });
+                canvas.dispatchEvent(up);
+
+                expect(canvas.style.cursor).to.equal('');
+
+                handler.detach();
+            });
+
+            it('global pointerup cleans up drag state when released outside canvas', () => {
+                const handler = createPanelSwapHandler({
+                    canvasId: 'testCanvas',
+                    state: state,
+                    onPanelSelected: () => {},
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: () => {},
+                    onTargetHovered: (targetId) => { targetHoveredIds.push(targetId); },
+                    onDragStart: () => {},
+                    onDragEnd: () => {}
+                });
+                handler.attach();
+
+                // Start drag on panel-0
+                const down = new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                });
+                canvas.dispatchEvent(down);
+
+                // Move to trigger drag
+                const move = new PointerEvent('pointermove', {
+                    clientX: 300, clientY: 200, bubbles: true
+                });
+                canvas.dispatchEvent(move);
+
+                expect(canvas.style.cursor).to.equal('grabbing');
+
+                // Simulate pointerup on window (outside canvas)
+                const globalUp = new PointerEvent('pointerup', {
+                    clientX: 9999, clientY: 9999, bubbles: true
+                });
+                window.dispatchEvent(globalUp);
+
+                // Drag state should be cleaned up
+                expect(canvas.style.cursor).to.equal('');
+                expect(targetHoveredIds).to.include(null);
+
+                handler.detach();
+            });
+
+            it('dragTargetId is null when not dragging', () => {
+                expect(state.dragTargetId).to.be.null;
+            });
+        });
+
+        // ============================================================
+        // CR-FU-05: PanelRenderer.drawDragTarget
+        // ============================================================
+        describe('CR-FU-05 — PanelRenderer.drawDragTarget', () => {
+            it('drawDragTarget method exists on panel renderer', () => {
+                const renderer = createPanelRenderer();
+                expect(renderer.drawDragTarget).to.be.a('function');
+            });
+
+            it('drawDragTarget sets blue stroke style on rect panel', () => {
+                const renderer = createPanelRenderer();
+                const canvas = document.createElement('canvas');
+                canvas.width = 1920;
+                canvas.height = 1080;
+                const ctx = canvas.getContext('2d');
+
+                // Spy on strokeStyle assignments
+                const strokeStyles = [];
+                let strokeStyleValue = ctx.strokeStyle;
+                Object.defineProperty(ctx, 'strokeStyle', {
+                    get: () => strokeStyleValue,
+                    set: (v) => { strokeStyles.push(v); strokeStyleValue = v; }
+                });
+
+                const panel = {
+                    id: 'test-panel',
+                    geometry: {
+                        type: 'rect',
+                        rect: { x: 100, y: 100, width: 200, height: 300 }
+                    }
+                };
+
+                renderer.drawDragTarget(ctx, panel);
+
+                expect(strokeStyles).to.include('#4285f4');
+            });
+
+            it('drawDragTarget sets blue stroke style on path panel', () => {
+                const renderer = createPanelRenderer();
+                const canvas = document.createElement('canvas');
+                canvas.width = 1920;
+                canvas.height = 1080;
+                const ctx = canvas.getContext('2d');
+
+                const strokeStyles = [];
+                let strokeStyleValue = ctx.strokeStyle;
+                Object.defineProperty(ctx, 'strokeStyle', {
+                    get: () => strokeStyleValue,
+                    set: (v) => { strokeStyles.push(v); strokeStyleValue = v; }
+                });
+
+                const panel = {
+                    id: 'hex-panel',
+                    geometry: {
+                        type: 'path',
+                        points: [
+                            [100, 50], [200, 50], [250, 150],
+                            [200, 250], [100, 250], [50, 150]
+                        ]
+                    }
+                };
+
+                renderer.drawDragTarget(ctx, panel);
+
+                expect(strokeStyles).to.include('#4285f4');
+            });
+
+            it('drawDragTarget sets dashed line pattern', () => {
+                const renderer = createPanelRenderer();
+                const canvas = document.createElement('canvas');
+                canvas.width = 1920;
+                canvas.height = 1080;
+                const ctx = canvas.getContext('2d');
+
+                let dashPattern = null;
+                const origSetLineDash = ctx.setLineDash.bind(ctx);
+                ctx.setLineDash = (pattern) => { dashPattern = pattern; origSetLineDash(pattern); };
+
+                const panel = {
+                    id: 'test-panel',
+                    geometry: {
+                        type: 'rect',
+                        rect: { x: 100, y: 100, width: 200, height: 300 }
+                    }
+                };
+
+                renderer.drawDragTarget(ctx, panel);
+
+                expect(dashPattern).to.deep.equal([6, 4]);
+            });
+
+            it('drawDragTarget sets lineWidth to 3', () => {
+                const renderer = createPanelRenderer();
+                const canvas = document.createElement('canvas');
+                canvas.width = 1920;
+                canvas.height = 1080;
+                const ctx = canvas.getContext('2d');
+
+                const lineWeights = [];
+                let lineWidthValue = ctx.lineWidth;
+                Object.defineProperty(ctx, 'lineWidth', {
+                    get: () => lineWidthValue,
+                    set: (v) => { lineWeights.push(v); lineWidthValue = v; }
+                });
+
+                const panel = {
+                    id: 'test-panel',
+                    geometry: {
+                        type: 'rect',
+                        rect: { x: 100, y: 100, width: 200, height: 300 }
+                    }
+                };
+
+                renderer.drawDragTarget(ctx, panel);
+
+                expect(lineWeights).to.include(3);
+            });
+
+            it('drawDragTarget sets globalAlpha to 0.8', () => {
+                const renderer = createPanelRenderer();
+                const canvas = document.createElement('canvas');
+                canvas.width = 1920;
+                canvas.height = 1080;
+                const ctx = canvas.getContext('2d');
+
+                const alphas = [];
+                let alphaValue = ctx.globalAlpha;
+                Object.defineProperty(ctx, 'globalAlpha', {
+                    get: () => alphaValue,
+                    set: (v) => { alphas.push(v); alphaValue = v; }
+                });
+
+                const panel = {
+                    id: 'test-panel',
+                    geometry: {
+                        type: 'rect',
+                        rect: { x: 100, y: 100, width: 200, height: 300 }
+                    }
+                };
+
+                renderer.drawDragTarget(ctx, panel);
+
+                expect(alphas).to.include(0.8);
+            });
+        });
+
+        // ============================================================
+        // CR-FU-05: CollageAssembler dragTargetId rendering
+        // ============================================================
+        describe('CR-FU-05 — CollageAssembler dragTargetId', () => {
+            it('assembler render accepts dragTargetId option', () => {
+                const assembler = createCollageAssembler();
+                const canvas = document.createElement('canvas');
+                canvas.width = 1920;
+                canvas.height = 1080;
+                const ctx = canvas.getContext('2d');
+
+                const panels = [
+                    { id: 'panel-0', imageIndex: 0, geometry: { type: 'rect', rect: { x: 0, y: 0, width: 960, height: 1080 } } },
+                    { id: 'panel-1', imageIndex: 1, geometry: { type: 'rect', rect: { x: 960, y: 0, width: 960, height: 1080 } } }
+                ];
+
+                // Should not throw when dragTargetId is provided
+                expect(() => {
+                    assembler.render(ctx, {
+                        panels: panels,
+                        images: [],
+                        crops: new Map(),
+                        panelAssignments: new Map(),
+                        backgroundColor: '#ffffff',
+                        canvasSize: { width: 1920, height: 1080 },
+                        selectedPanelId: null,
+                        hoveredPanelId: null,
+                        dragTargetId: 'panel-1'
+                    });
+                }).to.not.throw();
+            });
+
+            it('assembler renders dragTarget highlight when target panel exists', () => {
+                const assembler = createCollageAssembler();
+                const canvas = document.createElement('canvas');
+                canvas.width = 1920;
+                canvas.height = 1080;
+                const ctx = canvas.getContext('2d');
+
+                // Spy on strokeStyle
+                const strokeStyles = [];
+                let strokeStyleValue = ctx.strokeStyle;
+                Object.defineProperty(ctx, 'strokeStyle', {
+                    get: () => strokeStyleValue,
+                    set: (v) => { strokeStyles.push(v); strokeStyleValue = v; }
+                });
+
+                const panels = [
+                    { id: 'panel-0', imageIndex: 0, geometry: { type: 'rect', rect: { x: 0, y: 0, width: 960, height: 1080 } } },
+                    { id: 'panel-1', imageIndex: 1, geometry: { type: 'rect', rect: { x: 960, y: 0, width: 960, height: 1080 } } }
+                ];
+
+                assembler.render(ctx, {
+                    panels: panels,
+                    images: [],
+                    crops: new Map(),
+                    panelAssignments: new Map(),
+                    backgroundColor: '#ffffff',
+                    canvasSize: { width: 1920, height: 1080 },
+                    selectedPanelId: null,
+                    hoveredPanelId: null,
+                    dragTargetId: 'panel-1'
+                });
+
+                // The dragTarget highlight should have set blue stroke
+                expect(strokeStyles).to.include('#4285f4');
+            });
+
+            it('assembler skips dragTarget when target panel not found', () => {
+                const assembler = createCollageAssembler();
+                const canvas = document.createElement('canvas');
+                canvas.width = 1920;
+                canvas.height = 1080;
+                const ctx = canvas.getContext('2d');
+
+                // Spy on strokeStyle
+                const strokeStyles = [];
+                let strokeStyleValue = ctx.strokeStyle;
+                Object.defineProperty(ctx, 'strokeStyle', {
+                    get: () => strokeStyleValue,
+                    set: (v) => { strokeStyles.push(v); strokeStyleValue = v; }
+                });
+
+                const panels = [
+                    { id: 'panel-0', imageIndex: 0, geometry: { type: 'rect', rect: { x: 0, y: 0, width: 960, height: 1080 } } }
+                ];
+
+                assembler.render(ctx, {
+                    panels: panels,
+                    images: [],
+                    crops: new Map(),
+                    panelAssignments: new Map(),
+                    backgroundColor: '#ffffff',
+                    canvasSize: { width: 1920, height: 1080 },
+                    selectedPanelId: null,
+                    hoveredPanelId: null,
+                    dragTargetId: 'nonexistent-panel'
+                });
+
+                // Should not have set blue stroke (target not found)
+                expect(strokeStyles).to.not.include('#4285f4');
+            });
+        });
+
+        // ============================================================
+        // CR-FU-05: Reactive state includes dragTargetId
+        // ============================================================
+        describe('CR-FU-05 — Reactive state dragTargetId', () => {
+            it('reactive state includes dragTargetId initialized to null', () => {
+                const state = createCollageData(createMockBase)();
+                expect(state.dragTargetId).to.be.null;
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

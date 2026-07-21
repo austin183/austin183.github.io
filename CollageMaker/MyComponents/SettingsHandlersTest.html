@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SettingsHandlers Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — SettingsHandlers Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Plan 2026-07-15-review-fixes-implementation Phase 1 — tests 1.T.5 through 1.T.9</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createSettingsHandlers } from '../MyESModules/App/createSettingsHandlers.js';
+        import { createCollageLifecycle } from '../MyESModules/App/createCollageLifecycle.js';
+        import { createTitleHandlers } from '../MyESModules/App/createTitleHandlers.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // Shared mock state factory
+        // ============================================================
+        function makeMockState(overrides = {}) {
+            return {
+                layoutStyle: 'hero',
+                gutter: 0,
+                sliceAngle: 45,
+                hexSpacing: 8,
+                backgroundStyle: 'solid',
+                backgroundColor: '#ffffff',
+                gradientColors: ['#000000', '#333333'],
+                gradientAngle: 90,
+                titleStyle: {
+                    fontFamily: 'Arial',
+                    fontSize: 36,
+                    fontColor: '#FFFFFF',
+                    alignment: 'center',
+                    fontOpacity: 1.0,
+                    bgOpacity: 1.0,
+                    titleBoxWidth: null,
+                    titleBoxX: null,
+                    titleBoxY: null,
+                    showBackground: false,
+                    backgroundColor: '#000000',
+                    ...overrides.titleStyle
+                },
+                exportQuality: 0.92,
+                ...overrides
+            };
+        }
+
+        // ============================================================
+        // Phase 1: _saveSettings payload tests
+        // ============================================================
+        describe('Phase 1 — _saveSettings includes all 7 new title fields', () => {
+            let savedPayload;
+            let handlers;
+            let originalSetItem;
+
+            beforeEach(function () {
+                // Mock localStorage so save() doesn't actually write
+                originalSetItem = localStorage.setItem;
+                savedPayload = null;
+                localStorage.setItem = function (key, value) {
+                    savedPayload = JSON.parse(value);
+                };
+
+                handlers = createSettingsHandlers();
+            });
+
+            afterEach(function () {
+                localStorage.setItem = originalSetItem;
+            });
+
+            it('1.T.5 — _saveSettings includes all 7 new title fields in payload', () => {
+                const state = makeMockState({
+                    titleStyle: {
+                        fontOpacity: 0.5,
+                        bgOpacity: 0.8,
+                        titleBoxWidth: 500,
+                        titleBoxX: 100,
+                        titleBoxY: 850,
+                        showBackground: true,
+                        backgroundColor: '#FF0000'
+                    }
+                });
+                handlers._saveSettings(state);
+
+                expect(savedPayload).to.have.property('titleFontOpacity', 0.5);
+                expect(savedPayload).to.have.property('titleBgOpacity', 0.8);
+                expect(savedPayload).to.have.property('titleBoxWidth', 500);
+                expect(savedPayload).to.have.property('titleBoxX', 100);
+                expect(savedPayload).to.have.property('titleBoxY', 850);
+                expect(savedPayload).to.have.property('titleShowBackground', true);
+                expect(savedPayload).to.have.property('titleBackgroundColor', '#FF0000');
+            });
+
+            it('1.T.5b — _saveSettings still includes original 4 title fields', () => {
+                const state = makeMockState();
+                handlers._saveSettings(state);
+
+                expect(savedPayload).to.have.property('titleFontFamily', 'Arial');
+                expect(savedPayload).to.have.property('titleFontSize', 36);
+                expect(savedPayload).to.have.property('titleFontColor', '#FFFFFF');
+                expect(savedPayload).to.have.property('titleAlignment', 'center');
+            });
+
+            it('1.T.5c — titleBackgroundColor does not collide with backgroundColor', () => {
+                const state = makeMockState({
+                    backgroundColor: '#ffffff',
+                    titleStyle: {
+                        backgroundColor: '#FF0000'
+                    }
+                });
+                handlers._saveSettings(state);
+
+                expect(savedPayload).to.have.property('backgroundColor', '#ffffff');
+                expect(savedPayload).to.have.property('titleBackgroundColor', '#FF0000');
+                expect(savedPayload.backgroundColor).to.not.equal(savedPayload.titleBackgroundColor);
+            });
+
+            it('1.T.5d — _saveSettings preserves null for position/width fields', () => {
+                const state = makeMockState({
+                    titleStyle: {
+                        titleBoxWidth: null,
+                        titleBoxX: null,
+                        titleBoxY: null
+                    }
+                });
+                handlers._saveSettings(state);
+
+                expect(savedPayload).to.have.property('titleBoxWidth', null);
+                expect(savedPayload).to.have.property('titleBoxX', null);
+                expect(savedPayload).to.have.property('titleBoxY', null);
+            });
+
+            it('1.T.5e — _saveSettings preserves falsy values', () => {
+                const state = makeMockState({
+                    titleStyle: {
+                        fontOpacity: 0,
+                        bgOpacity: 0,
+                        showBackground: false
+                    }
+                });
+                handlers._saveSettings(state);
+
+                expect(savedPayload).to.have.property('titleFontOpacity', 0);
+                expect(savedPayload).to.have.property('titleBgOpacity', 0);
+                expect(savedPayload).to.have.property('titleShowBackground', false);
+            });
+        });
+
+        // ============================================================
+        // Phase 1: _applySavedSettings restore tests
+        // ============================================================
+        describe('Phase 1 — _applySavedSettings restores all 7 new title fields', () => {
+            it('1.T.6 — restores all 7 new title fields from settings', () => {
+                // Extract the _applySavedSettings method from lifecycle
+                const lifecycle = createCollageLifecycle({});
+                const vm = {
+                    layoutStyle: 'hero',
+                    gutter: 0,
+                    sliceAngle: 45,
+                    hexSpacing: 8,
+                    backgroundStyle: 'solid',
+                    backgroundColor: '#ffffff',
+                    gradientColors: ['#000000', '#333333'],
+                    gradientAngle: 90,
+                    titleStyle: {
+                        fontFamily: 'Arial',
+                        fontSize: 36,
+                        fontColor: '#FFFFFF',
+                        alignment: 'center',
+                        fontOpacity: 1.0,
+                        bgOpacity: 1.0,
+                        titleBoxWidth: null,
+                        titleBoxX: null,
+                        titleBoxY: null,
+                        showBackground: false,
+                        backgroundColor: '#000000'
+                    },
+                    exportQuality: 0.92
+                };
+
+                const settings = {
+                    titleFontOpacity: 0.5,
+                    titleBgOpacity: 0.8,
+                    titleBoxWidth: 500,
+                    titleBoxX: 100,
+                    titleBoxY: 850,
+                    titleShowBackground: true,
+                    titleBackgroundColor: '#FF0000'
+                };
+
+                lifecycle.methods._applySavedSettings.call(vm, settings);
+
+                expect(vm.titleStyle.fontOpacity).to.equal(0.5);
+                expect(vm.titleStyle.bgOpacity).to.equal(0.8);
+                expect(vm.titleStyle.titleBoxWidth).to.equal(500);
+                expect(vm.titleStyle.titleBoxX).to.equal(100);
+                expect(vm.titleStyle.titleBoxY).to.equal(850);
+                expect(vm.titleStyle.showBackground).to.equal(true);
+                expect(vm.titleStyle.backgroundColor).to.equal('#FF0000');
+            });
+
+            it('1.T.7 — handles missing new fields gracefully (backward compat)', () => {
+                const lifecycle = createCollageLifecycle({});
+                const vm = {
+                    layoutStyle: 'hero',
+                    gutter: 0,
+                    sliceAngle: 45,
+                    hexSpacing: 8,
+                    backgroundStyle: 'solid',
+                    backgroundColor: '#ffffff',
+                    gradientColors: ['#000000', '#333333'],
+                    gradientAngle: 90,
+                    titleStyle: {
+                        fontFamily: 'Arial',
+                        fontSize: 36,
+                        fontColor: '#FFFFFF',
+                        alignment: 'center',
+                        fontOpacity: 1.0,
+                        bgOpacity: 1.0,
+                        titleBoxWidth: null,
+                        titleBoxX: null,
+                        titleBoxY: null,
+                        showBackground: false,
+                        backgroundColor: '#000000'
+                    },
+                    exportQuality: 0.92
+                };
+
+                // Old settings format — no new title fields
+                const oldSettings = {
+                    layoutStyle: 'mosaic',
+                    titleFontFamily: 'Georgia',
+                    titleFontSize: 48
+                };
+
+                // Should not throw
+                expect(() => {
+                    lifecycle.methods._applySavedSettings.call(vm, oldSettings);
+                }).to.not.throw();
+
+                // Existing fields restored
+                expect(vm.layoutStyle).to.equal('mosaic');
+                expect(vm.titleStyle.fontFamily).to.equal('Georgia');
+                expect(vm.titleStyle.fontSize).to.equal(48);
+
+                // New fields remain at defaults (untouched)
+                expect(vm.titleStyle.fontOpacity).to.equal(1.0);
+                expect(vm.titleStyle.bgOpacity).to.equal(1.0);
+                expect(vm.titleStyle.titleBoxWidth).to.equal(null);
+                expect(vm.titleStyle.titleBoxX).to.equal(null);
+                expect(vm.titleStyle.titleBoxY).to.equal(null);
+                expect(vm.titleStyle.showBackground).to.equal(false);
+                expect(vm.titleStyle.backgroundColor).to.equal('#000000');
+            });
+
+            it('1.T.8 — handles titleFontOpacity: 0 correctly (not skipped by truthy guard)', () => {
+                const lifecycle = createCollageLifecycle({});
+                const vm = makeMockState();
+
+                const settings = { titleFontOpacity: 0 };
+                lifecycle.methods._applySavedSettings.call(vm, settings);
+
+                expect(vm.titleStyle.fontOpacity).to.equal(0);
+            });
+
+            it('1.T.9 — handles titleShowBackground: false correctly (not skipped by truthy guard)', () => {
+                const lifecycle = createCollageLifecycle({});
+                const vm = makeMockState({
+                    titleStyle: { showBackground: true }
+                });
+
+                const settings = { titleShowBackground: false };
+                lifecycle.methods._applySavedSettings.call(vm, settings);
+
+                expect(vm.titleStyle.showBackground).to.equal(false);
+            });
+
+            it('1.T.9b — handles titleBgOpacity: 0 correctly', () => {
+                const lifecycle = createCollageLifecycle({});
+                const vm = makeMockState();
+
+                const settings = { titleBgOpacity: 0 };
+                lifecycle.methods._applySavedSettings.call(vm, settings);
+
+                expect(vm.titleStyle.bgOpacity).to.equal(0);
+            });
+
+            it('1.T.9c — handles null position/width values correctly', () => {
+                const lifecycle = createCollageLifecycle({});
+                const vm = makeMockState({
+                    titleStyle: {
+                        titleBoxWidth: 400,
+                        titleBoxX: 50,
+                        titleBoxY: 100
+                    }
+                });
+
+                const settings = {
+                    titleBoxWidth: null,
+                    titleBoxX: null,
+                    titleBoxY: null
+                };
+                lifecycle.methods._applySavedSettings.call(vm, settings);
+
+                expect(vm.titleStyle.titleBoxWidth).to.equal(null);
+                expect(vm.titleStyle.titleBoxX).to.equal(null);
+                expect(vm.titleStyle.titleBoxY).to.equal(null);
+            });
+        });
+
+        // ============================================================
+        // Phase 2: onTitleWidthChange simplification
+        // ============================================================
+        describe('Phase 2 — onTitleWidthChange simplification', () => {
+            it('2.T.6 — onTitleWidthChange with no args reads from v-model source of truth', () => {
+                let setWidthCalls = [];
+                const mockTitleManager = {
+                    setWidth: (w) => { setWidthCalls.push(w); }
+                };
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {}
+                );
+
+                // Simulate Vue instance context with titleStyle set by v-model
+                const vm = {
+                    titleStyle: {
+                        titleBoxWidth: 600
+                    }
+                };
+
+                // Call with no arguments (as @input binding does)
+                handlers.onTitleWidthChange.call(vm);
+
+                expect(setWidthCalls).to.have.lengthOf(1);
+                expect(setWidthCalls[0]).to.equal(600);
+            });
+
+            it('2.T.7 — onTitleWidthChange is consistent with other handlers (no params)', () => {
+                let setWidthCalls = [];
+                let setOpacityCalls = [];
+                const mockTitleManager = {
+                    setWidth: (w) => { setWidthCalls.push(w); },
+                    setFontOpacity: (o) => { setOpacityCalls.push(o); }
+                };
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {}
+                );
+
+                const vm = {
+                    titleStyle: {
+                        titleBoxWidth: 500,
+                        fontOpacity: 0.5
+                    }
+                };
+
+                // Both handlers take no arguments and read from this.titleStyle
+                handlers.onTitleWidthChange.call(vm);
+                handlers.onTitleFontOpacityChange.call(vm);
+
+                expect(setWidthCalls).to.have.lengthOf(1);
+                expect(setWidthCalls[0]).to.equal(500);
+                expect(setOpacityCalls).to.have.lengthOf(1);
+                expect(setOpacityCalls[0]).to.equal(0.5);
+            });
+        });
+
+        // ============================================================
+        // Phase 5: Storage full handling — toast on save failure (H-3)
+        // ============================================================
+        describe('Phase 5 — _saveSettings shows toast when storage is full', () => {
+            it('5.T.1 — save succeeds (returns true): no toast shown', () => {
+                const mockSave = () => true;
+                const toastCalls = [];
+                const handlers = createSettingsHandlers(mockSave);
+
+                const state = {
+                    layoutStyle: 'hero',
+                    gutter: 0,
+                    sliceAngle: 45,
+                    hexSpacing: 8,
+                    backgroundStyle: 'solid',
+                    backgroundColor: '#ffffff',
+                    gradientColors: ['#000000', '#333333'],
+                    gradientAngle: 90,
+                    titleStyle: {
+                        fontFamily: 'Arial',
+                        fontSize: 36,
+                        fontColor: '#FFFFFF',
+                        alignment: 'center',
+                        fontOpacity: 1.0,
+                        bgOpacity: 1.0,
+                        titleBoxWidth: null,
+                        titleBoxX: null,
+                        titleBoxY: null,
+                        showBackground: false,
+                        backgroundColor: '#000000'
+                    },
+                    exportQuality: 0.92,
+                    showToast: (msg, type, dur) => { toastCalls.push({ msg, type, dur }); }
+                };
+
+                handlers._saveSettings(state);
+
+                expect(toastCalls).to.have.lengthOf(0);
+            });
+
+            it('5.T.2 — save fails (returns false): error toast shown', () => {
+                const mockSave = () => false;
+                const toastCalls = [];
+                const handlers = createSettingsHandlers(mockSave);
+
+                const state = {
+                    layoutStyle: 'hero',
+                    gutter: 0,
+                    sliceAngle: 45,
+                    hexSpacing: 8,
+                    backgroundStyle: 'solid',
+                    backgroundColor: '#ffffff',
+                    gradientColors: ['#000000', '#333333'],
+                    gradientAngle: 90,
+                    titleStyle: {
+                        fontFamily: 'Arial',
+                        fontSize: 36,
+                        fontColor: '#FFFFFF',
+                        alignment: 'center',
+                        fontOpacity: 1.0,
+                        bgOpacity: 1.0,
+                        titleBoxWidth: null,
+                        titleBoxX: null,
+                        titleBoxY: null,
+                        showBackground: false,
+                        backgroundColor: '#000000'
+                    },
+                    exportQuality: 0.92,
+                    showToast: (msg, type, dur) => { toastCalls.push({ msg, type, dur }); }
+                };
+
+                handlers._saveSettings(state);
+
+                expect(toastCalls).to.have.lengthOf(1);
+                expect(toastCalls[0].msg).to.equal('Settings not saved — storage full');
+                expect(toastCalls[0].type).to.equal('error');
+                expect(toastCalls[0].dur).to.equal(5000);
+            });
+
+            it('5.T.3 — save fails but no showToast on state: no error thrown', () => {
+                const mockSave = () => false;
+                const handlers = createSettingsHandlers(mockSave);
+
+                const state = {
+                    layoutStyle: 'hero',
+                    gutter: 0,
+                    sliceAngle: 45,
+                    hexSpacing: 8,
+                    backgroundStyle: 'solid',
+                    backgroundColor: '#ffffff',
+                    gradientColors: ['#000000', '#333333'],
+                    gradientAngle: 90,
+                    titleStyle: {
+                        fontFamily: 'Arial',
+                        fontSize: 36,
+                        fontColor: '#FFFFFF',
+                        alignment: 'center',
+                        fontOpacity: 1.0,
+                        bgOpacity: 1.0,
+                        titleBoxWidth: null,
+                        titleBoxX: null,
+                        titleBoxY: null,
+                        showBackground: false,
+                        backgroundColor: '#000000'
+                    },
+                    exportQuality: 0.92
+                    // No showToast method
+                };
+
+                expect(() => {
+                    handlers._saveSettings(state);
+                }).to.not.throw();
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

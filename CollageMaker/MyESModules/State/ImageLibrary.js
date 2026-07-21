@@ -1,0 +1,116 @@
+/**
+  * ImageLibrary - Image collection management.
+  * Ported from Swift ViewModel/ImageLibraryManager.swift
+  */
+
+import { createImageItem, generateThumbnail, disposeImageItem } from '../Models/ImageItem.js';
+
+/**
+ * Creates an image library manager.
+ * @param {Object} state - The reactive CollageState
+ * @param {Function} onImagesChanged - Callback when images change
+ * @returns {Object} ImageLibrary
+ */
+export function createImageLibrary(state, onImagesChanged) {
+    return {
+        /**
+         * Adds images from an array of File objects.
+         * @param {File[]} files
+         * @param {Function} [onProgress] - Optional callback(current, total) fired per-image
+         * @param {Function} [onFailures] - Optional callback(failedCount, totalCount) fired when some images fail
+         * @returns {Promise<void>}
+         */
+        async addImages(files, onProgress, onFailures) {
+            const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+            if (imageFiles.length === 0) return;
+
+            let loaded = 0;
+            const newItems = await Promise.all(
+                imageFiles.map(async (file) => {
+                    const item = await this._loadImage(file);
+                    loaded++;
+                    if (typeof onProgress === 'function') {
+                        onProgress(loaded, imageFiles.length);
+                    }
+                    return item;
+                })
+            );
+
+            const validItems = newItems.filter(item => item !== null);
+            const failedCount = newItems.length - validItems.length;
+if (failedCount > 0) {
+                console.warn(`ImageLibrary: ${failedCount} of ${newItems.length} image(s) failed to load`);
+                if (typeof onFailures === 'function') {
+                    try {
+                        onFailures(failedCount, newItems.length);
+                    } catch (err) {
+                        console.error('ImageLibrary: onFailures callback error:', err);
+                    }
+                }
+            }
+            if (validItems.length === 0) return;
+
+            state.images.push(...validItems);
+            onImagesChanged();
+        },
+
+        /**
+          * Disposes and removes an image at the given index.
+          * Properly nulls out image references to allow garbage collection.
+          * @param {number} index
+          */
+        disposeImage(index) {
+            if (index < 0 || index >= state.images.length) return;
+
+            const imageItem = state.images[index];
+            disposeImageItem(imageItem); // Centralized disposal logic
+
+            // Remove from array
+            state.images.splice(index, 1);
+            onImagesChanged();
+        },
+
+        /**
+          * Clears all images, disposing their references.
+          */
+        clearAll() {
+            // Dispose each image first to release HTMLImageElement references
+            for (let i = 0; i < state.images.length; i++) {
+                disposeImageItem(state.images[i]);
+            }
+
+            // Remove all items from the array in-place to maintain reactive reference
+            state.images.splice(0, state.images.length);
+            onImagesChanged();
+        },
+
+        /**
+         * Loads a single image file into an ImageItem.
+         * @param {File} file
+         * @returns {Promise<Object|null>}
+         */
+        _loadImage(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const thumbnail = generateThumbnail(img);
+                        const item = createImageItem({
+                            image: img,
+                            filename: file.name,
+                            width: img.naturalWidth,
+                            height: img.naturalHeight,
+                            thumbnail
+                        });
+                        resolve(item);
+                    };
+                    img.onerror = () => resolve(null);
+                    img.src = e.target.result;
+                };
+                reader.onerror = () => resolve(null);
+                reader.readAsDataURL(file);
+            });
+        }
+    };
+}

@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phase 1 Code Quality Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Phase 1 Code Quality Tests</h1>
+    <p class="test-plan-ref">Covers: MARGIN deduplication, shared offscreen canvas, test import alignment</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { computeMultiLineBounds, PADDING } from '../MyESModules/Rendering/TitleRenderer.js';
+        import { createTitleInteraction } from '../MyESModules/Interaction/TitleInteraction.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // Helpers
+        // ============================================================
+
+        function makeTitleRun({ text = 'Hello World', bold = false, italic = false, underline = false } = {}) {
+            return { text, bold, italic, underline };
+        }
+
+        function makeTitleStyle({
+            fontSize = 36,
+            fontFamily = 'Arial',
+            alignment = 'center',
+            titleBoxWidth = 400,
+            titleBoxX = 500,
+            titleBoxY = 900
+        } = {}) {
+            return { fontSize, fontFamily, alignment, titleBoxWidth, titleBoxX, titleBoxY };
+        }
+
+        function createTestState(titleStyle, titleRuns) {
+            return {
+                titleStyle: titleStyle || makeTitleStyle(),
+                titleRuns: titleRuns || [makeTitleRun()],
+                panels: [],
+                panelAssignments: new Map(),
+                _multiTouchGestureActive: false,
+                titleInteractionMode: null,
+                titleHoverTarget: null
+            };
+        }
+
+        function createTestCanvas() {
+            const canvas = document.createElement('canvas');
+            canvas.id = 'phase1-test-canvas';
+            canvas.width = 1920;
+            canvas.height = 1080;
+            canvas.style.cssText = 'width: 960px; height: 540px; position: fixed; top: 0px; left: 0px; z-index: -1;';
+            document.body.appendChild(canvas);
+            return canvas;
+        }
+
+        // Canvas creation tracker
+        let createCanvasCalls = 0;
+        let originalCreateElement = null;
+
+        function startTrackingCanvasCreation() {
+            if (!originalCreateElement) {
+                originalCreateElement = document.createElement.bind(document);
+                document.createElement = function(tagName) {
+                    if (tagName.toLowerCase() === 'canvas') {
+                        createCanvasCalls++;
+                    }
+                    return originalCreateElement(tagName);
+                };
+            }
+            createCanvasCalls = 0;
+        }
+
+        function stopTrackingCanvasCreation() {
+            if (originalCreateElement) {
+                document.createElement = originalCreateElement;
+                originalCreateElement = null;
+            }
+            createCanvasCalls = 0;
+        }
+
+        // ============================================================
+        // Section 1: MARGIN Constant Deduplication
+        // ============================================================
+        describe('Phase 1 — MARGIN Constant', () => {
+            it('MARGIN is exported from TitleRenderer and equals 40', async () => {
+                const mod = await import('../MyESModules/Rendering/TitleRenderer.js');
+                expect(mod.MARGIN).to.equal(40);
+            });
+
+            it('MARGIN value is consistent with PADDING (both exported)', async () => {
+                const mod = await import('../MyESModules/Rendering/TitleRenderer.js');
+                expect(mod.MARGIN).to.be.a('number');
+                expect(mod.PADDING).to.be.a('number');
+                expect(mod.MARGIN).to.be.greaterThan(mod.PADDING);
+            });
+
+            it('Legacy-mode hit test uses MARGIN=40 for left alignment', () => {
+                const canvas = createTestCanvas();
+                const state = createTestState(
+                    { fontSize: 36, fontFamily: 'Arial', alignment: 'left' },
+                    [makeTitleRun({ text: 'Hello' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'phase1-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // With MARGIN=40, left-aligned: effectiveBoxX = 40
+                // bgX = 40 - 12 = 28, CSS: 14px
+                // baselineY = 1080 - 40 = 1040, bounds.y = 1040 - 36 - 12 = 992, CSS: 496
+                // bounds.height = 36 + 24 = 60, CSS: 30
+                // CSS box: left=14, top=496, height=30, so y=506 is within box
+                const result = handler._hitTestTitle(20, 506, 960, 540);
+                expect(result.hit).to.be.true;
+
+                handler.detach();
+                canvas.parentNode.removeChild(canvas);
+            });
+
+            it('Legacy-mode hit test uses MARGIN=40 for right alignment', () => {
+                const canvas = createTestCanvas();
+                const state = createTestState(
+                    { fontSize: 36, fontFamily: 'Arial', alignment: 'right' },
+                    [makeTitleRun({ text: 'Hi' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'phase1-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Right-aligned: effectiveBoxX = 1920 - 40 - textWidth
+                // "Hi" textWidth ~100px, effectiveBoxX = 1780
+                // bgX = 1780 - 12 = 1768, CSS: 884
+                // boxWidth ~100 + 24 = 124, CSS: 62
+                // CSS right edge: 884 + 62 = 946
+                // Hit test near right edge of canvas at y=506
+                const result = handler._hitTestTitle(920, 506, 960, 540);
+                expect(result.hit).to.be.true;
+
+                handler.detach();
+                canvas.parentNode.removeChild(canvas);
+            });
+        });
+
+        // ============================================================
+        // Section 2: Shared Offscreen Canvas — computeMultiLineBounds
+        // ============================================================
+        describe('Phase 1 — computeMultiLineBounds measureCtx', () => {
+            beforeEach(() => {
+                startTrackingCanvasCreation();
+            });
+
+            afterEach(() => {
+                stopTrackingCanvasCreation();
+            });
+
+            it('WITHOUT measureCtx creates a new canvas', () => {
+                const style = { fontSize: 36, fontFamily: 'Arial', alignment: 'center' };
+                const runs = [makeTitleRun({ text: 'Test' })];
+
+                computeMultiLineBounds(style, runs, 1920, 1080);
+                expect(createCanvasCalls).to.be.at.least(1);
+            });
+
+            it('WITH measureCtx does NOT create a new canvas', () => {
+                const style = { fontSize: 36, fontFamily: 'Arial', alignment: 'center' };
+                const runs = [makeTitleRun({ text: 'Test' })];
+
+                const offscreen = originalCreateElement('canvas');
+                const measureCtx = offscreen.getContext('2d');
+                createCanvasCalls = 0;
+
+                computeMultiLineBounds(style, runs, 1920, 1080, measureCtx);
+                expect(createCanvasCalls).to.equal(0);
+            });
+
+            it('100 calls WITH shared measureCtx create no canvases', () => {
+                const style = { fontSize: 36, fontFamily: 'Arial', alignment: 'center' };
+                const runs = [makeTitleRun({ text: 'Test' })];
+
+                const offscreen = originalCreateElement('canvas');
+                const measureCtx = offscreen.getContext('2d');
+                createCanvasCalls = 0;
+
+                for (let i = 0; i < 100; i++) {
+                    computeMultiLineBounds(style, runs, 1920, 1080, measureCtx);
+                }
+                expect(createCanvasCalls).to.equal(0);
+            });
+
+            it('10 calls WITHOUT measureCtx create 10 canvases', () => {
+                const style = { fontSize: 36, fontFamily: 'Arial', alignment: 'center' };
+                const runs = [makeTitleRun({ text: 'Test' })];
+
+                for (let i = 0; i < 10; i++) {
+                    computeMultiLineBounds(style, runs, 1920, 1080);
+                }
+                expect(createCanvasCalls).to.be.at.least(10);
+            });
+        });
+
+        // ============================================================
+        // Section 3: TitleInteraction uses shared measureCtx
+        // ============================================================
+        describe('Phase 1 — TitleInteraction Shared Canvas', () => {
+            beforeEach(() => {
+                startTrackingCanvasCreation();
+            });
+
+            afterEach(() => {
+                stopTrackingCanvasCreation();
+            });
+
+            it('Dragging title creates no new canvases per pointermove', () => {
+                const canvas = createTestCanvas();
+
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                let positionCalls = [];
+                const titleManager = {
+                    setPosition: (x, y) => { positionCalls.push({ x, y }); state.titleStyle.titleBoxX = x; state.titleStyle.titleBoxY = y; },
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'phase1-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                // Reset counter after factory creates shared measureCanvas
+                createCanvasCalls = 0;
+
+                handler.attach();
+
+                // Pointer down on title body
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 350, clientY: 456, button: 0, bubbles: true
+                }));
+
+                // Simulate many pointermove events during drag
+                for (let i = 0; i < 20; i++) {
+                    canvas.dispatchEvent(new PointerEvent('pointermove', {
+                        clientX: 350 + i * 2, clientY: 456, bubbles: true
+                    }));
+                }
+
+                // With shared measureCtx, no new canvases during drag
+                expect(createCanvasCalls).to.equal(0);
+
+                handler.detach();
+                canvas.parentNode.removeChild(canvas);
+            });
+
+            it('Resizing title creates no new canvases per pointermove', () => {
+                const canvas = createTestCanvas();
+
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                let widthCalls = [];
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: (w) => { widthCalls.push(w); state.titleStyle.titleBoxWidth = w; },
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'phase1-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                // Reset counter after factory creates shared measureCanvas
+                createCanvasCalls = 0;
+
+                handler.attach();
+
+                // Pointer down on right edge
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 447, clientY: 456, button: 0, bubbles: true
+                }));
+
+                // Simulate many pointermove events during resize
+                for (let i = 0; i < 20; i++) {
+                    canvas.dispatchEvent(new PointerEvent('pointermove', {
+                        clientX: 447 + i * 3, clientY: 456, bubbles: true
+                    }));
+                }
+
+                expect(createCanvasCalls).to.equal(0);
+
+                handler.detach();
+                canvas.parentNode.removeChild(canvas);
+            });
+        });
+
+        // ============================================================
+        // Section 4: Test Import Alignment
+        // ============================================================
+        describe('Phase 1 — Test Import Alignment', () => {
+            it('computeMultiLineBounds is importable from TitleRenderer', async () => {
+                const mod = await import('../MyESModules/Rendering/TitleRenderer.js');
+                expect(mod.computeMultiLineBounds).to.be.a('function');
+            });
+
+            it('computeMultiLineBounds and computeBounds produce same result for single-line text', async () => {
+                const { computeBounds, computeMultiLineBounds: computeMultiLineBoundsFn } =
+                    await import('../MyESModules/Rendering/TitleRenderer.js');
+
+                // Use style without titleBoxY so both functions use height - MARGIN
+                const style = { fontSize: 36, fontFamily: 'Arial', alignment: 'center', titleBoxWidth: 400 };
+                const runs = [makeTitleRun({ text: 'Hello World' })];
+
+                const singleBounds = computeBounds(style, runs, 1920, 1080);
+                const multiBounds = computeMultiLineBoundsFn(style, runs, 1920, 1080);
+
+                expect(multiBounds.boxWidth).to.equal(singleBounds.boxWidth);
+                expect(multiBounds.textWidth).to.equal(singleBounds.textWidth);
+                expect(multiBounds.baselineY).to.equal(singleBounds.baselineY);
+            });
+        });
+
+        mocha.run();
+    </script>
+</body>
+</html>

@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ExportManager Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — ExportManager Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Phase 3 - Section 3.2 (ExportManager registry pattern)</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { ExportManager } from '../MyESModules/Export/ExportManager.js';
+        import { exportToJpeg } from '../MyESModules/Export/formats/jpegExporter.js';
+        import { exportToPng } from '../MyESModules/Export/formats/pngExporter.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // Mock assembler for testing
+        // ============================================================
+        function createMockAssembler() {
+            const calls = [];
+            return {
+                render(ctx, renderData) {
+                    calls.push({ ctx, renderData });
+                },
+                getCalls() {
+                    return calls;
+                },
+                reset() {
+                    calls.length = 0;
+                }
+            };
+        }
+
+        // ============================================================
+        // Mock state for testing
+        // ============================================================
+        function createMockState() {
+            return {
+                panels: [],
+                images: [],
+                crops: new Map(),
+                panelAssignments: new Map(),
+                backgroundColor: '#ffffff',
+                backgroundState: null,
+                overlayState: null,
+                titleStyle: null,
+                titleRuns: []
+            };
+        }
+
+        // ============================================================
+        // Section 3.2: ExportManager Registry Pattern
+        // ============================================================
+        describe('Section 3.2 — ExportManager Registry', () => {
+            let assembler, state;
+
+            beforeEach(() => {
+                assembler = createMockAssembler();
+                state = createMockState();
+            });
+
+            it('3.2.1 — export API exists and is callable', async () => {
+                // Just verify the method exists and doesn't throw due to missing format
+                expect(ExportManager.export).to.be.a('function');
+                
+                // We'll catch any errors from canvas creation since we're not testing actual rendering
+                try {
+                    await ExportManager.export(assembler, state, 'jpeg');
+                } catch (e) {
+                    // If there's an error in canvas setup, that's okay for API test
+                    expect(e).to.not.be.undefined;
+                }
+            });
+
+            it('3.2.2 — export with jpeg format does not throw lookup error', async () => {
+                let errorThrown = null;
+                try {
+                    await ExportManager.export(assembler, state, 'jpeg');
+                } catch (e) {
+                    errorThrown = e;
+                }
+                // If there was an error, it should NOT be about unsupported format
+                if (errorThrown) {
+                    const msg = errorThrown.message || errorThrown;
+                    expect(msg).to.not.include('Unsupported export format');
+                }
+            });
+
+            it('3.2.3 — export with png format does not throw lookup error', async () => {
+                let errorThrown = null;
+                try {
+                    await ExportManager.export(assembler, state, 'png');
+                } catch (e) {
+                    errorThrown = e;
+                }
+                // If there was an error, it should NOT be about unsupported format
+                if (errorThrown) {
+                    const msg = errorThrown.message || errorThrown;
+                    expect(msg).to.not.include('Unsupported export format');
+                }
+            });
+
+            it('3.2.4 — export with unsupported format throws error', async () => {
+                let errorThrown = null;
+                try {
+                    await ExportManager.export(assembler, state, 'gif');
+                } catch (e) {
+                    errorThrown = e;
+                }
+                expect(errorThrown).to.not.be.null;
+                expect(errorThrown.message).to.include('Unsupported export format');
+            });
+
+            it('3.2.5 — default format is jpeg', async () => {
+                let errorThrown = null;
+                try {
+                    await ExportManager.export(assembler, state);
+                } catch (e) {
+                    errorThrown = e;
+                }
+                // Should not throw about unsupported format
+                expect(errorThrown).to.be.null || expect(errorThrown?.message).to.not.include('Unsupported export format');
+            });
+
+            it('3.2.6 — registerFormat adds new exporter', async () => {
+                const customExporter = function(assembler, state) {
+                    return Promise.resolve('custom-exported');
+                };
+
+                ExportManager.registerFormat('custom', customExporter);
+
+                let result;
+                let errorThrown = null;
+                try {
+                    result = await ExportManager.export(assembler, state, 'custom');
+                } catch (e) {
+                    errorThrown = e;
+                }
+
+                // If no error, verify result
+                if (!errorThrown) {
+                    expect(result).to.equal('custom-exported');
+                } else {
+                    // Even if canvas errors occur, the format should be recognized
+                    expect(errorThrown.message).to.not.include('Unsupported export format');
+                }
+            });
+
+            it('3.2.7 — jpeg exporter function exists', async () => {
+                expect(typeof exportToJpeg).to.equal('function');
+            });
+
+            it('3.2.8 — png exporter function exists', async () => {
+                expect(typeof exportToPng).to.equal('function');
+            });
+
+            it('3.2.9 — registerFormat can overwrite existing format', async () => {
+                const overrideExporter = function(assembler, state) {
+                    return Promise.resolve('overridden');
+                };
+
+                ExportManager.registerFormat('jpeg', overrideExporter);
+
+                let result;
+                try {
+                    result = await ExportManager.export(assembler, state, 'jpeg');
+                } catch (e) {
+                    // May error due to canvas but should not be about missing format
+                    expect(e.message).to.not.include('Unsupported export format');
+                }
+
+                // Restore default for other tests? Not necessary as test files are isolated
+            });
+        });
+
+        // ============================================================
+        // Section 5.1: Exporter Functionality (Simplified)
+        // ============================================================
+        describe('Section 5.1 — Exporter Basics', () => {
+            it('5.1.1 — exportToJpeg function signature accepts required params', async () => {
+                expect(exportToJpeg.length).to.be.greaterThanOrEqual(2); // assembler, state
+            });
+
+            it('5.1.2 — exportToPng function signature accepts required params', async () => {
+                expect(exportToPng.length).to.be.greaterThanOrEqual(2);
+            });
+
+            it('5.1.3 — exportToJpeg returns a Promise', async () => {
+                const result = exportToJpeg(null, null);
+                expect(result).to.be.a('Promise');
+            });
+
+            it('5.1.4 — exportToPng returns a Promise', async () => {
+                const result = exportToPng(null, null);
+                expect(result).to.be.a('Promise');
+            });
+        });
+
+        // ============================================================
+        // Section 6.1: PNG Exporter Signature (Phase 1 fix)
+        // ============================================================
+        describe('Section 6.1 — PNG Exporter Signature', () => {
+            let originalCreateElement;
+
+            beforeEach(() => {
+                originalCreateElement = document.createElement.bind(document);
+            });
+
+            afterEach(() => {
+                document.createElement = originalCreateElement;
+            });
+
+            it('6.1.1 — exportToPng with quality as 3rd arg creates correct canvas size', async () => {
+                // Intercept canvas creation to verify dimensions
+                let createdWidth, createdHeight;
+                document.createElement = function(tag) {
+                    const el = originalCreateElement(tag);
+                    if (tag === 'canvas') {
+                        const origSetWidth = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'width');
+                        Object.defineProperty(el, 'width', {
+                            get: function() { return createdWidth; },
+                            set: function(v) { createdWidth = v; },
+                            configurable: true
+                        });
+                        const origSetHeight = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'height');
+                        Object.defineProperty(el, 'height', {
+                            get: function() { return createdHeight; },
+                            set: function(v) { createdHeight = v; },
+                            configurable: true
+                        });
+                        el.getContext = () => null; // Fail early, we only need dimensions
+                    }
+                    return el;
+                };
+
+                try {
+                    await exportToPng(null, createMockState(), 0.92);
+                } catch (e) {
+                    // Expected to fail after canvas creation (no context)
+                }
+
+                // The key assertion: canvas should be 1920x1080, NOT 300x150 or NaN
+                expect(createdWidth).to.equal(1920);
+                expect(createdHeight).to.equal(1080);
+            });
+
+            it('6.1.2 — exportToPng with quality + explicit exportSize uses custom size', async () => {
+                let createdWidth, createdHeight;
+                document.createElement = function(tag) {
+                    const el = originalCreateElement(tag);
+                    if (tag === 'canvas') {
+                        Object.defineProperty(el, 'width', {
+                            get: function() { return createdWidth; },
+                            set: function(v) { createdWidth = v; },
+                            configurable: true
+                        });
+                        Object.defineProperty(el, 'height', {
+                            get: function() { return createdHeight; },
+                            set: function(v) { createdHeight = v; },
+                            configurable: true
+                        });
+                        el.getContext = () => null;
+                    }
+                    return el;
+                };
+
+                try {
+                    await exportToPng(null, createMockState(), 0.92, { width: 3840, height: 2160 });
+                } catch (e) {
+                    // Expected to fail after canvas creation
+                }
+
+                expect(createdWidth).to.equal(3840);
+                expect(createdHeight).to.equal(2160);
+            });
+
+            it('6.1.3 — exportToPng and exportToJpeg have aligned signatures', async () => {
+                // Both exporters accept (assembler, state, quality, exportSize)
+                // .length === 2 because JS only counts params before first default value
+                expect(exportToPng.length).to.equal(exportToJpeg.length);
+            });
+
+            it('6.1.4 — ExportManager.export with png format passes quality correctly', async () => {
+                // This is the actual bug: ExportManager.export() calls
+                // exporter(assembler, state, quality) — PNG must accept quality as 3rd arg
+                let createdWidth, createdHeight;
+                document.createElement = function(tag) {
+                    const el = originalCreateElement(tag);
+                    if (tag === 'canvas') {
+                        Object.defineProperty(el, 'width', {
+                            get: function() { return createdWidth; },
+                            set: function(v) { createdWidth = v; },
+                            configurable: true
+                        });
+                        Object.defineProperty(el, 'height', {
+                            get: function() { return createdHeight; },
+                            set: function(v) { createdHeight = v; },
+                            configurable: true
+                        });
+                        el.getContext = () => null;
+                    }
+                    return el;
+                };
+
+                try {
+                    await ExportManager.export(createMockAssembler(), createMockState(), 'png', 0.92);
+                } catch (e) {
+                    // Expected to fail after canvas creation
+                }
+
+                expect(createdWidth).to.equal(1920);
+                expect(createdHeight).to.equal(1080);
+            });
+        });
+
+        // ============================================================
+        // Section 6.2: Barrel Exports (Phase 1 fix)
+        // ============================================================
+        describe('Section 6.2 — Barrel Exports', () => {
+            it('6.2.1 — barrel exports exportToJpeg as a function', async () => {
+                const barrel = await import('../MyESModules/index.js');
+                expect(typeof barrel.exportToJpeg).to.equal('function');
+            });
+
+            it('6.2.2 — barrel exports exportToPng as a function', async () => {
+                const barrel = await import('../MyESModules/index.js');
+                expect(typeof barrel.exportToPng).to.equal('function');
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

@@ -15,3 +15,5 @@ package-lock.json
 CollageMaker/_agent_docs/**
 TaxBracketVisualizer/.opencode/**
 **/.claude/**
+CollageMaker/.opencode/skills/playwright-cli/**
+CollageMaker/.opencode/skills/analyzing-opencode-usage/**

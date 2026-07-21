@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toast Notification Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Toast Notification Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Phase 1 Follow-Up — CR-FU-04 Saliency Failure Toast (test plan 1A.1.1–1A.1.4, 1A.2.1)</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createCollageData } from '../MyESModules/App/createCollageData.js';
+        import { createCollageMethods } from '../MyESModules/App/createCollageMethods.js';
+        import { createSaliencyAnalyzer } from '../MyESModules/Saliency/SaliencyAnalyzer.js';
+
+        const { expect } = chai;
+
+        // Minimal base mock for factory initialization
+        function createMockBase() {
+            return {
+                assembler: { render: () => {} },
+                dropHandler: { setupGlobalDrop: () => () => {} },
+                getCanvasRenderer: () => null,
+                setCanvasRenderer: () => {},
+                getLayoutManager: () => null,
+                setLayoutManager: () => {},
+                getCropManager: () => null,
+                setCropManager: () => {},
+                getImageLibrary: () => null,
+                setImageLibrary: () => {},
+                getBackgroundManager: () => null,
+                setBackgroundManager: () => {},
+                getTitleManager: () => null,
+                setTitleManager: () => {},
+                layoutStyleOptions: []
+            };
+        }
+
+        // ============================================================
+        // 1A.1 Toast System — State & showToast() method
+        // ============================================================
+        describe('Section 1A.1 — Toast Notification System', () => {
+            let data, methods, mockBase;
+
+            beforeEach(() => {
+                mockBase = createMockBase();
+                data = createCollageData(mockBase);
+                methods = createCollageMethods(mockBase);
+            });
+
+            it('1A.1.0 — Toast state initialized with defaults', () => {
+                const state = data();
+                expect(state.toast).to.be.an('object');
+                expect(state.toast.message).to.equal('');
+                expect(state.toast.type).to.equal('');
+                expect(state.toast.visible).to.be.false;
+                expect(state.toast.timer).to.be.null;
+            });
+
+            it('1A.1.1 — showToast sets visible=true and message', () => {
+                const state = data();
+                const vm = { ...state, toast: { ...state.toast } };
+                methods.showToast.call(vm, 'Hello world', 'info', 5000);
+                expect(vm.toast.visible).to.be.true;
+                expect(vm.toast.message).to.equal('Hello world');
+            });
+
+            it('1A.1.2 — showToast sets type', () => {
+                const state = data();
+                const vm = { ...state, toast: { ...state.toast } };
+                methods.showToast.call(vm, 'Error occurred', 'error', 5000);
+                expect(vm.toast.type).to.equal('error');
+            });
+
+            it('1A.1.3 — showToast defaults type to "info" when omitted', () => {
+                const state = data();
+                const vm = { ...state, toast: { ...state.toast } };
+                methods.showToast.call(vm, 'Just a message');
+                expect(vm.toast.type).to.equal('info');
+            });
+
+            it('1A.1.4 — showToast defaults duration to 5000 when omitted', () => {
+                const state = data();
+                const vm = { ...state, toast: { ...state.toast } };
+                methods.showToast.call(vm, 'Just a message');
+                // Timer should be set — verify it's not null
+                expect(vm.toast.timer).to.not.be.null;
+            });
+
+            it('1A.1.5 — showToast auto-dismisses after duration', (done) => {
+                const state = data();
+                const vm = { ...state, toast: { ...state.toast } };
+                methods.showToast.call(vm, 'Auto dismiss', 'info', 50);
+                expect(vm.toast.visible).to.be.true;
+
+                setTimeout(() => {
+                    expect(vm.toast.visible).to.be.false;
+                    expect(vm.toast.message).to.equal('');
+                    expect(vm.toast.timer).to.be.null;
+                    done();
+                }, 100);
+            });
+
+            it('1A.1.6 — Rapid calls clear previous timer (no double-dismiss)', (done) => {
+                const state = data();
+                const vm = { ...state, toast: { ...state.toast } };
+
+                // First call with long duration
+                methods.showToast.call(vm, 'First', 'info', 5000);
+                const firstTimer = vm.toast.timer;
+
+                // Second call — should clear first timer
+                methods.showToast.call(vm, 'Second', 'error', 50);
+                const secondTimer = vm.toast.timer;
+
+                // Timer IDs should be different (first was cleared, new one created)
+                expect(secondTimer).to.not.equal(firstTimer);
+                // Second message should be active
+                expect(vm.toast.message).to.equal('Second');
+                expect(vm.toast.type).to.equal('error');
+
+                // After 100ms, only the second toast should have dismissed
+                setTimeout(() => {
+                    expect(vm.toast.visible).to.be.false;
+                    expect(vm.toast.message).to.equal('');
+                    // First timer was cleared — no extra auto-dismiss fires
+                    expect(vm.toast.timer).to.be.null;
+                    done();
+                }, 100);
+            });
+
+            it('1A.1.7 — showToast with "success" type', () => {
+                const state = data();
+                const vm = { ...state, toast: { ...state.toast } };
+                methods.showToast.call(vm, 'Collage exported!', 'success', 3000);
+                expect(vm.toast.visible).to.be.true;
+                expect(vm.toast.message).to.equal('Collage exported!');
+                expect(vm.toast.type).to.equal('success');
+            });
+        });
+
+        // ============================================================
+        // 1A.2 Saliency Toast Wiring
+        // ============================================================
+        describe('Section 1A.2 — Saliency onModelsFailed Toast Wiring', () => {
+            it('1A.2.1 — createSaliencyAnalyzer accepts onModelsFailed callback', () => {
+                let failedMsg = null;
+                const analyzer = createSaliencyAnalyzer({
+                    onModelsFailed: (msg) => { failedMsg = msg; }
+                });
+                expect(analyzer).to.have.property('initModels');
+                expect(analyzer).to.have.property('dispose');
+                // Callback is wired — verify by disposing (won't trigger failure)
+                analyzer.dispose();
+            });
+
+            it('1A.2.2 — onModelsFailed fires when worker constructor throws', () => {
+                let failedMsg = null;
+                const origWorker = window.Worker;
+
+                // Mock Worker to throw on construction
+                Object.defineProperty(window, 'Worker', {
+                    configurable: true,
+                    value: class {
+                        constructor() {
+                            throw new Error('Worker construction failed');
+                        }
+                    }
+                });
+
+                try {
+                    const analyzer = createSaliencyAnalyzer({
+                        onModelsFailed: (msg) => { failedMsg = msg; }
+                    });
+                    analyzer.initModels();
+                    expect(failedMsg).to.equal('Worker construction failed');
+                } finally {
+                    Object.defineProperty(window, 'Worker', {
+                        configurable: true,
+                        value: origWorker
+                    });
+                }
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

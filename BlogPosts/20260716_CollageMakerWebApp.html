@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>07-16-2026 - Building a Collage Maker with Agents</title>
+    <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
+    <link rel="stylesheet" href="../src/css/variables.css">
+    <link rel="stylesheet" href="../src/css/Style.css"><link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+        <span id="theme-icon" class="material-icons">sunny</span>
+    </button>
+    <script src="../src/js/themeSwitcher.js"></script>
+    <h1>Building a Collage Maker with Agents: From macOS Prototype to Web App</h1>
+
+    <div>
+        <p>
+            CollageMaker lets you turn a collection of images into collages with what I hope are intuitive controls and export them as a JPEG or PNG. It started as a MacOS prototype, practicing kata to build a macos app building skill and adding tests through patchwork requests.  It took 165 sessions, 143 million raw tokens, 3 models, and 6 agents to build. The app worked — you could load images, crop panels with pinch and drag gestures, switch layouts, and export.  It was a good experience, and it helped me prove out the UI experience I wanted.  
+        </p>
+        <p>
+            After making a video and sharing progress with some friends, I realized it was limited in reach to other people with Macs, and only if they go through the trouble of building it with XCode and dealing with its current hitches.  So I extracted the specifications from the MacOS prototype and decided to start a new web based app instead.
+        </p>
+        <p>
+            This post covers the whole arc: the macOS prototype that started it, the web port that became something more, and the opencode usage analytics pipeline I built alongside the code that fundamentally changed how I work with agents.
+        </p>
+
+        <h2>The macOS Prototype</h2>
+        <p>
+            The project began in May 2026 as a SwiftUI app in my <code>agent-ollama-projects</code> repository. I used playwright-cli to ask an agent to study Apple's sample code extensively and documentation first from <a href="https://developer.apple.com/documentation/">Apple Dveloper Documentation</a> - "Building a great Mac app with SwiftUI," the Landmarks project for Liquid Glass patterns, Vision framework samples for saliency analysis, and Accelerate/vImage for image processing. The prototype had protocol-based dependency injection from day one, a <code>CollageViewModel</code>, a <code>CropManager</code>, and a <code>LayoutGenerator</code> with five layout strategies: uniform, hero, mosaic, diagonal slices, and hexagonal.  I liked it, but it felt like I was circling a few key issues over and over again, and I wanted to expand the reach of the app rather than continue poking at the prototype.
+        </p>
+
+        <h2>Interest in Token Usage and Value Per Token</h2>
+        <p>
+            While working on this prototype, I read alot about token-maxing and token pricing and all kinds of token based rhetoric not related to a project's progress.  I thought it would be interesting to see what kind of data I could plumb out of OpenCode to see how tokens were used in this project and ways to measure their effect on the project.  I had the agent explore the opencode SQLLite database for insights, and that effort also carried into the web app project, where the skill for it was improved but still needs more work.
+        </p>
+
+        <h2>Why Web?</h2>
+        <p>
+            An app is only as good as its deployment strategy, and having a project on github to compile for a very narrow set of computers is a bad deployment strategy.  Putting the application on my website makes it so people who want to use it have immediate access.
+        </p>
+        <p>
+            I also like the transparency of implementation that comes wit javascript and web apps.  It feels like the universal common denominator for computer programming.
+        </p>
+
+        <h2>Initializing the Project</h2>
+        <p>
+            July 1st, 2026. One session, 31 files. The entire foundation went up in a single agent run: Vue 3 app shell, five data models, five layout strategies ported from Swift, three canvas rendering modules, state management, image loading, and a component registry for dependency injection. The Vue 3 Options API factory decomposition pattern carried over from my Midiestro3D project — <code>createCollageData</code>, <code>createCollageMethods</code>, <code>createCollageLifecycle</code>, and <code>createCollageServices</code> as separate factory functions, assembled into a Vue app config.
+        </p>
+        <p>
+            A post-implementation world-review caught five bugs immediately: a continuous requestAnimationFrame render loop replaced with on-demand rendering, mosaic layout truncation at 21 images removed, a drag-over CSS class mismatch fixed, silent image load failures made visible, and duplicate drop handlers deduplicated. That external review saved me hours of debugging.
+        </p>
+
+        <h2>Continuing to Build Analytics Alongside the Code</h2>
+        <p>
+            We made some more improvements on the analyzing-opencode-usage skill to query the opencode SQLite database, estimate prefix cache impact from per-message token data, and render consolidated HTML reports with charts and cost analysis.
+        </p>
+        <p>
+            The first numbers were eye-opening. A 94.0% cache hit rate meant raw tokens (474 million) were 14× the effective work (33 million). The LLM was spending most of its tokens re-reading the same context it already knew. <a href="references/CollageMaker-LLM-Report.html">The full analytics report</a> breaks this down by model, agent, day, and cost. Two findings stood out: 46% of documented sessions were <code>docs</code> purpose — plans, learnings, skill refinements. Meta-work that doesn't ship code but compounds value across every future session.
+        </p>
+
+        <h2>Analytics Informed Agent Specialization</h2>
+        <p>
+            The numbers revealed a structural problem. The generic <code>build</code> agent was doing everything — writing code, writing tests, writing docs, debugging — and accumulating context with every session. Context accumulation is the real cost driver: greenfield sessions run at 96 tokens per line of code, while iteration sessions climb to 618–823 tokens per line — an 8.6× increase driven purely by the agent re-reading its own prior work.
+        </p>
+        <p>
+            I split <code>build</code> into specialized agents, each starting fresh with focused context.  First I built a <code>build-code</code> and a <code>build-test</code> agent to split the concern of writing tests and writing code, but that felt inorganic.  Eventually we combined them into <code>build-tdd</code>.  When that change felt like a success, we also created <code>plan-bdd</code> to create the same kind of disciplined technique applied to development for our planning process.  These changes are still fresh, but I feel like I spend less time fixing the same bugs over and over in this project so far.
+        </p>
+        <ul>
+            <li><strong><code>build-docs</code></strong> (86 sessions) — plans, learnings, skill refinements</li>
+            <li><strong><code>build-tdd</code></strong> (33 sessions) — test-driven implementation, highest token usage at 4.6M per session because it carries full test context</li>
+            <li><strong><code>build-test</code></strong> (24 sessions) — test infrastructure and test plans</li>
+            <li><strong><code>build-debug</code></strong> (8 sessions) — targeted bug fixes</li>
+            <li><strong><code>plan-bdd</code></strong> (6 sessions) — behavior-driven development planning</li>
+            <li><strong><code>world-review</code></strong> (88 sessions, 25K effective tokens per session) — the cheapest quality gate in the entire project</li>
+        </ul>
+        <p>
+            The <code>world-review</code> agent was the most efficient investment. At 26K effective tokens per session, it could review code, catch architectural issues, and flag memory leaks for a fraction of the cost of a single coding session. This agent uses the <a href="https://github.com/QwenLM/Qwen-AgentWorld">Qwen AgentWorld</a> LLM, which predicts the next state of an environment rather than the next token in a string.  I think this means is has a different perspective and can think through changes and environmental constraints in a complimentary way for agentic development.  Like a Systems and QA Analyst LLM next to a Coding LLM. I started running it after every significant change — after breaking down a god module, after completing a refactoring phase, before merging work. It became what feels like an effective pre-commit quality gate.  
+        </p>
+
+        <div class="llm-quote">
+            <h2>Architectural Patterns That Emerged</h2>
+            <p>
+                Five patterns kept appearing across the project, each solving a specific problem of making agent-written code testable and maintainable without a build step.
+            </p>
+            <p>
+                <strong>Factory decomposition</strong> split Vue Options API configuration into separate files — data, methods, lifecycle, services — so each could be tested without instantiating the full Vue app. <strong>Strategy and registry patterns</strong> replaced switch statements in layout generation and export, making it open for extension without modification. <strong>Handler composition</strong> separated Vue event handlers from state managers, with handlers calling manager methods and managers firing change callbacks. <strong>Action functions</strong> extracted pure state mutation logic into testable functions that <code>CropManager</code> could apply, undo, or replay. <strong>Callback injection</strong> let managers receive render and undo callbacks as constructor parameters, eliminating hardcoded dependencies.
+            </p>
+            <p>
+                Together, these patterns made it possible to write unit tests for canvas rendering code, to mock saliency analysis in a web worker, and to verify render order by wrapping Canvas 2D context methods — all in a browser with no bundler, no transpiler, no build step.
+            </p>
+            <span class="llm-attribution">— Generated by LittleLight</span>
+        </div>
+
+        <h2>Apple's Accessibility DNA in a Web App</h2>
+        <p>
+            The macOS prototype was reviewed and updated several times using Apple's Human Interface Guidelines. When I ported to the web, those accessibility practices came along — not as an afterthought, but as inherited expectations.
+        </p>
+        <p>
+            Toast notifications use <code>role="status"</code> and <code>aria-live="polite"</code> so screen readers announce them. The export button has <code>aria-busy</code> during processing. The interactive canvas has <code>role="application"</code> with descriptive <code>aria-label</code> text. Collapsible sidebar sections use <code>aria-expanded</code> and <code>aria-controls</code>. Slider controls have <code>aria-valuenow</code>, <code>aria-valuemin</code>, and <code>aria-valuemax</code>. The export format segmented control uses <code>role="radiogroup"</code> with <code>aria-checked</code> on each button. Keyboard shortcuts work — Cmd+Z for undo, Cmd+Shift+Z for redo, Cmd+E for export, Alt+1 through Alt+5 for layout switching.
+        </p>
+        <p>
+            None of this would have happened organically in a web project. It happened because the prototype was built in an ecosystem where accessibility is a first-class concern, and those expectations carried over into the HTML.
+        </p>
+
+        <h2>Edge Cases That Made It Real</h2>
+        <p>
+            Features are what you plan. Edge cases are what you ship. The web port surfaced a whole class of problems that don't exist in SwiftUI:
+        </p>
+        <p>
+            <strong>Multi-touch gesture coordination</strong> required dual-pointer handlers that could distinguish between a single-finger drag to swap hexagonal panels and a two-finger pinch to zoom, without one handler stealing events from the other. <strong>Pointer capture hygiene</strong> meant releasing capture on <code>pointerup</code> and <code>pointercancel</code> to prevent stuck selections. <strong>Wheel event <code>preventDefault</code> guards</strong> had to check <code>event.deltaMode</code> and whether the canvas was actually under the cursor, or the user couldn't scroll the page. <strong>Canvas render-order testing</strong> required wrapping Canvas 2D context methods to verify that drag targets are drawn before selection borders, avoiding compositing artifacts. <strong>Saliency worker timeout cleanup</strong> meant terminating web workers in <code>beforeUnmount</code> and nulling out references, or they'd keep running after the component was destroyed.
+        </p>
+        <p>
+            These aren't features. They're the difference between "works on my machine" and "works."
+        </p>
+
+        <h2>The Numbers</h2>
+        <p>
+            Two projects, one idea, very different journeys:
+        </p>
+        <table>
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>macOS Prototype</th>
+                    <th>Web App</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Sessions</td>
+                    <td>165</td>
+                    <td>330</td>
+                </tr>
+                <tr>
+                    <td>Raw tokens</td>
+                    <td>143M</td>
+                    <td>474M</td>
+                </tr>
+                <tr>
+                    <td>Effective tokens</td>
+                    <td>—</td>
+                    <td>33M</td>
+                </tr>
+                <tr>
+                    <td>Models</td>
+                    <td>3</td>
+                    <td>9</td>
+                </tr>
+                <tr>
+                    <td>Agents</td>
+                    <td>6</td>
+                    <td>17</td>
+                </tr>
+                <tr>
+                    <td>Commits</td>
+                    <td>—</td>
+                    <td>13</td>
+                </tr>
+                <tr>
+                    <td>Lines added</td>
+                    <td>—</td>
+                    <td>53K</td>
+                </tr>
+                <tr>
+                    <td>Cache hit rate</td>
+                    <td>—</td>
+                    <td>94%</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>What Changed for Me</h2>
+        <p>
+            With Midiestro, I was refactoring existing code — adding tests after the fact, modernizing architecture around working features. CollageMaker was greenfield. I could try to instill discipline into my agent to write tests before code, architecture before implementation, and reviews before commits. The discipline of TDD from day one felt different. There was no legacy to work around, no "it works, don't touch it" corner cases.
+        </p>
+        <p>
+            The analytics pipeline changed how I think about agent work. Before, I'd look at a session and think "that was productive" or "that was a waste." Now I have numbers: tokens per line of code, effective vs cached, agent efficiency rankings. I can see that <code>world-review</code> at 25K effective tokens per session is a bargain, and that <code>build-tdd</code> at 185K effective per session is expensive but necessary. I can see that context accumulation is the enemy — a fresh agent with a focused task is cheaper than a continuing agent with growing history. 
+        </p>
+        <p>
+            I still have more work to do on analysis.  It would be good to get tokens per test or tokens per feature.  Something less gameable than tokens per commit and tokens per line.  The software industy is full of useless metrics, like line count, test count, and token count.  How many tokens does it take to get to a meaningful metric?  "The only way to know is to spend!" - LLM Vendors, probably.
+        </p>
+        <p>
+            The shift from "coder" to "director" that I described in my Midiestro post has matured. I'm no longer just asking agents to do tasks. I am specifying agent behavior and measuring where tokens are going while streamlining the plan, test, implement, and validate processes.
+        </p>
+
+        <h2>What's Next</h2>
+        <p>
+            The app has room to grow. Shape-based cutouts with <code>destination-out</code> compositing are in. PWA capabilities could make it installable. The layout strategies could expand — grid, grid with span, freeform. Smart cropping using saliency to keep faces centered would be a natural extension of the existing saliency analysis. And the macOS app could learn from the web app's accessibility and testing practices.
+        </p>
+        <p>
+            But the real next step is figuring out what to build next and how to evolve the agent development framework. The analytics pipeline, the agent specialization patterns, the test frameworks — these are reusable across projects.  Future sessions can contribute new learnings, and we can keep evolving things to develop solid slop more efficiently.
+        </p>
+
+        <h2>Links</h2>
+        <ul>
+            <li><a href="../CollageMaker/index.html">Try CollageMaker in your browser</a></li>
+            <li><a href="https://github.com/austin183/austin183.github.io/tree/main/CollageMaker">Web app source code</a></li>
+            <li><a href="https://github.com/austin183/agent-ollama-projects/tree/main/Experiments/CollageMaker">macOS prototype source code</a></li>
+            <li><a href="references/CollageMaker-LLM-Report.html">LLM Usage &amp; Value Report</a> — consolidated analytics report with token breakdowns, cost estimates, and code impact metrics</li>
+            <li><a href="20260319_AgentAssistedRefactoring.html">Creating 3D Version with Agents</a> — the earlier post about my agent-assisted refactoring journey with Midiestro</li>
+        </ul>
+    </div>
+</body>
+
+</html>
