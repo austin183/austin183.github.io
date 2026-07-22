@@ -92,25 +92,25 @@
                             <template v-if="section.id === 'layout'">
                                 <div class="detail-section">
                                     <label for="layoutStyleSelect">Layout Style</label>
-                                    <select id="layoutStyleSelect" v-model="layoutStyle" class="pure-input-rounded" @change="onLayoutStyleChange">
+                                    <select id="layoutStyleSelect" v-model="layoutStyle" class="pure-input-rounded" @focus="snapshotLayoutStyle" @change="onLayoutStyleChange">
                                         <option v-for="style in layoutStyles" :key="style.value" :value="style.value">{{ style.label }}</option>
                                     </select>
                                 </div>
                                 <div class="detail-section" v-show="layoutStyle !== 'hexagonal'">
                                     <label for="gutterSlider">Gutter: {{ gutter }}px</label>
-                                    <input type="range" id="gutterSlider" v-model.number="gutter" min="0" max="20" step="1" class="fullRange" @input="onGutterChange">
+                                    <input type="range" id="gutterSlider" v-model.number="gutter" min="0" max="20" step="1" class="fullRange" @focus="snapshotLayoutOptions" @pointerdown="snapshotLayoutOptions" @input="onGutterChange" @blur="commitLayoutOptions">
                                 </div>
                                 <div class="detail-section" v-if="layoutStyle === 'diagonalSlices'">
                                     <label for="sliceAngleSlider">Slice Angle: {{ sliceAngle }}&deg;</label>
-                                    <input type="range" id="sliceAngleSlider" v-model.number="sliceAngle" min="-75" max="75" step="1" class="fullRange" @input="onSliceAngleChange">
+                                    <input type="range" id="sliceAngleSlider" v-model.number="sliceAngle" min="-75" max="75" step="1" class="fullRange" @focus="snapshotLayoutOptions" @pointerdown="snapshotLayoutOptions" @input="onSliceAngleChange" @blur="commitLayoutOptions">
                                 </div>
                                 <div class="detail-section" v-if="layoutStyle === 'hexagonal'">
                                     <label for="hexSpacingSlider">Hex Spacing: {{ hexSpacing }}px</label>
-                                    <input type="range" id="hexSpacingSlider" v-model.number="hexSpacing" min="0" max="30" step="1" class="fullRange" @input="onHexSpacingChange">
+                                    <input type="range" id="hexSpacingSlider" v-model.number="hexSpacing" min="0" max="30" step="1" class="fullRange" @focus="snapshotLayoutOptions" @pointerdown="snapshotLayoutOptions" @input="onHexSpacingChange" @blur="commitLayoutOptions">
                                 </div>
                                 <div class="detail-section" v-if="layoutStyle === 'hexagonal'">
                                     <label for="hexSizeSlider">Hexagon Size: {{ Math.round(hexSizeMultiplier * 100) }}%</label>
-                                    <input type="range" id="hexSizeSlider" v-model.number="hexSizeMultiplier" min="0.5" max="2" step="0.05" class="fullRange" @input="onHexSizeMultiplierChange">
+                                    <input type="range" id="hexSizeSlider" v-model.number="hexSizeMultiplier" min="0.5" max="2" step="0.05" class="fullRange" @focus="snapshotLayoutOptions" @pointerdown="snapshotLayoutOptions" @input="onHexSizeMultiplierChange" @blur="commitLayoutOptions">
                                 </div>
                                 <div class="layout-shortcut-hint">
                                     Shortcuts: Alt+1 Uniform · Alt+2 Hero · Alt+3 Mosaic · Alt+4 Slices · Alt+5 Hex
@@ -172,7 +172,7 @@
                             <template v-if="section.id === 'title'">
                                 <div class="detail-section">
                                     <label for="titleInput">Title (max 3 lines)</label>
-                                    <textarea id="titleInput" v-model="titleText" @input="onTitleTextChange" @select="onTitleSelectionChange" @click="onTitleSelectionChange" @keyup="onTitleSelectionChange" @keydown.enter="onTitleEnterKey" placeholder="Enter title text..." rows="3" maxlength="200" class="pure-input-rounded title-textarea"></textarea>
+                                    <textarea id="titleInput" v-model="titleText" @focus="snapshotTitleText" @input="onTitleTextChange" @select="onTitleSelectionChange" @click="onTitleSelectionChange" @keyup="onTitleSelectionChange" @keydown.enter="onTitleEnterKey" @blur="commitTitleText" placeholder="Enter title text..." rows="3" maxlength="200" class="pure-input-rounded title-textarea"></textarea>
                                 </div>
                                 <div class="detail-section">
                                     <div class="formatting-bar">
@@ -189,57 +189,57 @@
                                 </div>
                                 <div class="detail-section">
                                     <label for="titleFontSelect">Font</label>
-                                    <select id="titleFontSelect" v-model="titleStyle.fontFamily" class="pure-input-rounded" @change="onTitleFontFamilyChange">
+                                    <select id="titleFontSelect" v-model="titleStyle.fontFamily" class="pure-input-rounded" @focus="snapshotTitleStyle" @change="onTitleFontFamilyChange" @blur="commitTitleStyle">
                                         <option v-for="font in ['Arial', 'Helvetica', 'Times New Roman', 'Georgia', 'Courier New', 'Verdana', 'Trebuchet MS', 'Impact', 'Comic Sans MS', 'Palatino', 'Lucida Console', 'Garamond', 'Bookman']" :key="font" :value="font">{{ font }}</option>
                                     </select>
                                 </div>
                                 <div class="detail-section">
                                     <label for="titleFontSizeSlider">Size: {{ titleStyle.fontSize }}pt</label>
-                                    <input type="range" id="titleFontSizeSlider" v-model.number="titleStyle.fontSize" min="12" max="120" step="1" class="fullRange" @input="onTitleFontSizeChange">
+                                    <input type="range" id="titleFontSizeSlider" v-model.number="titleStyle.fontSize" min="12" max="120" step="1" class="fullRange" @focus="snapshotTitleStyle" @pointerdown="snapshotTitleStyle" @input="onTitleFontSizeChange" @blur="commitTitleStyle">
                                 </div>
                                 <div class="detail-section">
                                     <label for="titleFontColorPicker">Font Color</label>
                                     <div class="color-picker-row">
-                                        <input type="color" id="titleFontColorPicker" v-model="titleStyle.fontColor" @input="onTitleFontColorChange">
+                                        <input type="color" id="titleFontColorPicker" v-model="titleStyle.fontColor" @focus="snapshotTitleStyle" @input="onTitleFontColorChange" @blur="commitTitleStyle">
                                     </div>
                                 </div>
                                 <div class="detail-section">
                                     <label for="titleFontOpacitySlider">Font Opacity: {{ Math.round(titleStyle.fontOpacity * 100) }}%</label>
-                                    <input type="range" id="titleFontOpacitySlider" v-model.number="titleStyle.fontOpacity" min="0" max="1" step="0.01" :aria-valuenow="Math.round(titleStyle.fontOpacity * 100) + '%'" aria-valuemin="0%" aria-valuemax="100%" class="fullRange" @input="onTitleFontOpacityChange">
+                                    <input type="range" id="titleFontOpacitySlider" v-model.number="titleStyle.fontOpacity" min="0" max="1" step="0.01" :aria-valuenow="Math.round(titleStyle.fontOpacity * 100) + '%'" aria-valuemin="0%" aria-valuemax="100%" class="fullRange" @focus="snapshotTitleStyle" @pointerdown="snapshotTitleStyle" @input="onTitleFontOpacityChange" @blur="commitTitleStyle">
                                 </div>
                                 <div class="detail-section">
                                     <label for="titleBgColorPicker">Background Color</label>
                                     <div class="color-picker-row">
-                                        <input type="color" id="titleBgColorPicker" v-model="titleStyle.backgroundColor" @input="onTitleBackgroundColorChange">
+                                        <input type="color" id="titleBgColorPicker" v-model="titleStyle.backgroundColor" @focus="snapshotTitleStyle" @input="onTitleBackgroundColorChange" @blur="commitTitleStyle">
                                     </div>
                                 </div>
                                 <div class="detail-section">
                                     <label for="titleBgOpacitySlider">Bg Opacity: {{ Math.round(titleStyle.bgOpacity * 100) }}%</label>
-                                    <input type="range" id="titleBgOpacitySlider" v-model.number="titleStyle.bgOpacity" min="0" max="1" step="0.01" :aria-valuenow="Math.round(titleStyle.bgOpacity * 100) + '%'" aria-valuemin="0%" aria-valuemax="100%" class="fullRange" @input="onTitleBgOpacityChange">
+                                    <input type="range" id="titleBgOpacitySlider" v-model.number="titleStyle.bgOpacity" min="0" max="1" step="0.01" :aria-valuenow="Math.round(titleStyle.bgOpacity * 100) + '%'" aria-valuemin="0%" aria-valuemax="100%" class="fullRange" @focus="snapshotTitleStyle" @pointerdown="snapshotTitleStyle" @input="onTitleBgOpacityChange" @blur="commitTitleStyle">
                                 </div>
                                 <div class="detail-section">
                                     <label>
-                                        <input type="checkbox" v-model="titleStyle.showBackground" @change="onTitleShowBackgroundChange">
+                                        <input type="checkbox" :checked="titleStyle.showBackground" @change="toggleTitleShowBackground">
                                         Show Background
                                     </label>
                                 </div>
                                 <div class="detail-section">
                                     <label>Alignment</label>
                                     <div class="segmented-control">
-                                        <button class="segment-btn" :class="{ active: titleStyle.alignment === 'left' }" @click="titleStyle.alignment = 'left'; onTitleAlignmentChange()">
+                                        <button class="segment-btn" :class="{ active: titleStyle.alignment === 'left' }" @click="setTitleAlignment('left')">
                                             <span class="material-icons" style="font-size: 18px;">format_align_left</span>
                                         </button>
-                                        <button class="segment-btn" :class="{ active: titleStyle.alignment === 'center' }" @click="titleStyle.alignment = 'center'; onTitleAlignmentChange()">
+                                        <button class="segment-btn" :class="{ active: titleStyle.alignment === 'center' }" @click="setTitleAlignment('center')">
                                             <span class="material-icons" style="font-size: 18px;">format_align_center</span>
                                         </button>
-                                        <button class="segment-btn" :class="{ active: titleStyle.alignment === 'right' }" @click="titleStyle.alignment = 'right'; onTitleAlignmentChange()">
+                                        <button class="segment-btn" :class="{ active: titleStyle.alignment === 'right' }" @click="setTitleAlignment('right')">
                                              <span class="material-icons" style="font-size: 18px;">format_align_right</span>
                                          </button>
                                      </div>
                                  </div>
                                   <div class="detail-section">
                                       <label for="titleWidthSlider">Width: {{ titleStyle.titleBoxWidth ? Math.round(titleStyle.titleBoxWidth) : 'Auto' }}</label>
-                                      <input type="range" id="titleWidthSlider" v-model.number="titleStyle.titleBoxWidth" min="100" max="1920" step="1" :aria-valuenow="(titleStyle.titleBoxWidth ? Math.round(titleStyle.titleBoxWidth) + 'px' : 'Auto')" aria-valuemin="100px" aria-valuemax="1920px" class="fullRange" @input="onTitleWidthChange">
+                                      <input type="range" id="titleWidthSlider" v-model.number="titleStyle.titleBoxWidth" min="100" max="1920" step="1" :aria-valuenow="(titleStyle.titleBoxWidth ? Math.round(titleStyle.titleBoxWidth) + 'px' : 'Auto')" aria-valuemin="100px" aria-valuemax="1920px" class="fullRange" @focus="snapshotTitleStyle" @pointerdown="snapshotTitleStyle" @input="onTitleWidthChange" @blur="commitTitleStyle">
                                   </div>
                                   <div class="detail-section">
                                       <button class="pure-button reset-title-btn" @click="resetTitlePosition">
@@ -279,47 +279,47 @@
                                 <div class="detail-section">
                                     <label>Style</label>
                                     <div class="segmented-control">
-                                        <button class="segment-btn" :class="{ active: backgroundStyle === 'solid' }" @click="backgroundStyle = 'solid'; onBackgroundStyleChange()">Solid</button>
-                                        <button class="segment-btn" :class="{ active: backgroundStyle === 'gradient' }" @click="backgroundStyle = 'gradient'; onBackgroundStyleChange()">Gradient</button>
-                                        <button class="segment-btn" :class="{ active: backgroundStyle === 'image' }" @click="backgroundStyle = 'image'; onBackgroundStyleChange()">Image</button>
+                                        <button class="segment-btn" :class="{ active: backgroundStyle === 'solid' }" @click="setBackgroundStyle('solid')">Solid</button>
+                                        <button class="segment-btn" :class="{ active: backgroundStyle === 'gradient' }" @click="setBackgroundStyle('gradient')">Gradient</button>
+                                        <button class="segment-btn" :class="{ active: backgroundStyle === 'image' }" @click="setBackgroundStyle('image')">Image</button>
                                     </div>
                                 </div>
                                 <div class="detail-section" v-if="backgroundStyle === 'solid'">
                                     <label for="bgColorPicker">Color</label>
                                     <div class="color-picker-row">
-                                        <input type="color" id="bgColorPicker" v-model="backgroundColor" @input="onBackgroundColorChange">
+                                        <input type="color" id="bgColorPicker" v-model="backgroundColor" @focus="snapshotBackground" @input="onBackgroundColorChange" @blur="commitBackground">
                                     </div>
                                 </div>
                                 <template v-if="backgroundStyle === 'gradient'">
                                     <div class="detail-section">
                                         <label for="gradientColor1">Color 1</label>
                                         <div class="color-picker-row">
-                                             <input type="color" id="gradientColor1" v-model="backgroundColor" @input="onGradientColor1Change">
+                                             <input type="color" id="gradientColor1" v-model="backgroundColor" @focus="snapshotBackground" @input="onGradientColor1Change" @blur="commitBackground">
                                         </div>
                                     </div>
                                     <div class="detail-section">
                                         <label for="gradientColor2">Color 2</label>
                                         <div class="color-picker-row">
-                                             <input type="color" id="gradientColor2" :value="gradientColors ? gradientColors[1] : '#333333'" @input="onGradientColor2Input($event)">
+                                             <input type="color" id="gradientColor2" :value="gradientColors ? gradientColors[1] : '#333333'" @focus="snapshotBackground" @input="onGradientColor2Input($event)" @blur="commitBackground">
                                         </div>
                                     </div>
                                     <div class="detail-section">
                                         <label for="gradientAngleSlider">Angle: {{ gradientAngle }}&deg;</label>
-                                        <input type="range" id="gradientAngleSlider" v-model.number="gradientAngle" min="0" max="360" step="1" class="fullRange" @input="onGradientAngleChange">
+                                        <input type="range" id="gradientAngleSlider" v-model.number="gradientAngle" min="0" max="360" step="1" class="fullRange" @focus="snapshotBackground" @pointerdown="snapshotBackground" @input="onGradientAngleChange" @blur="commitBackground">
                                     </div>
                                 </template>
                                 <template v-if="backgroundStyle === 'image'">
                                     <div class="detail-section">
                                         <label for="bgImageInput">Background Image</label>
                                         <input type="file" id="bgImageInput" accept="image/*" @change="handleBackgroundImageChange" class="file-input-styled">
-                                        <button v-if="backgroundImage" class="pure-button remove-bg-btn" @click="removeBackgroundImage">
+                                        <button v-if="backgroundImage" class="pure-button remove-bg-btn" @click="removeBackgroundImageAtomic()">
                                             <span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 4px;">delete</span>
                                             Remove Image
                                         </button>
                                     </div>
                                     <div class="detail-section">
                                         <label for="bgOpacitySlider">Opacity: {{ Math.round(backgroundOpacity * 100) }}%</label>
-                                        <input type="range" id="bgOpacitySlider" v-model.number="backgroundOpacity" min="0" max="1" step="0.01" class="fullRange" @input="onBackgroundOpacityChange">
+                                        <input type="range" id="bgOpacitySlider" v-model.number="backgroundOpacity" min="0" max="1" step="0.01" class="fullRange" @focus="snapshotBackground" @pointerdown="snapshotBackground" @input="onBackgroundOpacityChange" @blur="commitBackground">
                                     </div>
                                 </template>
                             </template>
@@ -329,14 +329,14 @@
                                 <div class="detail-section">
                                     <label for="overlayImageInput">Mask Image</label>
                                     <input type="file" id="overlayImageInput" accept="image/*" @change="handleOverlayImageChange" class="file-input-styled">
-                                    <button v-if="overlayImage" class="pure-button remove-overlay-btn" @click="removeOverlay">
+                                    <button v-if="overlayImage" class="pure-button remove-overlay-btn" @click="removeOverlayAtomic()">
                                         <span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 4px;">delete</span>
                                         Remove Mask
                                     </button>
                                 </div>
                                 <div class="detail-section" v-if="overlayImage">
                                     <label for="overlayModeSelect">Blend Mode</label>
-                                    <select id="overlayModeSelect" v-model="overlayMode" class="pure-input-rounded" @change="onOverlayModeChange">
+                                    <select id="overlayModeSelect" v-model="overlayMode" class="pure-input-rounded" @focus="snapshotOverlay" @change="onOverlayModeChange" @blur="commitOverlay">
                                         <option value="source-over">Normal</option>
                                         <option value="multiply">Multiply</option>
                                         <option value="screen">Screen</option>
@@ -357,7 +357,7 @@
                                 </div>
                                 <div class="detail-section" v-if="overlayImage">
                                     <label for="overlayOpacitySlider">Opacity: {{ Math.round(overlayOpacity * 100) }}%</label>
-                                    <input type="range" id="overlayOpacitySlider" v-model.number="overlayOpacity" min="0" max="1" step="0.01" class="fullRange" @input="onOverlayOpacityChange">
+                                    <input type="range" id="overlayOpacitySlider" v-model.number="overlayOpacity" min="0" max="1" step="0.01" class="fullRange" @focus="snapshotOverlay" @pointerdown="snapshotOverlay" @input="onOverlayOpacityChange" @blur="commitOverlay">
                                 </div>
                             </template>
 

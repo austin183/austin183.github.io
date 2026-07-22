@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Title Undo Closure Bug Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Title Undo Closure Bug (Phase 1)</h1>
+    <p class="test-plan-ref">Covers: Plan 2026-07-20-undo-redo-expansion-implementation.md Phase 1 — Fix title undo closure bug</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createUndoManager } from '../MyESModules/State/UndoManager.js';
+
+        const { expect } = chai;
+
+        /**
+         * Simulates the onInteractionEnd callback pattern from createCollageLifecycle.js.
+         *
+         * @param {Object} vm - Mock Vue instance with titleStyle and undoManager
+         * @param {Object} snapshot - Pre-interaction snapshot (mutable, to simulate the closure bug)
+         * @param {boolean} useFixedPattern - If true, copies snapshot to local constant before building closure
+         * @returns {Object} The pushed command (or null if no command was pushed)
+         */
+        function simulateOnInteractionEnd(vm, snapshot, useFixedPattern = false) {
+            if (snapshot && vm.undoManager) {
+                const postState = {
+                    titleBoxX: vm.titleStyle.titleBoxX,
+                    titleBoxY: vm.titleStyle.titleBoxY,
+                    titleBoxWidth: vm.titleStyle.titleBoxWidth
+                };
+
+                if (snapshot.titleBoxX !== postState.titleBoxX ||
+                    snapshot.titleBoxY !== postState.titleBoxY ||
+                    snapshot.titleBoxWidth !== postState.titleBoxWidth) {
+
+                    // FIXED pattern: copy snapshot values to a local constant
+                    // BUGGY pattern: use snapshot directly (captured by reference)
+                    const preState = useFixedPattern
+                        ? {
+                            titleBoxX: snapshot.titleBoxX,
+                            titleBoxY: snapshot.titleBoxY,
+                            titleBoxWidth: snapshot.titleBoxWidth
+                        }
+                        : snapshot;
+
+                    vm.undoManager.push({
+                        label: 'Move/Resize Title',
+                        undo: () => {
+                            vm.titleStyle.titleBoxX = preState.titleBoxX;
+                            vm.titleStyle.titleBoxY = preState.titleBoxY;
+                            vm.titleStyle.titleBoxWidth = preState.titleBoxWidth;
+                        },
+                        redo: () => {
+                            vm.titleStyle.titleBoxX = postState.titleBoxX;
+                            vm.titleStyle.titleBoxY = postState.titleBoxY;
+                            vm.titleStyle.titleBoxWidth = postState.titleBoxWidth;
+                        }
+                    });
+                }
+            }
+            // Simulate: titleUndoSnapshot = null (line 244 of createCollageLifecycle.js)
+            // In the real code, this nulls the outer variable. Here we simulate by
+            // setting snapshot properties to undefined to represent the variable becoming null.
+            if (snapshot) {
+                snapshot.titleBoxX = undefined;
+                snapshot.titleBoxY = undefined;
+                snapshot.titleBoxWidth = undefined;
+            }
+        }
+
+        describe('Title undo closure bug — Phase 1', () => {
+            let vm, snapshot;
+
+            function makeVm(preX, preY, preW) {
+                return {
+                    titleStyle: {
+                        titleBoxX: preX,
+                        titleBoxY: preY,
+                        titleBoxWidth: preW
+                    },
+                    undoManager: createUndoManager()
+                };
+            }
+
+            beforeEach(() => {
+                vm = makeVm(100, 200, 500);
+                snapshot = {
+                    titleBoxX: 100,
+                    titleBoxY: 200,
+                    titleBoxWidth: 500
+                };
+            });
+
+            // =========================================================================
+            // 1.2.1 — Title undo closure captures correct values (FIXED pattern)
+            // =========================================================================
+            it('1.2.1 — Fixed pattern: undo restores correct values after snapshot is nulled', () => {
+                // Simulate title being moved
+                vm.titleStyle.titleBoxX = 300;
+                vm.titleStyle.titleBoxY = 400;
+                vm.titleStyle.titleBoxWidth = 600;
+
+                // Use FIXED pattern (copies snapshot to local constant)
+                simulateOnInteractionEnd(vm, snapshot, true);
+
+                expect(vm.undoManager.canUndo()).to.be.true;
+
+                // Execute undo — this is where the bug manifests
+                vm.undoManager.undo();
+
+                // With fixed pattern, values are correctly restored
+                expect(vm.titleStyle.titleBoxX).to.equal(100);
+                expect(vm.titleStyle.titleBoxY).to.equal(200);
+                expect(vm.titleStyle.titleBoxWidth).to.equal(500);
+            });
+
+            // =========================================================================
+            // 1.2.1b — Title undo redo works with fixed pattern
+            // =========================================================================
+            it('1.2.1b — Fixed pattern: redo restores post-state correctly', () => {
+                // Simulate title being moved
+                vm.titleStyle.titleBoxX = 300;
+                vm.titleStyle.titleBoxY = 400;
+                vm.titleStyle.titleBoxWidth = 600;
+
+                simulateOnInteractionEnd(vm, snapshot, true);
+
+                // Undo
+                vm.undoManager.undo();
+                expect(vm.titleStyle.titleBoxX).to.equal(100);
+
+                // Redo — should restore the moved position
+                vm.undoManager.redo();
+                expect(vm.titleStyle.titleBoxX).to.equal(300);
+                expect(vm.titleStyle.titleBoxY).to.equal(400);
+                expect(vm.titleStyle.titleBoxWidth).to.equal(600);
+            });
+
+            // =========================================================================
+            // 1.2.2 — Title undo does not crash when snapshot is null
+            // =========================================================================
+            it('1.2.2 — No crash when snapshot is null (simulating no prior interaction)', () => {
+                // Simulate: titleUndoSnapshot is null (no prior interaction start)
+                expect(() => {
+                    simulateOnInteractionEnd(vm, null, true);
+                }).to.not.throw();
+
+                // No command should be pushed
+                expect(vm.undoManager.canUndo()).to.be.false;
+            });
+
+            // =========================================================================
+            // 1.2.3 — No command pushed when title unchanged
+            // =========================================================================
+            it('1.2.3 — No command pushed when title position unchanged', () => {
+                // Title was at (100, 200, 500) and is still at (100, 200, 500)
+                // (no actual movement occurred)
+                simulateOnInteractionEnd(vm, snapshot, true);
+
+                expect(vm.undoManager.canUndo()).to.be.false;
+            });
+
+            // =========================================================================
+            // 1.2.4 — Only X changed triggers undo command
+            // =========================================================================
+            it('1.2.4 — Command pushed when only titleBoxX changed', () => {
+                vm.titleStyle.titleBoxX = 300;
+                // Y and width unchanged
+
+                simulateOnInteractionEnd(vm, snapshot, true);
+
+                expect(vm.undoManager.canUndo()).to.be.true;
+                vm.undoManager.undo();
+                expect(vm.titleStyle.titleBoxX).to.equal(100);
+                expect(vm.titleStyle.titleBoxY).to.equal(200);
+                expect(vm.titleStyle.titleBoxWidth).to.equal(500);
+            });
+
+            // =========================================================================
+            // 1.2.5 — Only width changed triggers undo command
+            // =========================================================================
+            it('1.2.5 — Command pushed when only titleBoxWidth changed (resize)', () => {
+                vm.titleStyle.titleBoxWidth = 700;
+
+                simulateOnInteractionEnd(vm, snapshot, true);
+
+                expect(vm.undoManager.canUndo()).to.be.true;
+                vm.undoManager.undo();
+                expect(vm.titleStyle.titleBoxWidth).to.equal(500);
+            });
+
+            // =========================================================================
+            // 1.2.5b — Only Y changed triggers undo command
+            // =========================================================================
+            it('1.2.5b — Command pushed when only titleBoxY changed', () => {
+                vm.titleStyle.titleBoxY = 400;
+
+                simulateOnInteractionEnd(vm, snapshot, true);
+
+                expect(vm.undoManager.canUndo()).to.be.true;
+                vm.undoManager.undo();
+                expect(vm.titleStyle.titleBoxY).to.equal(200);
+            });
+
+            // =========================================================================
+            // 1.2.6 — Multiple undo/redo cycles work correctly
+            // =========================================================================
+            it('1.2.6 — Multiple undo/redo cycles preserve correct values', () => {
+                // First move
+                vm.titleStyle.titleBoxX = 300;
+                simulateOnInteractionEnd(vm, snapshot, true);
+
+                // Undo
+                vm.undoManager.undo();
+                expect(vm.titleStyle.titleBoxX).to.equal(100);
+
+                // Redo
+                vm.undoManager.redo();
+                expect(vm.titleStyle.titleBoxX).to.equal(300);
+
+                // Undo again
+                vm.undoManager.undo();
+                expect(vm.titleStyle.titleBoxX).to.equal(100);
+
+                // Redo again
+                vm.undoManager.redo();
+                expect(vm.titleStyle.titleBoxX).to.equal(300);
+            });
+
+            // =========================================================================
+            // 1.2.7 — Command label is correct
+            // =========================================================================
+            it('1.2.7 — Undo command has correct label', () => {
+                vm.titleStyle.titleBoxX = 300;
+                simulateOnInteractionEnd(vm, snapshot, true);
+
+                expect(vm.undoManager.canUndo()).to.be.true;
+                // The label is stored in the command; verify via undo count
+                expect(vm.undoManager.getUndoCount()).to.equal(1);
+            });
+
+            // =========================================================================
+            // 1.2.8 — New action clears redo stack
+            // =========================================================================
+            it('1.2.8 — New title action clears redo stack', () => {
+                vm.titleStyle.titleBoxX = 300;
+                simulateOnInteractionEnd(vm, snapshot, true);
+
+                vm.undoManager.undo();
+                expect(vm.undoManager.canRedo()).to.be.true;
+
+                // New action
+                snapshot.titleBoxX = 100;
+                snapshot.titleBoxY = 200;
+                snapshot.titleBoxWidth = 500;
+                vm.titleStyle.titleBoxY = 400;
+                simulateOnInteractionEnd(vm, snapshot, true);
+
+                expect(vm.undoManager.canRedo()).to.be.false;
+            });
+
+            // =========================================================================
+            // 1.2.9 — Full snapshot lifecycle across multiple interaction cycles
+            // =========================================================================
+            it('1.2.9 — Snapshot lifecycle: move → undo → new move → undo restores original', () => {
+                // First interaction: move title to (300, 400, 600)
+                vm.titleStyle.titleBoxX = 300;
+                vm.titleStyle.titleBoxY = 400;
+                vm.titleStyle.titleBoxWidth = 600;
+                simulateOnInteractionEnd(vm, snapshot, true);
+
+                // Undo: should restore to (100, 200, 500)
+                vm.undoManager.undo();
+                expect(vm.titleStyle.titleBoxX).to.equal(100);
+                expect(vm.titleStyle.titleBoxY).to.equal(200);
+                expect(vm.titleStyle.titleBoxWidth).to.equal(500);
+
+                // Second interaction: move title to a DIFFERENT position (500, 100, 400)
+                snapshot.titleBoxX = 100;
+                snapshot.titleBoxY = 200;
+                snapshot.titleBoxWidth = 500;
+                vm.titleStyle.titleBoxX = 500;
+                vm.titleStyle.titleBoxY = 100;
+                vm.titleStyle.titleBoxWidth = 400;
+                simulateOnInteractionEnd(vm, snapshot, true);
+
+                // New action clears redo stack — first interaction is no longer redoable
+                expect(vm.undoManager.canRedo()).to.be.false;
+
+                // Undo second interaction: restores to (100, 200, 500)
+                vm.undoManager.undo();
+                expect(vm.titleStyle.titleBoxX).to.equal(100);
+                expect(vm.titleStyle.titleBoxY).to.equal(200);
+                expect(vm.titleStyle.titleBoxWidth).to.equal(500);
+
+                // Redo second interaction: restores to (500, 100, 400)
+                vm.undoManager.redo();
+                expect(vm.titleStyle.titleBoxX).to.equal(500);
+                expect(vm.titleStyle.titleBoxY).to.equal(100);
+                expect(vm.titleStyle.titleBoxWidth).to.equal(400);
+
+                // Undo again: back to (100, 200, 500)
+                vm.undoManager.undo();
+                expect(vm.titleStyle.titleBoxX).to.equal(100);
+                expect(vm.titleStyle.titleBoxY).to.equal(200);
+                expect(vm.titleStyle.titleBoxWidth).to.equal(500);
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

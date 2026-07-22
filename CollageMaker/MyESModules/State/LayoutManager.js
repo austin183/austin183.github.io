@@ -60,6 +60,7 @@ export function createLayoutManager(state, assembler) {
          * @param {string} style
          */
         setLayoutStyle(style) {
+            if (state.layoutStyle === style) return;
             state.layoutStyle = style;
             this.regenerate();
         },
@@ -70,6 +71,7 @@ export function createLayoutManager(state, assembler) {
          * @param {number} value
          */
         setGutter(value) {
+            if (state.gutter === value) return;
             state.gutter = value;
             this.regenerate();
         },
@@ -80,6 +82,7 @@ export function createLayoutManager(state, assembler) {
          * @param {number} value
          */
         setSliceAngle(value) {
+            if (state.sliceAngle === value) return;
             state.sliceAngle = value;
             if (state.layoutStyle === 'diagonalSlices') {
                 this.regenerate();
@@ -92,6 +95,7 @@ export function createLayoutManager(state, assembler) {
          * @param {number} value
          */
         setHexSpacing(value) {
+            if (state.hexSpacing === value) return;
             state.hexSpacing = value;
             if (state.layoutStyle === 'hexagonal') {
                 this.regenerate();
@@ -104,6 +108,7 @@ export function createLayoutManager(state, assembler) {
          * @param {number} value
          */
         setHexSizeMultiplier(value) {
+            if (state.hexSizeMultiplier === value) return;
             state.hexSizeMultiplier = value;
             if (state.layoutStyle === 'hexagonal') {
                 this.regenerate();

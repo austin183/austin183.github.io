@@ -113,6 +113,55 @@ Vue refs on certain native form inputs (notably `<input type="color">`) may not 
 
 **Solution:** Don't add duplicate interactive targets for `<input type="color">`. Use descriptive text labels instead. See `references/accessibility.md` — Color Picker Accessibility.
 
+## v-model Timing for Undo Snapshots
+
+**Critical gotcha:** `v-model` updates reactive data **before** `@change` (select) or `@input` (range/text) fires. By the time your handler runs, the data is already the NEW value.
+
+### Pattern: Pre-Change Snapshot
+
+Capture the pre-state on an event that fires BEFORE v-model updates:
+
+**For `<select>`: Use `@focus`**
+```html
+<select v-model="layoutStyle" @focus="snapshotLayoutStyle" @change="onLayoutStyleChange">
+```
+```javascript
+snapshotLayoutStyle() {
+    layoutStyleSnapshot = this.layoutStyle;  // Old value, captured before dropdown opens
+}
+onLayoutStyleChange() {
+    if (layoutStyleSnapshot !== null && this.layoutStyle !== layoutStyleSnapshot) {
+        // Push undo command with layoutStyleSnapshot as pre-state
+        layoutStyleSnapshot = null;
+    }
+}
+```
+
+**For `<input type="range">`: Use `@focus` + `@pointerdown`**
+```html
+<input type="range" v-model.number="gutter"
+       @focus="snapshotLayoutOptions"
+       @pointerdown="snapshotLayoutOptions"
+       @input="onGutterChange"
+       @blur="commitLayoutOptions">
+```
+
+- `@focus` — captures snapshot when user tabs to the slider (keyboard navigation)
+- `@pointerdown` — captures snapshot when user clicks/touches the slider (mouse/touch)
+- **Why `@pointerdown` and NOT `@mousedown`?** `@mousedown` does NOT fire on touch devices (iOS/Android) for form elements. The browser fires `touchstart` instead. `@pointerdown` is the modern, cross-platform standard that unifies mouse, touch, and pen input.
+
+**Batching pattern for sliders:** Range inputs fire `@input` continuously during drag. To batch multiple slider changes into a single undo command:
+1. Snapshot on interaction start: `@focus` or `@pointerdown`
+2. Update on every input: `@input` updates layout and renders
+3. Commit on interaction end: `@blur` pushes the batched undo command
+
+**Testing:** Simulate the Vue event order:
+```javascript
+handlers.snapshotLayoutStyle.call(vm);
+vm.layoutStyle = 'hex';  // v-model updates
+handlers.onLayoutStyleChange.call(vm);  // @change fires
+```
+
 ## Range Input with Null Default
 
 `v-model.number` on `<input type="range">` coerces `null` to the `min` attribute value, which is unexpected when `null` represents "auto/unset":

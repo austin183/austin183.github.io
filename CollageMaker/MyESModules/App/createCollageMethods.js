@@ -52,6 +52,33 @@ export function createCollageMethods(base, domIds = {}) {
     // ---- Create handler factories with injected callbacks ----
     // Each callback receives the Vue instance (vm) as a parameter.
 
+    // Shared undo command wiring — pushes commands to the Vue instance's undoManager
+    // with error handling and render state updates.
+    function pushUndoCommand(vm, cmd) {
+        if (vm.undoManager) {
+            vm.undoManager.push({
+                label: cmd.label,
+                undo: () => {
+                    try { cmd.undoFn(vm); } catch (e) {
+                        console.error(`Undo error (${cmd.label}):`, e);
+                        if (vm.showToast) {
+                            vm.showToast('Undo failed. Please try again.', 'error', 5000);
+                        }
+                    }
+                },
+                redo: () => {
+                    try { cmd.redoFn(vm); } catch (e) {
+                        console.error(`Redo error (${cmd.label}):`, e);
+                        if (vm.showToast) {
+                            vm.showToast('Redo failed. Please try again.', 'error', 5000);
+                        }
+                    }
+                }
+            });
+            vm._updateUndoState();
+        }
+    }
+
     const fileHandlers = createFileHandlers(
         () => base.getImageLibrary(),
         (vm) => renderMethods._regenerateAndRender(vm),
@@ -59,19 +86,22 @@ export function createCollageMethods(base, domIds = {}) {
         (vm, current, total) => vm._setImageLoadingProgress(current, total),
         (vm, failedCount, totalCount) => {
             vm.showToast(`${failedCount} of ${totalCount} image(s) failed to load`, 'error', 5000);
-        }
+        },
+        (vm, cmd) => pushUndoCommand(vm, cmd)
     );
 
     const imagePanelHandlers = createImagePanelHandlers(
         () => base.getImageLibrary(),
         () => base.getLayoutManager(),
         () => base.getCanvasRenderer(),
-        (vm) => renderMethods._scheduleRender(vm)
+        (vm) => renderMethods._scheduleRender(vm),
+        (vm, cmd) => pushUndoCommand(vm, cmd)
     );
 
     const layoutHandlers = createLayoutHandlers(
         () => base.getLayoutManager(),
-        (vm) => renderMethods._scheduleRender(vm)
+        (vm) => renderMethods._scheduleRender(vm),
+        (vm, cmd) => pushUndoCommand(vm, cmd)
     );
 
     const cropHandlers = createCropHandlers(
@@ -82,16 +112,19 @@ export function createCollageMethods(base, domIds = {}) {
 
     const backgroundHandlers = createBackgroundHandlers(
         () => base.getBackgroundManager(),
-        (vm) => renderMethods._scheduleRender(vm)
+        (vm) => renderMethods._scheduleRender(vm),
+        (vm, cmd) => pushUndoCommand(vm, cmd)
     );
 
     const titleHandlers = createTitleHandlers(
         () => base.getTitleManager(),
-        (vm) => renderMethods._scheduleRender(vm)
+        (vm) => renderMethods._scheduleRender(vm),
+        (vm, cmd) => pushUndoCommand(vm, cmd)
     );
 
     const overlayHandlers = createOverlayHandlers(
-        (vm) => renderMethods._scheduleRender(vm)
+        (vm) => renderMethods._scheduleRender(vm),
+        (vm, cmd) => pushUndoCommand(vm, cmd)
     );
 
     const exportHandlers = createExportHandlers(base.assembler);
@@ -140,6 +173,15 @@ export function createCollageMethods(base, domIds = {}) {
         },
 
         // Layout handlers
+        snapshotLayoutStyle() {
+            layoutHandlers.snapshotLayoutStyle.call(this);
+        },
+        snapshotLayoutOptions() {
+            layoutHandlers.snapshotLayoutOptions.call(this);
+        },
+        commitLayoutOptions() {
+            layoutHandlers.commitLayoutOptions.call(this);
+        },
         onLayoutStyleChange() {
             layoutHandlers.onLayoutStyleChange.call(this);
         },
@@ -169,8 +211,25 @@ export function createCollageMethods(base, domIds = {}) {
         redo() {
             undoMethods._performRedo(this);
         },
+        /**
+         * Pushes an undo command onto the undo stack. Wraps undoFn/redoFn
+         * in try/catch — error handling (generic toast + console.error)
+         * occurs during _performUndo/_performRedo execution, not at push time.
+         * Exposed on the methods object for testability.
+         * @param {Object} vm — Vue instance (for toast and undo state updates)
+         * @param {Object} cmd — Command with label, undoFn, and redoFn
+         */
+        pushUndoCommand(vm, cmd) {
+            pushUndoCommand(vm, cmd);
+        },
 
         // Background handlers
+        snapshotBackground() {
+            backgroundHandlers.snapshotBackground.call(this);
+        },
+        commitBackground() {
+            backgroundHandlers.commitBackground.call(this);
+        },
         onBackgroundStyleChange() {
             backgroundHandlers.onBackgroundStyleChange.call(this);
         },
@@ -209,8 +268,26 @@ export function createCollageMethods(base, domIds = {}) {
         removeBackgroundImage() {
             backgroundHandlers.removeBackgroundImage.call(this);
         },
+        setBackgroundStyle(style) {
+            backgroundHandlers.setBackgroundStyle.call(this, style);
+        },
+        removeBackgroundImageAtomic() {
+            backgroundHandlers.removeBackgroundImageAtomic.call(this);
+        },
 
         // Title handlers
+        snapshotTitleText() {
+            titleHandlers.snapshotTitleText.call(this);
+        },
+        commitTitleText() {
+            titleHandlers.commitTitleText.call(this);
+        },
+        snapshotTitleStyle() {
+            titleHandlers.snapshotTitleStyle.call(this);
+        },
+        commitTitleStyle() {
+            titleHandlers.commitTitleStyle.call(this);
+        },
         onTitleTextChange() {
             titleHandlers.onTitleTextChange.call(this);
         },
@@ -262,8 +339,20 @@ export function createCollageMethods(base, domIds = {}) {
         resetTitlePosition() {
             titleHandlers.resetTitlePosition.call(this);
         },
+        setTitleAlignment(alignment) {
+            titleHandlers.setTitleAlignment.call(this, alignment);
+        },
+        toggleTitleShowBackground() {
+            titleHandlers.toggleTitleShowBackground.call(this);
+        },
 
         // Overlay handlers
+        snapshotOverlay() {
+            overlayHandlers.snapshotOverlay.call(this);
+        },
+        commitOverlay() {
+            overlayHandlers.commitOverlay.call(this);
+        },
         handleOverlayImageChange(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -277,6 +366,9 @@ export function createCollageMethods(base, domIds = {}) {
         },
         removeOverlay() {
             overlayHandlers.removeOverlay.call(this);
+        },
+        removeOverlayAtomic() {
+            overlayHandlers.removeOverlayAtomic.call(this);
         },
 
         // Export handlers

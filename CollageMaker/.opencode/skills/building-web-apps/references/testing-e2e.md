@@ -216,3 +216,61 @@ await page.click('#previewCanvas');  // select a panel
 await page.click('.reset-crop-btn'); // creates undo command
 await page.click('#undoBtn');        // works — button is enabled
 ```
+
+## E2E Event Simulation Gotchas
+
+Several Playwright methods do NOT fire the DOM events that Vue handlers depend on:
+
+### `el.focus()` Does NOT Fire `focus` Event
+
+Calling `element.focus()` changes focus state but does NOT fire a `focus` event. Vue `@focus` handlers (e.g., for capturing pre-change snapshots) won't execute.
+
+**Fix:** Explicitly dispatch the event after focusing:
+```javascript
+await page.evaluate((selector) => {
+    const el = document.querySelector(selector);
+    el.focus();
+    el.dispatchEvent(new Event('focus', { bubbles: true }));
+}, '#mySelect');
+```
+
+### `page.selectText()` Does NOT Fire `select` Event
+
+`locator.selectText()` selects text but does NOT fire the `select` event. Vue `@select` handlers (e.g., for tracking selection range) won't execute.
+
+**Fix:** Use evaluate to set selection and dispatch event:
+```javascript
+await page.evaluate(() => {
+    const el = document.getElementById('myTextarea');
+    el.setSelectionRange(0, el.value.length);
+    el.dispatchEvent(new Event('select', { bubbles: true }));
+});
+```
+
+### `page.fill()` Does NOT Work on Range Inputs
+
+`page.fill()` only works on text inputs, textareas, and selects. It fails silently on `<input type="range">`.
+
+**Fix:** Use evaluate to set value and dispatch input event:
+```javascript
+await page.evaluate((args) => {
+    const el = document.querySelector(args.selector);
+    el.value = args.value;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+}, { selector: '#myRange', value: 10 });
+```
+
+### Sidebar Sections Collapsed by Default
+
+CollageMaker right sidebar sections (Title, Background, Overlay, etc.) are collapsed by default. Tests must expand sections before interacting with their contents.
+
+```javascript
+const header = page.locator('.sidebar-right .sidebar-section-header')
+    .filter({ hasText: 'Title' });
+if (await header.getAttribute('aria-expanded') !== 'true') {
+    await header.click();
+    await page.waitForTimeout(100);
+}
+```
+
+See `_agent_docs/learnings/2026-07-22-playwright-event-simulation-gotchas.md` for full details.

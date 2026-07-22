@@ -20,6 +20,8 @@
 - Manager-Specific Testing
 - Worker Testing
 - Characterization Tests Before Refactor
+- Mock VM Construction for Factory Testing
+- Return Object Exposure for Internal Functions
 
 ## Unit Tests — Mocha + Chai
 
@@ -701,3 +703,85 @@ it('drawSelectionBorder sets strokeStyle and shadow properties', () => {
 
 **File Reference:**
 - `MyESModules/Rendering/PanelRenderer.js` — `_drawPanelBorder` extraction was preceded by characterization tests for `lineWidth` and `globalAlpha`
+
+## Mock VM Construction for Factory Testing
+
+When testing a factory that returns many methods, construct the mock VM by spreading the factory methods first, then overriding specific methods with spies.
+
+**The gotcha:** `Object.assign(vm, methods)` or `{ ...methods }` overwrites any properties set before it. Always spread/assign the factory methods first, then override with spies.
+
+```javascript
+function buildVm(undoManager) {
+    const base = makeMockBase(undoManager);
+    const methods = createCollageMethods(base);
+
+    // Spread factory methods FIRST — this establishes all base methods
+    const vm = { ...methods };
+
+    // Override specific methods with spies — MUST come after spread
+    vm.showToast = (msg, type, duration) => {
+        vm._toastCalls.push({ message: msg, type, duration });
+    };
+    vm._updateUndoState = () => {
+        vm._undoStateCalls.push(true);
+    };
+
+    return vm;
+}
+```
+
+**Why this order matters:** If you set `vm.showToast = spy` before spreading `methods`, and the factory return object also defines `showToast`, the spread overwrites your spy. The factory methods always win.
+
+**When to use:**
+- Testing factory methods that call other factory methods (e.g., `pushUndoCommand` calls `showToast`)
+- Factories that return many interdependent methods
+- When you need to spy on a subset of methods while keeping the rest functional
+
+## Return Object Exposure for Internal Functions
+
+When an internal factory function has meaningful behavior worth testing (error handling, validation, etc.) but is genuinely internal (not needed by other modules), expose it as a method on the factory's return object instead of exporting it as a module-level named export.
+
+```javascript
+// Internal function — scoped to factory, not exported
+function pushUndoCommand(vm, cmd) {
+    if (vm.undoManager) {
+        vm.undoManager.push({
+            label: cmd.label,
+            undo: () => {
+                try { cmd.undoFn(vm); } catch (e) {
+                    console.error(`Undo error (${cmd.label}):`, e);
+                    if (vm.showToast) {
+                        vm.showToast('Undo failed. Please try again.', 'error', 5000);
+                    }
+                }
+            },
+            // ... redo wrapper
+        });
+        vm._updateUndoState();
+    }
+}
+
+// Expose on return object for testability
+return {
+    // ... other methods
+    pushUndoCommand(vm, cmd) {
+        pushUndoCommand(vm, cmd);
+    },
+};
+```
+
+**Why not export as a module-level named export?** Exporting would:
+1. Break the factory encapsulation pattern
+2. Require the function to accept all dependencies as parameters (losing closure benefits)
+3. Create a new import dependency for test files
+
+**When to use this pattern:**
+- The function is genuinely internal (not needed by other modules)
+- The function has meaningful behavior worth testing (error handling, validation, etc.)
+- The function relies on factory-scoped closures (dependencies, state)
+- You don't want to extract the function to a separate module
+
+**When NOT to use this pattern:**
+- The function is already testable through the public API (prefer testing through public methods)
+- The function is simple enough that testing through integration is sufficient
+- The function should be extracted to its own module (consider SRP — if it's complex enough to need direct testing, it might belong in its own module)

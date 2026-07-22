@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Undo Error Message — Generic Toast Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Undo Error Message Tests (Phase 1: N-2)</h1>
+    <p class="test-plan-ref">Covers: Plan 2026-07-21-undo-redo-review-followups-implementation.md Phase 1 — Genericize error toast messages</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createCollageMethods } from '../MyESModules/App/createCollageMethods.js';
+        import { createUndoManager } from '../MyESModules/State/UndoManager.js';
+
+        const { expect } = chai;
+
+        /**
+         * Create a mock base object that provides the minimum services
+         * required by createCollageMethods. All service getters return
+         * null or no-op implementations.
+         */
+        function makeMockBase(undoManager) {
+            return {
+                getImageLibrary: () => null,
+                getLayoutManager: () => null,
+                getCanvasRenderer: () => null,
+                getUndoManager: () => undoManager,
+                getCropManager: () => null,
+                getBackgroundManager: () => null,
+                getTitleManager: () => null,
+                getExportManager: () => null,
+                getKeyboardHandler: () => null,
+                getSettingsManager: () => null,
+                getGestureHandler: () => null,
+                getPanelSwapHandler: () => null,
+                getDragDropHandler: () => null,
+                getExportSize: () => ({ width: 1200, height: 1200 }),
+                assembler: { render: () => {} }
+            };
+        }
+
+        /**
+         * Build a vm with createCollageMethods, then override showToast
+         * with a spy. Order matters: assign methods first, then override.
+         */
+        function buildVm(undoManager) {
+            const base = makeMockBase(undoManager);
+            const methods = createCollageMethods(base);
+
+            // Start with methods from factory
+            const vm = { ...methods };
+
+            // Override showToast with a spy (must come after spread)
+            vm.showToast = (msg, type, duration) => {
+                vm._toastCalls.push({ message: msg, type, duration });
+            };
+
+            return vm;
+        }
+
+        describe('pushUndoCommand — error toast messages (N-2)', () => {
+            let um, vm, consoleErrors;
+
+            beforeEach(() => {
+                um = createUndoManager();
+                vm = buildVm(um);
+                vm._toastCalls = [];
+                vm.undoManager = um;
+
+                consoleErrors = [];
+                const originalConsoleError = console.error;
+                console.error = (...args) => {
+                    consoleErrors.push(args);
+                };
+            });
+
+            it('1.2.1 — Undo error toast is generic (no JS internals)', () => {
+                const technicalError = new TypeError('Cannot read properties of undefined (reading "image")');
+
+                // Use pushUndoCommand (exposed on vm) to push a command
+                // whose undoFn throws a technical error
+                vm.pushUndoCommand(vm, {
+                    label: 'Test Action',
+                    undoFn: () => { throw technicalError; },
+                    redoFn: () => {}
+                });
+
+                // Execute undo via the undo manager
+                um.undo();
+
+                expect(vm._toastCalls.length).to.equal(1);
+                expect(vm._toastCalls[0].message).to.equal('Undo failed. Please try again.');
+                expect(vm._toastCalls[0].message).to.not.include('Cannot read properties');
+                expect(vm._toastCalls[0].message).to.not.include('undefined');
+                expect(vm._toastCalls[0].type).to.equal('error');
+            });
+
+            it('1.2.2 — Redo error toast is generic (no JS internals)', () => {
+                const technicalError = new ReferenceError('foo is not defined');
+
+                vm.pushUndoCommand(vm, {
+                    label: 'Test Action',
+                    undoFn: () => {},
+                    redoFn: () => { throw technicalError; }
+                });
+
+                // Move to redo stack, then redo
+                um.undo();
+                um.redo();
+
+                expect(vm._toastCalls.length).to.equal(1);
+                expect(vm._toastCalls[0].message).to.equal('Redo failed. Please try again.');
+                expect(vm._toastCalls[0].message).to.not.include('foo is not defined');
+                expect(vm._toastCalls[0].message).to.not.include('ReferenceError');
+                expect(vm._toastCalls[0].type).to.equal('error');
+            });
+
+            it('1.2.3 — Console retains debug details on undo error', () => {
+                const technicalError = new TypeError('Cannot read properties of undefined (reading "image")');
+
+                vm.pushUndoCommand(vm, {
+                    label: 'Test Action',
+                    undoFn: () => { throw technicalError; },
+                    redoFn: () => {}
+                });
+
+                um.undo();
+
+                expect(consoleErrors.length).to.be.greaterThan(0);
+                const errorCall = consoleErrors[0];
+                expect(errorCall[0]).to.include('Test Action');
+                expect(errorCall[1]).to.be.an.instanceOf(TypeError);
+            });
+        });
+
+        describe('pushUndoCommand — integration via _performUndo/_performRedo', () => {
+            let um, vm, consoleErrors;
+
+            beforeEach(() => {
+                um = createUndoManager();
+                vm = buildVm(um);
+                vm._toastCalls = [];
+                vm.undoManager = um;
+
+                consoleErrors = [];
+                const originalConsoleError = console.error;
+                console.error = (...args) => {
+                    consoleErrors.push(args);
+                };
+            });
+
+            it('1.2.1-integration — _performUndo: error in undoFn shows generic toast', () => {
+                const technicalError = new TypeError('Cannot read properties of undefined');
+
+                vm.pushUndoCommand(vm, {
+                    label: 'Simulated Action',
+                    undoFn: () => { throw technicalError; },
+                    redoFn: () => {}
+                });
+
+                // Execute via _performUndo (which calls um.undo() internally)
+                vm._performUndo();
+
+                expect(vm._toastCalls.length).to.equal(1);
+                expect(vm._toastCalls[0].message).to.equal('Undo failed. Please try again.');
+                expect(vm._toastCalls[0].message).to.not.include('Cannot read properties');
+                expect(vm._toastCalls[0].type).to.equal('error');
+
+                // Console retains debug details
+                expect(consoleErrors.length).to.be.greaterThan(0);
+                expect(consoleErrors[0][0]).to.include('Simulated Action');
+            });
+
+            it('1.2.2-integration — _performRedo: error in redoFn shows generic toast', () => {
+                const technicalError = new ReferenceError('foo is not defined');
+
+                vm.pushUndoCommand(vm, {
+                    label: 'Simulated Action',
+                    undoFn: () => {},
+                    redoFn: () => { throw technicalError; }
+                });
+
+                // Move to redo stack, then redo via _performRedo
+                um.undo();
+                vm._performRedo();
+
+                expect(vm._toastCalls.length).to.equal(1);
+                expect(vm._toastCalls[0].message).to.equal('Redo failed. Please try again.');
+                expect(vm._toastCalls[0].message).to.not.include('foo is not defined');
+                expect(vm._toastCalls[0].type).to.equal('error');
+            });
+        });
+    </script>
+
+    <script>
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

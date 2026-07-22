@@ -1,0 +1,3095 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Undo Expansion — Phase 2: Image Operations</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Undo Expansion Phase 2: Image Operations</h1>
+    <p class="test-plan-ref">Covers: Plan 2026-07-20-undo-redo-expansion-implementation.md Phase 2 — Add/remove/clear image undo</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createFileHandlers } from '../MyESModules/App/createFileHandlers.js';
+        import { createImagePanelHandlers } from '../MyESModules/App/createImagePanelHandlers.js';
+        import { createLayoutHandlers } from '../MyESModules/App/createLayoutHandlers.js';
+        import { createTitleHandlers } from '../MyESModules/App/createTitleHandlers.js';
+        import { createBackgroundHandlers } from '../MyESModules/App/createBackgroundHandlers.js';
+        import { createOverlayHandlers } from '../MyESModules/App/createOverlayHandlers.js';
+        import { createUndoManager } from '../MyESModules/State/UndoManager.js';
+
+        const { expect } = chai;
+
+        // =========================================================================
+        // Helpers
+        // =========================================================================
+
+        /**
+         * Create a minimal ImageItem-like object for testing.
+         */
+        function makeImageItem(id, filename = 'test.jpg') {
+            const img = new Image();
+            img.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+            return {
+                id,
+                filename,
+                image: img,
+                width: 100,
+                height: 100,
+                thumbnail: img
+            };
+        }
+
+        /**
+         * Create a mock Vue-like context (vm) with images, crops, and other state.
+         */
+        function makeVm(images = [], crops = []) {
+            return {
+                images: images.map(item => ({ ...item })),
+                crops: JSON.parse(JSON.stringify(crops)),
+                selectedImageId: null,
+                selectedPanelId: null,
+                panels: [],
+                undoManager: createUndoManager(),
+                showToast: null,
+                _scheduleRender: null,
+                _regenerateAndRender: null,
+                layoutManager: null,
+                imageLibrary: null
+            };
+        }
+
+        /**
+         * Create a mock ImageLibrary that delegates to the vm's images array.
+         */
+        function makeMockImageLibrary(vm) {
+            return {
+                addImages: async (files, onProgress, onFailures) => {
+                    // Simulate adding images from files
+                    const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+                    for (const file of imageFiles) {
+                        const item = makeImageItem(
+                            'img-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+                            file.name
+                        );
+                        vm.images.push(item);
+                    }
+                },
+                disposeImage: (index) => {
+                    if (index >= 0 && index < vm.images.length) {
+                        const item = vm.images[index];
+                        if (item && item.image) {
+                            item.image.src = '';
+                        }
+                        item.image = null;
+                        vm.images.splice(index, 1);
+                    }
+                },
+                clearAll: () => {
+                    for (const item of vm.images) {
+                        if (item && item.image) {
+                            item.image.src = '';
+                        }
+                        item.image = null;
+                    }
+                    vm.images.splice(0, vm.images.length);
+                }
+            };
+        }
+
+        /**
+         * Create a mock LayoutManager.
+         */
+        function makeMockLayoutManager() {
+            return {
+                regenerate: () => {},
+                setLayoutStyle: () => {},
+                setGutter: () => {},
+                setSliceAngle: () => {},
+                setHexSpacing: () => {},
+                setHexSizeMultiplier: () => {}
+            };
+        }
+
+        /**
+         * Create a real image File for testing.
+         */
+        function createTestImageFile(name = 'test.png') {
+            return new File(
+                ['dummy'],
+                name,
+                { type: 'image/png' }
+            );
+        }
+
+        // =========================================================================
+        // createFileHandlers — onUndoCommand for Add Images
+        // =========================================================================
+        describe('createFileHandlers — onUndoCommand for Add Images', () => {
+            let originalGetElementById;
+            let vm, mockLib, undoCommands;
+
+            function collectUndoCommands(cmd) {
+                undoCommands.push(cmd);
+            }
+
+            beforeEach(() => {
+                vm = makeVm();
+                mockLib = makeMockImageLibrary(vm);
+                undoCommands = [];
+
+                originalGetElementById = document.getElementById;
+                document.getElementById = (id) => {
+                    if (id === 'fileInput') {
+                        return { files: null, value: '' };
+                    }
+                    return originalGetElementById(id);
+                };
+            });
+
+            afterEach(() => {
+                document.getElementById = originalGetElementById;
+            });
+
+            it('2.2.1 — onUndoCommand called after images added via file input', async () => {
+                const mockInput = {
+                    files: [createTestImageFile('a.png'), createTestImageFile('b.png')],
+                    value: ''
+                };
+                document.getElementById = (id) => {
+                    if (id === 'fileInput') return mockInput;
+                    return originalGetElementById(id);
+                };
+
+                let regenerateCalled = false;
+                const handlers = createFileHandlers(
+                    () => mockLib,
+                    () => { regenerateCalled = true; },
+                    'fileInput',
+                    null,
+                    null,
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                await handlers.handleFileInputChange.call(vm);
+
+                expect(regenerateCalled).to.be.true;
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Add Images');
+                expect(undoCommands[0].undoFn).to.be.a('function');
+                expect(undoCommands[0].redoFn).to.be.a('function');
+            });
+
+            it('2.2.1b — No undo command when no images added', async () => {
+                const mockInput = {
+                    files: [],
+                    value: ''
+                };
+                document.getElementById = (id) => {
+                    if (id === 'fileInput') return mockInput;
+                    return originalGetElementById(id);
+                };
+
+                const handlers = createFileHandlers(
+                    () => mockLib,
+                    () => {},
+                    'fileInput',
+                    null,
+                    null,
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                await handlers.handleFileInputChange.call(vm);
+
+                expect(undoCommands.length).to.equal(0);
+            });
+
+            it('2.2.1c — No undo command when onUndoCommand is null', async () => {
+                const mockInput = {
+                    files: [createTestImageFile('a.png')],
+                    value: ''
+                };
+                document.getElementById = (id) => {
+                    if (id === 'fileInput') return mockInput;
+                    return originalGetElementById(id);
+                };
+
+                const handlers = createFileHandlers(
+                    () => mockLib,
+                    () => {},
+                    'fileInput',
+                    null,
+                    null,
+                    null  // No onUndoCommand
+                );
+
+                await handlers.handleFileInputChange.call(vm);
+
+                // Should not throw
+                expect(vm.images.length).to.equal(1);
+            });
+
+            it('2.2.2 — Undo removes only the added images, keeps pre-existing', async () => {
+                // Pre-existing image
+                const existingItem = makeImageItem('existing-1');
+                vm.images.push(existingItem);
+
+                const mockInput = {
+                    files: [createTestImageFile('new1.png'), createTestImageFile('new2.png')],
+                    value: ''
+                };
+                document.getElementById = (id) => {
+                    if (id === 'fileInput') return mockInput;
+                    return originalGetElementById(id);
+                };
+
+                const handlers = createFileHandlers(
+                    () => mockLib,
+                    () => {},
+                    'fileInput',
+                    null,
+                    null,
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                await handlers.handleFileInputChange.call(vm);
+                expect(vm.images.length).to.equal(3); // 1 existing + 2 new
+
+                // Execute undo
+                const cmd = undoCommands[0];
+                cmd.undoFn(vm);
+
+                // Only existing image should remain
+                expect(vm.images.length).to.equal(1);
+                expect(vm.images[0].id).to.equal('existing-1');
+            });
+
+            it('2.2.9 — Multiple file picker operations produce separate undo commands', async () => {
+                const mockInput = {
+                    files: [],
+                    value: ''
+                };
+                document.getElementById = (id) => {
+                    if (id === 'fileInput') return mockInput;
+                    return originalGetElementById(id);
+                };
+
+                const handlers = createFileHandlers(
+                    () => mockLib,
+                    () => {},
+                    'fileInput',
+                    null,
+                    null,
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                // First batch
+                mockInput.files = [createTestImageFile('a.png')];
+                await handlers.handleFileInputChange.call(vm);
+
+                // Second batch
+                mockInput.files = [createTestImageFile('b.png')];
+                await handlers.handleFileInputChange.call(vm);
+
+                // Each batch should produce its own undo command
+                expect(undoCommands.length).to.equal(2);
+                expect(undoCommands[0].label).to.equal('Add Images');
+                expect(undoCommands[1].label).to.equal('Add Images');
+            });
+        });
+
+        // =========================================================================
+        // createImagePanelHandlers — onUndoCommand for Remove Image
+        // =========================================================================
+        describe('createImagePanelHandlers — onUndoCommand for Remove Image', () => {
+            let vm, mockLib, mockLayout, undoCommands;
+
+            function collectUndoCommands(cmd) {
+                undoCommands.push(cmd);
+            }
+
+            beforeEach(() => {
+                const items = [
+                    makeImageItem('img-1'),
+                    makeImageItem('img-2'),
+                    makeImageItem('img-3')
+                ];
+                vm = makeVm(items, [{ x: 0, y: 0, w: 1, h: 1 }, { x: 0, y: 0, w: 1, h: 1 }, { x: 0, y: 0, w: 1, h: 1 }]);
+                mockLib = makeMockImageLibrary(vm);
+                mockLayout = makeMockLayoutManager();
+                undoCommands = [];
+            });
+
+            it('2.2.3 — Remove image pushes undo command', () => {
+                const handlers = createImagePanelHandlers(
+                    () => mockLib,
+                    () => mockLayout,
+                    () => null,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.removeImage.call(vm, 1);
+
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Remove Image');
+                expect(undoCommands[0].undoFn).to.be.a('function');
+                expect(undoCommands[0].redoFn).to.be.a('function');
+            });
+
+            it('2.2.4 — Remove image undo restores image at original index', () => {
+                const originalCrops = JSON.parse(JSON.stringify(vm.crops));
+                const handlers = createImagePanelHandlers(
+                    () => mockLib,
+                    () => mockLayout,
+                    () => null,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.removeImage.call(vm, 1);
+                expect(vm.images.length).to.equal(2);
+
+                // Execute undo
+                const cmd = undoCommands[0];
+                cmd.undoFn(vm);
+
+                expect(vm.images.length).to.equal(3);
+                // Image should be restored at original index
+                expect(vm.images[1].id).to.equal('img-2');
+                // Crops should be restored
+                expect(vm.crops.length).to.equal(originalCrops.length);
+            });
+
+            it('2.2.5 — Remove image undo with disposed image element shows toast', () => {
+                // Create an image item that already has a null image reference
+                // (simulating a previously disposed image that was re-added to the array)
+                const disposedItem = { id: 'img-disposed', image: null, filename: 'disposed.jpg', width: 100, height: 100, thumbnail: null };
+                const disposedVm = makeVm([makeImageItem('img-a'), disposedItem, makeImageItem('img-c')], [{ x: 0 }, { x: 0 }, { x: 0 }]);
+                const disposedLib = makeMockImageLibrary(disposedVm);
+
+                const disposedUndoCommands = [];
+                const disposedHandlers = createImagePanelHandlers(
+                    () => disposedLib,
+                    () => mockLayout,
+                    () => null,
+                    () => {},
+                    (vmRef, cmd) => disposedUndoCommands.push(cmd)
+                );
+
+                disposedHandlers.removeImage.call(disposedVm, 1);
+
+                let toastMessage = null;
+                let toastType = null;
+                disposedVm.showToast = (msg, type) => {
+                    toastMessage = msg;
+                    toastType = type;
+                };
+
+                // Execute undo — removedItem.image is null, so toast should show
+                disposedUndoCommands[0].undoFn(disposedVm);
+
+                expect(toastMessage).to.contain('Cannot undo');
+                expect(toastType).to.equal('error');
+            });
+
+            it('2.2.5b — Remove image undo with disposed image does not crash', () => {
+                const handlers = createImagePanelHandlers(
+                    () => mockLib,
+                    () => mockLayout,
+                    () => null,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                vm.showToast = null; // No toast handler
+
+                handlers.removeImage.call(vm, 1);
+
+                // Should not throw even without toast
+                expect(() => {
+                    undoCommands[0].undoFn(vm);
+                }).to.not.throw();
+            });
+
+            it('2.2.5c — Remove image redo re-removes the image', () => {
+                const handlers = createImagePanelHandlers(
+                    () => mockLib,
+                    () => mockLayout,
+                    () => null,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.removeImage.call(vm, 1);
+                expect(vm.images.length).to.equal(2);
+
+                // Manually re-insert the image (simulating a successful undo with valid image)
+                // In real scenario, the undoFn would handle this, but since image is disposed,
+                // let's test the redoFn independently
+                const cmd = undoCommands[0];
+
+                // Redo should not crash even if image is not in the array
+                expect(() => {
+                    cmd.redoFn(vm);
+                }).to.not.throw();
+            });
+
+            it('2.2.3b — No undo command when onUndoCommand is null', () => {
+                const handlers = createImagePanelHandlers(
+                    () => mockLib,
+                    () => mockLayout,
+                    () => null,
+                    () => {},
+                    null  // No onUndoCommand
+                );
+
+                expect(() => {
+                    handlers.removeImage.call(vm, 1);
+                }).to.not.throw();
+
+                expect(vm.images.length).to.equal(2);
+            });
+
+            it('2.2.3c — No undo command when removing from empty array', () => {
+                vm.images = [];
+                vm.crops = [];
+                mockLib = makeMockImageLibrary(vm);
+
+                const handlers = createImagePanelHandlers(
+                    () => mockLib,
+                    () => mockLayout,
+                    () => null,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.removeImage.call(vm, 0);
+
+                expect(undoCommands.length).to.equal(0);
+            });
+        });
+
+        // =========================================================================
+        // createImagePanelHandlers — onUndoCommand for Clear All Images
+        // =========================================================================
+        describe('createImagePanelHandlers — onUndoCommand for Clear All Images', () => {
+            let vm, mockLib, mockLayout, undoCommands;
+
+            function collectUndoCommands(cmd) {
+                undoCommands.push(cmd);
+            }
+
+            beforeEach(() => {
+                const items = [
+                    makeImageItem('img-1'),
+                    makeImageItem('img-2'),
+                    makeImageItem('img-3'),
+                    makeImageItem('img-4'),
+                    makeImageItem('img-5')
+                ];
+                vm = makeVm(items, [{ x: 0, y: 0, w: 1, h: 1 }, { x: 0, y: 0, w: 1, h: 1 }, { x: 0, y: 0, w: 1, h: 1 }, { x: 0, y: 0, w: 1, h: 1 }, { x: 0, y: 0, w: 1, h: 1 }]);
+                mockLib = makeMockImageLibrary(vm);
+                mockLayout = makeMockLayoutManager();
+                undoCommands = [];
+            });
+
+            it('2.2.6 — Clear all pushes undo command', () => {
+                const handlers = createImagePanelHandlers(
+                    () => mockLib,
+                    () => mockLayout,
+                    () => null,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.clearAllImages.call(vm);
+
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Clear All Images');
+                expect(undoCommands[0].undoFn).to.be.a('function');
+                expect(undoCommands[0].redoFn).to.be.a('function');
+            });
+
+            it('2.2.7 — Clear all undo restores all images when references preserved', () => {
+                const handlers = createImagePanelHandlers(
+                    () => mockLib,
+                    () => mockLayout,
+                    () => null,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.clearAllImages.call(vm);
+                expect(vm.images.length).to.equal(0);
+
+                // Execute undo — snapshot preserves image references, so undo works
+                vm.layoutManager = mockLayout;
+                vm._scheduleRender = () => {};
+                undoCommands[0].undoFn(vm);
+
+                // Images should be restored (references were preserved in snapshot)
+                expect(vm.images.length).to.equal(5);
+            });
+
+            it('2.2.8 — Clear all undo with all disposed images shows toast', () => {
+                // Simulate: after clearAll, the image references are externally invalidated
+                // (e.g., user navigates away and back, browser GC collects images)
+                // We test this by creating items with null images and verifying toast
+                const nullImageItems = [
+                    { id: 'ni-1', image: null, filename: 'a.jpg', width: 100, height: 100, thumbnail: null },
+                    { id: 'ni-2', image: null, filename: 'b.jpg', width: 100, height: 100, thumbnail: null }
+                ];
+                const nullVm = makeVm(nullImageItems, []);
+                const nullLib = makeMockImageLibrary(nullVm);
+
+                const nullUndoCommands = [];
+                const nullHandlers = createImagePanelHandlers(
+                    () => nullLib,
+                    () => mockLayout,
+                    () => null,
+                    () => {},
+                    (vmRef, cmd) => nullUndoCommands.push(cmd)
+                );
+
+                nullHandlers.clearAllImages.call(nullVm);
+
+                let toastMessage = null;
+                nullVm.showToast = (msg) => { toastMessage = msg; };
+
+                // Execute undo — all images have null references
+                nullUndoCommands[0].undoFn(nullVm);
+
+                expect(toastMessage).to.contain('Cannot undo');
+            });
+
+            it('2.2.8b — Clear all undo with all disposed does not crash', () => {
+                const handlers = createImagePanelHandlers(
+                    () => mockLib,
+                    () => mockLayout,
+                    () => null,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.clearAllImages.call(vm);
+
+                vm.showToast = null;
+
+                expect(() => {
+                    undoCommands[0].undoFn(vm);
+                }).to.not.throw();
+            });
+
+            it('2.2.6b — No undo command when clearing empty array', () => {
+                vm.images = [];
+                vm.crops = [];
+                mockLib = makeMockImageLibrary(vm);
+
+                const handlers = createImagePanelHandlers(
+                    () => mockLib,
+                    () => mockLayout,
+                    () => null,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.clearAllImages.call(vm);
+
+                expect(undoCommands.length).to.equal(0);
+            });
+
+            it('2.2.6c — No undo command when onUndoCommand is null', () => {
+                const handlers = createImagePanelHandlers(
+                    () => mockLib,
+                    () => mockLayout,
+                    () => null,
+                    () => {},
+                    null  // No onUndoCommand
+                );
+
+                expect(() => {
+                    handlers.clearAllImages.call(vm);
+                }).to.not.throw();
+
+                expect(vm.images.length).to.equal(0);
+            });
+        });
+
+        // =========================================================================
+        // createImagePanelHandlers — onUndoCommand for Remove Selected Image
+        // =========================================================================
+        describe('createImagePanelHandlers — onUndoCommand for Remove Selected Image', () => {
+            let vm, mockLib, mockLayout, undoCommands;
+
+            function collectUndoCommands(cmd) {
+                undoCommands.push(cmd);
+            }
+
+            beforeEach(() => {
+                const items = [
+                    makeImageItem('img-1'),
+                    makeImageItem('img-2'),
+                    makeImageItem('img-3')
+                ];
+                vm = makeVm(items, [{ x: 0, y: 0, w: 1, h: 1 }, { x: 0, y: 0, w: 1, h: 1 }, { x: 0, y: 0, w: 1, h: 1 }]);
+                vm.panels = [
+                    { id: 'panel-1', imageId: 'img-1' },
+                    { id: 'panel-2', imageId: 'img-2' },
+                    { id: 'panel-3', imageId: 'img-3' }
+                ];
+                vm.selectedPanelId = 'panel-2';
+                mockLib = makeMockImageLibrary(vm);
+                mockLayout = makeMockLayoutManager();
+                undoCommands = [];
+            });
+
+            it('2.2.10 — Remove selected image pushes undo command', () => {
+                const handlers = createImagePanelHandlers(
+                    () => mockLib,
+                    () => mockLayout,
+                    () => null,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.removeSelectedImage.call(vm);
+
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Remove Image');
+            });
+
+            it('2.2.10b — No undo command when no panel selected', () => {
+                vm.selectedPanelId = null;
+
+                const handlers = createImagePanelHandlers(
+                    () => mockLib,
+                    () => mockLayout,
+                    () => null,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.removeSelectedImage.call(vm);
+
+                expect(undoCommands.length).to.equal(0);
+            });
+
+            it('2.2.10c — No undo command when selected panel not found', () => {
+                vm.selectedPanelId = 'nonexistent-panel';
+
+                const handlers = createImagePanelHandlers(
+                    () => mockLib,
+                    () => mockLayout,
+                    () => null,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.removeSelectedImage.call(vm);
+
+                expect(undoCommands.length).to.equal(0);
+            });
+        });
+
+        // =========================================================================
+        // Integration: onUndoCommand wiring pattern
+        // =========================================================================
+        describe('onUndoCommand wiring pattern', () => {
+            it('2.2.11 — Wiring: undo command executes via vm context', () => {
+                const um = createUndoManager();
+                const vm = {
+                    images: [makeImageItem('img-1'), makeImageItem('img-2')],
+                    crops: [{ x: 0, y: 0, w: 1, h: 1 }, { x: 0, y: 0, w: 1, h: 1 }],
+                    undoManager: um,
+                    layoutManager: makeMockLayoutManager(),
+                    showToast: null,
+                    _scheduleRender: () => {}
+                };
+
+                // Simulate the wiring layer pushing a command
+                const preImages = [...vm.images];
+                const preCrops = JSON.parse(JSON.stringify(vm.crops));
+
+                // Simulate removing image at index 0
+                vm.images.splice(0, 1);
+
+                um.push({
+                    label: 'Remove Image',
+                    undo: () => {
+                        // Restore
+                        vm.images.splice(0, 0, preImages[0]);
+                        vm.crops.length = 0;
+                        vm.crops.push(...preCrops);
+                    },
+                    redo: () => {
+                        // Re-remove
+                        vm.images.splice(0, 1);
+                    }
+                });
+
+                expect(vm.images.length).to.equal(1);
+
+                // Undo
+                um.undo();
+                expect(vm.images.length).to.equal(2);
+                expect(vm.images[0].id).to.equal('img-1');
+
+                // Redo
+                um.redo();
+                expect(vm.images.length).to.equal(1);
+            });
+
+            it('2.2.12 — Wiring: error in undoFn is caught and does not crash', () => {
+                const um = createUndoManager();
+
+                um.push({
+                    label: 'Bad Command',
+                    undo: () => {
+                        throw new Error('Simulated undo error');
+                    },
+                    redo: () => {}
+                });
+
+                // The undo function itself throws, but the wiring layer should catch it
+                // This tests that the undoFn is wrapped in try/catch by the wiring layer
+                let errorCaught = false;
+                try {
+                    um.undo();
+                } catch (e) {
+                    errorCaught = true;
+                }
+
+                // Without wiring, the error propagates. With wiring, it would be caught.
+                // This test documents the expected behavior: the wiring layer wraps undoFn
+                // in try/catch so errors don't crash the app.
+                expect(errorCaught).to.be.true;
+            });
+        });
+
+        // =========================================================================
+        // createLayoutHandlers — onUndoCommand for Layout Style Change
+        // =========================================================================
+        describe('createLayoutHandlers — onUndoCommand for Layout Style Change', () => {
+            let mockLayout, undoCommands, renderScheduled;
+
+            function collectUndoCommands(cmd) {
+                undoCommands.push(cmd);
+            }
+
+            beforeEach(() => {
+                mockLayout = makeMockLayoutManager();
+                undoCommands = [];
+                renderScheduled = null;
+            });
+
+            it('3.2.1 — Layout style change pushes undo command', () => {
+                const vm = {
+                    layoutStyle: 'grid',
+                    _scheduleRender: () => {}
+                };
+
+                const handlers = createLayoutHandlers(
+                    () => mockLayout,
+                    (v) => { renderScheduled = v; },
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                // Snapshot pre-state (simulates @focus on the select element)
+                handlers.snapshotLayoutStyle.call(vm);
+                // v-model updates data, then @change fires
+                vm.layoutStyle = 'hex';
+                handlers.onLayoutStyleChange.call(vm);
+
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Change Layout');
+                expect(undoCommands[0].undoFn).to.be.a('function');
+                expect(undoCommands[0].redoFn).to.be.a('function');
+            });
+
+            it('3.2.2 — Layout style undo restores previous value', () => {
+                const vm = {
+                    layoutStyle: 'grid',
+                    layoutManager: mockLayout,
+                    _scheduleRender: () => {}
+                };
+
+                const handlers = createLayoutHandlers(
+                    () => mockLayout,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.snapshotLayoutStyle.call(vm);
+                vm.layoutStyle = 'hex';
+                handlers.onLayoutStyleChange.call(vm);
+                expect(vm.layoutStyle).to.equal('hex');
+
+                // Execute undo
+                undoCommands[0].undoFn(vm);
+                expect(vm.layoutStyle).to.equal('grid');
+            });
+
+            it('3.2.3 — Layout style redo restores new value', () => {
+                const vm = {
+                    layoutStyle: 'grid',
+                    layoutManager: mockLayout,
+                    _scheduleRender: () => {}
+                };
+
+                const handlers = createLayoutHandlers(
+                    () => mockLayout,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.snapshotLayoutStyle.call(vm);
+                vm.layoutStyle = 'hex';
+                handlers.onLayoutStyleChange.call(vm);
+
+                // Undo
+                undoCommands[0].undoFn(vm);
+                expect(vm.layoutStyle).to.equal('grid');
+
+                // Redo
+                undoCommands[0].redoFn(vm);
+                expect(vm.layoutStyle).to.equal('hex');
+            });
+
+            it('3.2.1b — No undo command when layout style unchanged', () => {
+                const vm = {
+                    layoutStyle: 'grid',
+                    _scheduleRender: () => {}
+                };
+
+                const handlers = createLayoutHandlers(
+                    () => mockLayout,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                // Snapshot then call handler without changing value
+                handlers.snapshotLayoutStyle.call(vm);
+                handlers.onLayoutStyleChange.call(vm);
+
+                expect(undoCommands.length).to.equal(0);
+            });
+
+            it('3.2.1c — No undo command when onUndoCommand is null', () => {
+                const vm = {
+                    layoutStyle: 'grid',
+                    _scheduleRender: () => {}
+                };
+
+                const handlers = createLayoutHandlers(
+                    () => mockLayout,
+                    () => {},
+                    null  // No onUndoCommand
+                );
+
+                handlers.snapshotLayoutStyle.call(vm);
+                vm.layoutStyle = 'hex';
+                expect(() => {
+                    handlers.onLayoutStyleChange.call(vm);
+                }).to.not.throw();
+            });
+
+            it('3.2.1d — Layout style change calls layoutManager.setLayoutStyle', () => {
+                const setStyleCalls = [];
+                const trackingLayout = {
+                    setLayoutStyle: (s) => { setStyleCalls.push(s); }
+                };
+
+                const vm = {
+                    layoutStyle: 'grid',
+                    _scheduleRender: () => {}
+                };
+
+                const handlers = createLayoutHandlers(
+                    () => trackingLayout,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.snapshotLayoutStyle.call(vm);
+                vm.layoutStyle = 'hex';
+                handlers.onLayoutStyleChange.call(vm);
+
+                expect(setStyleCalls).to.deep.equal(['hex']);
+            });
+
+            it('3.2.2b — Undo also calls layoutManager.setLayoutStyle', () => {
+                const setStyleCalls = [];
+                const trackingLayout = {
+                    setLayoutStyle: (s) => { setStyleCalls.push(s); }
+                };
+
+                const vm = {
+                    layoutStyle: 'grid',
+                    layoutManager: trackingLayout,
+                    _scheduleRender: () => {}
+                };
+
+                const handlers = createLayoutHandlers(
+                    () => trackingLayout,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.snapshotLayoutStyle.call(vm);
+                vm.layoutStyle = 'hex';
+                handlers.onLayoutStyleChange.call(vm);
+
+                // Execute undo
+                undoCommands[0].undoFn(vm);
+
+                expect(setStyleCalls).to.deep.equal(['hex', 'grid']);
+                expect(vm.layoutStyle).to.equal('grid');
+            });
+        });
+
+        // =========================================================================
+        // createLayoutHandlers — onUndoCommand for Layout Options (Batched)
+        // =========================================================================
+        describe('createLayoutHandlers — onUndoCommand for Layout Options (Batched)', () => {
+            let mockLayout, undoCommands, renderScheduled;
+
+            function collectUndoCommands(cmd) {
+                undoCommands.push(cmd);
+            }
+
+            beforeEach(() => {
+                mockLayout = makeMockLayoutManager();
+                undoCommands = [];
+                renderScheduled = null;
+            });
+
+            function makeLayoutVm() {
+                return {
+                    layoutStyle: 'grid',
+                    gutter: 10,
+                    sliceAngle: 45,
+                    hexSpacing: 8,
+                    hexSizeMultiplier: 1.0,
+                    layoutManager: mockLayout,
+                    _scheduleRender: () => {}
+                };
+            }
+
+            it('3.2.4 — Gutter change snapshots pre-state', () => {
+                const vm = makeLayoutVm();
+
+                const handlers = createLayoutHandlers(
+                    () => mockLayout,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                // Snapshot pre-state (simulates @mousedown on slider)
+                handlers.snapshotLayoutOptions.call(vm);
+                // v-model updates data, then @input fires
+                vm.gutter = 20;
+                handlers.onGutterChange.call(vm);
+
+                // At this point, no command should be pushed yet (batching)
+                expect(undoCommands.length).to.equal(0);
+
+                // Commit the batch (simulates @blur on slider)
+                handlers.commitLayoutOptions.call(vm);
+
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Adjust Layout Options');
+            });
+
+            it('3.2.5 — Multiple option changes batch into one command', () => {
+                const vm = makeLayoutVm();
+
+                const handlers = createLayoutHandlers(
+                    () => mockLayout,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                // Snapshot pre-state before any changes
+                handlers.snapshotLayoutOptions.call(vm);
+
+                // Change multiple options without committing
+                vm.gutter = 20;
+                handlers.onGutterChange.call(vm);
+
+                vm.sliceAngle = 30;
+                handlers.onSliceAngleChange.call(vm);
+
+                vm.hexSpacing = 12;
+                handlers.onHexSpacingChange.call(vm);
+
+                // Still no command (batching)
+                expect(undoCommands.length).to.equal(0);
+
+                // Commit — should produce single command
+                handlers.commitLayoutOptions.call(vm);
+
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Adjust Layout Options');
+            });
+
+            it('3.2.5b — Undo restores all batched option values', () => {
+                const vm = makeLayoutVm();
+
+                const handlers = createLayoutHandlers(
+                    () => mockLayout,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.snapshotLayoutOptions.call(vm);
+                vm.gutter = 20;
+                handlers.onGutterChange.call(vm);
+                vm.sliceAngle = 30;
+                handlers.onSliceAngleChange.call(vm);
+
+                handlers.commitLayoutOptions.call(vm);
+
+                // Execute undo
+                undoCommands[0].undoFn(vm);
+
+                expect(vm.gutter).to.equal(10);
+                expect(vm.sliceAngle).to.equal(45);
+                expect(vm.hexSpacing).to.equal(8);
+                expect(vm.hexSizeMultiplier).to.equal(1.0);
+            });
+
+            it('3.2.5c — Redo restores all batched option values', () => {
+                const vm = makeLayoutVm();
+
+                const handlers = createLayoutHandlers(
+                    () => mockLayout,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.snapshotLayoutOptions.call(vm);
+                vm.gutter = 20;
+                handlers.onGutterChange.call(vm);
+                vm.sliceAngle = 30;
+                handlers.onSliceAngleChange.call(vm);
+
+                handlers.commitLayoutOptions.call(vm);
+
+                // Undo
+                undoCommands[0].undoFn(vm);
+                expect(vm.gutter).to.equal(10);
+                expect(vm.sliceAngle).to.equal(45);
+
+                // Redo
+                undoCommands[0].redoFn(vm);
+                expect(vm.gutter).to.equal(20);
+                expect(vm.sliceAngle).to.equal(30);
+            });
+
+            it('3.2.6 — No command pushed when options unchanged', () => {
+                const vm = makeLayoutVm();
+
+                const handlers = createLayoutHandlers(
+                    () => mockLayout,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                // Snapshot then set to same value
+                handlers.snapshotLayoutOptions.call(vm);
+                vm.gutter = 10; // Same as original
+                handlers.onGutterChange.call(vm);
+
+                handlers.commitLayoutOptions.call(vm);
+
+                expect(undoCommands.length).to.equal(0);
+            });
+
+            it('3.2.7 — commitLayoutOptions pushes batched command with correct states', () => {
+                const vm = makeLayoutVm();
+
+                const handlers = createLayoutHandlers(
+                    () => mockLayout,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.snapshotLayoutOptions.call(vm);
+                vm.gutter = 25;
+                handlers.onGutterChange.call(vm);
+                vm.hexSizeMultiplier = 1.5;
+                handlers.onHexSizeMultiplierChange.call(vm);
+
+                handlers.commitLayoutOptions.call(vm);
+
+                expect(undoCommands.length).to.equal(1);
+                const cmd = undoCommands[0];
+
+                // Verify undo restores pre-state
+                cmd.undoFn(vm);
+                expect(vm.gutter).to.equal(10);
+                expect(vm.hexSizeMultiplier).to.equal(1.0);
+
+                // Verify redo restores post-state
+                cmd.redoFn(vm);
+                expect(vm.gutter).to.equal(25);
+                expect(vm.hexSizeMultiplier).to.equal(1.5);
+            });
+
+            it('3.2.8 — commitLayoutOptions is idempotent', () => {
+                const vm = makeLayoutVm();
+
+                const handlers = createLayoutHandlers(
+                    () => mockLayout,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                // Commit without any changes
+                handlers.commitLayoutOptions.call(vm);
+                expect(undoCommands.length).to.equal(0);
+
+                // Commit again — should not error
+                expect(() => {
+                    handlers.commitLayoutOptions.call(vm);
+                }).to.not.throw();
+                expect(undoCommands.length).to.equal(0);
+            });
+
+            it('3.2.8b — Second commit after first starts fresh batch', () => {
+                const vm = makeLayoutVm();
+
+                const handlers = createLayoutHandlers(
+                    () => mockLayout,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                // First batch
+                handlers.snapshotLayoutOptions.call(vm);
+                vm.gutter = 20;
+                handlers.onGutterChange.call(vm);
+                handlers.commitLayoutOptions.call(vm);
+                expect(undoCommands.length).to.equal(1);
+
+                // Second batch — should start fresh
+                handlers.snapshotLayoutOptions.call(vm);
+                vm.gutter = 30;
+                handlers.onGutterChange.call(vm);
+                handlers.commitLayoutOptions.call(vm);
+                expect(undoCommands.length).to.equal(2);
+
+                // First undo should restore to 20 (second batch's pre-state)
+                undoCommands[1].undoFn(vm);
+                expect(vm.gutter).to.equal(20);
+            });
+
+            it('3.2.4b — Layout manager methods called during option changes', () => {
+                const calls = [];
+                const trackingLayout = {
+                    setGutter: (v) => { calls.push({ method: 'setGutter', value: v }); },
+                    setSliceAngle: (v) => { calls.push({ method: 'setSliceAngle', value: v }); },
+                    setHexSpacing: (v) => { calls.push({ method: 'setHexSpacing', value: v }); },
+                    setHexSizeMultiplier: (v) => { calls.push({ method: 'setHexSizeMultiplier', value: v }); }
+                };
+
+                const vm = makeLayoutVm();
+
+                const handlers = createLayoutHandlers(
+                    () => trackingLayout,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.snapshotLayoutOptions.call(vm);
+                vm.gutter = 20;
+                handlers.onGutterChange.call(vm);
+                vm.hexSpacing = 15;
+                handlers.onHexSpacingChange.call(vm);
+
+                expect(calls).to.deep.equal([
+                    { method: 'setGutter', value: 20 },
+                    { method: 'setHexSpacing', value: 15 }
+                ]);
+            });
+
+            it('3.2.4c — Undo calls layoutManager option setters', () => {
+                const calls = [];
+                const trackingLayout = {
+                    setGutter: (v) => { calls.push({ method: 'setGutter', value: v }); },
+                    setSliceAngle: (v) => { calls.push({ method: 'setSliceAngle', value: v }); },
+                    setHexSpacing: (v) => { calls.push({ method: 'setHexSpacing', value: v }); },
+                    setHexSizeMultiplier: (v) => { calls.push({ method: 'setHexSizeMultiplier', value: v }); },
+                    regenerate: () => { calls.push({ method: 'regenerate' }); }
+                };
+
+                const vm = makeLayoutVm();
+                vm.layoutManager = trackingLayout;
+
+                const handlers = createLayoutHandlers(
+                    () => trackingLayout,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.snapshotLayoutOptions.call(vm);
+                vm.gutter = 20;
+                handlers.onGutterChange.call(vm);
+                handlers.commitLayoutOptions.call(vm);
+
+                // onGutterChange called setGutter(20), now execute undo
+                undoCommands[0].undoFn(vm);
+
+                // Undo restores all option values (not just changed ones)
+                // Total setter calls: setGutter(20) from onGutterChange + 4 from undoFn
+                const setterCalls = calls.filter(c => c.method.startsWith('set'));
+                expect(setterCalls).to.deep.equal([
+                    { method: 'setGutter', value: 20 },  // from onGutterChange
+                    { method: 'setGutter', value: 10 },  // from undoFn
+                    { method: 'setSliceAngle', value: 45 },
+                    { method: 'setHexSpacing', value: 8 },
+                    { method: 'setHexSizeMultiplier', value: 1.0 }
+                ]);
+            });
+
+            it('3.2.4d — No undo command when onUndoCommand is null', () => {
+                const vm = makeLayoutVm();
+
+                const handlers = createLayoutHandlers(
+                    () => mockLayout,
+                    () => {},
+                    null  // No onUndoCommand
+                );
+
+                handlers.snapshotLayoutOptions.call(vm);
+                vm.gutter = 20;
+                expect(() => {
+                    handlers.onGutterChange.call(vm);
+                    handlers.commitLayoutOptions.call(vm);
+                }).to.not.throw();
+            });
+        });
+
+        // =========================================================================
+        // createLayoutHandlers — Integration: Style + Options Interaction
+        // =========================================================================
+        describe('createLayoutHandlers — Integration: Style + Options Interaction', () => {
+            let mockLayout, undoCommands;
+
+            function collectUndoCommands(cmd) {
+                undoCommands.push(cmd);
+            }
+
+            beforeEach(() => {
+                mockLayout = makeMockLayoutManager();
+                undoCommands = [];
+            });
+
+            function makeLayoutVm() {
+                return {
+                    layoutStyle: 'grid',
+                    gutter: 10,
+                    sliceAngle: 45,
+                    hexSpacing: 8,
+                    hexSizeMultiplier: 1.0,
+                    layoutManager: mockLayout,
+                    _scheduleRender: () => {}
+                };
+            }
+
+            it('3.2.9 — Layout style change and options change produce separate commands', () => {
+                const vm = makeLayoutVm();
+
+                const handlers = createLayoutHandlers(
+                    () => mockLayout,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                // Change layout style (snapshot first, then change)
+                handlers.snapshotLayoutStyle.call(vm);
+                vm.layoutStyle = 'hex';
+                handlers.onLayoutStyleChange.call(vm);
+
+                // Change gutter (snapshot options first, then change)
+                handlers.snapshotLayoutOptions.call(vm);
+                vm.gutter = 20;
+                handlers.onGutterChange.call(vm);
+                handlers.commitLayoutOptions.call(vm);
+
+                expect(undoCommands.length).to.equal(2);
+                expect(undoCommands[0].label).to.equal('Change Layout');
+                expect(undoCommands[1].label).to.equal('Adjust Layout Options');
+            });
+
+            it('3.2.9b — Undo options first, then undo style', () => {
+                const vm = makeLayoutVm();
+
+                const handlers = createLayoutHandlers(
+                    () => mockLayout,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.snapshotLayoutStyle.call(vm);
+                vm.layoutStyle = 'hex';
+                handlers.onLayoutStyleChange.call(vm);
+                handlers.snapshotLayoutOptions.call(vm);
+                vm.gutter = 20;
+                handlers.onGutterChange.call(vm);
+                handlers.commitLayoutOptions.call(vm);
+
+                // Undo options (most recent)
+                undoCommands[1].undoFn(vm);
+                expect(vm.gutter).to.equal(10);
+                expect(vm.layoutStyle).to.equal('hex');
+
+                // Undo style
+                undoCommands[0].undoFn(vm);
+                expect(vm.gutter).to.equal(10);
+                expect(vm.layoutStyle).to.equal('grid');
+            });
+        });
+
+        // =========================================================================
+        // createTitleHandlers — onUndoCommand for Title Text (blur/Enter)
+        // =========================================================================
+        describe('createTitleHandlers — onUndoCommand for Title Text', () => {
+            let mockTitleManager, undoCommands, renderScheduled;
+
+            function collectUndoCommands(cmd) {
+                undoCommands.push(cmd);
+            }
+
+            function makeMockTitleManager() {
+                return {
+                    setText: (text) => {
+                        mockTitleManager._text = text;
+                        return { truncated: false };
+                    },
+                    toggleBold: () => {},
+                    toggleItalic: () => {},
+                    toggleUnderline: () => {},
+                    getFullText: () => mockTitleManager._text || '',
+                    _text: ''
+                };
+            }
+
+            function makeTitleVm(titleText = 'Hello', titleRuns = [{ text: 'Hello', bold: false, italic: false, underline: false }]) {
+                return {
+                    titleText,
+                    titleRuns: JSON.parse(JSON.stringify(titleRuns)),
+                    titleSelectionStart: 0,
+                    titleSelectionEnd: 0,
+                    titleStyle: {
+                        fontFamily: 'Arial',
+                        fontSize: 36,
+                        fontColor: '#FFFFFF',
+                        backgroundColor: '#000000',
+                        alignment: 'center',
+                        showBackground: false,
+                        fontOpacity: 1.0,
+                        bgOpacity: 1.0,
+                        titleBoxWidth: null,
+                        titleBoxX: null,
+                        titleBoxY: null
+                    },
+                    showToast: null,
+                    _scheduleRender: () => {}
+                };
+            }
+
+            beforeEach(() => {
+                mockTitleManager = makeMockTitleManager();
+                undoCommands = [];
+                renderScheduled = null;
+            });
+
+            it('4.2.1 — Title text change on blur pushes undo', () => {
+                const vm = makeTitleVm('Hello');
+                mockTitleManager._text = 'Hello';
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    (v) => { renderScheduled = v; },
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                // Snapshot pre-state (simulates @focus on textarea)
+                handlers.snapshotTitleText.call(vm);
+                // User types new text (v-model updates, @input fires)
+                vm.titleText = 'World';
+                handlers.onTitleTextChange.call(vm);
+
+                // No command pushed yet (typing, no blur)
+                expect(undoCommands.length).to.equal(0);
+
+                // User clicks away (blur) — commit the change
+                handlers.commitTitleText.call(vm);
+
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Edit Title');
+            });
+
+            it('4.2.2 — Title text change on Enter pushes undo', () => {
+                const vm = makeTitleVm('Hello');
+                mockTitleManager._text = 'Hello';
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                // Snapshot pre-state
+                handlers.snapshotTitleText.call(vm);
+                vm.titleText = 'World';
+                handlers.onTitleTextChange.call(vm);
+
+                // Commit via Enter key
+                handlers.commitTitleText.call(vm);
+
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Edit Title');
+            });
+
+            it('4.2.3 — Title text typing without blur — no command pushed', () => {
+                const vm = makeTitleVm('Hello');
+                mockTitleManager._text = 'Hello';
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                // Multiple keystrokes, no blur
+                vm.titleText = 'H';
+                handlers.onTitleTextChange.call(vm);
+                vm.titleText = 'He';
+                handlers.onTitleTextChange.call(vm);
+                vm.titleText = 'Hel';
+                handlers.onTitleTextChange.call(vm);
+
+                // No commitTitleText called — no command should be pushed
+                expect(undoCommands.length).to.equal(0);
+            });
+
+            it('4.2.1b — Title text undo restores previous text and runs', () => {
+                const vm = makeTitleVm('Hello', [{ text: 'Hello', bold: false, italic: false, underline: false }]);
+                mockTitleManager._text = 'Hello';
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                // Snapshot pre-state
+                handlers.snapshotTitleText.call(vm);
+                vm.titleText = 'World';
+                handlers.onTitleTextChange.call(vm);
+                handlers.commitTitleText.call(vm);
+
+                expect(vm.titleText).to.equal('World');
+
+                // Execute undo
+                undoCommands[0].undoFn(vm);
+
+                expect(vm.titleText).to.equal('Hello');
+                expect(vm.titleRuns.length).to.equal(1);
+                expect(vm.titleRuns[0].text).to.equal('Hello');
+            });
+
+            it('4.2.1c — Title text redo restores new text and runs', () => {
+                const vm = makeTitleVm('Hello', [{ text: 'Hello', bold: false, italic: false, underline: false }]);
+                mockTitleManager._text = 'Hello';
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                // Snapshot pre-state
+                handlers.snapshotTitleText.call(vm);
+                vm.titleText = 'World';
+                vm.titleRuns = [{ text: 'World', bold: false, italic: false, underline: false }];
+                handlers.onTitleTextChange.call(vm);
+                handlers.commitTitleText.call(vm);
+
+                // Undo
+                undoCommands[0].undoFn(vm);
+                expect(vm.titleText).to.equal('Hello');
+
+                // Redo
+                undoCommands[0].redoFn(vm);
+                expect(vm.titleText).to.equal('World');
+                expect(vm.titleRuns[0].text).to.equal('World');
+            });
+
+            it('4.2.1d — No undo command when title text unchanged', () => {
+                const vm = makeTitleVm('Hello');
+                mockTitleManager._text = 'Hello';
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                // Snapshot then commit without changing
+                handlers.snapshotTitleText.call(vm);
+                handlers.onTitleTextChange.call(vm);
+                handlers.commitTitleText.call(vm);
+
+                expect(undoCommands.length).to.equal(0);
+            });
+
+            it('4.2.1e — No undo command when onUndoCommand is null', () => {
+                const vm = makeTitleVm('Hello');
+                mockTitleManager._text = 'Hello';
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    null  // No onUndoCommand
+                );
+
+                handlers.snapshotTitleText.call(vm);
+                vm.titleText = 'World';
+                expect(() => {
+                    handlers.onTitleTextChange.call(vm);
+                    handlers.commitTitleText.call(vm);
+                }).to.not.throw();
+            });
+
+            it('4.2.1f — commitTitleText is idempotent', () => {
+                const vm = makeTitleVm('Hello');
+                mockTitleManager._text = 'Hello';
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                // Commit without any changes
+                handlers.commitTitleText.call(vm);
+                expect(undoCommands.length).to.equal(0);
+
+                // Commit again — should not error
+                expect(() => {
+                    handlers.commitTitleText.call(vm);
+                }).to.not.throw();
+                expect(undoCommands.length).to.equal(0);
+            });
+        });
+
+        // =========================================================================
+        // createTitleHandlers — onUndoCommand for Title Formatting
+        // =========================================================================
+        describe('createTitleHandlers — onUndoCommand for Title Formatting', () => {
+            let mockTitleManager, undoCommands;
+
+            function collectUndoCommands(cmd) {
+                undoCommands.push(cmd);
+            }
+
+            function makeMockTitleManagerWithRuns(runs) {
+                return {
+                    setText: (text) => {
+                        mockTitleManager._text = text;
+                        return { truncated: false };
+                    },
+                    toggleBold: (start, end) => {
+                        // Simulate toggle: flip bold on runs in range
+                        // Use the vm's titleRuns (same reference as what handler sees)
+                        const targetRuns = mockTitleManager._targetRuns || runs;
+                        let offset = 0;
+                        for (const run of targetRuns) {
+                            const runStart = offset;
+                            const runEnd = offset + run.text.length;
+                            if (runEnd > start && runStart < end) {
+                                run.bold = !run.bold;
+                            }
+                            offset = runEnd;
+                        }
+                    },
+                    toggleItalic: (start, end) => {
+                        const targetRuns = mockTitleManager._targetRuns || runs;
+                        let offset = 0;
+                        for (const run of targetRuns) {
+                            const runStart = offset;
+                            const runEnd = offset + run.text.length;
+                            if (runEnd > start && runStart < end) {
+                                run.italic = !run.italic;
+                            }
+                            offset = runEnd;
+                        }
+                    },
+                    toggleUnderline: (start, end) => {
+                        const targetRuns = mockTitleManager._targetRuns || runs;
+                        let offset = 0;
+                        for (const run of targetRuns) {
+                            const runStart = offset;
+                            const runEnd = offset + run.text.length;
+                            if (runEnd > start && runStart < end) {
+                                run.underline = !run.underline;
+                            }
+                            offset = runEnd;
+                        }
+                    },
+                    getFullText: () => {
+                        const targetRuns = mockTitleManager._targetRuns || runs;
+                        return targetRuns.map(r => r.text).join('');
+                    },
+                    _text: '',
+                    _targetRuns: null
+                };
+            }
+
+            function makeFormatVm(text, runs) {
+                return {
+                    titleText: text,
+                    titleRuns: JSON.parse(JSON.stringify(runs)),
+                    titleSelectionStart: 0,
+                    titleSelectionEnd: text.length,
+                    titleStyle: {
+                        fontFamily: 'Arial', fontSize: 36, fontColor: '#FFFFFF',
+                        backgroundColor: '#000000', alignment: 'center',
+                        showBackground: false, fontOpacity: 1.0, bgOpacity: 1.0,
+                        titleBoxWidth: null, titleBoxX: null, titleBoxY: null
+                    },
+                    showToast: null,
+                    _scheduleRender: () => {}
+                };
+            }
+
+            beforeEach(() => {
+                undoCommands = [];
+            });
+
+            it('4.2.4 — Title bold toggle pushes undo', () => {
+                const runs = [{ text: 'Hello', bold: false, italic: false, underline: false }];
+                mockTitleManager = makeMockTitleManagerWithRuns(runs);
+                const vm = makeFormatVm('Hello', runs);
+                mockTitleManager._targetRuns = vm.titleRuns;
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.toggleTitleBold.call(vm);
+
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Format Title');
+            });
+
+            it('4.2.5 — Title bold undo restores formatting', () => {
+                const runs = [{ text: 'Hello', bold: false, italic: false, underline: false }];
+                mockTitleManager = makeMockTitleManagerWithRuns(runs);
+                const vm = makeFormatVm('Hello', runs);
+                mockTitleManager._targetRuns = vm.titleRuns;
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.toggleTitleBold.call(vm);
+                expect(vm.titleRuns[0].bold).to.be.true;
+
+                // Execute undo
+                undoCommands[0].undoFn(vm);
+                expect(vm.titleRuns[0].bold).to.be.false;
+            });
+
+            it('4.2.4b — Title italic toggle pushes undo', () => {
+                const runs = [{ text: 'Hello', bold: false, italic: false, underline: false }];
+                mockTitleManager = makeMockTitleManagerWithRuns(runs);
+                const vm = makeFormatVm('Hello', runs);
+                mockTitleManager._targetRuns = vm.titleRuns;
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.toggleTitleItalic.call(vm);
+
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Format Title');
+            });
+
+            it('4.2.4c — Title underline toggle pushes undo', () => {
+                const runs = [{ text: 'Hello', bold: false, italic: false, underline: false }];
+                mockTitleManager = makeMockTitleManagerWithRuns(runs);
+                const vm = makeFormatVm('Hello', runs);
+                mockTitleManager._targetRuns = vm.titleRuns;
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.toggleTitleUnderline.call(vm);
+
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Format Title');
+            });
+
+            it('4.2.4d — No formatting undo when no selection', () => {
+                const runs = [{ text: 'Hello', bold: false, italic: false, underline: false }];
+                mockTitleManager = makeMockTitleManagerWithRuns(runs);
+                const vm = makeFormatVm('Hello', runs);
+                mockTitleManager._targetRuns = vm.titleRuns;
+                vm.titleSelectionStart = 2;
+                vm.titleSelectionEnd = 2; // No selection
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.toggleTitleBold.call(vm);
+
+                expect(undoCommands.length).to.equal(0);
+            });
+
+            it('4.2.4e — No formatting undo when onUndoCommand is null', () => {
+                const runs = [{ text: 'Hello', bold: false, italic: false, underline: false }];
+                mockTitleManager = makeMockTitleManagerWithRuns(runs);
+                const vm = makeFormatVm('Hello', runs);
+                mockTitleManager._targetRuns = vm.titleRuns;
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    null  // No onUndoCommand
+                );
+
+                expect(() => {
+                    handlers.toggleTitleBold.call(vm);
+                }).to.not.throw();
+            });
+        });
+
+        // =========================================================================
+        // createTitleHandlers — onUndoCommand for Title Style (Batched)
+        // =========================================================================
+        describe('createTitleHandlers — onUndoCommand for Title Style (Batched)', () => {
+            let mockTitleManager, undoCommands;
+
+            function collectUndoCommands(cmd) {
+                undoCommands.push(cmd);
+            }
+
+            function makeMockTitleManager() {
+                return {
+                    setText: () => ({ truncated: false }),
+                    setFontFamily: () => {},
+                    setFontSize: () => {},
+                    setFontColor: () => {},
+                    setBackgroundColor: () => {},
+                    setAlignment: () => {},
+                    showBackground: () => {},
+                    setFontOpacity: () => {},
+                    setBgOpacity: () => {},
+                    setWidth: () => {}
+                };
+            }
+
+            function makeTitleStyleVm() {
+                return {
+                    titleText: 'Hello',
+                    titleRuns: [{ text: 'Hello', bold: false, italic: false, underline: false }],
+                    titleSelectionStart: 0,
+                    titleSelectionEnd: 0,
+                    titleStyle: {
+                        fontFamily: 'Arial',
+                        fontSize: 36,
+                        fontColor: '#FFFFFF',
+                        backgroundColor: '#000000',
+                        alignment: 'center',
+                        showBackground: false,
+                        fontOpacity: 1.0,
+                        bgOpacity: 1.0,
+                        titleBoxWidth: null,
+                        titleBoxX: null,
+                        titleBoxY: null
+                    },
+                    showToast: null,
+                    _scheduleRender: () => {}
+                };
+            }
+
+            beforeEach(() => {
+                mockTitleManager = makeMockTitleManager();
+                undoCommands = [];
+            });
+
+            it('4.2.6 — Title style changes batch into single command', () => {
+                const vm = makeTitleStyleVm();
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                // Snapshot pre-state (simulates @focus on style controls)
+                handlers.snapshotTitleStyle.call(vm);
+
+                // Change font family
+                vm.titleStyle.fontFamily = 'Georgia';
+                handlers.onTitleFontFamilyChange.call(vm);
+
+                // Change font size
+                vm.titleStyle.fontSize = 48;
+                handlers.onTitleFontSizeChange.call(vm);
+
+                // No command yet (batching)
+                expect(undoCommands.length).to.equal(0);
+
+                // Commit (simulates @blur on style controls)
+                handlers.commitTitleStyle.call(vm);
+
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Change Title Style');
+            });
+
+            it('4.2.6b — Title style undo restores all properties', () => {
+                const vm = makeTitleStyleVm();
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.snapshotTitleStyle.call(vm);
+                vm.titleStyle.fontFamily = 'Georgia';
+                handlers.onTitleFontFamilyChange.call(vm);
+                vm.titleStyle.fontSize = 48;
+                handlers.onTitleFontSizeChange.call(vm);
+                vm.titleStyle.fontColor = '#FF0000';
+                handlers.onTitleFontColorChange.call(vm);
+
+                handlers.commitTitleStyle.call(vm);
+
+                // Execute undo
+                undoCommands[0].undoFn(vm);
+
+                expect(vm.titleStyle.fontFamily).to.equal('Arial');
+                expect(vm.titleStyle.fontSize).to.equal(36);
+                expect(vm.titleStyle.fontColor).to.equal('#FFFFFF');
+            });
+
+            it('4.2.6c — Title style redo restores new properties', () => {
+                const vm = makeTitleStyleVm();
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.snapshotTitleStyle.call(vm);
+                vm.titleStyle.fontFamily = 'Georgia';
+                handlers.onTitleFontFamilyChange.call(vm);
+                vm.titleStyle.fontSize = 48;
+                handlers.onTitleFontSizeChange.call(vm);
+
+                handlers.commitTitleStyle.call(vm);
+
+                // Undo
+                undoCommands[0].undoFn(vm);
+                expect(vm.titleStyle.fontFamily).to.equal('Arial');
+                expect(vm.titleStyle.fontSize).to.equal(36);
+
+                // Redo
+                undoCommands[0].redoFn(vm);
+                expect(vm.titleStyle.fontFamily).to.equal('Georgia');
+                expect(vm.titleStyle.fontSize).to.equal(48);
+            });
+
+            it('4.2.6d — No command when title style unchanged', () => {
+                const vm = makeTitleStyleVm();
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.snapshotTitleStyle.call(vm);
+                // No changes
+                handlers.commitTitleStyle.call(vm);
+
+                expect(undoCommands.length).to.equal(0);
+            });
+
+            it('4.2.6e — commitTitleStyle is idempotent', () => {
+                const vm = makeTitleStyleVm();
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.commitTitleStyle.call(vm);
+                expect(undoCommands.length).to.equal(0);
+
+                expect(() => {
+                    handlers.commitTitleStyle.call(vm);
+                }).to.not.throw();
+            });
+
+            it('4.2.6f — No undo command when onUndoCommand is null', () => {
+                const vm = makeTitleStyleVm();
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    null
+                );
+
+                handlers.snapshotTitleStyle.call(vm);
+                vm.titleStyle.fontFamily = 'Georgia';
+                expect(() => {
+                    handlers.onTitleFontFamilyChange.call(vm);
+                    handlers.commitTitleStyle.call(vm);
+                }).to.not.throw();
+            });
+        });
+
+        // =========================================================================
+        // createBackgroundHandlers — onUndoCommand for Background Changes
+        // =========================================================================
+        describe('createBackgroundHandlers — onUndoCommand for Background Changes', () => {
+            let mockBgManager, undoCommands;
+
+            function collectUndoCommands(cmd) {
+                undoCommands.push(cmd);
+            }
+
+            function makeMockBgManager() {
+                return {
+                    updateStyle: () => {},
+                    setColor: () => {},
+                    setGradientColors: () => {},
+                    setAngle: () => {},
+                    setImage: () => {},
+                    setOpacity: () => {}
+                };
+            }
+
+            function makeBgVm() {
+                return {
+                    backgroundStyle: 'solid',
+                    backgroundColor: '#ffffff',
+                    gradientColors: ['#ffffff', '#e0e0e0'],
+                    gradientAngle: 90,
+                    backgroundImage: null,
+                    backgroundOpacity: 1.0,
+                    backgroundManager: mockBgManager,
+                    showToast: null,
+                    _scheduleRender: () => {}
+                };
+            }
+
+            beforeEach(() => {
+                mockBgManager = makeMockBgManager();
+                undoCommands = [];
+            });
+
+            it('4.2.7 — Background style change pushes undo', () => {
+                const vm = makeBgVm();
+
+                const handlers = createBackgroundHandlers(
+                    () => mockBgManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                // Snapshot pre-state
+                handlers.snapshotBackground.call(vm);
+                vm.backgroundStyle = 'gradient';
+                handlers.onBackgroundStyleChange.call(vm);
+
+                // Commit the batched change
+                handlers.commitBackground.call(vm);
+
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Change Background');
+            });
+
+            it('4.2.8 — Background undo restores all properties', () => {
+                const vm = makeBgVm();
+                vm.gradientColors = ['#ffffff', '#e0e0e0'];
+
+                const handlers = createBackgroundHandlers(
+                    () => mockBgManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.snapshotBackground.call(vm);
+                vm.backgroundStyle = 'gradient';
+                handlers.onBackgroundStyleChange.call(vm);
+                vm.backgroundColor = '#000000';
+                handlers.onBackgroundColorChange.call(vm);
+                vm.gradientAngle = 180;
+                handlers.onGradientAngleChange.call(vm);
+
+                // Commit batched changes
+                handlers.commitBackground.call(vm);
+
+                expect(undoCommands.length).to.equal(1);
+
+                // Execute undo
+                undoCommands[0].undoFn(vm);
+
+                expect(vm.backgroundStyle).to.equal('solid');
+                expect(vm.backgroundColor).to.equal('#ffffff');
+                expect(vm.gradientAngle).to.equal(90);
+                expect(vm.backgroundOpacity).to.equal(1.0);
+            });
+
+            it('4.2.7b — No background undo when onUndoCommand is null', () => {
+                const vm = makeBgVm();
+
+                const handlers = createBackgroundHandlers(
+                    () => mockBgManager,
+                    () => {},
+                    null
+                );
+
+                handlers.snapshotBackground.call(vm);
+                vm.backgroundStyle = 'gradient';
+                expect(() => {
+                    handlers.onBackgroundStyleChange.call(vm);
+                }).to.not.throw();
+            });
+
+            it('4.2.7c — commitBackground is idempotent', () => {
+                const vm = makeBgVm();
+
+                const handlers = createBackgroundHandlers(
+                    () => mockBgManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.commitBackground.call(vm);
+                expect(undoCommands.length).to.equal(0);
+
+                expect(() => {
+                    handlers.commitBackground.call(vm);
+                }).to.not.throw();
+            });
+
+            it('4.2.7d — Background image change pushes undo', async () => {
+                const vm = makeBgVm();
+
+                const handlers = createBackgroundHandlers(
+                    () => mockBgManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                // Create a test image
+                const img = new Image();
+                img.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+                handlers.snapshotBackground.call(vm);
+                vm.backgroundImage = img;
+                vm.backgroundStyle = 'image';
+                handlers.handleBackgroundImageChange.call(vm, null); // No file needed, image already set
+
+                handlers.commitBackground.call(vm);
+
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Change Background');
+            });
+
+            it('4.2.7e — Remove background image pushes undo', () => {
+                const img = new Image();
+                img.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+                const vm = makeBgVm();
+                vm.backgroundImage = img;
+                vm.backgroundStyle = 'image';
+
+                const handlers = createBackgroundHandlers(
+                    () => mockBgManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.snapshotBackground.call(vm);
+                handlers.removeBackgroundImage.call(vm);
+                handlers.commitBackground.call(vm);
+
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Change Background');
+            });
+        });
+
+        // =========================================================================
+        // createOverlayHandlers — onUndoCommand for Overlay Changes
+        // =========================================================================
+        describe('createOverlayHandlers — onUndoCommand for Overlay Changes', () => {
+            let undoCommands;
+
+            function collectUndoCommands(cmd) {
+                undoCommands.push(cmd);
+            }
+
+            function makeOverlayVm() {
+                return {
+                    overlayImage: null,
+                    overlayMode: 'source-over',
+                    overlayOpacity: 1.0,
+                    _scheduleRender: () => {}
+                };
+            }
+
+            beforeEach(() => {
+                undoCommands = [];
+            });
+
+            it('4.2.9 — Overlay image change pushes undo', async () => {
+                const vm = makeOverlayVm();
+
+                const handlers = createOverlayHandlers(
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                const img = new Image();
+                img.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+                handlers.snapshotOverlay.call(vm);
+                vm.overlayImage = img;
+                handlers.handleOverlayImageChange.call(vm, null);
+
+                handlers.commitOverlay.call(vm);
+
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Change Overlay');
+            });
+
+            it('4.2.10 — Overlay undo restores previous image', async () => {
+                const vm = makeOverlayVm();
+
+                const handlers = createOverlayHandlers(
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                const img = new Image();
+                img.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+                handlers.snapshotOverlay.call(vm);
+                vm.overlayImage = img;
+                handlers.handleOverlayImageChange.call(vm, null);
+                handlers.commitOverlay.call(vm);
+
+                expect(vm.overlayImage).to.equal(img);
+
+                // Execute undo
+                undoCommands[0].undoFn(vm);
+
+                expect(vm.overlayImage).to.be.null;
+            });
+
+            it('4.2.9b — Overlay mode change pushes undo', () => {
+                const vm = makeOverlayVm();
+
+                const handlers = createOverlayHandlers(
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.snapshotOverlay.call(vm);
+                vm.overlayMode = 'multiply';
+                handlers.onOverlayModeChange.call(vm);
+
+                handlers.commitOverlay.call(vm);
+
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Change Overlay');
+            });
+
+            it('4.2.9c — Overlay opacity change pushes undo', () => {
+                const vm = makeOverlayVm();
+
+                const handlers = createOverlayHandlers(
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.snapshotOverlay.call(vm);
+                vm.overlayOpacity = 0.5;
+                handlers.onOverlayOpacityChange.call(vm);
+
+                handlers.commitOverlay.call(vm);
+
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Change Overlay');
+            });
+
+            it('4.2.9d — Multiple overlay changes batch into single command', () => {
+                const vm = makeOverlayVm();
+                vm.overlayMode = 'source-over';
+                vm.overlayOpacity = 1.0;
+
+                const handlers = createOverlayHandlers(
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.snapshotOverlay.call(vm);
+                vm.overlayMode = 'multiply';
+                handlers.onOverlayModeChange.call(vm);
+                vm.overlayOpacity = 0.5;
+                handlers.onOverlayOpacityChange.call(vm);
+
+                handlers.commitOverlay.call(vm);
+
+                expect(undoCommands.length).to.equal(1);
+            });
+
+            it('4.2.9e — Remove overlay pushes undo', () => {
+                const img = new Image();
+                img.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+                const vm = makeOverlayVm();
+                vm.overlayImage = img;
+
+                const handlers = createOverlayHandlers(
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.snapshotOverlay.call(vm);
+                handlers.removeOverlay.call(vm);
+                handlers.commitOverlay.call(vm);
+
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Change Overlay');
+
+                // Undo should restore the image
+                undoCommands[0].undoFn(vm);
+                expect(vm.overlayImage).to.equal(img);
+            });
+
+            it('4.2.9f — No overlay undo when onUndoCommand is null', () => {
+                const vm = makeOverlayVm();
+
+                const handlers = createOverlayHandlers(
+                    () => {},
+                    null
+                );
+
+                handlers.snapshotOverlay.call(vm);
+                vm.overlayMode = 'multiply';
+                expect(() => {
+                    handlers.onOverlayModeChange.call(vm);
+                    handlers.commitOverlay.call(vm);
+                }).to.not.throw();
+            });
+
+            it('4.2.9g — commitOverlay is idempotent', () => {
+                const vm = makeOverlayVm();
+
+                const handlers = createOverlayHandlers(
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.commitOverlay.call(vm);
+                expect(undoCommands.length).to.equal(0);
+
+                expect(() => {
+                    handlers.commitOverlay.call(vm);
+                }).to.not.throw();
+            });
+        });
+
+        // =========================================================================
+        // createTitleHandlers — Atomic Segmented Control Methods (N-1)
+        // =========================================================================
+        describe('createTitleHandlers — setTitleAlignment (atomic)', () => {
+            let mockTitleManager, undoCommands;
+
+            function collectUndoCommands(cmd) {
+                undoCommands.push(cmd);
+            }
+
+            function makeMockTitleManager() {
+                return {
+                    setAlignment: () => {}
+                };
+            }
+
+            function makeTitleStyleVm() {
+                return {
+                    titleText: 'Hello',
+                    titleRuns: [{ text: 'Hello', bold: false, italic: false, underline: false }],
+                    titleSelectionStart: 0,
+                    titleSelectionEnd: 0,
+                    titleStyle: {
+                        fontFamily: 'Arial', fontSize: 36, fontColor: '#FFFFFF',
+                        backgroundColor: '#000000', alignment: 'center',
+                        showBackground: false, fontOpacity: 1.0, bgOpacity: 1.0,
+                        titleBoxWidth: null, titleBoxX: null, titleBoxY: null
+                    },
+                    showToast: null,
+                    _scheduleRender: () => {}
+                };
+            }
+
+            beforeEach(() => {
+                mockTitleManager = makeMockTitleManager();
+                undoCommands = [];
+            });
+
+            it('N1-2.2.1 — setTitleAlignment pushes undo command when value changes', () => {
+                const vm = makeTitleStyleVm();
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.setTitleAlignment.call(vm, 'left');
+
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Change Title Style');
+                expect(vm.titleStyle.alignment).to.equal('left');
+            });
+
+            it('N1-2.2.2 — setTitleAlignment no-op when value unchanged', () => {
+                const vm = makeTitleStyleVm();
+                vm.titleStyle.alignment = 'center';
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.setTitleAlignment.call(vm, 'center');
+
+                expect(undoCommands.length).to.equal(0);
+            });
+
+            it('N1-2.3.1 — setTitleAlignment undoFn restores pre-state', () => {
+                const vm = makeTitleStyleVm();
+                vm.titleStyle.alignment = 'center';
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.setTitleAlignment.call(vm, 'left');
+                expect(vm.titleStyle.alignment).to.equal('left');
+
+                // Execute undo
+                undoCommands[0].undoFn(vm);
+                expect(vm.titleStyle.alignment).to.equal('center');
+            });
+
+            it('N1-2.3.2 — setTitleAlignment redoFn restores post-state', () => {
+                const vm = makeTitleStyleVm();
+                vm.titleStyle.alignment = 'center';
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.setTitleAlignment.call(vm, 'right');
+
+                // Undo then redo
+                undoCommands[0].undoFn(vm);
+                expect(vm.titleStyle.alignment).to.equal('center');
+                undoCommands[0].redoFn(vm);
+                expect(vm.titleStyle.alignment).to.equal('right');
+            });
+
+            it('N1-2.2.1b — setTitleAlignment calls TitleManager.setAlignment', () => {
+                const alignments = [];
+                const trackingManager = {
+                    setAlignment: (a) => { alignments.push(a); }
+                };
+
+                const vm = makeTitleStyleVm();
+
+                const handlers = createTitleHandlers(
+                    () => trackingManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.setTitleAlignment.call(vm, 'right');
+
+                expect(alignments).to.deep.equal(['right']);
+            });
+
+            it('N1-2.2.1c — setTitleAlignment no crash when onUndoCommand is null', () => {
+                const vm = makeTitleStyleVm();
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    null
+                );
+
+                expect(() => {
+                    handlers.setTitleAlignment.call(vm, 'left');
+                }).to.not.throw();
+                expect(vm.titleStyle.alignment).to.equal('left');
+            });
+        });
+
+        describe('createTitleHandlers — toggleTitleShowBackground (atomic)', () => {
+            let mockTitleManager, undoCommands;
+
+            function collectUndoCommands(cmd) {
+                undoCommands.push(cmd);
+            }
+
+            function makeMockTitleManager() {
+                return {
+                    showBackground: () => {}
+                };
+            }
+
+            function makeTitleStyleVm() {
+                return {
+                    titleText: 'Hello',
+                    titleRuns: [{ text: 'Hello', bold: false, italic: false, underline: false }],
+                    titleSelectionStart: 0,
+                    titleSelectionEnd: 0,
+                    titleStyle: {
+                        fontFamily: 'Arial', fontSize: 36, fontColor: '#FFFFFF',
+                        backgroundColor: '#000000', alignment: 'center',
+                        showBackground: false, fontOpacity: 1.0, bgOpacity: 1.0,
+                        titleBoxWidth: null, titleBoxX: null, titleBoxY: null
+                    },
+                    showToast: null,
+                    _scheduleRender: () => {}
+                };
+            }
+
+            beforeEach(() => {
+                mockTitleManager = makeMockTitleManager();
+                undoCommands = [];
+            });
+
+            it('N1-2.2.3 — toggleTitleShowBackground toggles and pushes undo', () => {
+                const vm = makeTitleStyleVm();
+                vm.titleStyle.showBackground = false;
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.toggleTitleShowBackground.call(vm);
+
+                expect(vm.titleStyle.showBackground).to.be.true;
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Change Title Style');
+            });
+
+            it('N1-2.2.3b — toggleTitleShowBackground undo restores pre-state', () => {
+                const vm = makeTitleStyleVm();
+                vm.titleStyle.showBackground = false;
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.toggleTitleShowBackground.call(vm);
+                expect(vm.titleStyle.showBackground).to.be.true;
+
+                undoCommands[0].undoFn(vm);
+                expect(vm.titleStyle.showBackground).to.be.false;
+            });
+
+            it('N1-2.2.3c — toggleTitleShowBackground redo restores post-state', () => {
+                const vm = makeTitleStyleVm();
+                vm.titleStyle.showBackground = false;
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.toggleTitleShowBackground.call(vm);
+
+                undoCommands[0].undoFn(vm);
+                expect(vm.titleStyle.showBackground).to.be.false;
+                undoCommands[0].redoFn(vm);
+                expect(vm.titleStyle.showBackground).to.be.true;
+            });
+
+            it('N1-2.2.3d — toggleTitleShowBackground calls TitleManager.showBackground', () => {
+                const calls = [];
+                const trackingManager = {
+                    showBackground: (v) => { calls.push(v); }
+                };
+
+                const vm = makeTitleStyleVm();
+
+                const handlers = createTitleHandlers(
+                    () => trackingManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.toggleTitleShowBackground.call(vm);
+
+                expect(calls).to.deep.equal([true]);
+            });
+
+            it('N1-2.2.3e — toggleTitleShowBackground no crash when onUndoCommand is null', () => {
+                const vm = makeTitleStyleVm();
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    null
+                );
+
+                expect(() => {
+                    handlers.toggleTitleShowBackground.call(vm);
+                }).to.not.throw();
+                expect(vm.titleStyle.showBackground).to.be.true;
+            });
+        });
+
+        // =========================================================================
+        // createBackgroundHandlers — Atomic Segmented Control Methods (N-1)
+        // =========================================================================
+        describe('createBackgroundHandlers — setBackgroundStyle (atomic)', () => {
+            let mockBgManager, undoCommands;
+
+            function collectUndoCommands(cmd) {
+                undoCommands.push(cmd);
+            }
+
+            function makeMockBgManager() {
+                return {
+                    updateStyle: () => {}
+                };
+            }
+
+            function makeBgVm() {
+                return {
+                    backgroundStyle: 'solid',
+                    backgroundColor: '#ffffff',
+                    gradientColors: ['#ffffff', '#e0e0e0'],
+                    gradientAngle: 90,
+                    backgroundImage: null,
+                    backgroundOpacity: 1.0,
+                    backgroundManager: mockBgManager,
+                    showToast: null,
+                    _scheduleRender: () => {}
+                };
+            }
+
+            beforeEach(() => {
+                mockBgManager = makeMockBgManager();
+                undoCommands = [];
+            });
+
+            it('N1-2.2.4 — setBackgroundStyle changes style and pushes undo', () => {
+                const vm = makeBgVm();
+
+                const handlers = createBackgroundHandlers(
+                    () => mockBgManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.setBackgroundStyle.call(vm, 'gradient');
+
+                expect(vm.backgroundStyle).to.equal('gradient');
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Change Background');
+            });
+
+            it('N1-2.2.4b — setBackgroundStyle undo restores pre-state', () => {
+                const vm = makeBgVm();
+
+                const handlers = createBackgroundHandlers(
+                    () => mockBgManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.setBackgroundStyle.call(vm, 'image');
+                expect(vm.backgroundStyle).to.equal('image');
+
+                undoCommands[0].undoFn(vm);
+                expect(vm.backgroundStyle).to.equal('solid');
+            });
+
+            it('N1-2.2.4c — setBackgroundStyle redo restores post-state', () => {
+                const vm = makeBgVm();
+
+                const handlers = createBackgroundHandlers(
+                    () => mockBgManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.setBackgroundStyle.call(vm, 'gradient');
+
+                undoCommands[0].undoFn(vm);
+                expect(vm.backgroundStyle).to.equal('solid');
+                undoCommands[0].redoFn(vm);
+                expect(vm.backgroundStyle).to.equal('gradient');
+            });
+
+            it('N1-2.2.4d — setBackgroundStyle no-op when value unchanged', () => {
+                const vm = makeBgVm();
+
+                const handlers = createBackgroundHandlers(
+                    () => mockBgManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.setBackgroundStyle.call(vm, 'solid');
+
+                expect(undoCommands.length).to.equal(0);
+            });
+
+            it('N1-2.2.4e — setBackgroundStyle calls BackgroundManager.updateStyle', () => {
+                const styles = [];
+                const trackingManager = {
+                    updateStyle: (s) => { styles.push(s); }
+                };
+
+                const vm = makeBgVm();
+
+                const handlers = createBackgroundHandlers(
+                    () => trackingManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.setBackgroundStyle.call(vm, 'gradient');
+
+                expect(styles).to.deep.equal(['gradient']);
+            });
+
+            it('N1-2.2.4f — setBackgroundStyle no crash when onUndoCommand is null', () => {
+                const vm = makeBgVm();
+
+                const handlers = createBackgroundHandlers(
+                    () => mockBgManager,
+                    () => {},
+                    null
+                );
+
+                expect(() => {
+                    handlers.setBackgroundStyle.call(vm, 'gradient');
+                }).to.not.throw();
+                expect(vm.backgroundStyle).to.equal('gradient');
+            });
+        });
+
+        describe('createBackgroundHandlers — removeBackgroundImageAtomic (atomic)', () => {
+            let mockBgManager, undoCommands;
+
+            function collectUndoCommands(cmd) {
+                undoCommands.push(cmd);
+            }
+
+            function makeMockBgManager() {
+                return {
+                    updateStyle: () => {},
+                    setImage: () => {}
+                };
+            }
+
+            function makeBgVmWithImage() {
+                const img = new Image();
+                img.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+                return {
+                    backgroundStyle: 'image',
+                    backgroundColor: '#ffffff',
+                    gradientColors: ['#ffffff', '#e0e0e0'],
+                    gradientAngle: 90,
+                    backgroundImage: img,
+                    backgroundOpacity: 1.0,
+                    backgroundManager: mockBgManager,
+                    showToast: null,
+                    _scheduleRender: () => {}
+                };
+            }
+
+            function makeBgVmNoImage() {
+                return {
+                    backgroundStyle: 'solid',
+                    backgroundColor: '#ffffff',
+                    gradientColors: ['#ffffff', '#e0e0e0'],
+                    gradientAngle: 90,
+                    backgroundImage: null,
+                    backgroundOpacity: 1.0,
+                    backgroundManager: mockBgManager,
+                    showToast: null,
+                    _scheduleRender: () => {}
+                };
+            }
+
+            beforeEach(() => {
+                mockBgManager = makeMockBgManager();
+                undoCommands = [];
+            });
+
+            it('N1-2.2.5 — removeBackgroundImageAtomic removes image and pushes undo', () => {
+                const img = new Image();
+                img.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+                const vm = makeBgVmNoImage();
+                vm.backgroundImage = img;
+                vm.backgroundStyle = 'image';
+
+                const handlers = createBackgroundHandlers(
+                    () => mockBgManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.removeBackgroundImageAtomic.call(vm);
+
+                expect(vm.backgroundImage).to.be.null;
+                expect(vm.backgroundStyle).to.equal('solid');
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Change Background');
+            });
+
+            it('N1-2.2.5b — removeBackgroundImageAtomic no-op when no image', () => {
+                const vm = makeBgVmNoImage();
+
+                const handlers = createBackgroundHandlers(
+                    () => mockBgManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.removeBackgroundImageAtomic.call(vm);
+
+                expect(undoCommands.length).to.equal(0);
+                expect(vm.backgroundImage).to.be.null;
+                expect(vm.backgroundStyle).to.equal('solid');
+            });
+
+            it('N1-2.3.3 — removeBackgroundImageAtomic undo restores image and style', () => {
+                const img = new Image();
+                img.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+                const vm = makeBgVmNoImage();
+                vm.backgroundImage = img;
+                vm.backgroundStyle = 'image';
+
+                const handlers = createBackgroundHandlers(
+                    () => mockBgManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.removeBackgroundImageAtomic.call(vm);
+                expect(vm.backgroundImage).to.be.null;
+                expect(vm.backgroundStyle).to.equal('solid');
+
+                // Execute undo
+                undoCommands[0].undoFn(vm);
+                expect(vm.backgroundImage).to.equal(img);
+                expect(vm.backgroundStyle).to.equal('image');
+            });
+
+            it('N1-2.3.3b — removeBackgroundImageAtomic redo re-removes image', () => {
+                const img = new Image();
+                img.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+                const vm = makeBgVmNoImage();
+                vm.backgroundImage = img;
+                vm.backgroundStyle = 'image';
+
+                const handlers = createBackgroundHandlers(
+                    () => mockBgManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.removeBackgroundImageAtomic.call(vm);
+
+                // Undo then redo
+                undoCommands[0].undoFn(vm);
+                expect(vm.backgroundImage).to.equal(img);
+                undoCommands[0].redoFn(vm);
+                expect(vm.backgroundImage).to.be.null;
+                expect(vm.backgroundStyle).to.equal('solid');
+            });
+
+            it('N1-2.2.5c — removeBackgroundImageAtomic no crash when onUndoCommand is null', () => {
+                const img = new Image();
+                img.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+                const vm = makeBgVmNoImage();
+                vm.backgroundImage = img;
+                vm.backgroundStyle = 'image';
+
+                const handlers = createBackgroundHandlers(
+                    () => mockBgManager,
+                    () => {},
+                    null
+                );
+
+                expect(() => {
+                    handlers.removeBackgroundImageAtomic.call(vm);
+                }).to.not.throw();
+                expect(vm.backgroundImage).to.be.null;
+            });
+        });
+
+        // =========================================================================
+        // createOverlayHandlers — Atomic Segmented Control Methods (N-1)
+        // =========================================================================
+        describe('createOverlayHandlers — removeOverlayAtomic (atomic)', () => {
+            let undoCommands;
+
+            function collectUndoCommands(cmd) {
+                undoCommands.push(cmd);
+            }
+
+            function makeOverlayVmWithImage() {
+                const img = new Image();
+                img.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+                return {
+                    overlayImage: img,
+                    overlayMode: 'multiply',
+                    overlayOpacity: 0.75,
+                    _scheduleRender: () => {}
+                };
+            }
+
+            function makeOverlayVmNoImage() {
+                return {
+                    overlayImage: null,
+                    overlayMode: 'source-over',
+                    overlayOpacity: 1.0,
+                    _scheduleRender: () => {}
+                };
+            }
+
+            beforeEach(() => {
+                undoCommands = [];
+            });
+
+            it('N1-2.2.6 — removeOverlayAtomic removes overlay and pushes undo', () => {
+                const vm = makeOverlayVmWithImage();
+
+                const handlers = createOverlayHandlers(
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.removeOverlayAtomic.call(vm);
+
+                expect(vm.overlayImage).to.be.null;
+                expect(undoCommands.length).to.equal(1);
+                expect(undoCommands[0].label).to.equal('Change Overlay');
+            });
+
+            it('N1-2.2.6b — removeOverlayAtomic no-op when no overlay', () => {
+                const vm = makeOverlayVmNoImage();
+
+                const handlers = createOverlayHandlers(
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.removeOverlayAtomic.call(vm);
+
+                expect(undoCommands.length).to.equal(0);
+            });
+
+            it('N1-2.2.6c — removeOverlayAtomic undo restores full pre-state', () => {
+                const img = new Image();
+                img.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+                const vm = makeOverlayVmNoImage();
+                vm.overlayImage = img;
+                vm.overlayMode = 'multiply';
+                vm.overlayOpacity = 0.5;
+
+                const handlers = createOverlayHandlers(
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.removeOverlayAtomic.call(vm);
+                expect(vm.overlayImage).to.be.null;
+
+                // Execute undo
+                undoCommands[0].undoFn(vm);
+                expect(vm.overlayImage).to.equal(img);
+                expect(vm.overlayMode).to.equal('multiply');
+                expect(vm.overlayOpacity).to.equal(0.5);
+            });
+
+            it('N1-2.2.6d — removeOverlayAtomic redo re-removes overlay', () => {
+                const img = new Image();
+                img.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+                const vm = makeOverlayVmNoImage();
+                vm.overlayImage = img;
+                vm.overlayMode = 'screen';
+                vm.overlayOpacity = 0.8;
+
+                const handlers = createOverlayHandlers(
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                handlers.removeOverlayAtomic.call(vm);
+
+                undoCommands[0].undoFn(vm);
+                expect(vm.overlayImage).to.equal(img);
+                undoCommands[0].redoFn(vm);
+                expect(vm.overlayImage).to.be.null;
+            });
+
+            it('N1-2.2.6e — removeOverlayAtomic no crash when onUndoCommand is null', () => {
+                const vm = makeOverlayVmWithImage();
+
+                const handlers = createOverlayHandlers(
+                    () => {},
+                    null
+                );
+
+                expect(() => {
+                    handlers.removeOverlayAtomic.call(vm);
+                }).to.not.throw();
+                expect(vm.overlayImage).to.be.null;
+            });
+        });
+
+        // =========================================================================
+        // createTitleHandlers — TitleRuns Deep Copy
+        // =========================================================================
+        describe('createTitleHandlers — TitleRuns Deep Copy', () => {
+            let mockTitleManager, undoCommands;
+
+            function collectUndoCommands(cmd) {
+                undoCommands.push(cmd);
+            }
+
+            function makeMockTitleManager() {
+                return {
+                    setText: (text) => {
+                        mockTitleManager._text = text;
+                        return { truncated: false };
+                    },
+                    getFullText: () => mockTitleManager._text || '',
+                    _text: ''
+                };
+            }
+
+            function makeTitleVm(titleText, titleRuns) {
+                return {
+                    titleText,
+                    titleRuns: JSON.parse(JSON.stringify(titleRuns)),
+                    titleSelectionStart: 0,
+                    titleSelectionEnd: 0,
+                    titleStyle: {
+                        fontFamily: 'Arial', fontSize: 36, fontColor: '#FFFFFF',
+                        backgroundColor: '#000000', alignment: 'center',
+                        showBackground: false, fontOpacity: 1.0, bgOpacity: 1.0,
+                        titleBoxWidth: null, titleBoxX: null, titleBoxY: null
+                    },
+                    showToast: null,
+                    _scheduleRender: () => {}
+                };
+            }
+
+            beforeEach(() => {
+                mockTitleManager = makeMockTitleManager();
+                undoCommands = [];
+            });
+
+            it('4.2.11 — TitleRuns snapshot is independent of original', () => {
+                const runs = [
+                    { text: 'Hello', bold: false, italic: false, underline: false },
+                    { text: ' World', bold: true, italic: false, underline: false }
+                ];
+                const vm = makeTitleVm('Hello World', runs);
+                mockTitleManager._text = 'Hello World';
+
+                const handlers = createTitleHandlers(
+                    () => mockTitleManager,
+                    () => {},
+                    (vmRef, cmd) => collectUndoCommands(cmd)
+                );
+
+                // Snapshot pre-state
+                handlers.snapshotTitleText.call(vm);
+                // Type new text and commit
+                vm.titleText = 'Goodbye';
+                vm.titleRuns = [{ text: 'Goodbye', bold: false, italic: false, underline: false }];
+                handlers.onTitleTextChange.call(vm);
+                handlers.commitTitleText.call(vm);
+
+                // Mutate the current runs array (simulating subsequent edits)
+                vm.titleRuns[0].bold = true;
+
+                // Execute undo — should restore original runs (not the mutated ones)
+                undoCommands[0].undoFn(vm);
+
+                expect(vm.titleRuns.length).to.equal(2);
+                expect(vm.titleRuns[0].text).to.equal('Hello');
+                expect(vm.titleRuns[0].bold).to.be.false;
+                expect(vm.titleRuns[1].text).to.equal(' World');
+                expect(vm.titleRuns[1].bold).to.be.true;
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

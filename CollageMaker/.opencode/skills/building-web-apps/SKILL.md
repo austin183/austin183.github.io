@@ -1,6 +1,6 @@
 ---
 name: building-web-apps
-description: Build static web apps with Vue 3 Options API, Canvas 2D rendering, ES modules, and CDN-loaded libraries. Covers factory testability patterns (callback injection, provider functions, DOM ID injection, module extraction, service locator safety, return value notification, handler .call(this) binding), extensibility patterns (strategy/registry), canvas clearing for exports, config-based rendering helpers, shared offscreen canvas for text measurement, render order testing via context method wrapping, async UI state cleanup (try/finally pattern, concurrency guards), toast notifications, accessibility (ARIA live regions, custom button keyboard activation, aria-busy loading states, reduced motion, interactive canvas roles, touch target sizing, pointerType dynamic thresholds), drag-and-drop cleanup, drag boundary clamping (VISIBLE_MIN pattern), test-driven refactoring (characterization tests), Vue input patterns (@keydown.enter newline prevention), multi-touch and trackpad gestures (TouchEvent, PointerEvent, WheelEvent paths, pointerType guards, wheel event pan/zoom), destination-out compositing for shape cutouts, and web edge cases (DPR, CORS). No build step, no bundler. Use when working on CollageMaker web app features, rendering, state management, testing, or architectural refactoring.
+description: Build static web apps with Vue 3 Options API, Canvas 2D, ES modules, CDN libraries. Covers factory testability (callback injection, provider functions, DOM ID injection, module extraction, service locator safety, return value notification, handler .call(this), closure safety, return-object exposure, mock VM construction, undo snapshots (segmented inline, atomic handler methods, lifecycle cleanup)), extensibility (strategy/registry), canvas clearing for exports, config rendering, shared offscreen canvas, render order, async UI cleanup (try/finally, concurrency guards), toast notifications, accessibility (ARIA live regions, custom button keyboard, aria-busy, reduced motion, canvas roles), drag cleanup, VISIBLE_MIN clamping, test-driven refactoring, Vue input patterns (@keydown.enter, v-model undo timing, segmented/checkbox inline snapshot/commit, atomic handler extraction, beforeUnmount cleanup), multi-touch gestures (TouchEvent/PointerEvent/WheelEvent, pointerType guards, wheel pan/zoom), destination-out compositing, DPR/CORS. No build step. Use for CollageMaker features, rendering, state, testing.
 ---
 
 # Building Web Apps
@@ -13,7 +13,7 @@ description: Build static web apps with Vue 3 Options API, Canvas 2D rendering, 
 
 Consult these files for verified patterns and gotchas:
 
-- `references/vue-options-api.md` — Vue 3 Options API factory decomposition, provide() timing, @mousedown.prevent, $refs on native form inputs, array mutation patterns for reactivity
+- `references/vue-options-api.md` — Vue 3 Options API factory decomposition, provide() timing, @mousedown.prevent, $refs on native form inputs, array mutation patterns for reactivity, v-model timing for undo snapshots
 - `references/canvas-2d.md` — Canvas 2D rendering, DPR scaling, semi-transparent compositing, config-based rendering helpers, shared offscreen canvas for measurement, offscreen export
 - `references/es-modules.md` — ES module conventions and barrel exports
 - `references/rich-text-runs.md` — Run-based text formatting, merge/split algorithm
@@ -25,6 +25,7 @@ Consult these files for verified patterns and gotchas:
 - `references/css-layout.md` — Flex column chain, `min-height: 0` requirement, responsive sidebar config, CSS computed value naming, mobile safe areas
 - `references/memory-management.md` — Disposing HTMLImageElement references, URL.createObjectURL cleanup, lifecycle cleanup ordering, canvas GPU memory release, visual state cleanup, image disposal when replacing references
 - `references/manager-patterns.md` — Action-based vs. direct mutation state managers, when to use each pattern, undo/redo integration, return value pattern for side-effect notification
+- `references/undo-snapshots.md` — Undo/redo snapshot patterns: shallow copy reference preservation, onUndoCommand callback injection, crops deep copy with null guard, File object redo limitations, testing disposed-image toast
 - `references/web-workers.md` — Web Worker lifecycle, timeout guard pattern, clearing timeouts on every exit path, mock Worker pattern for testing
 - `references/accessibility.md` — ARIA patterns for segmented controls (radiogroup), color picker accessibility, custom button keyboard activation (Enter + Space), aria-busy loading states, prefers-reduced-motion, ARIA live regions (toast notifications), interactive canvas role selection, touch target sizing (WCAG 2.5.8, 44x44px minimum, sizing property selection)
 
@@ -144,7 +145,46 @@ function _invokeProvider(provider, vm) {
 _invokeProvider(getOnRenderScheduled, vm);
 ```
 
-**Always add the `typeof callback === 'function'` guard** — it costs virtually nothing and prevents cryptic `TypeError` from malformed providers (e.g., `() => null`).
+**Closure Reference Safety for Undo Commands** — When building undo/redo closures that reference a mutable outer variable (e.g., a snapshot variable later set to `null`), copy the values into a local `const` before building the closure. JavaScript closures capture variables by reference, not by value:
+
+```javascript
+// WRONG — titleUndoSnapshot is captured by reference, later nullified
+this.undoManager.push({
+    undo: () => {
+        this.titleStyle.titleBoxX = titleUndoSnapshot.titleBoxX; // → TypeError: null
+    }
+});
+titleUndoSnapshot = null; // Breaks the closure
+
+// CORRECT — local const captures values at closure creation time
+const preState = { ...titleUndoSnapshot };
+this.undoManager.push({
+    undo: () => {
+        this.titleStyle.titleBoxX = preState.titleBoxX; // Safe — preState is const
+    }
+});
+titleUndoSnapshot = null; // Does not affect the closure
+```
+
+- This pattern is common in interaction handlers that capture a pre-state snapshot, build an undo command at interaction end, then null the snapshot variable
+- The crop drag undo in `createCollageLifecycle.js` already demonstrates the correct pattern: `const preState = { ...cropUndoSnapshot };`
+- Any closure referencing an outer variable that is later reassigned is vulnerable — look for this during code review
+
+**Undo Snapshot Patterns** — When building undo/redo commands for image operations, snapshot state *before* disposal:
+
+```javascript
+// Snapshot BEFORE disposal — shallow copy preserves DOM element references
+const removedItem = { ...this.images[index] };
+imageLibrary.disposeImage(index);
+// removedItem.image is still valid — spread copies the reference value, not a shared property
+```
+
+- **Shallow copy preserves references** — `{ ...item }` copies property *values* (which are references to `HTMLImageElement`). After `disposeImage` nulls the original, the snapshot's reference remains valid. Undo can restore the image.
+- **onUndoCommand callback** — Handler factories accept optional `onUndoCommand(vm, cmd)` to push undo commands without knowing about UndoManager. The `cmd.undoFn(vm)` / `cmd.redoFn(vm)` signatures receive the Vue instance as a parameter (not `this`). Optional for backward compatibility.
+- **Crops deep copy** — Use `JSON.parse(JSON.stringify(this.crops || []))`. Guard against null: `JSON.stringify(null)` returns `"null"`, and `JSON.parse("null")` returns `null`, breaking array operations.
+- **Add Images redo limitation** — `File` objects are not serializable and are lost after file input resets. Redo restores crop state but cannot re-add images. Acceptable UX trade-off.
+- **Testing disposed-image toast** — Normal disposal preserves the image reference in the snapshot, so you can't test the "Cannot undo" toast that way. Create a test item with `image: null` from the start.
+- See `references/undo-snapshots.md` for the full patterns
 
 **Service Locator Access Safety** — Two rules for accessing the `base` service locator:
 
@@ -164,6 +204,41 @@ renderer.scheduleRender(function (ctx, width, height) {
     asm.render(ctx, { ... });
 });
 ```
+
+**Return Object Exposure for Internal Functions** — When an internal factory function has meaningful behavior worth testing (error handling, validation, etc.) but is genuinely internal (not needed by other modules), expose it as a method on the factory's return object instead of exporting it as a module-level named export:
+```javascript
+// Internal function — scoped to factory, not exported
+function pushUndoCommand(vm, cmd) {
+    if (vm.undoManager) {
+        vm.undoManager.push({
+            label: cmd.label,
+            undo: () => {
+                try { cmd.undoFn(vm); } catch (e) {
+                    console.error(`Undo error (${cmd.label}):`, e);
+                    if (vm.showToast) {
+                        vm.showToast('Undo failed. Please try again.', 'error', 5000);
+                    }
+                }
+            },
+            // ... redo wrapper
+        });
+        vm._updateUndoState();
+    }
+}
+
+// Expose on return object for testability
+return {
+    // ... other methods
+    pushUndoCommand(vm, cmd) {
+        pushUndoCommand(vm, cmd);
+    },
+};
+```
+
+- Keeps the function scoped to the factory — no new import dependency for tests
+- Preserves closure benefits — function still captures factory-scoped dependencies
+- Use when the function relies on factory-scoped closures and you don't want to extract it to a separate module
+- Avoid when the function is already testable through the public API, or is simple enough that integration testing suffices
 
 ### Guard Against Null Inputs
 Browser API utilities that accept user input MUST guard against null/undefined. Return `Promise.resolve(null)` for null input rather than throwing:
@@ -193,6 +268,91 @@ onTitleEnterKey(event) {
 }
 ```
 - **Always pair Enter prevention with user feedback** — Blocking Enter without explanation feels like a bug. Show a brief toast so the user understands why the key was suppressed.
+- **v-model timing for undo snapshots** — `v-model` updates reactive data **before** `@change` (select) or `@input` (range/text) fires. By the time your handler runs, `this.someValue` is already the NEW value — you cannot capture the pre-change state inside the handler. Use pre-change events to snapshot:
+
+  - **`<select>`**: `@focus` to snapshot, `@change` to compare and push undo:
+    ```html
+    <select v-model="layoutStyle" @focus="snapshotLayoutStyle" @change="onLayoutStyleChange">
+    ```
+    ```javascript
+    snapshotLayoutStyle() { layoutStyleSnapshot = this.layoutStyle; }
+    onLayoutStyleChange() {
+        if (layoutStyleSnapshot !== null && this.layoutStyle !== layoutStyleSnapshot) {
+            // Push undo command with layoutStyleSnapshot as pre-state
+        }
+    }
+    ```
+
+  - **`<input type="range">`**: `@focus` + `@pointerdown` to snapshot, `@input` to update, `@blur` to commit:
+    ```html
+    <input type="range" v-model.number="gutter"
+           @focus="snapshotLayoutOptions" @pointerdown="snapshotLayoutOptions"
+           @input="onGutterChange" @blur="commitLayoutOptions">
+    ```
+    - `@focus` captures on keyboard navigation (tab to slider)
+    - `@pointerdown` captures on mouse/touch — **use `@pointerdown`, NOT `@mousedown`**, because `@mousedown` does NOT fire on touch devices for form elements. `@pointerdown` unifies mouse, touch, and pen.
+    - **Batching**: Range `@input` fires continuously during drag. Snapshot on interaction start (`@focus`/`@pointerdown`), update layout on every `@input`, commit batched undo command on `@blur`.
+
+  - **`<input type="color">`**: `@focus` to snapshot, `@input` to update, `@blur` to commit. Same pattern as range inputs.
+
+  - **`<textarea>`**: `@focus` to snapshot, `@input` to update, `@blur` to commit. Same pattern as range inputs.
+
+  - **`<button>` (segmented controls) and `<input type="checkbox">`**: These elements lack natural blur events. Use **inline snapshot/commit** in the `@click`/`@change` handler — each click is a discrete, atomic action:
+    ```html
+    <button @click="snapshotTitleStyle(); titleStyle.alignment = 'left'; onTitleAlignmentChange(); commitTitleStyle()">
+        Left
+    </button>
+    <input type="checkbox" v-model="titleStyle.showBackground"
+           @change="snapshotTitleStyle(); onTitleShowBackgroundChange(); commitTitleStyle()">
+    ```
+
+  - **Atomic handler methods (refinement)** — When you have 3+ inline expressions performing the same snapshot/mutate/commit cycle, or when you need to test the undo lifecycle in isolation, extract each into a dedicated handler method. This decouples tests from template implementation details:
+    ```html
+    <button @click="setTitleAlignment('left')">Left</button>
+    ```
+    ```javascript
+    setTitleAlignment(alignment) {
+        const preState = this.titleStyle.alignment;
+        this.titleStyle.alignment = alignment;
+        const titleManager = getTitleManager();
+        if (titleManager) titleManager.setAlignment(alignment);
+        onRenderScheduled(this);
+        if (onUndoCommand && preState !== alignment) {
+            onUndoCommand(this, {
+                label: 'Change Title Style',
+                undoFn: (v) => { /* restore preState */ },
+                redoFn: (v) => { /* re-apply alignment */ }
+            });
+        }
+    }
+    ```
+    **Design rules for atomic methods:**
+    - **Setters: guard against no-op** — skip undo when value is unchanged (`if (preState !== newValue)`). Clicking "Center" when already centered should not produce an undo command.
+    - **Toggles: always push undo** — a toggle always changes the value (false→true or true→false), so no guard is needed.
+    - **Removals: early return** — if there's nothing to remove, return early. The template may guard with `v-if`, but method-level guards provide defense-in-depth for programmatic calls.
+
+  - **Lifecycle cleanup**: Commit all pending snapshots in `beforeUnmount` to prevent lost edits when the Vue app is destroyed. Guard with `if (this.method)` since commit methods may not exist:
+    ```javascript
+    beforeUnmount() {
+        if (this.commitTitleText) this.commitTitleText();
+        if (this.commitTitleStyle) this.commitTitleStyle();
+        // ... other commit methods
+    }
+    ```
+
+  - **Testing inline snapshot/commit**: Simulate Vue event order — call snapshot handler, change value, call change handler:
+    ```javascript
+    handlers.snapshotLayoutStyle.call(vm);
+    vm.layoutStyle = 'hex';  // v-model updates
+    handlers.onLayoutStyleChange.call(vm);  // @change fires
+    ```
+
+  - **Testing atomic handler methods**: Call the method directly — no Vue event simulation needed:
+    ```javascript
+    handlers.setTitleAlignment.call(vm, 'left');
+    expect(undoCommands.length).to.equal(1);
+    expect(vm.titleStyle.alignment).to.equal('left');
+    ```
 - See `references/vue-options-api.md` for provide() timing and array mutation patterns
 
 ### Canvas 2D
@@ -368,6 +528,23 @@ showToast(message, type, duration) {
 - `DragEvent.dataTransfer` cannot be mocked in constructor — test listener presence via `preventDefault()` tracking
 - Mock `window.Worker` with `Object.defineProperty` + setter for `onmessage` to capture the handler, then fire synthetic messages. Override timeout config (e.g., `INFERENCE_TIMEOUT_MS = 50`) to test timeout paths without waiting. See `references/web-workers.md`
 - Document-level listeners leak across tests — use describe-level `afterEach` cleanup, never `beforeEach` + per-test setup
+- **Mock VM Construction** — When testing a factory that returns many methods, spread the factory methods first, then override specific methods with spies. `Object.assign(vm, methods)` or `{ ...methods }` overwrites properties set before it:
+  ```javascript
+  function buildVm(undoManager) {
+      const base = makeMockBase(undoManager);
+      const methods = createCollageMethods(base);
+
+      // Spread factory methods FIRST
+      const vm = { ...methods };
+
+      // Override specific methods with spies (MUST come after spread)
+      vm.showToast = (msg, type, duration) => {
+          vm._toastCalls.push({ message: msg, type, duration });
+      };
+
+      return vm;
+  }
+  ```
 - See `references/testing-unit.md` for patterns on testing state and combined edge cases, `references/testing-strategy.md` for deferred features
 
 ### Extensibility Patterns
@@ -435,6 +612,7 @@ See `references/memory-management.md` for patterns on disposing image references
     - [ ] Confirm all state mutation patterns are intentional and documented (action vs. direct)
     - [ ] Verify services are looked up inside callbacks, not captured outside (stale reference risk)
     - [ ] Check optional chaining consistency on all `base` service locator access across modules
+    - [ ] Verify undo/redo closures capture values via local `const`, not mutable outer variables later reassigned to `null`
     - **Run world-review after tests pass but before marking a feature complete** — Tests verify *specified* behavior; world-review catches UX gaps that unit tests miss (e.g., blocking a key without feedback feels like a bug, placeholder text not announced by screen readers). It is the last quality gate before shipping.
 7. **When refactoring to new patterns, update dependent code** — check all imports that may be affected by API changes; ensure backward compatibility where possible
 8. Verify: run `node scripts/run-tests.js`, check dev server, confirm no regressions

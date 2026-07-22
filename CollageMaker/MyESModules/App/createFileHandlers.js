@@ -9,9 +9,10 @@
  * @param {string} [fileInputId='fileInput'] - DOM ID of the file input element
  * @param {Function} [onImageLoadingProgress] - Optional progress callback(current, total)
  * @param {Function} [onImageFailures] - Optional callback(vm, failedCount, totalCount) when images fail to load
+ * @param {Function} [onUndoCommand] - Optional callback(vm, cmd) to push undo commands
  * @returns {Object} File handlers object
  */
-export function createFileHandlers(getImageLibrary, onRegenerate, fileInputId = 'fileInput', onImageLoadingProgress = null, onImageFailures = null) {
+export function createFileHandlers(getImageLibrary, onRegenerate, fileInputId = 'fileInput', onImageLoadingProgress = null, onImageFailures = null, onUndoCommand = null) {
     let activeCleanup = null;
 
     return {
@@ -38,6 +39,10 @@ export function createFileHandlers(getImageLibrary, onRegenerate, fileInputId = 
                 const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
                 let progressStarted = false;
 
+                // Snapshot pre-state for undo
+                const preImagesCount = this.images.length;
+                const preCrops = JSON.parse(JSON.stringify(this.crops || []));
+
                 try {
                     if (onImageLoadingProgress && imageFiles.length > 0) {
                         onImageLoadingProgress(this, 0, imageFiles.length);
@@ -61,6 +66,48 @@ export function createFileHandlers(getImageLibrary, onRegenerate, fileInputId = 
                         // Signal completion by passing current === total
                         onImageLoadingProgress(this, imageFiles.length, imageFiles.length);
                     }
+                }
+
+                // Push undo command if images were added
+                if (onUndoCommand && this.images.length > preImagesCount) {
+                    const addedItems = this.images.slice(preImagesCount);
+                    const addedImageIds = addedItems.map(item => item.id);
+                    // Snapshot post-state crops (after images added, before regenerate)
+                    const postCrops = JSON.parse(JSON.stringify(this.crops || []));
+                    onUndoCommand(this, {
+                        label: 'Add Images',
+                        undoFn: (vm) => {
+                            // Remove added images by filtering — dispose image references
+                            const remaining = [];
+                            for (const item of vm.images) {
+                                if (addedImageIds.includes(item.id)) {
+                                    if (item.image) {
+                                        item.image.src = '';
+                                        item.image = null;
+                                    }
+                                } else {
+                                    remaining.push(item);
+                                }
+                            }
+                            vm.images.length = 0;
+                            vm.images.push(...remaining);
+                            // Restore pre-state crops
+                            if (vm.crops) {
+                                vm.crops.length = 0;
+                                vm.crops.push(...JSON.parse(JSON.stringify(preCrops)));
+                            }
+                            if (vm._regenerateAndRender) vm._regenerateAndRender();
+                        },
+                        redoFn: (vm) => {
+                            // Re-adding images is not possible (File objects are gone)
+                            // Restore to post-state crops
+                            if (vm.crops) {
+                                vm.crops.length = 0;
+                                vm.crops.push(...JSON.parse(JSON.stringify(postCrops)));
+                            }
+                            if (vm._regenerateAndRender) vm._regenerateAndRender();
+                        }
+                    });
                 }
 
                 // Use injected callback for DIP compliance

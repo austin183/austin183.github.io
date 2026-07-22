@@ -215,22 +215,30 @@ export function createCollageLifecycle(base, domIds = {}) {
                 },
                 onInteractionEnd: () => {
                     // Push undo command for the title interaction
-                    if (titleUndoSnapshot && this.undoManager) {
+                    if (titleUndoSnapshot && this.undoManager && this.titleStyle) {
+                        // Copy snapshot values into local constants BEFORE building closures.
+                        // Without this, titleUndoSnapshot is captured by reference and becomes
+                        // null (line below) before the undo function executes, causing TypeError.
+                        const preState = {
+                            titleBoxX: titleUndoSnapshot.titleBoxX,
+                            titleBoxY: titleUndoSnapshot.titleBoxY,
+                            titleBoxWidth: titleUndoSnapshot.titleBoxWidth
+                        };
                         const postState = {
                             titleBoxX: this.titleStyle.titleBoxX,
                             titleBoxY: this.titleStyle.titleBoxY,
                             titleBoxWidth: this.titleStyle.titleBoxWidth
                         };
                         // Only push if something actually changed
-                        if (titleUndoSnapshot.titleBoxX !== postState.titleBoxX ||
-                            titleUndoSnapshot.titleBoxY !== postState.titleBoxY ||
-                            titleUndoSnapshot.titleBoxWidth !== postState.titleBoxWidth) {
+                        if (preState.titleBoxX !== postState.titleBoxX ||
+                            preState.titleBoxY !== postState.titleBoxY ||
+                            preState.titleBoxWidth !== postState.titleBoxWidth) {
                             this.undoManager.push({
                                 label: 'Move/Resize Title',
                                 undo: () => {
-                                    this.titleStyle.titleBoxX = titleUndoSnapshot.titleBoxX;
-                                    this.titleStyle.titleBoxY = titleUndoSnapshot.titleBoxY;
-                                    this.titleStyle.titleBoxWidth = titleUndoSnapshot.titleBoxWidth;
+                                    this.titleStyle.titleBoxX = preState.titleBoxX;
+                                    this.titleStyle.titleBoxY = preState.titleBoxY;
+                                    this.titleStyle.titleBoxWidth = preState.titleBoxWidth;
                                 },
                                 redo: () => {
                                     this.titleStyle.titleBoxX = postState.titleBoxX;
@@ -317,6 +325,13 @@ export function createCollageLifecycle(base, domIds = {}) {
                 clearTimeout(this.toast.timer);
                 this.toast.timer = null;
             }
+            // Commit any pending undo snapshots before destruction
+            // (prevents data loss if user navigates away mid-edit)
+            if (this.commitTitleText) this.commitTitleText();
+            if (this.commitTitleStyle) this.commitTitleStyle();
+            if (this.commitBackground) this.commitBackground();
+            if (this.commitOverlay) this.commitOverlay();
+            if (this.commitLayoutOptions) this.commitLayoutOptions();
             // 1. Stop new interactions first (prevents race conditions with async drop handlers)
             if (this._dropCleanup) {
                 this._dropCleanup();
