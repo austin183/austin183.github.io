@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>CollageMaker</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css" integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous">
     <link href="../src/css/variables.css" rel="stylesheet">
@@ -17,7 +17,7 @@
         <span id="theme-icon" class="material-icons">bedtime</span>
     </button>
 
-    <div id="app">
+    <div id="app" @keydown.escape.window.prevent="closeSidebars">
         <!-- Toolbar -->
         <div id="toolbar" class="collage-toolbar">
             <div class="app-title-group">
@@ -44,7 +44,10 @@
                     Clear All
                 </button>
                 <div class="toolbar-divider"></div>
-                <button id="sidebarToggleBtn" class="pure-button toolbar-icon-btn" @click="toggleRightSidebar" title="Toggle panel">
+                <button id="leftSidebarToggleBtn" class="pure-button toolbar-icon-btn" @click="toggleLeftSidebar" title="Toggle image panel" :aria-expanded="leftSidebarMobileOpen" aria-label="Toggle image panel">
+                    <span class="material-icons">{{ leftSidebarMobileOpen ? 'chevron_left' : 'chevron_right' }}</span>
+                </button>
+                <button id="sidebarToggleBtn" class="pure-button toolbar-icon-btn" @click="toggleRightSidebar" title="Toggle editor panel" :aria-expanded="rightSidebarOpen" aria-label="Toggle editor panel">
                     <span class="material-icons">{{ rightSidebarOpen ? 'chevron_right' : 'chevron_left' }}</span>
                 </button>
             </div>
@@ -53,7 +56,7 @@
         <!-- Three-Panel Layout -->
         <div id="mainLayout" class="main-layout">
             <!-- Left Sidebar: Image Library + Layout -->
-            <div id="sidebar-left" class="sidebar sidebar-left">
+            <div id="sidebar-left" class="sidebar sidebar-left" role="complementary" aria-label="Image library and layout controls" :class="{ 'mobile-open': leftSidebarMobileOpen }">
                 <div class="sidebar-scroll-container">
                     <div class="sidebar-section" v-for="section in leftSidebarSections" :key="'left-' + section.id">
                         <button class="sidebar-section-header" @click="toggleLeftSection(section.id)" :aria-expanded="expandedLeftSections[section.id]" :aria-controls="'left-section-content-' + section.id">
@@ -148,6 +151,11 @@
                 </div>
             </div>
 
+            <!-- Sidebar overlay backdrop for mobile -->
+            <div id="sidebarOverlay" class="sidebar-overlay"
+                 :class="{ visible: leftSidebarMobileOpen || rightSidebarMobileOpen }"
+                 @click="closeSidebars"></div>
+
             <!-- Toast Notification -->
             <div class="toast-notification"
                  v-show="toast.visible"
@@ -159,7 +167,7 @@
             </div>
 
             <!-- Right Sidebar: Detail / Editor Panel -->
-            <div id="sidebar-right" class="sidebar sidebar-right" :class="{ 'sidebar-collapsed': !rightSidebarOpen }">
+            <div id="sidebar-right" class="sidebar sidebar-right" role="complementary" aria-label="Editor panel" :class="{ 'sidebar-collapsed': !rightSidebarOpen, 'mobile-open': rightSidebarMobileOpen }">
                 <div class="sidebar-scroll-container">
                     <!-- Collapsible Sections -->
                     <div class="sidebar-section" v-for="section in sidebarSections" :key="section.id">

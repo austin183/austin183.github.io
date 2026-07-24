@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Sidebar Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Mobile Sidebar Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Phase 2 — Responsive CSS Layout mobile sidebar state and methods</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createCollageData } from '../MyESModules/App/createCollageData.js';
+        import { createCollageMethods } from '../MyESModules/App/createCollageMethods.js';
+
+        const { expect } = chai;
+
+        // Minimal base mock for factory initialization
+        function createMockBase() {
+            return {
+                assembler: { render: () => {} },
+                dropHandler: { setupGlobalDrop: () => () => {} },
+                getCanvasRenderer: () => null,
+                setCanvasRenderer: () => {},
+                getLayoutManager: () => null,
+                setLayoutManager: () => {},
+                getCropManager: () => null,
+                setCropManager: () => {},
+                getImageLibrary: () => null,
+                setImageLibrary: () => {},
+                getBackgroundManager: () => null,
+                setBackgroundManager: () => {},
+                getTitleManager: () => null,
+                setTitleManager: () => {},
+                layoutStyleOptions: []
+            };
+        }
+
+        // ============================================================
+        // Mobile Sidebar State and Methods
+        // ============================================================
+        describe('Mobile Sidebar — State and Methods', () => {
+            let data, methods, mockBase;
+
+            beforeEach(() => {
+                mockBase = createMockBase();
+                data = createCollageData(mockBase);
+                methods = createCollageMethods(mockBase);
+            });
+
+            it('Mobile-01 — leftSidebarMobileOpen defaults to false', () => {
+                const state = data();
+                expect(state.leftSidebarMobileOpen).to.equal(false);
+            });
+
+            it('Mobile-02 — rightSidebarMobileOpen defaults to false', () => {
+                const state = data();
+                expect(state.rightSidebarMobileOpen).to.equal(false);
+            });
+
+            it('Mobile-03 — toggleLeftSidebar opens left sidebar', () => {
+                const state = data();
+                const vm = { ...state };
+                methods.toggleLeftSidebar.call(vm);
+                expect(vm.leftSidebarMobileOpen).to.equal(true);
+            });
+
+            it('Mobile-04 — toggleLeftSidebar closes left sidebar when already open', () => {
+                const state = data();
+                state.leftSidebarMobileOpen = true;
+                const vm = { ...state };
+                methods.toggleLeftSidebar.call(vm);
+                expect(vm.leftSidebarMobileOpen).to.equal(false);
+            });
+
+            it('Mobile-05 — toggleLeftSidebar closes right sidebar when opening left', () => {
+                const state = data();
+                state.rightSidebarMobileOpen = true;
+                const vm = { ...state };
+                methods.toggleLeftSidebar.call(vm);
+                expect(vm.leftSidebarMobileOpen).to.equal(true);
+                expect(vm.rightSidebarMobileOpen).to.equal(false);
+            });
+
+            it('Mobile-06 — closeSidebars closes both sidebars', () => {
+                const state = data();
+                state.leftSidebarMobileOpen = true;
+                state.rightSidebarMobileOpen = true;
+                const vm = { ...state };
+                methods.closeSidebars.call(vm);
+                expect(vm.leftSidebarMobileOpen).to.equal(false);
+                expect(vm.rightSidebarMobileOpen).to.equal(false);
+            });
+
+            it('Mobile-07 — toggleRightSidebarMobile opens right sidebar', () => {
+                const state = data();
+                const vm = { ...state };
+                methods.toggleRightSidebarMobile.call(vm);
+                expect(vm.rightSidebarMobileOpen).to.equal(true);
+            });
+
+            it('Mobile-08 — toggleRightSidebarMobile closes right sidebar when already open', () => {
+                const state = data();
+                state.rightSidebarMobileOpen = true;
+                const vm = { ...state };
+                methods.toggleRightSidebarMobile.call(vm);
+                expect(vm.rightSidebarMobileOpen).to.equal(false);
+            });
+
+            it('Mobile-09 — toggleRightSidebarMobile closes left sidebar when opening right', () => {
+                const state = data();
+                state.leftSidebarMobileOpen = true;
+                const vm = { ...state };
+                methods.toggleRightSidebarMobile.call(vm);
+                expect(vm.rightSidebarMobileOpen).to.equal(true);
+                expect(vm.leftSidebarMobileOpen).to.equal(false);
+            });
+
+            it('Mobile-10 — toggleRightSidebar toggles both desktop and mobile state', () => {
+                const state = data();
+                const vm = { ...state };
+                methods.toggleRightSidebar.call(vm);
+                expect(vm.rightSidebarOpen).to.equal(false);
+                expect(vm.rightSidebarMobileOpen).to.equal(true);
+            });
+
+            it('Mobile-11 — toggleRightSidebar closes left mobile sidebar when opening right', () => {
+                const state = data();
+                state.leftSidebarMobileOpen = true;
+                const vm = { ...state };
+                methods.toggleRightSidebar.call(vm);
+                expect(vm.rightSidebarMobileOpen).to.equal(true);
+                expect(vm.leftSidebarMobileOpen).to.equal(false);
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

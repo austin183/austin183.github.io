@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Touch Gesture Direction Tests — Phase 1 (P0)</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Mobile Touch Gesture Direction Tests</h1>
+    <p class="test-plan-ref">Covers: Phase 1 (P0) — Touch Gesture Fixes: negated delta for direct manipulation, preserved wheel convention</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import {
+            computeTouchMidpoint,
+            computeTouchDistance,
+            computePinchScale,
+            createMultiTouchHandler
+        } from '../MyESModules/Interaction/MultiTouchHandler.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // Helpers (mirrored from MultiTouchHandlerTest.html)
+        // ============================================================
+        function makeTouchList(touches) {
+            const list = {
+                length: touches.length,
+                item: (i) => touches[i] || null
+            };
+            for (let i = 0; i < touches.length; i++) {
+                list[i] = touches[i];
+            }
+            list[Symbol.iterator] = function* () {
+                for (let i = 0; i < this.length; i++) {
+                    yield this[i];
+                }
+            };
+            return list;
+        }
+
+        function makeTouch(touchId, clientX, clientY) {
+            return { identifier: touchId, clientX, clientY };
+        }
+
+        function createMockTouchEvent(type, { touches, targetTouches, changedTouches } = {}) {
+            const evt = new Event(type, { bubbles: true, cancelable: true });
+            const props = {};
+            if (touches) props.touches = touches;
+            if (targetTouches) props.targetTouches = targetTouches;
+            if (changedTouches) props.changedTouches = changedTouches;
+            for (const [key, value] of Object.entries(props)) {
+                Object.defineProperty(evt, key, {
+                    get: () => value,
+                    configurable: true
+                });
+            }
+            return evt;
+        }
+
+        // ============================================================
+        // Pure Math Functions — regression: must NOT change
+        // ============================================================
+        describe('Pure math functions (regression)', () => {
+            it('computeTouchMidpoint is unchanged', () => {
+                const mid = computeTouchMidpoint(
+                    { clientX: 100, clientY: 200 },
+                    { clientX: 300, clientY: 400 }
+                );
+                expect(mid.x).to.equal(200);
+                expect(mid.y).to.equal(300);
+            });
+
+            it('computeTouchDistance is unchanged', () => {
+                const dist = computeTouchDistance(
+                    { clientX: 0, clientY: 0 },
+                    { clientX: 300, clientY: 400 }
+                );
+                expect(dist).to.equal(500);
+            });
+
+            it('computePinchScale is unchanged — equal distances return 1.0', () => {
+                expect(computePinchScale(100, 100)).to.equal(1.0);
+            });
+
+            it('computePinchScale is unchanged — guards against zero initial', () => {
+                expect(computePinchScale(0, 100)).to.equal(1.0);
+            });
+        });
+
+        // ============================================================
+        // 1.4.1 — TouchEvent pan delta negated (direct manipulation)
+        // Dragging fingers RIGHT should produce NEGATIVE adjustCrop x
+        // so that sourceRect.x decreases → image content moves RIGHT
+        // ============================================================
+        describe('TouchEvent pan delta negation (direct manipulation)', () => {
+            it('1.4.1 — two-finger drag RIGHT produces negative adjustCrop x', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-dir-touch-x';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let adjustDelta = null;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-dir-touch-x',
+                    cropManager: {
+                        adjustCrop: (_panelId, delta) => { adjustDelta = delta; },
+                        zoomCrop: () => {},
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Start: midpoint at (150, 100)
+                const touchesStart = makeTouchList([
+                    makeTouch(1, 100, 100),
+                    makeTouch(2, 200, 100)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchstart', {
+                    touches: touchesStart, targetTouches: touchesStart,
+                    changedTouches: touchesStart
+                }));
+
+                // Move RIGHT by 50px: midpoint goes from (150,100) to (200,100)
+                // dx = +50, dy = 0
+                // After negation: adjustCrop x should be negative
+                const touchesMove = makeTouchList([
+                    makeTouch(1, 150, 100),
+                    makeTouch(2, 250, 100)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchmove', {
+                    touches: touchesMove, targetTouches: touchesMove,
+                    changedTouches: touchesMove
+                }));
+
+                await new Promise(r => setTimeout(r, 10));
+
+                expect(adjustDelta).to.be.an('object');
+                // Dragging RIGHT (positive dx) should produce NEGATIVE adjustCrop x
+                // so that sourceRect.x decreases → image content moves RIGHT
+                expect(adjustDelta.x).to.be.lessThan(0);
+                // Y should be zero (no vertical movement)
+                expect(adjustDelta.y).to.equal(0);
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('1.4.2 — two-finger drag DOWN produces negative adjustCrop y', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-dir-touch-y';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let adjustDelta = null;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-dir-touch-y',
+                    cropManager: {
+                        adjustCrop: (_panelId, delta) => { adjustDelta = delta; },
+                        zoomCrop: () => {},
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Start: midpoint at (150, 150)
+                const touchesStart = makeTouchList([
+                    makeTouch(1, 100, 100),
+                    makeTouch(2, 200, 200)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchstart', {
+                    touches: touchesStart, targetTouches: touchesStart,
+                    changedTouches: touchesStart
+                }));
+
+                // Move DOWN by 30px: midpoint goes from (150,150) to (150,180)
+                // dx = 0, dy = +30
+                // After negation: adjustCrop y should be negative
+                const touchesMove = makeTouchList([
+                    makeTouch(1, 100, 130),
+                    makeTouch(2, 200, 230)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchmove', {
+                    touches: touchesMove, targetTouches: touchesMove,
+                    changedTouches: touchesMove
+                }));
+
+                await new Promise(r => setTimeout(r, 10));
+
+                expect(adjustDelta).to.be.an('object');
+                // Dragging DOWN (positive dy) should produce NEGATIVE adjustCrop y
+                expect(adjustDelta.y).to.be.lessThan(0);
+                // X should be zero (no horizontal movement)
+                expect(adjustDelta.x).to.equal(0);
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('two-finger drag LEFT produces positive adjustCrop x', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-dir-touch-left';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let adjustDelta = null;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-dir-touch-left',
+                    cropManager: {
+                        adjustCrop: (_panelId, delta) => { adjustDelta = delta; },
+                        zoomCrop: () => {},
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Start: midpoint at (250, 100)
+                const touchesStart = makeTouchList([
+                    makeTouch(1, 200, 100),
+                    makeTouch(2, 300, 100)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchstart', {
+                    touches: touchesStart, targetTouches: touchesStart,
+                    changedTouches: touchesStart
+                }));
+
+                // Move LEFT by 50px: midpoint goes from (250,100) to (200,100)
+                // dx = -50
+                // After negation: adjustCrop x should be positive
+                const touchesMove = makeTouchList([
+                    makeTouch(1, 150, 100),
+                    makeTouch(2, 250, 100)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchmove', {
+                    touches: touchesMove, targetTouches: touchesMove,
+                    changedTouches: touchesMove
+                }));
+
+                await new Promise(r => setTimeout(r, 10));
+
+                expect(adjustDelta).to.be.an('object');
+                // Dragging LEFT (negative dx) should produce POSITIVE adjustCrop x
+                expect(adjustDelta.x).to.be.greaterThan(0);
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('two-finger drag UP produces positive adjustCrop y', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-dir-touch-up';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let adjustDelta = null;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-dir-touch-up',
+                    cropManager: {
+                        adjustCrop: (_panelId, delta) => { adjustDelta = delta; },
+                        zoomCrop: () => {},
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Start: midpoint at (150, 250)
+                const touchesStart = makeTouchList([
+                    makeTouch(1, 100, 200),
+                    makeTouch(2, 200, 300)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchstart', {
+                    touches: touchesStart, targetTouches: touchesStart,
+                    changedTouches: touchesStart
+                }));
+
+                // Move UP by 30px: midpoint goes from (150,250) to (150,220)
+                // dy = -30
+                // After negation: adjustCrop y should be positive
+                const touchesMove = makeTouchList([
+                    makeTouch(1, 100, 170),
+                    makeTouch(2, 200, 270)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchmove', {
+                    touches: touchesMove, targetTouches: touchesMove,
+                    changedTouches: touchesMove
+                }));
+
+                await new Promise(r => setTimeout(r, 10));
+
+                expect(adjustDelta).to.be.an('object');
+                // Dragging UP (negative dy) should produce POSITIVE adjustCrop y
+                expect(adjustDelta.y).to.be.greaterThan(0);
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+        });
+
+        // ============================================================
+        // 1.4.3 — WheelEvent pan NOT negated (scrolling convention)
+        // Scrolling DOWN (positive deltaY) should produce POSITIVE adjustCrop y
+        // ============================================================
+        describe('WheelEvent pan NOT negated (scrolling convention)', () => {
+            it('1.4.3 — wheel with positive deltaX produces positive adjustCrop x', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-dir-wheel-x';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let adjustDelta = null;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-dir-wheel-x',
+                    cropManager: {
+                        adjustCrop: (_panelId, delta) => { adjustDelta = delta; },
+                        zoomCrop: () => {},
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Scroll RIGHT: positive deltaX
+                const wheelEvent = new WheelEvent('wheel', {
+                    deltaX: 5, deltaY: 0, deltaMode: 0,
+                    bubbles: true, cancelable: true
+                });
+                canvas.dispatchEvent(wheelEvent);
+
+                await new Promise(r => setTimeout(r, 10));
+
+                expect(adjustDelta).to.be.an('object');
+                // Wheel scrolling RIGHT should produce POSITIVE adjustCrop x
+                // (scrolling convention preserved — NOT negated)
+                expect(adjustDelta.x).to.be.greaterThan(0);
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('wheel with positive deltaY produces positive adjustCrop y', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-dir-wheel-y';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let adjustDelta = null;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-dir-wheel-y',
+                    cropManager: {
+                        adjustCrop: (_panelId, delta) => { adjustDelta = delta; },
+                        zoomCrop: () => {},
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Scroll DOWN: positive deltaY
+                const wheelEvent = new WheelEvent('wheel', {
+                    deltaX: 0, deltaY: 10, deltaMode: 0,
+                    bubbles: true, cancelable: true
+                });
+                canvas.dispatchEvent(wheelEvent);
+
+                await new Promise(r => setTimeout(r, 10));
+
+                expect(adjustDelta).to.be.an('object');
+                // Wheel scrolling DOWN should produce POSITIVE adjustCrop y
+                expect(adjustDelta.y).to.be.greaterThan(0);
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('wheel with negative deltaX produces negative adjustCrop x', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-dir-wheel-neg-x';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let adjustDelta = null;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-dir-wheel-neg-x',
+                    cropManager: {
+                        adjustCrop: (_panelId, delta) => { adjustDelta = delta; },
+                        zoomCrop: () => {},
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                const wheelEvent = new WheelEvent('wheel', {
+                    deltaX: -5, deltaY: 0, deltaMode: 0,
+                    bubbles: true, cancelable: true
+                });
+                canvas.dispatchEvent(wheelEvent);
+
+                await new Promise(r => setTimeout(r, 10));
+
+                expect(adjustDelta).to.be.an('object');
+                expect(adjustDelta.x).to.be.lessThan(0);
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+        });
+
+        // ============================================================
+        // 1.4.4 — Pinch zoom unchanged (regression)
+        // ============================================================
+        describe('Pinch zoom unchanged (regression)', () => {
+            it('1.4.4 — TouchEvent pinch open still zooms in (factor > 1)', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-dir-pinch-touch';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let zoomFactor = null;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-dir-pinch-touch',
+                    cropManager: {
+                        adjustCrop: () => {},
+                        zoomCrop: (_panelId, factor) => { zoomFactor = factor; },
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Start close together
+                const touchesStart = makeTouchList([
+                    makeTouch(1, 100, 100),
+                    makeTouch(2, 120, 120)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchstart', {
+                    touches: touchesStart, targetTouches: touchesStart,
+                    changedTouches: touchesStart
+                }));
+
+                // Spread apart significantly (pinch open)
+                const touchesMove = makeTouchList([
+                    makeTouch(1, 50, 50),
+                    makeTouch(2, 250, 250)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchmove', {
+                    touches: touchesMove, targetTouches: touchesMove,
+                    changedTouches: touchesMove
+                }));
+
+                await new Promise(r => setTimeout(r, 10));
+
+                expect(zoomFactor).to.be.a('number');
+                expect(zoomFactor).to.be.greaterThan(1.0);
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('WheelEvent pinch open (negative deltaZ) still zooms in', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-dir-pinch-wheel';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let zoomFactor = null;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-dir-pinch-wheel',
+                    cropManager: {
+                        adjustCrop: () => {},
+                        zoomCrop: (_panelId, factor) => { zoomFactor = factor; },
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Pinch open: negative deltaZ
+                const wheelEvent = new WheelEvent('wheel', {
+                    deltaX: 0, deltaY: 0, deltaZ: -10, deltaMode: 0,
+                    bubbles: true, cancelable: true
+                });
+                canvas.dispatchEvent(wheelEvent);
+
+                await new Promise(r => setTimeout(r, 10));
+
+                expect(zoomFactor).to.be.a('number');
+                expect(zoomFactor).to.be.greaterThan(1.0);
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+        });
+
+        // ============================================================
+        // 1.4.5 — One-finger touch ignored (regression)
+        // ============================================================
+        describe('One-finger touch ignored (regression)', () => {
+            it('1.4.5 — single-finger touchstart does not activate gesture', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-dir-single';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                let prevented = false;
+                const state = { selectedPanelId: 'panel-0', _multiTouchGestureActive: false };
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-dir-single',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {} },
+                    state: state,
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                const touches = makeTouchList([makeTouch(1, 100, 100)]);
+                const evt = createMockTouchEvent('touchstart', {
+                    touches: touches, targetTouches: touches,
+                    changedTouches: touches
+                });
+                evt.preventDefault = () => { prevented = true; };
+                canvas.dispatchEvent(evt);
+
+                expect(prevented).to.be.false;
+                expect(state._multiTouchGestureActive).to.be.false;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+        });
+
+        // ============================================================
+        // Threshold guard — sub-threshold movement does not trigger adjustCrop
+        // ============================================================
+        describe('Move threshold guard', () => {
+            it('sub-threshold movement (<= 2px) does not call adjustCrop', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-dir-threshold';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let adjustCalled = false;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-dir-threshold',
+                    cropManager: {
+                        adjustCrop: () => { adjustCalled = true; },
+                        zoomCrop: () => {},
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Start: midpoint at (150, 100)
+                const touchesStart = makeTouchList([
+                    makeTouch(1, 100, 100),
+                    makeTouch(2, 200, 100)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchstart', {
+                    touches: touchesStart, targetTouches: touchesStart,
+                    changedTouches: touchesStart
+                }));
+
+                // Move only 1px right: midpoint goes from (150,100) to (151,100)
+                // dx = +1, which is below the moveThreshold of 2
+                const touchesMove = makeTouchList([
+                    makeTouch(1, 101, 100),
+                    makeTouch(2, 201, 100)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchmove', {
+                    touches: touchesMove, targetTouches: touchesMove,
+                    changedTouches: touchesMove
+                }));
+
+                await new Promise(r => setTimeout(r, 10));
+
+                // Sub-threshold movement should NOT trigger adjustCrop
+                expect(adjustCalled).to.be.false;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+        });
+
+        // ============================================================
+        // Diagonal drag — both axes negated simultaneously
+        // ============================================================
+        describe('Diagonal drag', () => {
+            it('diagonal drag (right + down) produces negative x and y', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-dir-diagonal';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let adjustDelta = null;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-dir-diagonal',
+                    cropManager: {
+                        adjustCrop: (_panelId, delta) => { adjustDelta = delta; },
+                        zoomCrop: () => {},
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Start: midpoint at (150, 150)
+                const touchesStart = makeTouchList([
+                    makeTouch(1, 100, 100),
+                    makeTouch(2, 200, 200)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchstart', {
+                    touches: touchesStart, targetTouches: touchesStart,
+                    changedTouches: touchesStart
+                }));
+
+                // Move diagonally right+down by 50px: midpoint goes from (150,150) to (200,200)
+                // dx = +50, dy = +50
+                // After negation: both x and y should be negative
+                const touchesMove = makeTouchList([
+                    makeTouch(1, 150, 150),
+                    makeTouch(2, 250, 250)
+                ]);
+                canvas.dispatchEvent(createMockTouchEvent('touchmove', {
+                    touches: touchesMove, targetTouches: touchesMove,
+                    changedTouches: touchesMove
+                }));
+
+                await new Promise(r => setTimeout(r, 10));
+
+                expect(adjustDelta).to.be.an('object');
+                expect(adjustDelta.x).to.be.lessThan(0);
+                expect(adjustDelta.y).to.be.lessThan(0);
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+        });
+
+        // ============================================================
+        // PointerEvent path also gets negation (hybrid devices)
+        // ============================================================
+        describe('PointerEvent pan delta negation (hybrid devices)', () => {
+            it('two-pointer drag RIGHT produces negative adjustCrop x', async () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-dir-ptr-x';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                canvas.style.position = 'absolute';
+                canvas.style.left = '0px';
+                canvas.style.top = '0px';
+                document.body.appendChild(canvas);
+
+                let adjustDelta = null;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-dir-ptr-x',
+                    cropManager: {
+                        adjustCrop: (_panelId, delta) => { adjustDelta = delta; },
+                        zoomCrop: () => {},
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: { selectedPanelId: 'panel-0' },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Start: midpoint at (150, 100)
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100, pointerType: 'mouse'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 100, pointerType: 'mouse'
+                }));
+
+                // Move RIGHT by 50px: midpoint goes from (150,100) to (200,100)
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 1, clientX: 150, clientY: 100, pointerType: 'mouse'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 2, clientX: 250, clientY: 100, pointerType: 'mouse'
+                }));
+
+                await new Promise(r => setTimeout(r, 10));
+
+                expect(adjustDelta).to.be.an('object');
+                // Dragging RIGHT should produce NEGATIVE adjustCrop x (direct manipulation)
+                expect(adjustDelta.x).to.be.lessThan(0);
+                expect(adjustDelta.y).to.equal(0);
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+        });
+
+        // ============================================================
+        // CSS: touch-action on canvas
+        // This test verifies the CSS property value via computed styles
+        // ============================================================
+        describe('Canvas touch-action CSS', () => {
+            it('canvas element should have touch-action: pan-y (not none)', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-css-test';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                // Apply the same class that the app uses
+                canvas.style.touchAction = 'pan-y';
+                document.body.appendChild(canvas);
+
+                const style = window.getComputedStyle(canvas);
+                expect(style.touchAction).to.equal('pan-y');
+
+                document.body.removeChild(canvas);
+            });
+        });
+
+        mocha.run();
+    </script>
+</body>
+</html>

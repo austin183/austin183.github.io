@@ -3,12 +3,16 @@
 /* Override base body styles for full-width app layout */
 body {
     margin: 0;
-    padding: 0;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
     max-width: none;
     height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    overflow-x: hidden;
+    box-sizing: border-box;
 }
 
 /* Toolbar */
@@ -338,7 +342,7 @@ body.drag-over .canvas-container {
     border-radius: var(--radius-small);
     box-shadow: var(--elevation-2);
     background-color: #ffffff;
-    touch-action: none;
+    touch-action: pan-y;
 }
 
 /* Detail Section */
@@ -367,7 +371,7 @@ body.drag-over .canvas-container {
 /* Theme toggle positioning for this app */
 #themeToggle {
     position: fixed;
-    top: var(--space-3);
+    top: calc(var(--space-3) + env(safe-area-inset-top, 0px));
     right: var(--space-3);
     z-index: 200;
     min-width: 44px;
@@ -919,4 +923,119 @@ input[type="range"].fullRange {
     color: white;
     font-size: var(--font-size-sm);
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* ========================
+ * Mobile Responsive Layout
+ * ======================== */
+
+@media (max-width: 699px) {
+    /* Left sidebar: overlay panel */
+    .sidebar-left {
+        position: fixed !important;
+        top: env(safe-area-inset-top, 0px);
+        left: -280px;
+        width: 280px !important;
+        min-width: 0 !important;
+        max-width: 85vw;
+        height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+        z-index: 150;
+        box-shadow: var(--elevation-2);
+        transition: left 0.25s ease;
+        border-right: 1px solid var(--color-surface-variant);
+    }
+
+    .sidebar-left.mobile-open {
+        left: 0;
+    }
+
+    /* Right sidebar: overlay panel */
+    .sidebar-right {
+        position: fixed !important;
+        top: env(safe-area-inset-top, 0px);
+        right: -280px;
+        width: 280px !important;
+        min-width: 0 !important;
+        height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+        z-index: 150;
+        box-shadow: var(--elevation-2);
+        transition: right 0.25s ease;
+        border-left: 1px solid var(--color-surface-variant);
+        border-right: none !important;
+    }
+
+    .sidebar-right.mobile-open {
+        right: 0 !important;
+    }
+
+    /* Ensure sidebar-collapsed doesn't fight mobile-open */
+    .sidebar-right.sidebar-collapsed.mobile-open {
+        width: 280px !important;
+        min-width: 0 !important;
+        border-left: 1px solid var(--color-surface-variant) !important;
+        overflow: visible !important;
+    }
+
+    /* Canvas area takes full width */
+    .canvas-area {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    /* Overlay backdrop */
+    .sidebar-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.4);
+        z-index: 140;
+    }
+
+    .sidebar-overlay.visible {
+        display: block;
+    }
+
+    /* Toolbar: compact button labels on mobile */
+    .pure-button-primary span:not(.material-icons),
+    .pure-button span:not(.material-icons) {
+        display: none;
+    }
+
+    /* Keep "Export" button text visible */
+    .export-btn span:not(.material-icons) {
+        display: inline;
+    }
+
+    /* App title: shorter on mobile */
+    .app-title {
+        font-size: var(--font-size-base);
+    }
+
+    /* Theme toggle: adjust position for mobile toolbar */
+    #themeToggle {
+        top: calc(var(--space-2) + env(safe-area-inset-top, 0px));
+        right: var(--space-2);
+    }
+
+    /* Ensure image items have adequate touch target on mobile */
+    .image-item {
+        min-height: 44px;
+    }
+
+    /* Toolbar padding: tighter on mobile */
+    .collage-toolbar {
+        padding: var(--space-2) var(--space-3);
+    }
+}
+
+/* Landscape phone refinement */
+@media (max-width: 699px) and (orientation: landscape) {
+    .sidebar-left,
+    .sidebar-right {
+        width: 240px !important;
+        max-width: 50vw;
+    }
 }

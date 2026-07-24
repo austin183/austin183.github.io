@@ -14,12 +14,14 @@
 - PointerType-based dynamic thresholds
 - Unified gesture functions
 - Wheel event handling (macOS trackpad)
+- Dual gesture direction conventions (negation vs. scrolling)
 - setPointerCapture / releasePointerCapture lifecycle
 - pointercancel cleanup
 - pointer capture testing pattern
 - Window blur / visibilitychange safety net
-- touch-action: none CSS
+- touch-action: pan-y selective passthrough
 - VISIBLE_MIN drag boundary clamping
+- Testing gesture direction
 
 ## Three-Layer Architecture
 
@@ -411,6 +413,41 @@ function _onPointerDown(e) {
 }
 ```
 
+## Dual Gesture Direction Conventions (Negation vs. Scrolling)
+
+Touch-based gestures (TouchEvent, PointerEvent) and wheel-based gestures (WheelEvent) follow **opposite conventions** for pan direction:
+
+| Input Path | Convention | Delta Sign | User Action → Content Movement |
+|------------|-----------|------------|--------------------------------|
+| **TouchEvent** (phone touchscreen) | Direct manipulation | Negate | Drag right → content moves right |
+| **PointerEvent** (hybrid devices) | Direct manipulation | Negate | Drag right → content moves right |
+| **WheelEvent** (macOS trackpad) | Scrolling | No negation | Scroll down → view moves down |
+
+**Implementation pattern:**
+```javascript
+// TouchEvent / PointerEvent path — negate for direct manipulation
+function processGesture(t1, t2) {
+    const dx = currentMidpoint.x - initialMidpoint.x;
+    const dy = currentMidpoint.y - initialMidpoint.y;
+    cropManager.adjustCrop(panelId, {
+        x: -dx * imageScale,  // Negated
+        y: -dy * imageScale   // Negated
+    });
+}
+
+// WheelEvent path — no negation (scrolling convention)
+function _onWheel(e) {
+    cropManager.adjustCrop(panelId, {
+        x: e.deltaX * sensitivity * imageScale,  // NOT negated
+        y: e.deltaY * sensitivity * imageScale   // NOT negated
+    });
+}
+```
+
+**Why this matters:** On mobile, users expect "drag follows finger" (direct manipulation). On trackpads, users expect scroll-wheel behavior. The same codebase must support both conventions because the browser exposes them as different event types.
+
+**Key insight:** The WheelEvent path (`_onWheel`) never calls `processGesture()` — it computes its own delta inline. This natural separation makes it easy to apply different conventions to each path.
+
 ## Pointer Capture Lifecycle: setPointerCapture and releasePointerCapture
 
 `canvas.setPointerCapture(pointerId)` only succeeds for the pointer that fired the current event. Attempting to capture a different pointer's ID throws.
@@ -565,22 +602,45 @@ document.removeEventListener('visibilitychange', handleVisibilityChange);
 
 **Always guard the cleanup with a state check** (`if (gestureActive)`) to avoid unnecessary work on every blur event.
 
-## touch-action: none CSS
+## touch-action: pan-y Selective Passthrough
 
-When implementing custom multi-touch or pointer gestures on a canvas element, add `touch-action: none` to prevent the browser from handling default gestures (scroll, zoom, double-tap zoom).
+The CSS `touch-action` property controls which touch gestures the browser handles natively vs. which are passed to JavaScript:
 
+| Value | Browser Handles | JavaScript Can Intercept |
+|-------|----------------|-------------------------|
+| `none` | Nothing | Everything (must call preventDefault) |
+| `pan-y` | One-finger vertical scroll | Two-finger gestures, horizontal swipes |
+| `manipulation` | Scroll and zoom | Nothing (default browser behavior) |
+
+**Use `pan-y` when:**
+- You want one-finger vertical drag to scroll the page (not trigger app gestures)
+- You still want JavaScript to handle two-finger gestures (pan, pinch-to-zoom)
+- You want JavaScript to handle horizontal one-finger swipes (e.g., panel swapping)
+
+**Implementation:**
 ```css
 #previewCanvas {
-    touch-action: none;
+    touch-action: pan-y;
 }
 ```
 
-**Without this CSS property:**
-- Two-finger drag on trackpad scrolls the page instead of panning the image
-- Pinch gesture on touchscreen zooms the page instead of zooming the image
-- The browser consumes the events before your handlers see them
+**Critical requirement:** Your JavaScript handler MUST call `e.preventDefault()` on `touchmove` when a two-finger gesture is active. Without it, `pan-y` allows the browser to scroll during two-finger drag.
 
-**Accessibility consideration:** `touch-action: none` disables all default touch gestures. Ensure users have alternative input methods (mouse, keyboard) for any functionality that relies on gestures.
+```javascript
+// MultiTouchHandler pattern:
+function _onTouchMove(e) {
+    if (!gestureActive) return;  // One-finger → browser handles (pan-y)
+    if (e.touches.length !== 2) { /* cancel */ return; }
+    e.preventDefault();  // Two-finger → JavaScript handles, block browser scroll
+    processGesture(touches[0], touches[1]);
+}
+```
+
+**Anti-pattern:** Using `touch-action: none` blocks ALL browser gestures, including page scrolling. On mobile, this makes the app feel "stuck" — users cannot scroll to see content below the fold.
+
+**iOS Safari note:** `pan-y` does NOT prevent the browser's edge-swipe back gesture. Two-finger horizontal swipe from the screen edge may still trigger browser navigation. This is an acceptable trade-off.
+
+**Accessibility consideration:** `pan-y` preserves native page scrolling for one-finger vertical drag, providing a better mobile experience than `none`. Ensure users have alternative input methods (mouse, keyboard) for gesture-dependent functionality.
 
 ## VISIBLE_MIN Drag Boundary Clamping
 
@@ -764,3 +824,17 @@ function _onTouchStart(e) {
 When no panel is selected, `preventDefault()` still fires if called unconditionally — blocking browser defaults like page scrolling. This pattern applies equally to TouchEvent and PointerEvent paths.
 
 **Stricter variant for WheelEvent:** Even when the handler is "active" (panel selected), a wheel event with zero deltas (e.g., single-finger mouse scroll over canvas) should NOT call `preventDefault()`. Use a `hasAction` flag that tracks whether pan or zoom deltas were actually processed, and only call `preventDefault()` when `hasAction` is true. This prevents blocking page scrolling when the user scrolls normally over the canvas with a panel selected. Also guard the `ctrlKey + deltaY` zoom path: if `ctrlKey` is true but `deltaY` and `deltaZ` are both zero, do NOT call `preventDefault()` (would block browser zoom).
+
+## Testing Gesture Direction
+
+When testing gesture direction, verify the **sign** of the delta passed to the crop manager:
+
+```javascript
+// TouchEvent: drag RIGHT (positive dx) should produce NEGATIVE adjustCrop x
+expect(adjustDelta.x).to.be.lessThan(0);
+
+// WheelEvent: scroll RIGHT (positive deltaX) should produce POSITIVE adjustCrop x
+expect(adjustDelta.x).to.be.greaterThan(0);
+```
+
+**Triangulation pattern:** Test both cardinal directions (right/left, up/down) and diagonal to ensure the negation is applied consistently across axes. Also test the threshold guard — sub-threshold movement should NOT trigger the crop adjustment at all.

@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Polish Tests — Phase 3 (P2)</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Mobile Polish (Phase 3 P2) Tests</h1>
+    <p class="test-plan-ref">Covers: Phase 3 — Safe area insets, viewport-fit=cover, touch target regression</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        const { expect } = chai;
+
+        // Fetch and parse Style.css
+        let cssText = null;
+        async function loadCSS() {
+            if (cssText) return cssText;
+            const response = await fetch('../Style.css');
+            cssText = await response.text();
+            return cssText;
+        }
+
+        // Fetch and parse index.html
+        let indexDoc = null;
+        async function loadIndexHTML() {
+            if (indexDoc) return indexDoc;
+            const response = await fetch('../index.html');
+            const html = await response.text();
+            const parser = new DOMParser();
+            indexDoc = parser.parseFromString(html, 'text/html');
+            return indexDoc;
+        }
+
+        // ============================================================
+        // 3.1 — Safe Area Insets on Body
+        // Body must include env(safe-area-inset-top) and env(safe-area-inset-bottom)
+        // so that content on notch devices doesn't overlap the dynamic island
+        // or home indicator.
+        // ============================================================
+        describe('Phase 3.1 — Safe Area Insets on Body', async () => {
+            let css;
+
+            before(async () => {
+                css = await loadCSS();
+            });
+
+            it('3.1.1 — Body CSS includes env(safe-area-inset-top)', () => {
+                // The body rule should include padding-top with safe-area-inset-top
+                // so content doesn't overlap the dynamic island on iPhone
+                expect(css).to.match(/body[\s\S]*?padding-top:\s*env\(\s*safe-area-inset-top/);
+            });
+
+            it('3.1.2 — Body CSS includes env(safe-area-inset-bottom)', () => {
+                // The body rule should include padding-bottom with safe-area-inset-bottom
+                // so content doesn't overlap the home indicator on iPhone
+                expect(css).to.match(/body[\s\S]*?padding-bottom:\s*env\(\s*safe-area-inset-bottom/);
+            });
+
+            it('3.1.3 — Body safe-area env() has fallback value', () => {
+                // env() should include a fallback (e.g., 0px) for browsers/devices
+                // that don't support safe-area-inset
+                const bodyBlock = css.match(/body\s*\{[^}]*\}/);
+                expect(bodyBlock).to.not.be.null;
+                const bodyRule = bodyBlock[0];
+                expect(bodyRule).to.match(/env\([^,]+,\s*0px?\s*\)/);
+            });
+
+            it('3.1.4 — Body has box-sizing: border-box (required for safe area padding)', () => {
+                // Without box-sizing: border-box, padding would increase body height
+                // beyond 100vh, causing overflow
+                const bodyBlock = css.match(/body\s*\{[^}]*\}/);
+                expect(bodyBlock).to.not.be.null;
+                expect(bodyBlock[0]).to.include('box-sizing: border-box');
+            });
+        });
+
+        // ============================================================
+        // 3.2 — Viewport Meta Tag: viewport-fit=cover
+        // Required for env(safe-area-inset-*) to work on iOS Safari.
+        // Without viewport-fit=cover, safe area values are all 0.
+        // ============================================================
+        describe('Phase 3.2 — Viewport Meta: viewport-fit=cover', async () => {
+            let doc;
+
+            before(async () => {
+                doc = await loadIndexHTML();
+            });
+
+            it('3.2.1 — Viewport meta includes viewport-fit=cover', () => {
+                const viewportMeta = doc.querySelector('meta[name="viewport"]');
+                expect(viewportMeta).to.not.be.null;
+                const content = viewportMeta.getAttribute('content');
+                expect(content).to.include('viewport-fit=cover');
+            });
+
+            it('3.2.2 — Viewport still allows user zoom (accessibility)', () => {
+                // Per plan decision: do NOT add user-scalable=no
+                const viewportMeta = doc.querySelector('meta[name="viewport"]');
+                const content = viewportMeta.getAttribute('content');
+                expect(content).to.not.include('user-scalable=no');
+                expect(content).to.not.include('maximum-scale=1');
+            });
+        });
+
+        // ============================================================
+        // 3.3 — Toast Safe Area (regression)
+        // Toast notification must continue to use safe-area-inset-bottom
+        // ============================================================
+        describe('Phase 3.3 — Toast Safe Area (regression)', async () => {
+            let css;
+
+            before(async () => {
+                css = await loadCSS();
+            });
+
+            it('3.3.1 — Toast notification uses env(safe-area-inset-bottom)', () => {
+                expect(css).to.match(/\.toast-notification[\s\S]*?env\(\s*safe-area-inset-bottom/);
+            });
+
+            it('3.3.2 — Toast has fallback for safe-area-inset-bottom', () => {
+                const toastMatch = css.match(/\.toast-notification\s*\{[^}]*\}/);
+                expect(toastMatch).to.not.be.null;
+                expect(toastMatch[0]).to.match(/env\([^,]+,\s*0px?\s*\)/);
+            });
+        });
+
+        // ============================================================
+        // 3.4 — Touch Target: .image-item min-height (regression)
+        // Mobile media query must enforce 44px minimum touch target
+        // ============================================================
+        describe('Phase 3.4 — Touch Target: .image-item (regression)', async () => {
+            let css;
+
+            before(async () => {
+                css = await loadCSS();
+            });
+
+            it('3.4.1 — .image-item has min-height: 44px in mobile media query', () => {
+                // Inside the mobile breakpoint, .image-item should have min-height: 44px
+                const mobileBlock = css.match(/@media[^{]*max-width[^{]*699px[^{]*\{([\s\S]*?)(?=\n\}|$)/);
+                expect(mobileBlock).to.not.be.null;
+                const mobileContent = mobileBlock[1];
+                expect(mobileContent).to.match(/\.image-item[^{]*\{[^}]*min-height:\s*44px/);
+            });
+        });
+
+        // ============================================================
+        // 3.5 — Canvas touch-action: pan-y (regression from Phase 1)
+        // ============================================================
+        describe('Phase 3.5 — Canvas touch-action: pan-y (regression)', async () => {
+            let css;
+
+            before(async () => {
+                css = await loadCSS();
+            });
+
+            it('3.5.1 — #previewCanvas has touch-action: pan-y (not none)', () => {
+                const canvasMatch = css.match(/#previewCanvas\s*\{[^}]*\}/);
+                expect(canvasMatch).to.not.be.null;
+                expect(canvasMatch[0]).to.include('touch-action: pan-y');
+            });
+        });
+
+        // ============================================================
+        // 3.6 — Fixed UI Elements Safe Area (world-review findings)
+        // Fixed-positioned elements must account for safe-area-inset-top
+        // so they don't overlap the dynamic island on iPhone.
+        // ============================================================
+        describe('Phase 3.6 — Fixed UI Elements Safe Area', async () => {
+            let css;
+
+            before(async () => {
+                css = await loadCSS();
+            });
+
+            it('3.6.1 — #themeToggle accounts for safe-area-inset-top', () => {
+                // The theme toggle uses position: fixed, so it's relative to viewport,
+                // not the padded body. Must include safe-area-inset-top in its top value.
+                const themeMatch = css.match(/#themeToggle\s*\{[^}]*\}/);
+                expect(themeMatch).to.not.be.null;
+                expect(themeMatch[0]).to.match(/env\(\s*safe-area-inset-top/);
+            });
+
+            it('3.6.2 — Mobile #themeToggle also accounts for safe-area-inset-top', () => {
+                // The mobile media query override for #themeToggle must also
+                // include safe-area-inset-top
+                const mobileBlock = css.match(/@media[^{]*max-width[^{]*699px[^{]*\{([\s\S]*?)(?=\n\}|$)/);
+                expect(mobileBlock).to.not.be.null;
+                const mobileContent = mobileBlock[1];
+                const mobileThemeMatch = mobileContent.match(/#themeToggle[^{]*\{[^}]*\}/);
+                expect(mobileThemeMatch).to.not.be.null;
+                expect(mobileThemeMatch[0]).to.match(/env\(\s*safe-area-inset-top/);
+            });
+        });
+
+        // ============================================================
+        // 3.7 — Mobile Sidebar Safe Area (world-review findings)
+        // Mobile overlay sidebars must account for safe-area-inset-top/bottom
+        // so their content doesn't start behind the notch or home indicator.
+        // ============================================================
+        describe('Phase 3.7 — Mobile Sidebar Safe Area', async () => {
+            let css;
+
+            before(async () => {
+                css = await loadCSS();
+            });
+
+            it('3.7.1 — Mobile .sidebar-left uses safe-area-inset-top for top', () => {
+                const mobileBlock = css.match(/@media[^{]*max-width[^{]*699px[^{]*\{([\s\S]*?)(?=\n\}|$)/);
+                expect(mobileBlock).to.not.be.null;
+                const mobileContent = mobileBlock[1];
+                const leftMatch = mobileContent.match(/\.sidebar-left[^{]*\{[^}]*\}/);
+                expect(leftMatch).to.not.be.null;
+                expect(leftMatch[0]).to.match(/top:\s*env\(\s*safe-area-inset-top/);
+            });
+
+            it('3.7.2 — Mobile .sidebar-left height accounts for safe areas', () => {
+                const mobileBlock = css.match(/@media[^{]*max-width[^{]*699px[^{]*\{([\s\S]*?)(?=\n\}|$)/);
+                expect(mobileBlock).to.not.be.null;
+                const mobileContent = mobileBlock[1];
+                const leftMatch = mobileContent.match(/\.sidebar-left[^{]*\{[^}]*\}/);
+                expect(leftMatch).to.not.be.null;
+                // Height should subtract safe area insets to avoid overflow
+                expect(leftMatch[0]).to.match(/height:\s*calc\([^)]*safe-area-inset/);
+            });
+
+            it('3.7.3 — Mobile .sidebar-right uses safe-area-inset-top for top', () => {
+                const mobileBlock = css.match(/@media[^{]*max-width[^{]*699px[^{]*\{([\s\S]*?)(?=\n\}|$)/);
+                expect(mobileBlock).to.not.be.null;
+                const mobileContent = mobileBlock[1];
+                const rightMatch = mobileContent.match(/\.sidebar-right[^{]*\{[^}]*\}/);
+                expect(rightMatch).to.not.be.null;
+                expect(rightMatch[0]).to.match(/top:\s*env\(\s*safe-area-inset-top/);
+            });
+
+            it('3.7.4 — Mobile .sidebar-right height accounts for safe areas', () => {
+                const mobileBlock = css.match(/@media[^{]*max-width[^{]*699px[^{]*\{([\s\S]*?)(?=\n\}|$)/);
+                expect(mobileBlock).to.not.be.null;
+                const mobileContent = mobileBlock[1];
+                const rightMatch = mobileContent.match(/\.sidebar-right[^{]*\{[^}]*\}/);
+                expect(rightMatch).to.not.be.null;
+                expect(rightMatch[0]).to.match(/height:\s*calc\([^)]*safe-area-inset/);
+            });
+        });
+
+        // ============================================================
+        // 3.8 — Body uses dynamic viewport height (world-review finding)
+        // iOS Safari: 100vh includes the browser toolbar height.
+        // 100dvh adjusts dynamically when the toolbar shows/hides.
+        // ============================================================
+        describe('Phase 3.8 — Dynamic Viewport Height', async () => {
+            let css;
+
+            before(async () => {
+                css = await loadCSS();
+            });
+
+            it('3.8.1 — Body uses 100dvh (with 100vh fallback)', () => {
+                // 100dvh should come after 100vh so modern browsers use dvh
+                // and older browsers fall back to vh
+                const bodyBlock = css.match(/body\s*\{[^}]*\}/);
+                expect(bodyBlock).to.not.be.null;
+                const bodyRule = bodyBlock[0];
+                expect(bodyRule).to.include('height: 100vh');
+                expect(bodyRule).to.include('height: 100dvh');
+                // 100dvh must come after 100vh (override pattern)
+                const vhIndex = bodyRule.indexOf('height: 100vh');
+                const dvhIndex = bodyRule.lastIndexOf('height: 100dvh');
+                expect(dvhIndex).to.be.greaterThan(vhIndex);
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

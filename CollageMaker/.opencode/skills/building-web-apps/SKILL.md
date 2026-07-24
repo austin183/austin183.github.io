@@ -1,6 +1,6 @@
 ---
 name: building-web-apps
-description: Build static web apps with Vue 3 Options API, Canvas 2D, ES modules, CDN libraries. Covers factory testability (callback injection, provider functions, DOM ID injection, module extraction, service locator safety, return value notification, handler .call(this), closure safety, return-object exposure, mock VM construction, undo snapshots (segmented inline, atomic handler methods, lifecycle cleanup)), extensibility (strategy/registry), canvas clearing for exports, config rendering, shared offscreen canvas, render order, async UI cleanup (try/finally, concurrency guards), toast notifications, accessibility (ARIA live regions, custom button keyboard, aria-busy, reduced motion, canvas roles), drag cleanup, VISIBLE_MIN clamping, test-driven refactoring, Vue input patterns (@keydown.enter, v-model undo timing, segmented/checkbox inline snapshot/commit, atomic handler extraction, beforeUnmount cleanup), multi-touch gestures (TouchEvent/PointerEvent/WheelEvent, pointerType guards, wheel pan/zoom), destination-out compositing, DPR/CORS. No build step. Use for CollageMaker features, rendering, state, testing.
+description: Build static web apps with Vue 3 Options API, Canvas 2D, ES modules, CDN libraries. Covers factory testability (callback injection, provider functions, DOM ID injection, module extraction, service locator safety, return value notification, handler .call(this), closure safety, return-object exposure, mock VM construction, undo snapshots (segmented inline, atomic handler methods, lifecycle cleanup)), extensibility (strategy/registry), canvas clearing for exports, config rendering, shared offscreen canvas, render order, async UI cleanup (try/finally, concurrency guards), toast notifications, accessibility (ARIA live regions, custom button keyboard, aria-busy, reduced motion, canvas roles), drag cleanup, VISIBLE_MIN clamping, test-driven refactoring, Vue input patterns (@keydown.enter, v-model undo timing, segmented/checkbox inline snapshot/commit, atomic handler extraction, beforeUnmount cleanup), multi-touch gestures (TouchEvent/PointerEvent/WheelEvent, pointerType guards, wheel pan/zoom, dual gesture direction conventions, touch-action: pan-y selective passthrough), mobile sidebar overlays (dual-state toggles, CSS !important cascade, global Escape, overlay backdrops, aria-expanded), iOS safe areas (viewport-fit=cover, 100dvh, fixed element treatment, CSS content validation testing), destination-out compositing, DPR/CORS. No build step. Use for CollageMaker features, rendering, state, testing.
 ---
 
 # Building Web Apps
@@ -20,7 +20,7 @@ Consult these files for verified patterns and gotchas:
 - `references/testing-unit.md` — Mocha/Chai unit tests, mocking patterns, integration testing, characterization tests before refactor
 - `references/testing-e2e.md` — Playwright E2E, page load strategy, pointer/Touch/Drag event testing
 - `references/testing-strategy.md` — Testing approach, gotchas, deferred features, assertion density
-- `references/interaction.md` — Keyboard shortcut patterns: three-layer architecture, modifier matching, focus suppression, preventDefault ordering, pointer handler coordination, global pointerup drag cleanup, VISIBLE_MIN drag boundary clamping, multi-touch and trackpad gestures (TouchEvent/PointerEvent dual path, pointerType guards, pointerType-based dynamic thresholds, wheel event pan/zoom, setPointerCapture gotchas, releasePointerCapture hygiene, blur safety net, touch-action CSS)
+- `references/interaction.md` — Keyboard shortcut patterns: three-layer architecture, modifier matching, focus suppression, preventDefault ordering, pointer handler coordination, global pointerup drag cleanup, VISIBLE_MIN drag boundary clamping, multi-touch and trackpad gestures (TouchEvent/PointerEvent dual path, pointerType guards, pointerType-based dynamic thresholds, wheel event pan/zoom, dual gesture direction conventions, setPointerCapture gotchas, releasePointerCapture hygiene, blur safety net, touch-action: pan-y selective passthrough)
 - `references/midiestro-pattern.md` — Entry point pattern, shared infrastructure, directory structure
 - `references/css-layout.md` — Flex column chain, `min-height: 0` requirement, responsive sidebar config, CSS computed value naming, mobile safe areas
 - `references/memory-management.md` — Disposing HTMLImageElement references, URL.createObjectURL cleanup, lifecycle cleanup ordering, canvas GPU memory release, visual state cleanup, image disposal when replacing references
@@ -28,6 +28,7 @@ Consult these files for verified patterns and gotchas:
 - `references/undo-snapshots.md` — Undo/redo snapshot patterns: shallow copy reference preservation, onUndoCommand callback injection, crops deep copy with null guard, File object redo limitations, testing disposed-image toast
 - `references/web-workers.md` — Web Worker lifecycle, timeout guard pattern, clearing timeouts on every exit path, mock Worker pattern for testing
 - `references/accessibility.md` — ARIA patterns for segmented controls (radiogroup), color picker accessibility, custom button keyboard activation (Enter + Space), aria-busy loading states, prefers-reduced-motion, ARIA live regions (toast notifications), interactive canvas role selection, touch target sizing (WCAG 2.5.8, 44x44px minimum, sizing property selection)
+- `references/mobile-ui-patterns.md` — Dual-state toggle pattern (desktop vs mobile sidebar), CSS `!important` cascade in media queries, Vue `.window` modifier for global Escape, `display: none` overlay backdrops, `aria-expanded` on mobile toggles
 
 ## Core Conventions
 
@@ -407,16 +408,75 @@ Pan and zoom gestures must support **three input paths** for cross-platform cove
 
 **Critical: macOS trackpad gestures are wheel events, NOT pointer events.** The browser synthesizes two-finger trackpad input as a single `wheel` event. A PointerEvent-based two-pointer approach never activates on macOS.
 
+**Dual gesture direction conventions:** TouchEvent/PointerEvent and WheelEvent use **opposite** sign conventions for pan:
+
+| Input Path | Convention | Delta Sign | User Action → Content Movement |
+|------------|-----------|------------|--------------------------------|
+| **TouchEvent** (touchscreen) | Direct manipulation | **Negate** | Drag right → content moves right |
+| **PointerEvent** (hybrid) | Direct manipulation | **Negate** | Drag right → content moves right |
+| **WheelEvent** (trackpad) | Scrolling | **No negation** | Scroll down → view moves down |
+
+```javascript
+// TouchEvent / PointerEvent — negate for "drag follows finger"
+const dx = currentMidpoint.x - initialMidpoint.x;
+cropManager.adjustCrop(panelId, { x: -dx * imageScale, y: -dy * imageScale });
+
+// WheelEvent — no negation (scrolling convention)
+cropManager.adjustCrop(panelId, { x: e.deltaX * sensitivity * imageScale, y: e.deltaY * sensitivity * imageScale });
+```
+
+The WheelEvent path (`_onWheel`) never calls `processGesture()` — it computes its own delta inline, making it easy to apply different conventions.
+
 **Key patterns:**
 - **PointerType guard** — On hybrid devices (touchscreen + trackpad), guard PointerEvent handlers with `if (e.pointerType === 'touch') return;` to avoid double-firing with the TouchEvent path.
 - **Unified gesture functions** — Extract `startGesture()`, `processGesture()`, `endGesture()` so both TouchEvent and PointerEvent paths share identical logic.
 - **Wheel event handler** — Handle `deltaX`/`deltaY` for pan and `deltaZ` for zoom. Also check `ctrlKey + deltaY` as a cross-platform zoom fallback (Windows mice). Attach with `{ passive: false }`.
 - **Exactly 2 fingers** — For TouchEvent, check `e.touches.length !== 2`. Mobile OSes reserve 3+ finger gestures.
-- **touch-action: none** — Add this CSS to gesture canvases to prevent browser default scroll/zoom.
+- **touch-action: pan-y** — Use `touch-action: pan-y` (not `none`) for selective gesture passthrough: one-finger vertical drag scrolls the page, two-finger gestures go to JavaScript. Requires `e.preventDefault()` on `touchmove` when two-finger gesture is active. Avoid `touch-action: none` — it blocks all page scrolling and makes the app feel "stuck" on mobile.
 - **Window blur safety net** — Listen for `window.blur` and `document.visibilitychange` to cancel stuck gesture state if the user switches tabs/windows mid-gesture.
 - **preventDefault after gesture check (TouchEvent/PointerEvent)** — Only call `preventDefault()` when the gesture actually activates (e.g., panel is selected), not unconditionally.
 - **preventDefault two-level guard (WheelEvent)** — Wheel events need a stricter two-level guard: (1) is a panel selected? (2) are there actual pan or zoom deltas? If either check fails, do NOT call `preventDefault()`. Without Level 2, single-finger mouse scroll over canvas with a panel selected blocks page scrolling. Also guard `ctrlKey + deltaY`: if `ctrlKey` is true but all deltas are zero, skip `preventDefault()` to avoid blocking browser zoom.
-- See `references/interaction.md` for the full dual-input path patterns, wheel event handling, pointer capture gotchas, and blur safety net.
+- See `references/interaction.md` for the full dual-input path patterns, wheel event handling, pointer capture gotchas, blur safety net, and gesture direction conventions.
+
+### Responsive Mobile UI
+
+**Dual-State Toggle Pattern** — When a UI element has different visibility mechanisms on desktop vs mobile, use **two independent reactive state properties** toggled by a single method. CSS media queries determine which state has visual effect:
+
+```javascript
+// GOOD — CSS media queries determine which state matters
+toggleRightSidebar() {
+    this.rightSidebarOpen = !this.rightSidebarOpen;
+    this.rightSidebarMobileOpen = !this.rightSidebarMobileOpen;
+    if (this.rightSidebarMobileOpen) {
+        this.leftSidebarMobileOpen = false; // mutual exclusion
+    }
+}
+```
+
+**Anti-pattern:** Never use `window.innerWidth` checks in JavaScript to decide which state to toggle. This duplicates the CSS breakpoint value, breaks if the breakpoint changes, and doesn't handle rapid resize.
+
+**CSS `!important` Cascade** — When desktop CSS uses `!important`, mobile media query overrides must use **equally specific selectors with `!important`** to win:
+
+```css
+@media (max-width: 699px) {
+    .sidebar-right.sidebar-collapsed.mobile-open {
+        width: 280px !important;
+        overflow: visible !important;
+    }
+}
+```
+
+- Match specificity: include all conflicting classes in the selector
+- Only override conflicting properties, not all properties
+- Prefer avoiding `!important` when you control both desktop and mobile CSS
+
+**Global Escape Key** — Use `@keydown.escape.window.prevent` on the app root to catch Escape regardless of focus state. The `.window` modifier attaches the listener to `window`.
+
+**Overlay Backdrops** — Use `display: none` (not `opacity: 0`) for overlay backdrops. `display: none` removes the element from the rendering and event flow entirely, preventing click interception when hidden. Trade-off: no CSS transitions.
+
+**ARIA `aria-expanded`** — Bind `:aria-expanded` to the **mobile** state property in dual-state toggles, since that's what controls overlay visibility on mobile.
+
+See `references/mobile-ui-patterns.md` for full patterns, anti-patterns, and file references.
 
 ### File Input Handlers
 
@@ -511,7 +571,7 @@ showToast(message, type, duration) {
 - **Timer cleanup in `beforeUnmount()`** — Clear the toast timer to prevent updating reactive state on a destroyed instance: `if (this.toast && this.toast.timer) { clearTimeout(this.toast.timer); this.toast.timer = null; }`
 - **Toast coalescing** — Rapid successive calls clear the previous timer and overwrite the message. Only the last message is shown. Prevents spam but loses quick successive errors.
 - **`v-show` with CSS transitions** — `v-show` toggles `display: none`, which cannot be CSS-transitioned. For fade animations, use `v-if` with `<transition>` or bind `visibility` + `opacity` via inline styles. For simple toasts, `v-show` is acceptable (instant show/hide).
-- **Mobile safe areas** — Use `calc(16px + env(safe-area-inset-bottom, 0px))` for bottom-positioned fixed elements to avoid iOS home indicator overlap. See `references/css-layout.md`.
+- **Mobile safe areas** — Use `calc(16px + env(safe-area-inset-bottom, 0px))` for bottom-positioned fixed elements to avoid iOS home indicator overlap. Requires `viewport-fit=cover` in the viewport meta tag or `env()` returns 0. See `references/css-layout.md` for the complete safe area pattern.
 - **ARIA live region role** — Use `role="status" aria-live="polite"` for info/success toasts. Consider `role="alert"` for critical errors. Never combine `role="alert"` with `aria-live="polite"` — they contradict each other. Always add `aria-hidden="true"` to decorative icons inside live regions. See `references/accessibility.md`.
 
 ### Testing

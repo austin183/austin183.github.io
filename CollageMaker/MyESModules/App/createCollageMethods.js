@@ -430,6 +430,30 @@ export function createCollageMethods(base, domIds = {}) {
         // Sidebar methods
         toggleRightSidebar() {
             this.rightSidebarOpen = !this.rightSidebarOpen;
+            // Sync mobile overlay state with desktop toggle — on mobile the
+            // sidebar-collapsed class has no visual effect (sidebar is fixed
+            // off-screen), so we also toggle the mobile-open state.
+            this.rightSidebarMobileOpen = !this.rightSidebarMobileOpen;
+            // Ensure left mobile sidebar is closed
+            if (this.rightSidebarMobileOpen) {
+                this.leftSidebarMobileOpen = false;
+            }
+        },
+        toggleLeftSidebar() {
+            this.leftSidebarMobileOpen = !this.leftSidebarMobileOpen;
+            if (this.leftSidebarMobileOpen) {
+                this.rightSidebarMobileOpen = false;
+            }
+        },
+        toggleRightSidebarMobile() {
+            this.rightSidebarMobileOpen = !this.rightSidebarMobileOpen;
+            if (this.rightSidebarMobileOpen) {
+                this.leftSidebarMobileOpen = false;
+            }
+        },
+        closeSidebars() {
+            this.leftSidebarMobileOpen = false;
+            this.rightSidebarMobileOpen = false;
         },
         toggleSection(sectionId) {
             this.expandedSections[sectionId] = !this.expandedSections[sectionId];

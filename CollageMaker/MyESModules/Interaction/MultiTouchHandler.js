@@ -173,9 +173,12 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
 
         if (Math.abs(dx) > moveThreshold || Math.abs(dy) > moveThreshold) {
             const imageScale = estimateImageScale(panelId);
+            // Negate delta for direct manipulation convention:
+            // Dragging right (positive dx) decreases sourceRect.x,
+            // revealing more of the image's left side → content moves right.
             cropManager.adjustCrop(panelId, {
-                x: dx * imageScale,
-                y: dy * imageScale
+                x: -dx * imageScale,
+                y: -dy * imageScale
             });
             needsRender = true;
             // Reset initial midpoint to current to avoid accumulating deltas

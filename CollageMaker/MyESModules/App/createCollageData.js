@@ -83,6 +83,10 @@ export function createCollageData(base) {
             // Right sidebar toggle
             rightSidebarOpen: true,
 
+            // Mobile sidebar overlay state
+            leftSidebarMobileOpen: false,
+            rightSidebarMobileOpen: false,
+
             // Drag target (for visual feedback during panel swap)
             dragTargetId: null,
 
