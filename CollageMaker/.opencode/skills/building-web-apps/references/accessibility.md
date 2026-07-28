@@ -8,7 +8,11 @@
 - Reduced Motion Preference
 - ARIA Live Regions (Toast Notifications)
 - ARIA Role Selection for Interactive Canvases
+- Consolidating Duplicate Application Regions
+- Reactive Numeric Readouts (role=status)
 - Touch Target Sizing (WCAG 2.5.8)
+- ARIA Tab Pattern (id + aria-controls + aria-labelledby)
+- Focus Return on Dialog Close
 
 ## Segmented Controls with Radiogroup
 
@@ -174,6 +178,40 @@ Always add `aria-hidden="true"` to decorative icons inside live regions. Screen 
 </span>
 ```
 
+## Reactive Numeric Readouts (role=status)
+
+When displaying dynamically-updating numeric values (crop coordinates, dimensions, progress, etc.), use `role="status"` on the container so screen readers announce value changes automatically.
+
+### Why `role="status"` over `aria-live` alone?
+
+- `role="status"` implicitly sets `aria-live="polite"` AND `aria-atomic="true"`
+- `aria-atomic="true"` ensures the entire readout is announced as a unit, not individual numbers
+- Screen readers treat `role="status"` as a live region by default — no additional attributes needed
+
+### Why `aria-live="polite"` over `assertive`?
+
+- Values update frequently during interactions (e.g., drag gestures)
+- `polite` waits for the user to pause before announcing; `assertive` interrupts
+- Numeric readouts are supplementary information, not critical alerts
+
+### Pattern
+
+```html
+<div class="detail-section" aria-label="Crop settings">
+    <div class="crop-info" role="status" aria-live="polite">
+        <span class="crop-info-item">X: {{ Math.round(selectedCropInfo.sourceRect.x) }}</span>
+        <span class="crop-info-item">Y: {{ Math.round(selectedCropInfo.sourceRect.y) }}</span>
+        <span class="crop-info-item">W: {{ Math.round(selectedCropInfo.sourceRect.width) }}</span>
+        <span class="crop-info-item">H: {{ Math.round(selectedCropInfo.sourceRect.height) }}</span>
+    </div>
+</div>
+```
+
+Vue reactivity updates the text content automatically; `role="status"` ensures screen readers announce the changes.
+
+**File Reference:**
+- `index.html` — crop info readout in `#bs-panel-edit`
+
 ## ARIA Role Selection for Interactive Canvases
 
 Choosing the correct ARIA role for a `<canvas>` element determines how screen readers present it to users.
@@ -215,6 +253,43 @@ Using `role="img"` on a canvas that accepts pointer interactions misleads screen
 
 **File Reference:**
 - `index.html` — canvas ARIA role
+
+## Consolidating Duplicate Application Regions
+
+When the same interaction (e.g., crop editing) is available in multiple UI locations (desktop sidebar, mobile bottom sheet), avoid creating multiple `role="application"` regions. Screen reader users encounter duplicate focus targets, ambiguous navigation, and context-switching overhead.
+
+### Pattern: Single Source of Truth
+
+Designate one region as the primary interactive region. Other locations should be **read-only** or removed entirely.
+
+```html
+<!-- Main canvas — primary crop interaction (keep role="application") -->
+<canvas id="previewCanvas" role="application" aria-label="Canvas"></canvas>
+
+<!-- Mobile bottom sheet — read-only crop info (no role="application") -->
+<div class="detail-section" aria-label="Crop settings">
+    <div class="crop-info" role="status" aria-live="polite">
+        <span class="crop-info-item">X: 120</span>
+        <span class="crop-info-item">Y: 340</span>
+        <span class="crop-info-item">W: 800</span>
+        <span class="crop-info-item">H: 600</span>
+    </div>
+    <button class="pure-button reset-crop-btn">Reset Crop</button>
+</div>
+```
+
+### Decision Framework
+
+| Factor | Keep as `role="application"` | Demote to read-only |
+|--------|------------------------------|---------------------|
+| Touch targets meet 44x44px minimum | Yes | No |
+| Spatial context is sufficient for interaction | Yes | No |
+| User can perform the action meaningfully here | Yes | No |
+| Main canvas provides adequate feedback | N/A | Prefer demote |
+
+**File Reference:**
+- `index.html` — crop section in `#bs-panel-edit` (mobile bottom sheet Edit tab)
+- `MyESModules/Interaction/CropInteraction.js` — single canvas ID normalization
 
 ## Touch Target Sizing (WCAG 2.5.8)
 
@@ -271,10 +346,79 @@ expect(parseInt(style.minWidth)).toBeGreaterThanOrEqual(44);
 expect(parseInt(style.minHeight)).toBeGreaterThanOrEqual(44);
 ```
 
+## ARIA Tab Pattern: Complete `id` + `aria-controls` + `aria-labelledby` Wiring
+
+The WAI-ARIA tabs pattern requires three relationships — `role="tab"`, `aria-selected`, **and** the programmatic wiring between tabs and panels via `id`/`aria-controls`/`aria-labelledby`.
+
+### Incomplete Pattern (Common Mistake)
+
+```html
+<!-- Has role="tab" and aria-selected but missing id/aria-controls -->
+<button role="tab" :aria-selected="active === 'images'" @click="setTab('images')">
+    Images
+</button>
+<div role="tabpanel" v-show="active === 'images'">
+    <!-- Content -->
+</div>
+```
+
+Works visually and screen readers announce `aria-selected`, but assistive technologies that rely on `aria-controls` for tab-to-panel navigation (VoiceOver rotor, JAWS tab list) will not function.
+
+### Complete Pattern
+
+```html
+<!-- Tab: needs id + aria-controls pointing to panel -->
+<button id="bs-tab-images" role="tab"
+        :aria-selected="activeBottomSheetTab === 'images'"
+        aria-controls="bs-panel-images"
+        @click="setBottomSheetTab('images')">
+    Images
+</button>
+
+<!-- Panel: needs id matching aria-controls + aria-labelledby pointing to tab -->
+<div id="bs-panel-images" role="tabpanel"
+     aria-labelledby="bs-tab-images"
+     v-show="activeBottomSheetTab === 'images'">
+    <!-- Content -->
+</div>
+```
+
+### Why Both `aria-controls` AND `aria-labelledby`?
+
+- **`aria-controls`** (on the tab): Tells assistive tech "this tab controls this panel". Enables tab-to-panel navigation.
+- **`aria-labelledby`** (on the panel): Tells assistive tech "this panel's label comes from this tab". When focus enters the panel, the tab label is announced as context.
+
+## Focus Return on Dialog Close
+
+When a modal dialog (`role="dialog" aria-modal="true"`) closes, focus **MUST** return to the element that opened it. This is WCAG 2.1 Level A (2.4.3 Focus Order).
+
+### Pattern
+
+```javascript
+closeSidebars() {
+    const wasBottomSheetOpen = this.bottomSheetOpen;
+    this.leftSidebarMobileOpen = false;
+    this.rightSidebarMobileOpen = false;
+    this.bottomSheetOpen = false;
+    // Return focus to the element that opened the dialog
+    if (wasBottomSheetOpen) {
+        const btn = document.getElementById('bottomSheetToggleBtn');
+        if (btn) btn.focus();
+    }
+}
+```
+
+### Key Details
+
+- **Capture state before mutation** — `wasBottomSheetOpen` is read before setting `bottomSheetOpen = false`, because the method handles all dismissal paths (backdrop tap, Escape key).
+- **Defensive DOM lookup** — `getElementById()` may return `null` if the element is hidden by CSS (`display: none`) at lookup time. Guard with `if (btn)`.
+- **Scope to the closing dialog** — Only return focus when the specific dialog that closed was the one the user opened.
+
 ## File Reference
 
-- `index.html` — Export format selector, color pickers, export button, toast notification template
+- `index.html` — Export format selector, color pickers, export button, toast notification template, bottom sheet tabs and panels, crop info readout in `#bs-panel-edit`, canvas ARIA roles
 - `Style.css` — `.color-swatch`, `.export-spinner`, `.toast-notification` styles, `prefers-reduced-motion` media query, touch target sizing
 - `MyESModules/App/createCollageData.js` — toast reactive state, `isExporting` state
-- `MyESModules/App/createCollageMethods.js` — `showToast()` method
+- `MyESModules/App/createCollageMethods.js` — `showToast()` method, `closeSidebars()` focus return
+- `MyESModules/Interaction/CropInteraction.js` — single canvas ID normalization for duplicate region avoidance
 - `MyComponents/Phase2FollowUpTest.html` — Custom button keyboard activation tests

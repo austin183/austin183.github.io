@@ -8,7 +8,9 @@
 /**
  * Creates a crop interaction handler.
  * @param {Object} options
- * @param {string} options.canvasId - DOM ID of the crop preview canvas
+ * @param {string|string[]} options.canvasId - DOM ID(s) of the crop preview canvas(es).
+ *   Pass a single string for one canvas, or an array of strings for multiple canvases
+ *   (e.g., desktop sidebar + mobile bottom sheet).
  * @param {Object} options.cropManager - The CropManager instance
  * @param {string} options.panelId - The currently selected panel ID
  * @param {Function} options.onRenderScheduled - Call to trigger main canvas re-render
@@ -18,7 +20,11 @@
  * @returns {Object} CropInteraction
  */
 export function createCropInteraction({ canvasId, cropManager, panelId, onRenderScheduled, onCropPreviewRender, onDragStart, onDragEnd }) {
-    let canvas = null;
+    // Normalize canvasId to an array for uniform iteration
+    const canvasIds = Array.isArray(canvasId) ? canvasId : [canvasId];
+
+    /** @type {HTMLCanvasElement[]} */
+    let canvases = [];
     let isDragging = false;
     let isResizing = false;
     let dragStartScreen = { x: 0, y: 0 };
@@ -35,39 +41,48 @@ export function createCropInteraction({ canvasId, cropManager, panelId, onRender
 
     const handler = {
         /**
-         * Attaches pointer event listeners to the crop preview canvas.
+         * Attaches pointer event listeners to all configured crop preview canvases.
          */
         attach() {
             if (handlerAttached) return;
             handlerAttached = true;
 
-            canvas = document.getElementById(canvasId);
-            if (!canvas) return;
-
-            canvas.addEventListener('pointerdown', onPointerDown);
-            canvas.addEventListener('pointermove', onPointerMove);
-            canvas.addEventListener('pointerup', onPointerUp);
-            canvas.addEventListener('pointercancel', onPointerUp);
+            canvases = [];
+            for (const id of canvasIds) {
+                const c = document.getElementById(id);
+                if (c) {
+                    canvases.push(c);
+                    c.addEventListener('pointerdown', onPointerDown);
+                    c.addEventListener('pointermove', onPointerMove);
+                    c.addEventListener('pointerup', onPointerUp);
+                    c.addEventListener('pointercancel', onPointerUp);
+                }
+            }
         },
 
         /**
-         * Removes all event listeners.
+         * Removes all event listeners from all canvases.
          */
         detach() {
             if (!handlerAttached) return;
             handlerAttached = false;
 
             // Release any captured pointer on detach
-            if (canvas && canvas.releasePointerCapture && lastPointerId !== undefined) {
-                try { canvas.releasePointerCapture(lastPointerId); } catch (_) {}
+            for (const c of canvases) {
+                if (c && c.releasePointerCapture && lastPointerId !== undefined) {
+                    try { c.releasePointerCapture(lastPointerId); } catch (_) {}
+                }
             }
 
-            if (canvas) {
-                canvas.removeEventListener('pointerdown', onPointerDown);
-                canvas.removeEventListener('pointermove', onPointerMove);
-                canvas.removeEventListener('pointerup', onPointerUp);
-                canvas.removeEventListener('pointercancel', onPointerUp);
+            for (const c of canvases) {
+                if (c) {
+                    c.removeEventListener('pointerdown', onPointerDown);
+                    c.removeEventListener('pointermove', onPointerMove);
+                    c.removeEventListener('pointerup', onPointerUp);
+                    c.removeEventListener('pointercancel', onPointerUp);
+                }
             }
+            canvases = [];
         },
 
         /**
@@ -88,14 +103,15 @@ export function createCropInteraction({ canvasId, cropManager, panelId, onRender
          * @param {number} screenY - Y in CSS pixels relative to crop canvas
          * @returns {{ x: number, y: number, imageScale: number }}
          */
-        screenToImageCoords(screenX, screenY) {
-            if (!canvas) return { x: 0, y: 0, imageScale: 1 };
+        screenToImageCoords(screenX, screenY, targetCanvas) {
+            const c = targetCanvas || (canvases.length > 0 ? canvases[0] : null);
+            if (!c) return { x: 0, y: 0, imageScale: 1 };
 
             const crop = cropManager.getCrop(panelId);
             const image = cropManager.getPanelImage(panelId);
             if (!crop || !image) return { x: 0, y: 0, imageScale: 1 };
 
-            const rect = canvas.getBoundingClientRect();
+            const rect = c.getBoundingClientRect();
             const canvasW = rect.width;
             const canvasH = rect.height;
 
@@ -131,7 +147,7 @@ export function createCropInteraction({ canvasId, cropManager, panelId, onRender
          * @param {number} screenY
          * @returns {string|null} Corner identifier or null
          */
-        hitTestCorner(screenX, screenY) {
+        hitTestCorner(screenX, screenY, targetCanvas) {
             const crop = cropManager.getCrop(panelId);
             const image = cropManager.getPanelImage(panelId);
             if (!crop || !image) return null;
@@ -139,7 +155,7 @@ export function createCropInteraction({ canvasId, cropManager, panelId, onRender
             const sr = crop.sourceRect;
 
             // Convert crop rect corners to screen coordinates
-            const corners = this._getCornersInScreen();
+            const corners = this._getCornersInScreen(targetCanvas);
             const handleSize = CORNER_HANDLE_SIZE;
 
             for (const [corner, { x, y }] of Object.entries(corners)) {
@@ -154,14 +170,15 @@ export function createCropInteraction({ canvasId, cropManager, panelId, onRender
          * Gets the four corner handles in screen coordinates (relative to crop canvas).
          * @returns {Object} { tl: {x,y}, tr: {x,y}, bl: {x,y}, br: {x,y} }
          */
-        _getCornersInScreen() {
+        _getCornersInScreen(targetCanvas) {
+            const c = targetCanvas || (canvases.length > 0 ? canvases[0] : null);
             const crop = cropManager.getCrop(panelId);
             const image = cropManager.getPanelImage(panelId);
-            if (!crop || !image || !canvas) return {};
+            if (!crop || !image || !c) return {};
 
             const sr = crop.sourceRect;
 
-            const rect = canvas.getBoundingClientRect();
+            const rect = c.getBoundingClientRect();
             const canvasW = rect.width;
             const canvasH = rect.height;
 
@@ -200,21 +217,24 @@ export function createCropInteraction({ canvasId, cropManager, panelId, onRender
             // Track pointer ID for cleanup in detach()
             lastPointerId = e.pointerId;
 
+            // Use the canvas that received the event
+            const targetCanvas = e.currentTarget;
+
             // Protect setPointerCapture — not all browsers support it
-            if (canvas && canvas.setPointerCapture) {
+            if (targetCanvas && targetCanvas.setPointerCapture) {
                 try {
-                    canvas.setPointerCapture(e.pointerId);
+                    targetCanvas.setPointerCapture(e.pointerId);
                 } catch (_) {
                     // setPointerCapture not supported — pointer events still work
                 }
             }
 
-            const rect = canvas.getBoundingClientRect();
+            const rect = targetCanvas.getBoundingClientRect();
             const screenX = e.clientX - rect.left;
             const screenY = e.clientY - rect.top;
 
             // Check corner handles first
-            const corner = this.hitTestCorner(screenX, screenY);
+            const corner = this.hitTestCorner(screenX, screenY, targetCanvas);
             if (corner) {
                 isResizing = true;
                 resizeCorner = corner;
@@ -226,7 +246,7 @@ export function createCropInteraction({ canvasId, cropManager, panelId, onRender
             }
 
             // Otherwise, start dragging the crop region
-            const coords = this.screenToImageCoords(screenX, screenY);
+            const coords = this.screenToImageCoords(screenX, screenY, targetCanvas);
             const crop = cropManager.getCrop(panelId);
             if (!crop) return;
 
@@ -242,23 +262,24 @@ export function createCropInteraction({ canvasId, cropManager, panelId, onRender
         },
 
         _onPointerMove(e) {
+            const targetCanvas = e.currentTarget;
             if (!isDragging && !isResizing) {
                 // Update cursor based on hover
-                if (panelId && canvas) {
-                    const rect = canvas.getBoundingClientRect();
+                if (panelId && targetCanvas) {
+                    const rect = targetCanvas.getBoundingClientRect();
                     const screenX = e.clientX - rect.left;
                     const screenY = e.clientY - rect.top;
-                    const corner = this.hitTestCorner(screenX, screenY);
+                    const corner = this.hitTestCorner(screenX, screenY, targetCanvas);
                     if (corner) {
-                        canvas.style.cursor = this._cornerCursor(corner);
+                        targetCanvas.style.cursor = this._cornerCursor(corner);
                     } else {
-                        const coords = this.screenToImageCoords(screenX, screenY);
+                        const coords = this.screenToImageCoords(screenX, screenY, targetCanvas);
                         const crop = cropManager.getCrop(panelId);
                         if (crop) {
                             const sr = crop.sourceRect;
                             const inCrop = coords.x >= sr.x && coords.x <= sr.x + sr.width &&
                                 coords.y >= sr.y && coords.y <= sr.y + sr.height;
-                            canvas.style.cursor = inCrop ? 'grab' : 'default';
+                            targetCanvas.style.cursor = inCrop ? 'grab' : 'default';
                         }
                     }
                 }
@@ -266,21 +287,21 @@ export function createCropInteraction({ canvasId, cropManager, panelId, onRender
             }
 
             e.preventDefault();
-            const rect = canvas.getBoundingClientRect();
+            const rect = targetCanvas.getBoundingClientRect();
             const screenX = e.clientX - rect.left;
             const screenY = e.clientY - rect.top;
 
             if (isDragging) {
-                this._handleDrag(screenX, screenY);
+                this._handleDrag(screenX, screenY, targetCanvas);
             } else if (isResizing) {
-                this._handleResize(screenX, screenY);
+                this._handleResize(screenX, screenY, targetCanvas);
             }
         },
 
         _onPointerUp(e) {
             // Release pointer capture to prevent stuck pointer state
-            if (canvas && canvas.releasePointerCapture) {
-                try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+            if (e.currentTarget && e.currentTarget.releasePointerCapture) {
+                try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
             }
 
             if (isDragging || isResizing) {
@@ -292,9 +313,9 @@ export function createCropInteraction({ canvasId, cropManager, panelId, onRender
             resizeCorner = null;
         },
 
-        _handleDrag(screenX, screenY) {
-            const delta = this.screenToImageCoords(screenX, screenY);
-            const startDelta = this.screenToImageCoords(dragStartScreen.x, dragStartScreen.y);
+        _handleDrag(screenX, screenY, targetCanvas) {
+            const delta = this.screenToImageCoords(screenX, screenY, targetCanvas);
+            const startDelta = this.screenToImageCoords(dragStartScreen.x, dragStartScreen.y, targetCanvas);
 
             const dx = delta.x - startDelta.x;
             const dy = delta.y - startDelta.y;
@@ -310,8 +331,8 @@ export function createCropInteraction({ canvasId, cropManager, panelId, onRender
             onCropPreviewRender();
         },
 
-        _handleResize(screenX, screenY) {
-            const coords = this.screenToImageCoords(screenX, screenY);
+        _handleResize(screenX, screenY, targetCanvas) {
+            const coords = this.screenToImageCoords(screenX, screenY, targetCanvas);
             const crop = cropManager.getCrop(panelId);
             const image = cropManager.getPanelImage(panelId);
             if (!crop || !image) return;

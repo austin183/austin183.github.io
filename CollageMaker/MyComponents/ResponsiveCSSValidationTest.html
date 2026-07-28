@@ -321,6 +321,138 @@
             });
         });
 
+        // ============================================================
+        // BS-CSS-01 through BS-CSS-12: Bottom Sheet CSS Validation
+        // ============================================================
+        describe('BS-CSS — Bottom Sheet CSS Validation', async () => {
+            let css;
+
+            before(async () => {
+                css = await loadCSS();
+            });
+
+            it('BS-CSS-01 — .bottom-sheet class exists in mobile media query', () => {
+                // The mobile media query block must contain .bottom-sheet rules
+                const mobileBlock = css.match(/@media[^{]*max-width[^{]*699px[^{]*\{([\s\S]*?)(?=\n\}|$)/);
+                expect(mobileBlock).to.not.be.null;
+                expect(mobileBlock[1]).to.include('.bottom-sheet');
+            });
+
+            it('BS-CSS-02 — .bottom-sheet uses position: fixed', () => {
+                const mobileBlock = css.match(/@media[^{]*max-width[^{]*699px[^{]*\{([\s\S]*?)(?=\n\}|$)/);
+                expect(mobileBlock).to.not.be.null;
+                expect(mobileBlock[1]).to.match(/\.bottom-sheet[^{]*\{[^}]*position:\s*fixed/);
+            });
+
+            it('BS-CSS-03 — .bottom-sheet uses transform: translateY(100%) for hidden state', () => {
+                const mobileBlock = css.match(/@media[^{]*max-width[^{]*699px[^{]*\{([\s\S]*?)(?=\n\}|$)/);
+                expect(mobileBlock).to.not.be.null;
+                expect(mobileBlock[1]).to.match(/\.bottom-sheet[^{]*\{[^}]*transform:\s*translateY\(100%\)/);
+            });
+
+            it('BS-CSS-04 — .bottom-sheet-open uses transform: translateY(0)', () => {
+                const mobileBlock = css.match(/@media[^{]*max-width[^{]*699px[^{]*\{([\s\S]*?)(?=\n\}|$)/);
+                expect(mobileBlock).to.not.be.null;
+                expect(mobileBlock[1]).to.match(/\.bottom-sheet-open[^{]*\{[^}]*transform:\s*translateY\(0\)/);
+            });
+
+            it('BS-CSS-05 — .bottom-sheet accounts for safe area (env(safe-area-inset-bottom))', () => {
+                const mobileBlock = css.match(/@media[^{]*max-width[^{]*699px[^{]*\{([\s\S]*?)(?=\n\}|$)/);
+                expect(mobileBlock).to.not.be.null;
+                expect(mobileBlock[1]).to.include('env(safe-area-inset-bottom');
+            });
+
+            it('BS-CSS-06 — .sidebar-left and .sidebar-right hidden on mobile (display: none)', () => {
+                const mobileBlock = css.match(/@media[^{]*max-width[^{]*699px[^{]*\{([\s\S]*?)(?=\n\}|$)/);
+                expect(mobileBlock).to.not.be.null;
+                expect(mobileBlock[1]).to.match(/\.sidebar-left[^{]*\{[^}]*display:\s*none/);
+                expect(mobileBlock[1]).to.match(/\.sidebar-right[^{]*\{[^}]*display:\s*none/);
+            });
+
+            it('BS-CSS-07 — .desktop-only hides elements on mobile', () => {
+                const mobileBlock = css.match(/@media[^{]*max-width[^{]*699px[^{]*\{([\s\S]*?)(?=\n\}|$)/);
+                expect(mobileBlock).to.not.be.null;
+                expect(mobileBlock[1]).to.match(/\.desktop-only[^{]*\{[^}]*display:\s*none/);
+            });
+
+            it('BS-CSS-08 — .mobile-only shows hamburger on mobile', () => {
+                const mobileBlock = css.match(/@media[^{]*max-width[^{]*699px[^{]*\{([\s\S]*?)(?=\n\}|$)/);
+                expect(mobileBlock).to.not.be.null;
+                expect(mobileBlock[1]).to.match(/\.mobile-only[^{]*\{[^}]*display:\s*flex/);
+            });
+
+            it('BS-CSS-09 — .app-title hidden on mobile', () => {
+                const mobileBlock = css.match(/@media[^{]*max-width[^{]*699px[^{]*\{([\s\S]*?)(?=\n\}|$)/);
+                expect(mobileBlock).to.not.be.null;
+                expect(mobileBlock[1]).to.match(/\.app-title[^{]*\{[^}]*display:\s*none/);
+            });
+
+            it('BS-CSS-10 — .bottom-sheet-tab has min-height: 44px', () => {
+                const mobileBlock = css.match(/@media[^{]*max-width[^{]*699px[^{]*\{([\s\S]*?)(?=\n\}|$)/);
+                expect(mobileBlock).to.not.be.null;
+                expect(mobileBlock[1]).to.match(/\.bottom-sheet-tab[^{]*\{[^}]*min-height:\s*44px/);
+            });
+
+            it('BS-CSS-11 — .bottom-sheet uses dvh units for max-height', () => {
+                const mobileBlock = css.match(/@media[^{]*max-width[^{]*699px[^{]*\{([\s\S]*?)(?=\n\}|$)/);
+                expect(mobileBlock).to.not.be.null;
+                expect(mobileBlock[1]).to.match(/\.bottom-sheet[^{]*\{[^}]*max-height:\s*\d+dvh/);
+            });
+
+            it('BS-CSS-12 — Landscape media query sets 50dvh', () => {
+                const landscapeBlock = css.match(/@media[^{]*max-width[^{]*699px[^{]*orientation:\s*landscape[^{]*\{([\s\S]*?)(?=\n\}|$)/);
+                expect(landscapeBlock).to.not.be.null;
+                expect(landscapeBlock[1]).to.match(/\.bottom-sheet[^{]*\{[^}]*max-height:\s*50dvh/);
+            });
+
+            it('BS-CSS-P2-01 — .no-scroll class exists for body scroll lock', () => {
+                expect(css).to.match(/\.no-scroll[^{]*\{[^}]*overflow:\s*hidden/);
+            });
+
+            it('BS-CSS-P2-02 — .no-scroll does NOT use touch-action: none (avoids breaking canvas interactions)', () => {
+                const noScrollMatch = css.match(/\.no-scroll[^{]*\{[^}]*\}/);
+                expect(noScrollMatch).to.not.be.null;
+                expect(noScrollMatch[0]).to.not.include('touch-action: none');
+            });
+
+            it('BS-ADJ-CSS-01 — .crop-preview-canvas CSS rule still exists (desktop sidebar)', () => {
+                // The .crop-preview-canvas rule must remain for the desktop sidebar crop preview
+                expect(css).to.include('.crop-preview-canvas');
+            });
+
+            it('BS-ADJ-CSS-02 — .crop-preview-section CSS rule still exists (desktop sidebar)', () => {
+                // The .crop-preview-section rule must remain for the desktop sidebar crop preview
+                expect(css).to.include('.crop-preview-section');
+            });
+
+            it('BS-CSS-P2-03 — prefers-reduced-motion disables bottom sheet transition', () => {
+                // Find any prefers-reduced-motion block that contains .bottom-sheet
+                const allReducedMotion = css.match(/@media[^{]*prefers-reduced-motion[^{]*\{[\s\S]*?\}/g);
+                expect(allReducedMotion).to.not.be.null;
+                const bottomSheetMotionBlock = allReducedMotion.find(block =>
+                    block.includes('.bottom-sheet') && block.includes('transition: none')
+                );
+                expect(bottomSheetMotionBlock).to.not.be.undefined;
+            });
+
+            it('BS-ADJ-CSS-03 — .bottom-sheet-section-header CSS rule exists', () => {
+                // The section header class must be defined in the CSS
+                expect(css).to.include('.bottom-sheet-section-header');
+            });
+
+            it('BS-ADJ-CSS-04 — .library-search-sticky uses position: sticky (search bar stays visible while scrolling)', () => {
+                const stickySearchRule = css.match(/\.library-search-sticky[^{]*\{[^}]*\}/);
+                expect(stickySearchRule).to.not.be.null;
+                expect(stickySearchRule[0]).to.include('position: sticky');
+            });
+
+            it('BS-ADJ-CSS-05 — .bottom-sheet-section-header uses text-transform: uppercase', () => {
+                const headerRule = css.match(/\.bottom-sheet-section-header[^{]*\{[^}]*\}/);
+                expect(headerRule).to.not.be.null;
+                expect(headerRule[0]).to.include('text-transform: uppercase');
+            });
+        });
+
         // Run mocha after all tests are defined
         window.addEventListener('load', () => {
             mocha.run();

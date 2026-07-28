@@ -104,12 +104,18 @@ async function runTests(testPath, baseUrl = 'http://localhost:' + SERVER_PORT) {
         // Wait for external resources (Mocha/Chai CDN) to load
         await page.waitForSelector('#mocha', { state: 'attached', timeout: 10000 });
 
-        // Wait a bit for tests to run (Mocha runs synchronously on load)
-        await page.waitForTimeout(1000);
+        // Wait for mocha to finish running by looking for test result elements.
+        // This is more reliable than a fixed timeout for module-based tests.
+        try {
+            await page.waitForSelector('#mocha .test', { state: 'attached', timeout: 10000 });
+        } catch (_) {
+            // Fallback: if no tests match, wait a bit for mocha to run
+            await page.waitForTimeout(2000);
+        }
 
         // Extract test results by parsing the DOM
         const results = await page.evaluate((basePath) => {
-            const mochaEl = document.getElementById('mocha');
+            const mochaEl = document.querySelector('#mocha');
             if (!mochaEl) {
                 // Try to determine what went wrong
                 const bodyText = document.body.innerText || '';

@@ -838,3 +838,37 @@ expect(adjustDelta.x).to.be.greaterThan(0);
 ```
 
 **Triangulation pattern:** Test both cardinal directions (right/left, up/down) and diagonal to ensure the negation is applied consistently across axes. Also test the threshold guard — sub-threshold movement should NOT trigger the crop adjustment at all.
+
+## Multi-Canvas Pointer Events: Use e.currentTarget
+
+When pointer event handlers attach to multiple canvases, use `e.currentTarget` for per-canvas coordinate math instead of a stored canvas reference. A stored reference can become stale or ambiguous when multiple canvases receive events.
+
+**Problem:** If you store `this.canvas` in the handler factory and use it for coordinate calculations, the reference may point to the wrong canvas when events fire on a different one.
+
+```javascript
+// WRONG — stored canvas reference can be stale or wrong canvas
+_onPointerDown(e) {
+    const rect = this.canvas.getBoundingClientRect(); // May be wrong canvas
+    const x = e.clientX - rect.left;
+    // ...
+}
+
+// CORRECT — e.currentTarget is always the element that received the event
+_onPointerDown(e) {
+    const canvas = e.currentTarget;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    // ... coordinate math using the actual event target canvas
+}
+```
+
+**Key details:**
+- `e.currentTarget` is the element the listener is attached to — always matches the event source
+- `e.target` may be a child element (e.g., a nested SVG) — use `e.currentTarget` for the canvas itself
+- No stored reference needed — eliminates stale reference bugs when canvases are recreated or swapped
+
+**When to apply:**
+- A single handler instance manages pointer events on multiple canvases
+- Coordinate math depends on the specific canvas that received the event
+- Canvases may be dynamically created, destroyed, or repositioned

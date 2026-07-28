@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bottom Sheet Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Bottom Sheet Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Phase 1 — Mobile bottom sheet state, methods, and mutual exclusion</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createCollageData } from '../MyESModules/App/createCollageData.js';
+        import { createCollageMethods } from '../MyESModules/App/createCollageMethods.js';
+
+        const { expect } = chai;
+
+        // Minimal base mock for factory initialization
+        function createMockBase() {
+            return {
+                assembler: { render: () => {} },
+                dropHandler: { setupGlobalDrop: () => () => {} },
+                getCanvasRenderer: () => null,
+                setCanvasRenderer: () => {},
+                getLayoutManager: () => null,
+                setLayoutManager: () => {},
+                getCropManager: () => null,
+                setCropManager: () => {},
+                getImageLibrary: () => null,
+                setImageLibrary: () => {},
+                getBackgroundManager: () => null,
+                setBackgroundManager: () => {},
+                getTitleManager: () => null,
+                setTitleManager: () => {},
+                layoutStyleOptions: []
+            };
+        }
+
+        // ============================================================
+        // Bottom Sheet State Defaults
+        // ============================================================
+        describe('Bottom Sheet — State Defaults', () => {
+            let data, mockBase;
+
+            beforeEach(() => {
+                mockBase = createMockBase();
+                data = createCollageData(mockBase);
+            });
+
+            it('BS-01 — bottomSheetOpen defaults to false', () => {
+                const state = data();
+                expect(state.bottomSheetOpen).to.equal(false);
+            });
+
+            it('BS-02 — activeBottomSheetTab defaults to "images"', () => {
+                const state = data();
+                expect(state.activeBottomSheetTab).to.equal('images');
+            });
+        });
+
+        // ============================================================
+        // Bottom Sheet Methods
+        // ============================================================
+        describe('Bottom Sheet — Methods', () => {
+            let data, methods, mockBase;
+
+            beforeEach(() => {
+                mockBase = createMockBase();
+                data = createCollageData(mockBase);
+                methods = createCollageMethods(mockBase);
+            });
+
+            it('BS-03 — toggleBottomSheet() opens bottom sheet', () => {
+                const state = data();
+                const vm = { ...state };
+                methods.toggleBottomSheet.call(vm);
+                expect(vm.bottomSheetOpen).to.equal(true);
+            });
+
+            it('BS-04 — toggleBottomSheet() closes when already open', () => {
+                const state = data();
+                state.bottomSheetOpen = true;
+                const vm = { ...state };
+                methods.toggleBottomSheet.call(vm);
+                expect(vm.bottomSheetOpen).to.equal(false);
+            });
+
+            it('BS-05 — toggleBottomSheet() closes left sidebar when opening', () => {
+                const state = data();
+                state.leftSidebarMobileOpen = true;
+                state.bottomSheetOpen = false;
+                const vm = { ...state };
+                methods.toggleBottomSheet.call(vm);
+                expect(vm.bottomSheetOpen).to.equal(true);
+                expect(vm.leftSidebarMobileOpen).to.equal(false);
+            });
+
+            it('BS-06 — toggleBottomSheet() closes right sidebar when opening', () => {
+                const state = data();
+                state.rightSidebarMobileOpen = true;
+                state.bottomSheetOpen = false;
+                const vm = { ...state };
+                methods.toggleBottomSheet.call(vm);
+                expect(vm.bottomSheetOpen).to.equal(true);
+                expect(vm.rightSidebarMobileOpen).to.equal(false);
+            });
+
+            it('BS-07 — setBottomSheetTab("edit") changes active tab', () => {
+                const state = data();
+                const vm = { ...state };
+                methods.setBottomSheetTab.call(vm, 'edit');
+                expect(vm.activeBottomSheetTab).to.equal('edit');
+            });
+
+            it('BS-08 — setBottomSheetTab("export") changes active tab', () => {
+                const state = data();
+                const vm = { ...state };
+                methods.setBottomSheetTab.call(vm, 'export');
+                expect(vm.activeBottomSheetTab).to.equal('export');
+            });
+
+            it('BS-09 — setBottomSheetTab("images") changes active tab from edit', () => {
+                const state = data();
+                state.activeBottomSheetTab = 'edit';
+                const vm = { ...state };
+                methods.setBottomSheetTab.call(vm, 'images');
+                expect(vm.activeBottomSheetTab).to.equal('images');
+            });
+        });
+
+        // ============================================================
+        // closeSidebars() — Bottom Sheet Integration
+        // ============================================================
+        describe('Bottom Sheet — closeSidebars() Integration', () => {
+            let data, methods, mockBase;
+
+            beforeEach(() => {
+                mockBase = createMockBase();
+                data = createCollageData(mockBase);
+                methods = createCollageMethods(mockBase);
+            });
+
+            it('BS-10 — closeSidebars() closes bottom sheet', () => {
+                const state = data();
+                state.bottomSheetOpen = true;
+                const vm = { ...state };
+                methods.closeSidebars.call(vm);
+                expect(vm.bottomSheetOpen).to.equal(false);
+            });
+
+            it('BS-11 — closeSidebars() closes all three overlays', () => {
+                const state = data();
+                state.leftSidebarMobileOpen = true;
+                state.rightSidebarMobileOpen = true;
+                state.bottomSheetOpen = true;
+                const vm = { ...state };
+                methods.closeSidebars.call(vm);
+                expect(vm.leftSidebarMobileOpen).to.equal(false);
+                expect(vm.rightSidebarMobileOpen).to.equal(false);
+                expect(vm.bottomSheetOpen).to.equal(false);
+            });
+
+            it('BS-12 — toggleBottomSheet() does not affect rightSidebarOpen (desktop state)', () => {
+                const state = data();
+                state.rightSidebarOpen = true;
+                state.bottomSheetOpen = false;
+                const vm = { ...state };
+                methods.toggleBottomSheet.call(vm);
+                expect(vm.bottomSheetOpen).to.equal(true);
+                expect(vm.rightSidebarOpen).to.equal(true); // Unchanged
+            });
+        });
+
+        // ============================================================
+        // Phase 2: ARIA Tab Keyboard Navigation
+        // ============================================================
+        describe('Bottom Sheet Phase 2 — Tab Keyboard Navigation', () => {
+            let state, vm, methods, mockBase;
+
+            beforeEach(() => {
+                mockBase = createMockBase();
+                state = createCollageData(mockBase)();
+                state.bottomSheetOpen = true; // Arrow keys only work when sheet is open
+                methods = createCollageMethods(mockBase);
+                vm = { ...state };
+            });
+
+            it('BS-P2-01 — switchBottomSheetTab(1) moves Images → Edit', () => {
+                vm.activeBottomSheetTab = 'images';
+                methods.switchBottomSheetTab.call(vm, 1);
+                expect(vm.activeBottomSheetTab).to.equal('edit');
+            });
+
+            it('BS-P2-02 — switchBottomSheetTab(1) moves Edit → Export', () => {
+                vm.activeBottomSheetTab = 'edit';
+                methods.switchBottomSheetTab.call(vm, 1);
+                expect(vm.activeBottomSheetTab).to.equal('export');
+            });
+
+            it('BS-P2-03 — switchBottomSheetTab(1) wraps Export → Images', () => {
+                vm.activeBottomSheetTab = 'export';
+                methods.switchBottomSheetTab.call(vm, 1);
+                expect(vm.activeBottomSheetTab).to.equal('images');
+            });
+
+            it('BS-P2-04 — switchBottomSheetTab(-1) moves Images → Export (wrap)', () => {
+                vm.activeBottomSheetTab = 'images';
+                methods.switchBottomSheetTab.call(vm, -1);
+                expect(vm.activeBottomSheetTab).to.equal('export');
+            });
+
+            it('BS-P2-05 — switchBottomSheetTab(-1) moves Export → Edit', () => {
+                vm.activeBottomSheetTab = 'export';
+                methods.switchBottomSheetTab.call(vm, -1);
+                expect(vm.activeBottomSheetTab).to.equal('edit');
+            });
+
+            it('BS-P2-06 — switchBottomSheetTab with invalid tab falls back to first', () => {
+                vm.activeBottomSheetTab = 'invalid';
+                methods.switchBottomSheetTab.call(vm, 1);
+                expect(vm.activeBottomSheetTab).to.equal('edit');
+            });
+        });
+
+        // ============================================================
+        // Phase 2: Swipe-to-Dismiss
+        // ============================================================
+        describe('Bottom Sheet Phase 2 — Swipe-to-Dismiss', () => {
+            let state, vm, methods, mockBase;
+            const origQuerySelector = document.querySelector;
+
+            beforeEach(() => {
+                mockBase = createMockBase();
+                state = createCollageData(mockBase)();
+                state.bottomSheetOpen = true;
+                methods = createCollageMethods(mockBase);
+                vm = { ...state };
+            });
+
+            afterEach(() => {
+                document.querySelector = origQuerySelector;
+            });
+
+            it('BS-P2-07 — Swipe down >100px from top closes sheet', () => {
+                // Mock content element at scroll top
+                document.querySelector = () => ({ scrollTop: 0 });
+
+                // Simulate touchstart at top
+                const touchStartEvent = {
+                    touches: [{ clientY: 100 }]
+                };
+                methods.bsTouchStart.call(vm, touchStartEvent);
+
+                // Simulate touchend with 150px downward swipe
+                const touchEndEvent = {
+                    changedTouches: [{ clientY: 250 }]
+                };
+                methods.bsTouchEnd.call(vm, touchEndEvent);
+
+                expect(vm.bottomSheetOpen).to.equal(false);
+            });
+
+            it('BS-P2-08 — Swipe down from scrolled position does NOT close', () => {
+                // Mock content element scrolled down (scrollTop > 0)
+                document.querySelector = () => ({ scrollTop: 50 });
+
+                const touchStartEvent = {
+                    touches: [{ clientY: 100 }]
+                };
+                methods.bsTouchStart.call(vm, touchStartEvent);
+
+                const touchEndEvent = {
+                    changedTouches: [{ clientY: 250 }]
+                };
+                methods.bsTouchEnd.call(vm, touchEndEvent);
+
+                expect(vm.bottomSheetOpen).to.equal(true);
+            });
+
+            it('BS-P2-09 — Small swipe (<60px) does NOT close', () => {
+                document.querySelector = () => ({ scrollTop: 0 });
+
+                const touchStartEvent = {
+                    touches: [{ clientY: 100 }]
+                };
+                methods.bsTouchStart.call(vm, touchStartEvent);
+
+                // Only 30px swipe — below 60px minimum threshold
+                const touchEndEvent = {
+                    changedTouches: [{ clientY: 130 }]
+                };
+                methods.bsTouchEnd.call(vm, touchEndEvent);
+
+                expect(vm.bottomSheetOpen).to.equal(true);
+            });
+
+            it('BS-P2-10 — Swipe up does NOT close', () => {
+                document.querySelector = () => ({ scrollTop: 0 });
+
+                const touchStartEvent = {
+                    touches: [{ clientY: 200 }]
+                };
+                methods.bsTouchStart.call(vm, touchStartEvent);
+
+                // Swipe upward (negative deltaY)
+                const touchEndEvent = {
+                    changedTouches: [{ clientY: 100 }]
+                };
+                methods.bsTouchEnd.call(vm, touchEndEvent);
+
+                expect(vm.bottomSheetOpen).to.equal(true);
+            });
+
+            it('BS-P2-14 — touchcancel cleans up swipe state', () => {
+                document.querySelector = () => ({ scrollTop: 0 });
+
+                const touchStartEvent = {
+                    touches: [{ clientY: 100 }]
+                };
+                methods.bsTouchStart.call(vm, touchStartEvent);
+                expect(vm.bsTouchStartY).to.equal(100);
+
+                methods.bsTouchCancel.call(vm, {});
+                expect(vm.bsTouchStartY).to.equal(null);
+                expect(vm.bsTouchStartScrollTop).to.equal(null);
+            });
+
+            it('BS-P2-15 — switchBottomSheetTab no-op when sheet is closed', () => {
+                vm.bottomSheetOpen = false;
+                vm.activeBottomSheetTab = 'images';
+                methods.switchBottomSheetTab.call(vm, 1);
+                expect(vm.activeBottomSheetTab).to.equal('images'); // Unchanged
+            });
+        });
+
+        // ============================================================
+        // Phase 2: Body Scroll Lock
+        // ============================================================
+        describe('Bottom Sheet Phase 2 — Body Scroll Lock', () => {
+            let state, vm, methods, mockBase, bodySpy;
+
+            // Capture original methods once
+            const origAdd = document.body.classList.add.bind(document.body.classList);
+            const origRemove = document.body.classList.remove.bind(document.body.classList);
+
+            beforeEach(() => {
+                mockBase = createMockBase();
+                state = createCollageData(mockBase)();
+                methods = createCollageMethods(mockBase);
+                vm = { ...state };
+
+                // Spy on document.body.classList (cannot replace document.body — read-only)
+                bodySpy = {
+                    added: [],
+                    removed: [],
+                    add: function(className) { this.added.push(className); },
+                    remove: function(className) { this.removed.push(className); }
+                };
+                document.body.classList.add = bodySpy.add.bind(bodySpy);
+                document.body.classList.remove = bodySpy.remove.bind(bodySpy);
+            });
+
+            afterEach(() => {
+                // Restore original methods after each test
+                document.body.classList.add = origAdd;
+                document.body.classList.remove = origRemove;
+            });
+
+            it('BS-P2-11 — toggleBottomSheet() adds no-scroll on open', () => {
+                vm.bottomSheetOpen = false;
+                methods.toggleBottomSheet.call(vm);
+                expect(bodySpy.added).to.include('no-scroll');
+                expect(vm.bottomSheetOpen).to.equal(true);
+            });
+
+            it('BS-P2-12 — toggleBottomSheet() removes no-scroll on close', () => {
+                vm.bottomSheetOpen = true;
+                methods.toggleBottomSheet.call(vm);
+                expect(bodySpy.removed).to.include('no-scroll');
+                expect(vm.bottomSheetOpen).to.equal(false);
+            });
+
+            it('BS-P2-13 — closeSidebars() removes no-scroll', () => {
+                vm.bottomSheetOpen = true;
+                methods.closeSidebars.call(vm);
+                expect(bodySpy.removed).to.include('no-scroll');
+                expect(vm.bottomSheetOpen).to.equal(false);
+            });
+        });
+
+        // ============================================================
+        // Phase 2 Adjustments: Images Panel DOM Structure
+        // ============================================================
+        describe('Bottom Sheet Phase 2 Adjustments — Images Panel DOM Structure', async () => {
+            let doc;
+
+            before(async () => {
+                const response = await fetch('../index.html');
+                const html = await response.text();
+                const parser = new DOMParser();
+                doc = parser.parseFromString(html, 'text/html');
+            });
+
+            it('BS-ADJ-DOM-01 — Layout Controls precede Image Library in DOM', () => {
+                // The layout style select should appear before the library search input
+                const panel = doc.getElementById('bs-panel-images');
+                expect(panel).to.not.be.null;
+
+                const layoutSelect = panel.querySelector('#bsLayoutStyleSelect');
+                const searchInput = panel.querySelector('.library-search input');
+
+                expect(layoutSelect).to.not.be.null;
+                expect(searchInput).to.not.be.null;
+
+                // Verify DOM order: layout select comes before library search
+                const compareDoc = layoutSelect.compareDocumentPosition(searchInput);
+                const IS_AFTER = 4; // Node.DOCUMENT_POSITION_FOLLOWING
+                expect(compareDoc & IS_AFTER).to.equal(IS_AFTER);
+            });
+
+            it('BS-ADJ-DOM-02 — Section headers present in Images panel', () => {
+                const panel = doc.getElementById('bs-panel-images');
+                expect(panel).to.not.be.null;
+
+                const headers = panel.querySelectorAll('.bottom-sheet-section-header');
+                expect(headers.length).to.be.greaterThanOrEqual(2);
+
+                const headerTexts = Array.from(headers).map(h => h.textContent.trim());
+                expect(headerTexts).to.include('Layout Settings');
+                expect(headerTexts).to.include('Image Library');
+            });
+
+            it('BS-ADJ-DOM-03 — Search bar stays with Image Library', () => {
+                const panel = doc.getElementById('bs-panel-images');
+                expect(panel).to.not.be.null;
+
+                const librarySearch = panel.querySelector('.library-search');
+                const imageLibrary = panel.querySelector('.image-library');
+
+                expect(librarySearch).to.not.be.null;
+                expect(imageLibrary).to.not.be.null;
+
+                // .library-search should be immediately before .image-library
+                // (or at least before it, with no other major sections between)
+                const compareDoc = panel.compareDocumentPosition(imageLibrary);
+                const IS_AFTER = 4; // Node.DOCUMENT_POSITION_FOLLOWING
+                // Check from librarySearch perspective: imageLibrary should come after
+                const searchPos = librarySearch.compareDocumentPosition(imageLibrary);
+                expect(searchPos & IS_AFTER).to.equal(IS_AFTER);
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

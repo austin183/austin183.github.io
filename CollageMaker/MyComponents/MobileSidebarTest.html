@@ -143,6 +143,30 @@
                 expect(vm.rightSidebarMobileOpen).to.equal(true);
                 expect(vm.leftSidebarMobileOpen).to.equal(false);
             });
+
+            // ---- Regression: bottom sheet does not interfere with sidebar methods ----
+
+            it('Mobile-12 — closeSidebars() also closes bottom sheet', () => {
+                const state = data();
+                state.bottomSheetOpen = true;
+                const vm = { ...state };
+                methods.closeSidebars.call(vm);
+                expect(vm.bottomSheetOpen).to.equal(false);
+            });
+
+            it('Mobile-13 — toggleLeftSidebar() does not open bottom sheet', () => {
+                const state = data();
+                const vm = { ...state };
+                methods.toggleLeftSidebar.call(vm);
+                expect(vm.bottomSheetOpen).to.equal(false);
+            });
+
+            it('Mobile-14 — toggleRightSidebarMobile() does not open bottom sheet', () => {
+                const state = data();
+                const vm = { ...state };
+                methods.toggleRightSidebarMobile.call(vm);
+                expect(vm.bottomSheetOpen).to.equal(false);
+            });
         });
 
         // Run mocha after all tests are defined

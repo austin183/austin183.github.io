@@ -368,3 +368,37 @@ Verify:
 
 - `MyESModules/App/createCropPreviewRenderer.js` — shaped dark overlay implementation
 - `MyESModules/Layout/CropOverlayShape.js` — `beginPathFromPoints` helper
+
+## Dual-Canvas Visibility Guard
+
+When rendering to multiple canvases (e.g., desktop sidebar + mobile bottom sheet), skip draw operations for canvases that are hidden or disconnected. CSS `display: none` does not prevent Canvas 2D from executing all draw calls, wasting CPU/GPU cycles — especially costly on high-DPR mobile screens (2x–3x).
+
+**Guard with O(1) visibility check before rendering:**
+
+```javascript
+function _renderCropPreviewOnCanvas(canvasId) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+
+    // Skip disconnected or hidden canvases
+    if (!canvas.isConnected || canvas.offsetParent === null) return;
+
+    const ctx = canvas.getContext('2d');
+    // ... draw operations (only executed for visible canvases)
+}
+```
+
+**Key details:**
+- `canvas.isConnected` — `false` if the canvas was removed from the DOM
+- `canvas.offsetParent === null` — `true` for `display: none` and `visibility: hidden` elements; also catches `position: fixed` elements with zero dimensions
+- Both checks are O(1) and prevent all Canvas 2D draw operations for hidden canvases
+- On mobile with dual canvases, this halves the rendering workload during interactive crop adjustments
+
+**When to apply:**
+- Multiple canvases receive the same rendering output (e.g., desktop + mobile previews)
+- One or more canvases may be hidden via CSS based on viewport or layout state
+- Rendering is called on every interaction frame (crop drag, zoom, etc.)
+
+### File References
+
+- `MyESModules/App/createCropPreviewRenderer.js` — dual-canvas visibility guard

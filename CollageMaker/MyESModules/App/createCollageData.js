@@ -83,9 +83,16 @@ export function createCollageData(base) {
             // Right sidebar toggle
             rightSidebarOpen: true,
 
+            // Left sidebar toggle
+            leftSidebarOpen: true,
+
             // Mobile sidebar overlay state
             leftSidebarMobileOpen: false,
             rightSidebarMobileOpen: false,
+
+            // Bottom sheet (mobile)
+            bottomSheetOpen: false,
+            activeBottomSheetTab: 'images',  // 'images' | 'edit' | 'export'
 
             // Drag target (for visual feedback during panel swap)
             dragTargetId: null,

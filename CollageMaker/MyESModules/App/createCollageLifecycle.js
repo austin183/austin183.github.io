@@ -288,6 +288,10 @@ export function createCollageLifecycle(base, domIds = {}) {
                     this.endImageLoading();
                 }
                 this._regenerateAndRender();
+                // Switch bottom sheet to images tab when new images are added via drag-drop
+                if (this.bottomSheetOpen) {
+                    this.activeBottomSheetTab = 'images';
+                }
             });
 
             // Set up keyboard shortcuts via centralized handler

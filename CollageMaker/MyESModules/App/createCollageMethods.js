@@ -154,8 +154,12 @@ export function createCollageMethods(base, domIds = {}) {
         triggerFilePicker() {
             fileHandlers.triggerFilePicker.call(this);
         },
-        handleFileInputChange() {
-            fileHandlers.handleFileInputChange.call(this);
+        async handleFileInputChange() {
+            await fileHandlers.handleFileInputChange.call(this);
+            // Switch bottom sheet to images tab when new images are added
+            if (this.bottomSheetOpen) {
+                this.activeBottomSheetTab = 'images';
+            }
         },
 
         // Image panel handlers
@@ -440,7 +444,12 @@ export function createCollageMethods(base, domIds = {}) {
             }
         },
         toggleLeftSidebar() {
+            this.leftSidebarOpen = !this.leftSidebarOpen;
+            // Sync mobile overlay state with desktop toggle — on mobile the
+            // sidebar-collapsed class has no visual effect (sidebar is fixed
+            // off-screen), so we also toggle the mobile-open state.
             this.leftSidebarMobileOpen = !this.leftSidebarMobileOpen;
+            // Ensure right mobile sidebar is closed
             if (this.leftSidebarMobileOpen) {
                 this.rightSidebarMobileOpen = false;
             }
@@ -452,8 +461,91 @@ export function createCollageMethods(base, domIds = {}) {
             }
         },
         closeSidebars() {
+            const wasBottomSheetOpen = this.bottomSheetOpen;
             this.leftSidebarMobileOpen = false;
             this.rightSidebarMobileOpen = false;
+            this.bottomSheetOpen = false;
+            // Release body scroll lock
+            document.body?.classList.remove('no-scroll');
+            // Return focus to hamburger button when bottom sheet closes
+            if (wasBottomSheetOpen) {
+                const btn = document.getElementById('bottomSheetToggleBtn');
+                if (btn) btn.focus();
+            }
+        },
+
+        // Bottom sheet methods (mobile)
+        toggleBottomSheet() {
+            this.bottomSheetOpen = !this.bottomSheetOpen;
+            if (this.bottomSheetOpen) {
+                this.leftSidebarMobileOpen = false;
+                this.rightSidebarMobileOpen = false;
+                // Lock body scroll when bottom sheet opens
+                document.body?.classList.add('no-scroll');
+            } else {
+                // Release body scroll lock when bottom sheet closes
+                document.body?.classList.remove('no-scroll');
+            }
+        },
+        setBottomSheetTab(tabId) {
+            this.activeBottomSheetTab = tabId;
+        },
+        /**
+         * Cycles through bottom sheet tabs using arrow key delta.
+         * Supports wrap-around navigation (Left on first → last, Right on last → first).
+         * Guarded: only active when bottom sheet is open.
+         * @param {number} delta — +1 for next, -1 for previous
+         */
+        switchBottomSheetTab(delta) {
+            if (!this.bottomSheetOpen) return; // Only allow when sheet is open
+            const validTabs = ['images', 'edit', 'export'];
+            let idx = validTabs.indexOf(this.activeBottomSheetTab);
+            if (idx === -1) idx = 0; // Reset to first if corrupted, then apply delta
+            idx = (idx + delta + validTabs.length) % validTabs.length;
+            this.activeBottomSheetTab = validTabs[idx];
+        },
+        /**
+         * Touch start handler for swipe-to-dismiss on bottom sheet content area.
+         * Always captures current scroll position (not cached) to handle
+         * scroll state changes between opens.
+         * Note: method names avoid `_` prefix — Vue 3 reserves `_` for internals
+         * and refuses to resolve `_prefixed` properties in template expressions.
+         * @param {TouchEvent} event
+         */
+        bsTouchStart(event) {
+            this.bsTouchStartY = event.touches[0].clientY;
+            // Always capture current scroll position — don't cache across interactions
+            const contentEl = document.querySelector('.bottom-sheet-content');
+            this.bsTouchStartScrollTop = contentEl ? contentEl.scrollTop : 0;
+        },
+        /**
+         * Touch end handler for swipe-to-dismiss on bottom sheet content area.
+         * Only dismisses if swiped down past threshold AND content was at scroll top.
+         * Threshold is responsive: 8% of viewport height, minimum 60px.
+         * @param {TouchEvent} event
+         */
+        bsTouchEnd(event) {
+            if (this.bsTouchStartY == null) return;
+            const touchEndY = event.changedTouches[0].clientY;
+            const deltaY = touchEndY - this.bsTouchStartY;
+            // Responsive threshold: 8% of viewport height, minimum 60px
+            const minSwipeThreshold = Math.max(60, window.innerHeight * 0.08);
+            // Only dismiss on downward swipe when content is at top
+            if (deltaY > minSwipeThreshold && this.bsTouchStartScrollTop === 0) {
+                this.bottomSheetOpen = false;
+                document.body?.classList.remove('no-scroll');
+            }
+            this.bsTouchStartY = null;
+            this.bsTouchStartScrollTop = null;
+        },
+        /**
+         * Touch cancel handler — cleans up swipe state when touch is interrupted
+         * (e.g., app switch, phone call, pointer leaves surface).
+         * @param {TouchEvent} _event
+         */
+        bsTouchCancel(_event) {
+            this.bsTouchStartY = null;
+            this.bsTouchStartScrollTop = null;
         },
         toggleSection(sectionId) {
             this.expandedSections[sectionId] = !this.expandedSections[sectionId];

@@ -274,3 +274,35 @@ if (await header.getAttribute('aria-expanded') !== 'true') {
 ```
 
 See `_agent_docs/learnings/2026-07-22-playwright-event-simulation-gotchas.md` for full details.
+
+## Test Runner DOM Query Gotcha
+
+After Mocha runs and populates the `#mocha` div with test results, `document.getElementById('mocha')` can return `null` in certain Playwright evaluation contexts, while `document.querySelector('#mocha')` reliably finds the element.
+
+**Root cause:** Mocha's internal DOM manipulation (adding/removing classes, injecting child elements) can cause `getElementById` to fail in some execution contexts. This is a known HTML DOM edge case — `getElementById` is not always equivalent to `querySelector('#id')` when the DOM is dynamically modified.
+
+**Fix in `scripts/run-tests.js`:**
+
+```javascript
+// WRONG — can return null after Mocha populates #mocha
+const mochaEl = document.getElementById('mocha');
+
+// CORRECT — reliably finds the element regardless of Mocha's DOM mutations
+const mochaEl = document.querySelector('#mocha');
+```
+
+**Also prefer `waitForSelector` over `waitForTimeout` for test completion detection:**
+
+```javascript
+// WRONG — arbitrary timeout, may be too short or too long
+await page.waitForTimeout(1000);
+
+// CORRECT — waits for actual test output to appear
+await page.waitForSelector('#mocha .test', { timeout: 10000 });
+```
+
+**Rule:** Always use `querySelector` over `getElementById` in test runners when the DOM may be dynamically modified by test frameworks.
+
+### File References
+
+- `scripts/run-tests.js` — test runner DOM query fix

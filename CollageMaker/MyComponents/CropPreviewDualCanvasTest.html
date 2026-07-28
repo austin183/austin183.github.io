@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crop Preview Single Canvas Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Crop Preview Single Canvas Tests</h1>
+    <p class="test-plan-ref">Covers: Mobile Bottom Sheet Adjustments Phase 1 — crop preview wired to desktop sidebar canvas only (bsCropPreviewCanvas removed)</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createCropPreviewRenderer } from '../MyESModules/App/createCropPreviewRenderer.js';
+        import { createCropInteraction } from '../MyESModules/Interaction/CropInteraction.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // RAF mocking infrastructure
+        // ============================================================
+        let rafCallbacks = [];
+        const originalRAF = window.requestAnimationFrame.bind(window);
+        const originalCancelRAF = window.cancelAnimationFrame.bind(window);
+
+        function mockRAF() {
+            rafCallbacks = [];
+            window.requestAnimationFrame = (cb) => {
+                const id = rafCallbacks.length + 1;
+                rafCallbacks.push(cb);
+                return id;
+            };
+            window.cancelAnimationFrame = (id) => {};
+        }
+
+        function restoreRAF() {
+            window.requestAnimationFrame = originalRAF;
+            window.cancelAnimationFrame = originalCancelRAF;
+        }
+
+        function flushRAF() {
+            const cbs = [...rafCallbacks];
+            rafCallbacks = [];
+            for (const cb of cbs) { cb(); }
+        }
+
+        // ============================================================
+        // Helpers
+        // ============================================================
+
+        function createMockCanvas(id, width = 200, height = 150) {
+            const canvas = document.createElement('canvas');
+            canvas.id = id;
+            canvas.width = width;
+            canvas.height = height;
+            canvas.style.width = width + 'px';
+            canvas.style.height = height + 'px';
+            // Mock getBoundingClientRect
+            canvas.getBoundingClientRect = () => ({
+                width: width,
+                height: height,
+                left: 0,
+                top: 0
+            });
+            return canvas;
+        }
+
+        function createMockImage(width = 800, height = 600) {
+            const c = document.createElement('canvas');
+            c.width = width;
+            c.height = height;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#ff0000';
+            ctx.fillRect(0, 0, width, height);
+            return c;
+        }
+
+        function createMockCropManager() {
+            const mockImageEl = createMockImage(800, 600);
+            return {
+                getCrop: () => ({
+                    sourceRect: { x: 10, y: 10, width: 100, height: 100 }
+                }),
+                getPanelImage: () => ({
+                    image: mockImageEl,
+                    width: 800,
+                    height: 600
+                })
+            };
+        }
+
+        function createMockBase(cropManager) {
+            return {
+                getCropManager: () => cropManager,
+                getCanvasRenderer: () => null,
+                getLayoutManager: () => null,
+                getImageLibrary: () => null,
+                getBackgroundManager: () => null,
+                getTitleManager: () => null
+            };
+        }
+
+        // ============================================================
+        // BS-ADJ-01 through BS-ADJ-02: Single Canvas Crop Preview Renderer
+        // ============================================================
+        describe('Phase 1 — Single Canvas Crop Preview Renderer', () => {
+            let canvasDesktop;
+
+            beforeEach(() => {
+                canvasDesktop = createMockCanvas('cropPreviewCanvas', 200, 150);
+                document.body.appendChild(canvasDesktop);
+
+                mockRAF();
+            });
+
+            afterEach(() => {
+                document.body.removeChild(canvasDesktop);
+                restoreRAF();
+            });
+
+            it('BS-ADJ-01 — Renderer works with single canvas ID', () => {
+                const cropManager = createMockCropManager();
+                const base = createMockBase(cropManager);
+
+                // Should not throw when passed only cropPreviewCanvas
+                expect(() => {
+                    createCropPreviewRenderer(base, {
+                        cropPreviewCanvas: 'cropPreviewCanvas'
+                    });
+                }).to.not.throw();
+            });
+
+            it('BS-ADJ-02 — Renderer does not look up bsCropPreviewCanvas', () => {
+                const cropManager = createMockCropManager();
+                const base = createMockBase(cropManager);
+
+                const renderer = createCropPreviewRenderer(base, {
+                    cropPreviewCanvas: 'cropPreviewCanvas'
+                });
+
+                // Track which canvases get drawn to
+                const drawnCanvases = new Set();
+                const origFillRect = CanvasRenderingContext2D.prototype.fillRect;
+                CanvasRenderingContext2D.prototype.fillRect = function () {
+                    drawnCanvases.add(this.canvas.id);
+                };
+
+                const vm = {
+                    selectedPanelId: 'panel-1',
+                    panels: [{ id: 'panel-1', geometry: null }]
+                };
+
+                renderer._scheduleCropPreviewRender(vm);
+                flushRAF();
+
+                CanvasRenderingContext2D.prototype.fillRect = origFillRect;
+
+                // Only cropPreviewCanvas should be drawn to
+                expect(drawnCanvases).to.include('cropPreviewCanvas');
+                expect(drawnCanvases).to.not.include('bsCropPreviewCanvas');
+            });
+        });
+
+        // ============================================================
+        // BS-ADJ-03 through BS-ADJ-05: Single Canvas Crop Interaction
+        // ============================================================
+        describe('Phase 1 — Single Canvas Crop Interaction', () => {
+            let canvasDesktop;
+
+            beforeEach(() => {
+                canvasDesktop = createMockCanvas('cropPreviewCanvas', 200, 150);
+                document.body.appendChild(canvasDesktop);
+            });
+
+            afterEach(() => {
+                document.body.removeChild(canvasDesktop);
+            });
+
+            it('BS-ADJ-03 — CropInteraction accepts single canvas ID string', () => {
+                const cropManager = createMockCropManager();
+
+                // Should not throw when passed a single canvas ID (string, not array)
+                expect(() => {
+                    createCropInteraction({
+                        canvasId: 'cropPreviewCanvas',
+                        cropManager: cropManager,
+                        panelId: 'panel-1',
+                        onRenderScheduled: () => {},
+                        onCropPreviewRender: () => {}
+                    });
+                }).to.not.throw();
+            });
+
+            it('BS-ADJ-04 — CropInteraction attaches to single canvas only', () => {
+                const cropManager = createMockCropManager();
+
+                let desktopDownCount = 0;
+
+                // Spy on addEventListener to verify only one canvas gets listeners
+                const origAddEventListener = HTMLCanvasElement.prototype.addEventListener;
+                HTMLCanvasElement.prototype.addEventListener = function (type, handler) {
+                    if (type === 'pointerdown') {
+                        if (this.id === 'cropPreviewCanvas') desktopDownCount++;
+                    }
+                    return origAddEventListener.call(this, type, handler);
+                };
+
+                const handler = createCropInteraction({
+                    canvasId: 'cropPreviewCanvas',
+                    cropManager: cropManager,
+                    panelId: 'panel-1',
+                    onRenderScheduled: () => {},
+                    onCropPreviewRender: () => {}
+                });
+
+                handler.attach();
+
+                HTMLCanvasElement.prototype.addEventListener = origAddEventListener;
+
+                expect(desktopDownCount).to.equal(1);
+            });
+
+            it('BS-ADJ-05 — CropInteraction detach removes from single canvas', () => {
+                const cropManager = createMockCropManager();
+
+                let desktopRemoveCount = 0;
+
+                const origRemoveEventListener = HTMLCanvasElement.prototype.removeEventListener;
+                HTMLCanvasElement.prototype.removeEventListener = function (type, handler) {
+                    if (type === 'pointerdown') {
+                        if (this.id === 'cropPreviewCanvas') desktopRemoveCount++;
+                    }
+                    return origRemoveEventListener.call(this, type, handler);
+                };
+
+                const handler = createCropInteraction({
+                    canvasId: 'cropPreviewCanvas',
+                    cropManager: cropManager,
+                    panelId: 'panel-1',
+                    onRenderScheduled: () => {},
+                    onCropPreviewRender: () => {}
+                });
+
+                handler.attach();
+                handler.detach();
+
+                HTMLCanvasElement.prototype.removeEventListener = origRemoveEventListener;
+
+                expect(desktopRemoveCount).to.equal(1);
+            });
+        });
+
+        // ============================================================
+        // BS-ADJ-06: DOM IDs in index.html must NOT include bsCropPreviewCanvas
+        // ============================================================
+        describe('Phase 1 — DOM IDs Configuration', async () => {
+            let indexDoc;
+
+            before(async () => {
+                const response = await fetch('../index.html');
+                const html = await response.text();
+                const parser = new DOMParser();
+                indexDoc = parser.parseFromString(html, 'text/html');
+            });
+
+            it('BS-ADJ-06 — index.html domIds does NOT include bsCropPreviewCanvas', () => {
+                const script = indexDoc.querySelector('script[type="module"]');
+                expect(script).to.not.be.null;
+                expect(script.textContent).to.not.include('bsCropPreviewCanvas');
+            });
+        });
+
+        // Run mocha after all tests are defined
+        mocha.run(() => {
+            // Signal to test runner that tests are complete
+            window.__testsComplete = true;
+        });
+    </script>
+</body>
+</html>
