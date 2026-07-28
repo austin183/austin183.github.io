@@ -336,6 +336,8 @@ export function createCollageLifecycle(base, domIds = {}) {
             if (this.commitBackground) this.commitBackground();
             if (this.commitOverlay) this.commitOverlay();
             if (this.commitLayoutOptions) this.commitLayoutOptions();
+            // Release bottom sheet focus trap to prevent dangling event listeners
+            if (this.releaseFocusTrap) this.releaseFocusTrap();
             // 1. Stop new interactions first (prevents race conditions with async drop handlers)
             if (this._dropCleanup) {
                 this._dropCleanup();

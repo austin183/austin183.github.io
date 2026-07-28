@@ -165,6 +165,15 @@ Use `@keydown.escape.window.prevent` on the app root to catch Escape key globall
 
 **Why `.prevent`:** Prevents browser default Escape behavior (closing dialogs, canceling operations) when a sidebar is open.
 
+### E2E Testing Caveat
+
+`page.keyboard.press('Escape')` is **unreliable** for triggering `@keydown.escape.window.prevent` in headless Chromium, especially in mobile viewport with modal/overlay contexts. For E2E tests that need to verify Escape-dismiss behavior:
+
+- **Preferred:** Use backdrop click (`page.mouse.click(100, 100)`) to exercise the same dismiss code path
+- **Alternative:** Unit test `closeSidebars()` directly in Mocha/Chai — deterministic, no browser quirks
+
+See `references/testing-e2e.md` for the full gotcha and all workarounds.
+
 ### File References
 
 - `index.html` — Escape key handler on app root

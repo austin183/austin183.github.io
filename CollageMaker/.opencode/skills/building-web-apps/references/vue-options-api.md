@@ -179,6 +179,46 @@ handlers.onLayoutStyleChange.call(vm);  // @change fires
 
 **Why this matters:** The range input DOM element requires a numeric value within `[min, max]`. When Vue binds `null` via `v-model.number`, it coerces to the minimum, making the UI show an incorrect value. Using `:value` with a fallback gives full control over the displayed value, and `@input` with `$event.target.value` passes the raw slider value to the handler.
 
+## $nextTick Race Condition Guard
+
+When using `$nextTick` to defer DOM-dependent work (focus management, element queries, measurements), rapid user interactions can cause stale callbacks to fire after state has changed.
+
+### The Problem
+
+```javascript
+// User rapidly opens and closes bottom sheet
+toggleBottomSheet() {
+    this.bottomSheetOpen = true;
+    this.$nextTick(() => {
+        // This fires AFTER user already closed the sheet
+        this.trapFocusInBottomSheet(); // Sets up trap on hidden sheet!
+    });
+}
+// User immediately closes
+toggleBottomSheet() {
+    this.bottomSheetOpen = false;
+    this.releaseFocusTrap(); // Releases trap
+    // But the $nextTick callback from the open is still queued...
+}
+```
+
+### The Fix
+
+Guard the `$nextTick` callback with a state check:
+
+```javascript
+this.$nextTick(() => {
+    if (!this.bottomSheetOpen) return; // Guard against rapid close
+    this.trapFocusInBottomSheet();
+    const firstTab = document.getElementById('bs-tab-images');
+    if (firstTab) firstTab.focus();
+});
+```
+
+### When to Apply
+
+Any `$nextTick` callback that performs DOM-dependent side effects (focus management, element queries, measurements) should include a guard that checks the triggering state is still current.
+
 ## Files
 
 | File | Responsibility |

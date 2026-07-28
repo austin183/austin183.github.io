@@ -461,6 +461,591 @@
             });
         });
 
+        // ============================================================
+        // Phase 3: Focus Trap
+        // ============================================================
+        describe('Bottom Sheet Phase 3 — Focus Trap', () => {
+            let state, vm, methods, mockBase;
+            const origGetById = document.getElementById;
+            const origQuerySelector = document.querySelector;
+            const origQuerySelectorAll = document.querySelectorAll;
+            const origActiveElement = Object.getOwnPropertyDescriptor(document, 'activeElement');
+
+            // Restore DOM mocks after each test
+            afterEach(() => {
+                document.getElementById = origGetById;
+                document.querySelector = origQuerySelector;
+                document.querySelectorAll = origQuerySelectorAll;
+                if (origActiveElement) {
+                    Object.defineProperty(document, 'activeElement', origActiveElement);
+                }
+            });
+
+            // ---- BS-FT-01: trapFocusInBottomSheet adds keydown listener ----
+            it('BS-FT-01 — trapFocusInBottomSheet() adds keydown listener to #bottomSheet', () => {
+                const mockSheet = document.createElement('div');
+                mockSheet.id = 'bottomSheet';
+                const listeners = [];
+                mockSheet.addEventListener = (type, handler) => { listeners.push({ type, handler }); };
+                mockSheet.removeEventListener = () => {};
+
+                document.getElementById = (id) => id === 'bottomSheet' ? mockSheet : origGetById(id);
+
+                mockBase = createMockBase();
+                methods = createCollageMethods(mockBase);
+                state = createCollageData(mockBase)();
+                vm = { ...state };
+
+                methods.trapFocusInBottomSheet.call(vm);
+
+                const keydownListener = listeners.find(l => l.type === 'keydown');
+                expect(keydownListener).to.not.be.undefined;
+                expect(typeof keydownListener.handler).to.equal('function');
+            });
+
+            // ---- BS-FT-02: trapFocusInBottomSheet no-op when #bottomSheet missing ----
+            it('BS-FT-02 — trapFocusInBottomSheet() no-op when #bottomSheet missing', () => {
+                document.getElementById = () => null;
+
+                mockBase = createMockBase();
+                methods = createCollageMethods(mockBase);
+                state = createCollageData(mockBase)();
+                vm = { ...state };
+
+                expect(() => {
+                    methods.trapFocusInBottomSheet.call(vm);
+                }).to.not.throw();
+                expect(vm._bottomSheetFocusTrapHandler).to.be.undefined;
+            });
+
+            // ---- BS-FT-03: releaseFocusTrap removes keydown listener ----
+            it('BS-FT-03 — releaseFocusTrap() removes keydown listener', () => {
+                const mockSheet = document.createElement('div');
+                mockSheet.id = 'bottomSheet';
+                const listeners = [];
+                mockSheet.addEventListener = (type, handler) => { listeners.push({ type, handler }); };
+                let removedHandler = null;
+                mockSheet.removeEventListener = (type, handler) => { removedHandler = handler; };
+
+                document.getElementById = (id) => id === 'bottomSheet' ? mockSheet : origGetById(id);
+
+                mockBase = createMockBase();
+                methods = createCollageMethods(mockBase);
+                state = createCollageData(mockBase)();
+                vm = { ...state };
+
+                methods.trapFocusInBottomSheet.call(vm);
+                const addedHandler = listeners.find(l => l.type === 'keydown')?.handler;
+
+                methods.releaseFocusTrap.call(vm);
+
+                expect(removedHandler).to.equal(addedHandler);
+                expect(vm._bottomSheetFocusTrapHandler).to.be.null;
+            });
+
+            // ---- BS-FT-04: releaseFocusTrap idempotent ----
+            it('BS-FT-04 — releaseFocusTrap() idempotent — second call safe', () => {
+                const mockSheet = document.createElement('div');
+                mockSheet.id = 'bottomSheet';
+                mockSheet.addEventListener = () => {};
+                mockSheet.removeEventListener = () => {};
+
+                document.getElementById = (id) => id === 'bottomSheet' ? mockSheet : origGetById(id);
+
+                mockBase = createMockBase();
+                methods = createCollageMethods(mockBase);
+                state = createCollageData(mockBase)();
+                vm = { ...state };
+
+                methods.trapFocusInBottomSheet.call(vm);
+                methods.releaseFocusTrap.call(vm);
+
+                expect(() => {
+                    methods.releaseFocusTrap.call(vm);
+                }).to.not.throw();
+            });
+
+            // ---- BS-FT-05: releaseFocusTrap no-op when no trap active ----
+            it('BS-FT-05 — releaseFocusTrap() no-op when no trap active', () => {
+                mockBase = createMockBase();
+                methods = createCollageMethods(mockBase);
+                state = createCollageData(mockBase)();
+                vm = { ...state };
+
+                expect(() => {
+                    methods.releaseFocusTrap.call(vm);
+                }).to.not.throw();
+            });
+
+            // ---- BS-FT-06: Tab on last element wraps to first ----
+            it('BS-FT-06 — Tab on last element wraps to first', () => {
+                const mockSheet = document.createElement('div');
+                mockSheet.id = 'bottomSheet';
+                mockSheet.style.display = 'block';
+
+                // Build tab bar
+                const tabbar = document.createElement('div');
+                tabbar.setAttribute('role', 'tablist');
+                const tabBtn = document.createElement('button');
+                tabBtn.id = 'bs-tab-images';
+                tabbar.appendChild(tabBtn);
+                mockSheet.appendChild(tabbar);
+
+                // Build active panel
+                const panel = document.createElement('div');
+                panel.setAttribute('role', 'tabpanel');
+                const inputEl = document.createElement('input');
+                panel.appendChild(inputEl);
+                mockSheet.appendChild(panel);
+
+                // Mount to body so offsetParent is not null
+                document.body.appendChild(mockSheet);
+
+                let removed = false;
+                const origAddListener = mockSheet.addEventListener;
+                mockSheet.addEventListener = (type, handler) => {
+                    if (type === 'keydown') {
+                        mockSheet._keydownHandler = handler;
+                    }
+                };
+                mockSheet.removeEventListener = () => { removed = true; };
+
+                document.getElementById = (id) => id === 'bottomSheet' ? mockSheet : origGetById(id);
+
+                mockBase = createMockBase();
+                methods = createCollageMethods(mockBase);
+                state = createCollageData(mockBase)();
+                vm = { ...state };
+
+                methods.trapFocusInBottomSheet.call(vm);
+
+                // Mock activeElement to return inputEl
+                Object.defineProperty(document, 'activeElement', {
+                    get: () => inputEl,
+                    configurable: true
+                });
+
+                let prevented = false;
+                let focusedEl = null;
+                const tabEvent = new KeyboardEvent('Tab', { key: 'Tab', bubbles: true });
+                Object.defineProperty(tabEvent, 'preventDefault', {
+                    value: () => { prevented = true; },
+                    configurable: true
+                });
+                tabBtn.focus = () => { focusedEl = tabBtn; };
+                inputEl.focus = () => { focusedEl = inputEl; };
+
+                mockSheet._keydownHandler(tabEvent);
+
+                expect(prevented).to.equal(true);
+                expect(focusedEl).to.equal(tabBtn);
+
+                // Cleanup
+                document.body.removeChild(mockSheet);
+                mockSheet.addEventListener = origAddListener;
+            });
+
+            // ---- BS-FT-07: Shift+Tab on first element wraps to last ----
+            it('BS-FT-07 — Shift+Tab on first element wraps to last', () => {
+                const mockSheet = document.createElement('div');
+                mockSheet.id = 'bottomSheet';
+                mockSheet.style.display = 'block';
+
+                const tabbar = document.createElement('div');
+                tabbar.setAttribute('role', 'tablist');
+                const tabBtn = document.createElement('button');
+                tabBtn.id = 'bs-tab-images';
+                tabbar.appendChild(tabBtn);
+                mockSheet.appendChild(tabbar);
+
+                const panel = document.createElement('div');
+                panel.setAttribute('role', 'tabpanel');
+                const inputEl = document.createElement('input');
+                panel.appendChild(inputEl);
+                mockSheet.appendChild(panel);
+
+                // Mount to body so offsetParent is not null
+                document.body.appendChild(mockSheet);
+
+                mockSheet.addEventListener = (type, handler) => {
+                    if (type === 'keydown') mockSheet._keydownHandler = handler;
+                };
+                mockSheet.removeEventListener = () => {};
+
+                document.getElementById = (id) => id === 'bottomSheet' ? mockSheet : origGetById(id);
+
+                mockBase = createMockBase();
+                methods = createCollageMethods(mockBase);
+                state = createCollageData(mockBase)();
+                vm = { ...state };
+
+                methods.trapFocusInBottomSheet.call(vm);
+
+                Object.defineProperty(document, 'activeElement', {
+                    get: () => tabBtn,
+                    configurable: true
+                });
+
+                let prevented = false;
+                let focusedEl = null;
+                const shiftTabEvent = new KeyboardEvent('Tab', { key: 'Tab', shiftKey: true, bubbles: true });
+                Object.defineProperty(shiftTabEvent, 'preventDefault', {
+                    value: () => { prevented = true; },
+                    configurable: true
+                });
+                inputEl.focus = () => { focusedEl = inputEl; };
+
+                mockSheet._keydownHandler(shiftTabEvent);
+
+                expect(prevented).to.equal(true);
+                expect(focusedEl).to.equal(inputEl);
+
+                // Cleanup
+                document.body.removeChild(mockSheet);
+            });
+
+            // ---- BS-FT-08: Tab on middle element does not wrap ----
+            it('BS-FT-08 — Tab on middle element does not wrap (native behavior)', () => {
+                const mockSheet = document.createElement('div');
+                mockSheet.id = 'bottomSheet';
+                mockSheet.style.display = 'block';
+
+                const tabbar = document.createElement('div');
+                tabbar.setAttribute('role', 'tablist');
+                const tabBtn = document.createElement('button');
+                tabBtn.id = 'bs-tab-images';
+                tabbar.appendChild(tabBtn);
+                mockSheet.appendChild(tabbar);
+
+                const panel = document.createElement('div');
+                panel.setAttribute('role', 'tabpanel');
+                const input1 = document.createElement('input');
+                const input2 = document.createElement('input');
+                panel.appendChild(input1);
+                panel.appendChild(input2);
+                mockSheet.appendChild(panel);
+
+                // Mount to body so offsetParent is not null
+                document.body.appendChild(mockSheet);
+
+                mockSheet.addEventListener = (type, handler) => {
+                    if (type === 'keydown') mockSheet._keydownHandler = handler;
+                };
+                mockSheet.removeEventListener = () => {};
+
+                document.getElementById = (id) => id === 'bottomSheet' ? mockSheet : origGetById(id);
+
+                mockBase = createMockBase();
+                methods = createCollageMethods(mockBase);
+                state = createCollageData(mockBase)();
+                vm = { ...state };
+
+                methods.trapFocusInBottomSheet.call(vm);
+
+                Object.defineProperty(document, 'activeElement', {
+                    get: () => input1,
+                    configurable: true
+                });
+
+                let prevented = false;
+                const tabEvent = new KeyboardEvent('Tab', { key: 'Tab', bubbles: true });
+                Object.defineProperty(tabEvent, 'preventDefault', {
+                    value: () => { prevented = true; },
+                    configurable: true
+                });
+
+                mockSheet._keydownHandler(tabEvent);
+
+                expect(prevented).to.equal(false);
+
+                // Cleanup
+                document.body.removeChild(mockSheet);
+            });
+
+            // ---- BS-FT-09: Focus trap excludes hidden tab panel elements ----
+            it('BS-FT-09 — Focus trap excludes hidden tab panel elements', () => {
+                const mockSheet = document.createElement('div');
+                mockSheet.id = 'bottomSheet';
+                mockSheet.style.display = 'block';
+
+                const tabbar = document.createElement('div');
+                tabbar.setAttribute('role', 'tablist');
+                const tabBtn = document.createElement('button');
+                tabBtn.id = 'bs-tab-images';
+                tabbar.appendChild(tabBtn);
+                mockSheet.appendChild(tabbar);
+
+                // Active panel (visible)
+                const activePanel = document.createElement('div');
+                activePanel.setAttribute('role', 'tabpanel');
+                const activeInput = document.createElement('input');
+                activePanel.appendChild(activeInput);
+                mockSheet.appendChild(activePanel);
+
+                // Hidden panel (display: none via v-show)
+                const hiddenPanel = document.createElement('div');
+                hiddenPanel.setAttribute('role', 'tabpanel');
+                hiddenPanel.style.display = 'none';
+                const hiddenInput = document.createElement('input');
+                hiddenPanel.appendChild(hiddenInput);
+                mockSheet.appendChild(hiddenPanel);
+
+                // Mount to body so offsetParent is not null
+                document.body.appendChild(mockSheet);
+
+                mockSheet.addEventListener = (type, handler) => {
+                    if (type === 'keydown') mockSheet._keydownHandler = handler;
+                };
+                mockSheet.removeEventListener = () => {};
+
+                document.getElementById = (id) => id === 'bottomSheet' ? mockSheet : origGetById(id);
+
+                mockBase = createMockBase();
+                methods = createCollageMethods(mockBase);
+                state = createCollageData(mockBase)();
+                vm = { ...state };
+
+                methods.trapFocusInBottomSheet.call(vm);
+
+                Object.defineProperty(document, 'activeElement', {
+                    get: () => activeInput,
+                    configurable: true
+                });
+
+                let prevented = false;
+                let focusedEl = null;
+                const tabEvent = new KeyboardEvent('Tab', { key: 'Tab', bubbles: true });
+                Object.defineProperty(tabEvent, 'preventDefault', {
+                    value: () => { prevented = true; },
+                    configurable: true
+                });
+                tabBtn.focus = () => { focusedEl = tabBtn; };
+                hiddenInput.focus = () => { focusedEl = hiddenInput; };
+
+                mockSheet._keydownHandler(tabEvent);
+
+                expect(prevented).to.equal(true);
+                expect(focusedEl).to.equal(tabBtn); // Should NOT be hiddenInput
+
+                // Cleanup
+                document.body.removeChild(mockSheet);
+            });
+
+            // ---- BS-FT-10: Focus trap handles empty focusable list ----
+            it('BS-FT-10 — Focus trap handles empty focusable list', () => {
+                const mockSheet = document.createElement('div');
+                mockSheet.id = 'bottomSheet';
+                mockSheet.style.display = 'block';
+                // No focusable elements at all
+
+                mockSheet.addEventListener = (type, handler) => {
+                    if (type === 'keydown') mockSheet._keydownHandler = handler;
+                };
+                mockSheet.removeEventListener = () => {};
+
+                document.getElementById = (id) => id === 'bottomSheet' ? mockSheet : origGetById(id);
+
+                mockBase = createMockBase();
+                methods = createCollageMethods(mockBase);
+                state = createCollageData(mockBase)();
+                vm = { ...state };
+
+                methods.trapFocusInBottomSheet.call(vm);
+
+                // Simulate Tab — should not throw
+                let threw = false;
+                try {
+                    mockSheet._keydownHandler(new KeyboardEvent('Tab', { key: 'Tab', bubbles: true }));
+                } catch (e) {
+                    threw = true;
+                }
+                expect(threw).to.equal(false);
+            });
+
+            // ---- BS-FT-11: toggleBottomSheet sets up focus trap on open ----
+            it('BS-FT-11 — toggleBottomSheet() sets up focus trap on open', () => {
+                const mockSheet = document.createElement('div');
+                mockSheet.id = 'bottomSheet';
+                mockSheet.style.display = 'block';
+                const tabbar = document.createElement('div');
+                tabbar.setAttribute('role', 'tablist');
+                const tabBtn = document.createElement('button');
+                tabBtn.id = 'bs-tab-images';
+                tabbar.appendChild(tabBtn);
+                mockSheet.appendChild(tabbar);
+                const panel = document.createElement('div');
+                panel.setAttribute('role', 'tabpanel');
+                const inputEl = document.createElement('input');
+                panel.appendChild(inputEl);
+                mockSheet.appendChild(panel);
+                document.body.appendChild(mockSheet);
+
+                mockBase = createMockBase();
+                methods = createCollageMethods(mockBase);
+                state = createCollageData(mockBase)();
+                vm = { ...state };
+
+                // Mock $nextTick to call callback synchronously
+                vm.$nextTick = (cb) => { if (typeof cb === 'function') cb(); };
+
+                document.getElementById = (id) => {
+                    if (id === 'bottomSheet') return mockSheet;
+                    if (id === 'bs-tab-images') return tabBtn;
+                    return null;
+                };
+
+                methods.toggleBottomSheet.call(vm);
+
+                // Verify trap was set up (handler stored on VM)
+                expect(vm._bottomSheetFocusTrapHandler).to.be.a('function');
+                expect(vm.bottomSheetOpen).to.equal(true);
+
+                // Cleanup
+                document.body.removeChild(mockSheet);
+            });
+
+            // ---- BS-FT-12: toggleBottomSheet releases focus trap on close ----
+            it('BS-FT-12 — toggleBottomSheet() releases focus trap on close', () => {
+                // First set up a trap
+                const mockSheet = document.createElement('div');
+                mockSheet.id = 'bottomSheet';
+                mockSheet.style.display = 'block';
+                const tabbar = document.createElement('div');
+                tabbar.setAttribute('role', 'tablist');
+                const tabBtn = document.createElement('button');
+                tabBtn.id = 'bs-tab-images';
+                tabbar.appendChild(tabBtn);
+                mockSheet.appendChild(tabbar);
+                const panel = document.createElement('div');
+                panel.setAttribute('role', 'tabpanel');
+                const inputEl = document.createElement('input');
+                panel.appendChild(inputEl);
+                mockSheet.appendChild(panel);
+                document.body.appendChild(mockSheet);
+
+                mockBase = createMockBase();
+                methods = createCollageMethods(mockBase);
+                state = createCollageData(mockBase)();
+                state.bottomSheetOpen = true;
+                vm = { ...state };
+
+                document.getElementById = (id) => {
+                    if (id === 'bottomSheet') return mockSheet;
+                    return null;
+                };
+
+                // Set up trap first
+                methods.trapFocusInBottomSheet.call(vm);
+                expect(vm._bottomSheetFocusTrapHandler).to.be.a('function');
+
+                // Now close via toggle
+                methods.toggleBottomSheet.call(vm);
+
+                expect(vm._bottomSheetFocusTrapHandler).to.be.null;
+                expect(vm.bottomSheetOpen).to.equal(false);
+
+                // Cleanup
+                document.body.removeChild(mockSheet);
+            });
+
+            // ---- BS-FT-13: closeSidebars releases focus trap ----
+            it('BS-FT-13 — closeSidebars() releases focus trap', () => {
+                const mockSheet = document.createElement('div');
+                mockSheet.id = 'bottomSheet';
+                mockSheet.style.display = 'block';
+                const tabbar = document.createElement('div');
+                tabbar.setAttribute('role', 'tablist');
+                const tabBtn = document.createElement('button');
+                tabBtn.id = 'bs-tab-images';
+                tabbar.appendChild(tabBtn);
+                mockSheet.appendChild(tabbar);
+                const panel = document.createElement('div');
+                panel.setAttribute('role', 'tabpanel');
+                const inputEl = document.createElement('input');
+                panel.appendChild(inputEl);
+                mockSheet.appendChild(panel);
+                document.body.appendChild(mockSheet);
+
+                mockBase = createMockBase();
+                methods = createCollageMethods(mockBase);
+                state = createCollageData(mockBase)();
+                state.bottomSheetOpen = true;
+                vm = { ...state };
+
+                // Mock getElementById — return null for unknown IDs to avoid Illegal invocation
+                document.getElementById = (id) => {
+                    if (id === 'bottomSheet') return mockSheet;
+                    return null; // closeSidebars will guard against null
+                };
+
+                // Set up trap first
+                methods.trapFocusInBottomSheet.call(vm);
+                expect(vm._bottomSheetFocusTrapHandler).to.be.a('function');
+
+                // Now close via closeSidebars
+                methods.closeSidebars.call(vm);
+
+                expect(vm._bottomSheetFocusTrapHandler).to.be.null;
+                expect(vm.bottomSheetOpen).to.equal(false);
+
+                // Cleanup
+                document.body.removeChild(mockSheet);
+            });
+
+            // ---- BS-FT-14: bsTouchEnd releases focus trap on swipe dismiss ----
+            it('BS-FT-14 — bsTouchEnd() releases focus trap on swipe dismiss', () => {
+                const mockSheet = document.createElement('div');
+                mockSheet.id = 'bottomSheet';
+                mockSheet.style.display = 'block';
+                const tabbar = document.createElement('div');
+                tabbar.setAttribute('role', 'tablist');
+                const tabBtn = document.createElement('button');
+                tabBtn.id = 'bs-tab-images';
+                tabbar.appendChild(tabBtn);
+                mockSheet.appendChild(tabbar);
+                const panel = document.createElement('div');
+                panel.setAttribute('role', 'tabpanel');
+                const inputEl = document.createElement('input');
+                panel.appendChild(inputEl);
+                mockSheet.appendChild(panel);
+                document.body.appendChild(mockSheet);
+
+                mockBase = createMockBase();
+                methods = createCollageMethods(mockBase);
+                state = createCollageData(mockBase)();
+                state.bottomSheetOpen = true;
+                vm = { ...state };
+
+                document.getElementById = (id) => {
+                    if (id === 'bottomSheet') return mockSheet;
+                    return null;
+                };
+
+                // Set up trap first
+                methods.trapFocusInBottomSheet.call(vm);
+                expect(vm._bottomSheetFocusTrapHandler).to.be.a('function');
+
+                // Mock content element at scroll top
+                document.querySelector = () => ({ scrollTop: 0 });
+
+                // Simulate touchstart at top
+                methods.bsTouchStart.call(vm, {
+                    touches: [{ clientY: 100 }]
+                });
+
+                // Simulate touchend with 150px downward swipe (exceeds threshold)
+                methods.bsTouchEnd.call(vm, {
+                    changedTouches: [{ clientY: 250 }]
+                });
+
+                expect(vm._bottomSheetFocusTrapHandler).to.be.null;
+                expect(vm.bottomSheetOpen).to.equal(false);
+
+                // Cleanup
+                document.body.removeChild(mockSheet);
+            });
+        });
+
         // Run mocha after all tests are defined
         window.addEventListener('load', () => {
             mocha.run();

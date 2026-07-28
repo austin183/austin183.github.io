@@ -1,6 +1,6 @@
 ---
 name: building-web-apps
-description: Build static web apps with Vue 3 Options API, Canvas 2D, ES modules, CDN libraries. Covers factory testability (callback injection, provider functions, DOM ID injection, module extraction, service locator safety, return value notification, handler .call(this), closure safety, return-object exposure, mock VM construction, undo snapshots (segmented inline, atomic handler methods, lifecycle cleanup)), extensibility (strategy/registry), canvas clearing for exports, config rendering, shared offscreen canvas, render order, dual-canvas visibility guard, async UI cleanup (try/finally, concurrency guards), toast notifications, accessibility (ARIA live regions, custom button keyboard, aria-busy, reduced motion, canvas roles, ARIA tab pattern with aria-controls/aria-labelledby, focus return on dialog close), drag cleanup, VISIBLE_MIN clamping, test-driven refactoring, Vue input patterns (@keydown.enter, v-model undo timing, segmented/checkbox inline snapshot/commit, atomic handler extraction, beforeUnmount cleanup), multi-touch gestures (TouchEvent/PointerEvent/WheelEvent, pointerType guards, wheel pan/zoom, dual gesture direction conventions, touch-action: pan-y selective passthrough), multi-canvas pointer events (e.currentTarget for per-canvas coordinate math), mobile sidebar overlays (dual-state toggles, CSS !important cascade, global Escape, overlay backdrops, aria-expanded), mobile bottom sheets (ID prefixing for content duplication, visual drag handle, auto-switch tab on content change, dvh height units), fixed element z-index occlusion (prevention checklist, Playwright "intercepts pointer events" diagnosis), iOS safe areas (viewport-fit=cover, 100dvh, fixed element treatment, CSS content validation testing), destination-out compositing, DPR/CORS, test runner DOM queries (querySelector over getElementById). No build step. Use for CollageMaker features, rendering, state, testing.
+description: Build static web apps with Vue 3 Options API, Canvas 2D, ES modules, CDN libraries. Covers factory testability (callback injection, provider functions, DOM ID injection, module extraction, service locator safety, return value notification, handler .call(this), closure safety, internal closure pattern, return-object exposure, mock VM construction, undo snapshots (segmented inline, atomic handler methods, lifecycle cleanup)), extensibility (strategy/registry), canvas clearing for exports, config rendering, shared offscreen canvas, render order, dual-canvas visibility guard, async UI cleanup (try/finally, concurrency guards), toast notifications, accessibility (ARIA live regions, custom button keyboard, aria-busy, reduced motion, canvas roles, ARIA tab pattern with aria-controls/aria-labelledby, focus return on dialog close, focus traps for aria-modal dialogs), drag cleanup, VISIBLE_MIN clamping, test-driven refactoring, Vue input patterns (@keydown.enter, v-model undo timing, segmented/checkbox inline snapshot/commit, atomic handler extraction, beforeUnmount cleanup, $nextTick race condition guards), multi-touch gestures (TouchEvent/PointerEvent/WheelEvent, pointerType guards, wheel pan/zoom, dual gesture direction conventions, touch-action: pan-y selective passthrough), multi-canvas pointer events (e.currentTarget for per-canvas coordinate math), mobile sidebar overlays (dual-state toggles, CSS !important cascade, global Escape, Playwright Escape key unreliability with .window modifier, overlay backdrops, aria-expanded), mobile bottom sheets (ID prefixing for content duplication, visual drag handle, auto-switch tab on content change, dvh height units), fixed element z-index occlusion (prevention checklist, Playwright "intercepts pointer events" diagnosis), iOS safe areas (viewport-fit=cover, 100dvh, fixed element treatment, CSS content validation testing), destination-out compositing, DPR/CORS, test runner DOM queries (querySelector over getElementById, offsetParent mounting for detached elements, getElementById mock null fallback). No build step. Use for CollageMaker features, rendering, state, testing.
 ---
 
 # Building Web Apps
@@ -18,7 +18,7 @@ Consult these files for verified patterns and gotchas:
 - `references/es-modules.md` — ES module conventions and barrel exports
 - `references/rich-text-runs.md` — Run-based text formatting, merge/split algorithm
 - `references/testing-unit.md` — Mocha/Chai unit tests, mocking patterns, integration testing, characterization tests before refactor
-- `references/testing-e2e.md` — Playwright E2E, page load strategy, pointer/Touch/Drag event testing, test runner DOM query gotchas
+- `references/testing-e2e.md` — Playwright E2E, page load strategy, pointer/Touch/Drag event testing, test runner DOM query gotchas, Escape key unreliability with Vue `.window` modifier
 - `references/testing-strategy.md` — Testing approach, gotchas, deferred features, assertion density
 - `references/interaction.md` — Keyboard shortcut patterns: three-layer architecture, modifier matching, focus suppression, preventDefault ordering, pointer handler coordination, global pointerup drag cleanup, VISIBLE_MIN drag boundary clamping, multi-touch and trackpad gestures (TouchEvent/PointerEvent dual path, pointerType guards, pointerType-based dynamic thresholds, wheel event pan/zoom, dual gesture direction conventions, setPointerCapture gotchas, releasePointerCapture hygiene, blur safety net, touch-action: pan-y selective passthrough), multi-canvas pointer events (e.currentTarget)
 - `references/midiestro-pattern.md` — Entry point pattern, shared infrastructure, directory structure
@@ -240,6 +240,33 @@ return {
 - Preserves closure benefits — function still captures factory-scoped dependencies
 - Use when the function relies on factory-scoped closures and you don't want to extract it to a separate module
 - Avoid when the function is already testable through the public API, or is simple enough that integration testing suffices
+
+**Internal Closure Pattern for Factory Testability** — When a Vue factory method calls other methods on `this`, tests that mock partial VMs (spreading only state, not all methods) break. Use factory-scoped closures to avoid `this` dependencies in internal lifecycle methods:
+```javascript
+// Factory-scoped internal functions — no this dependency
+let _focusTrapHandler = null;
+
+function _trapFocus(vm) { /* ... */ }
+function _releaseFocus(vm) { /* ... */ }
+
+return {
+    // Internal lifecycle methods use closures directly
+    toggleBottomSheet() {
+        if (this.isOpen) {
+            _trapFocus(this);
+        } else {
+            _releaseFocus(this);
+        }
+    },
+
+    // Public API delegates to closures (for external callers / tests)
+    trapFocusInBottomSheet() { _trapFocus(this); },
+    releaseFocusTrap() { _releaseFocus(this); }
+};
+```
+- Internal functions capture factory dependencies (like constants, shared state) without creating new import dependencies
+- Public methods delegate to closures, enabling both internal lifecycle use and external testability
+- Prefer over module-level exports when the function relies on factory-scoped closures
 
 ### Guard Against Null Inputs
 Browser API utilities that accept user input MUST guard against null/undefined. Return `Promise.resolve(null)` for null input rather than throwing:
@@ -471,6 +498,8 @@ toggleRightSidebar() {
 - Prefer avoiding `!important` when you control both desktop and mobile CSS
 
 **Global Escape Key** — Use `@keydown.escape.window.prevent` on the app root to catch Escape regardless of focus state. The `.window` modifier attaches the listener to `window`.
+
+**E2E caveat:** `page.keyboard.press('Escape')` is unreliable for `.window` handlers in headless Chromium (especially mobile viewport + modal). Use backdrop click or unit test instead. See `references/testing-e2e.md`.
 
 **Overlay Backdrops** — Use `display: none` (not `opacity: 0`) for overlay backdrops. `display: none` removes the element from the rendering and event flow entirely, preventing click interception when hidden. Trade-off: no CSS transitions.
 

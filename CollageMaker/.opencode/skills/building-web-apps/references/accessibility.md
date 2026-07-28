@@ -13,6 +13,7 @@
 - Touch Target Sizing (WCAG 2.5.8)
 - ARIA Tab Pattern (id + aria-controls + aria-labelledby)
 - Focus Return on Dialog Close
+- Focus Traps for ARIA Modal Dialogs
 
 ## Segmented Controls with Radiogroup
 
@@ -413,12 +414,77 @@ closeSidebars() {
 - **Capture state before mutation** — `wasBottomSheetOpen` is read before setting `bottomSheetOpen = false`, because the method handles all dismissal paths (backdrop tap, Escape key).
 - **Defensive DOM lookup** — `getElementById()` may return `null` if the element is hidden by CSS (`display: none`) at lookup time. Guard with `if (btn)`.
 - **Scope to the closing dialog** — Only return focus when the specific dialog that closed was the one the user opened.
+- **Every dismiss path must return focus** — Toggle button, Escape key, backdrop tap, swipe dismiss — all must call `btn.focus()` on the trigger element. A missing path breaks WCAG 2.4.3.
+
+## Focus Traps for ARIA Modal Dialogs
+
+For a single modal dialog with known focusable elements, an inline focus trap (~30 lines) is preferable to a library dependency. The trap intercepts Tab/Shift+Tab on the modal container and wraps focus at boundaries.
+
+### Algorithm
+
+```javascript
+const FOCUSABLE_SELECTOR = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+function trapFocus(container) {
+    const onTabKey = (e) => {
+        if (e.key !== 'Tab') return;
+
+        // Collect focusable elements from visible areas only
+        const allFocusable = Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR))
+            .filter(el => el.offsetParent !== null); // Only visible elements
+        if (allFocusable.length === 0) return;
+
+        const firstEl = allFocusable[0];
+        const lastEl = allFocusable[allFocusable.length - 1];
+
+        if (e.shiftKey) {
+            if (document.activeElement === firstEl) {
+                e.preventDefault();
+                lastEl.focus();
+            }
+        } else {
+            if (document.activeElement === lastEl) {
+                e.preventDefault();
+                firstEl.focus();
+            }
+        }
+    };
+    container.addEventListener('keydown', onTabKey);
+    return onTabKey; // Return handler reference for cleanup
+}
+```
+
+### Key Decisions
+
+- **Collect elements on every Tab press** — The list of focusable elements changes dynamically (tab switches, conditional controls). Collecting once at trap setup would be stale. The query is fast (<1ms) for ~20-30 elements.
+- **`offsetParent !== null` for visibility** — More reliable than checking `display` computed style. Catches elements hidden by `display: none` AND elements whose ancestors are hidden. Does NOT catch `opacity: 0` or `visibility: hidden` — use `display: none` (via `v-show`) for hidden panels.
+- **`preventDefault()` only at boundaries** — Middle elements use native Tab behavior. Only wrap at first/last elements.
+- **Both Tab AND Shift+Tab** — Standard focus traps must handle both directions. Check `e.shiftKey`.
+- **Return handler reference** — Enables cleanup: `container.removeEventListener('keydown', onTabKey)`.
+
+### Pairing with Focus Return
+
+The focus trap and focus return are complementary: the trap keeps focus inside the modal while open; focus return sends it back to the trigger on close. Implement both for complete WCAG 2.4.3 compliance.
+
+### Testing Gotcha: `offsetParent` on Detached Elements
+
+When testing focus traps with synthetic DOM elements, `offsetParent` is `null` for detached elements. This causes the visibility filter to exclude ALL elements.
+
+**Fix:** Mount the mock element to `document.body` before testing:
+```javascript
+document.body.appendChild(mockSheet); // Now offsetParent works
+// ... run test ...
+document.body.removeChild(mockSheet); // Cleanup
+```
+
+**Avoid mocking `offsetParent`** with `Object.defineProperty` — works but fragile across browsers.
 
 ## File Reference
 
 - `index.html` — Export format selector, color pickers, export button, toast notification template, bottom sheet tabs and panels, crop info readout in `#bs-panel-edit`, canvas ARIA roles
 - `Style.css` — `.color-swatch`, `.export-spinner`, `.toast-notification` styles, `prefers-reduced-motion` media query, touch target sizing
 - `MyESModules/App/createCollageData.js` — toast reactive state, `isExporting` state
-- `MyESModules/App/createCollageMethods.js` — `showToast()` method, `closeSidebars()` focus return
+- `MyESModules/App/createCollageMethods.js` — `showToast()` method, `closeSidebars()` focus return, `_trapFocusInBottomSheet()` / `_releaseFocusTrap()` closures
 - `MyESModules/Interaction/CropInteraction.js` — single canvas ID normalization for duplicate region avoidance
 - `MyComponents/Phase2FollowUpTest.html` — Custom button keyboard activation tests
+- `MyComponents/BottomSheetTest.html` — Focus trap tests (BS-FT-06 through BS-FT-10)

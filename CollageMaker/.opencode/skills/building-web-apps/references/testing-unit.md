@@ -22,6 +22,8 @@
 - Characterization Tests Before Refactor
 - Mock VM Construction for Factory Testing
 - Return Object Exposure for Internal Functions
+- DOM Mounting for offsetParent-Dependent Tests
+- getElementById Mock Safety
 
 ## Unit Tests — Mocha + Chai
 
@@ -785,3 +787,74 @@ return {
 - The function is already testable through the public API (prefer testing through public methods)
 - The function is simple enough that testing through integration is sufficient
 - The function should be extracted to its own module (consider SRP — if it's complex enough to need direct testing, it might belong in its own module)
+
+## DOM Mounting for offsetParent-Dependent Tests
+
+When testing code that uses `offsetParent` for visibility checks (e.g., focus trap algorithms, visible element queries), detached DOM elements have `offsetParent === null`. This causes visibility filters to exclude ALL elements.
+
+### The Problem
+
+```javascript
+const mockSheet = document.createElement('div');
+const input = document.createElement('input');
+mockSheet.appendChild(input);
+// input.offsetParent === null (detached from document)
+// Focus trap filter excludes it → empty focusable list → test fails
+```
+
+### The Fix
+
+Mount the mock element to `document.body` before testing:
+
+```javascript
+const mockSheet = document.createElement('div');
+mockSheet.id = 'bottomSheet';
+// ... build DOM tree ...
+document.body.appendChild(mockSheet); // Now offsetParent works
+
+// Run test...
+
+document.body.removeChild(mockSheet); // Cleanup
+```
+
+### Alternative Approaches
+
+- **Mock `offsetParent`** — `Object.defineProperty(input, 'offsetParent', { get: () => mockSheet })` — works but fragile across browsers
+- **Skip visibility filter in tests** — Not recommended; tests should match production behavior
+
+**When to apply:** Any test where production code uses `offsetParent !== null` to filter visible elements.
+
+## getElementById Mock Safety
+
+When mocking `document.getElementById` in tests, falling through to the original function can cause "Illegal invocation" errors because `document.getElementById` requires a specific `this` context.
+
+### The Problem
+
+```javascript
+const origGetById = document.getElementById;
+document.getElementById = (id) => {
+    if (id === 'bottomSheet') return mockSheet;
+    return origGetById(id); // Illegal invocation!
+};
+```
+
+### The Fix
+
+Return `null` for unknown IDs instead of calling the original:
+
+```javascript
+document.getElementById = (id) => {
+    if (id === 'bottomSheet') return mockSheet;
+    return null; // Production code guards against null
+};
+```
+
+### Why This Works
+
+Production code already guards against null:
+```javascript
+const btn = document.getElementById('bottomSheetToggleBtn');
+if (btn) btn.focus(); // Safe — null check prevents error
+```
+
+**When to apply:** Any test that mocks `document.getElementById` and needs to handle IDs beyond the mocked set.

@@ -35,6 +35,75 @@ const DEFAULT_DOM_IDS = {
 export function createCollageMethods(base, domIds = {}) {
     const ids = { ...DEFAULT_DOM_IDS, ...domIds };
 
+    /**
+     * Focusable element selector for the bottom sheet focus trap.
+     * Matches all natively focusable elements plus explicit tabindex elements.
+     */
+    const FOCUSABLE_SELECTOR = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+    // ---- Bottom sheet focus trap (internal closures) ----
+    // These are factory-scoped functions used by both the public API methods
+    // and the internal lifecycle methods (toggleBottomSheet, closeSidebars, bsTouchEnd).
+    // Using closures avoids `this` references that break when tests mock partial VMs.
+    let _bottomSheetFocusTrapHandler = null;
+
+    function _trapFocusInBottomSheet(vm) {
+        const sheet = document.getElementById('bottomSheet');
+        if (!sheet) return;
+
+        const onTabKey = (e) => {
+            if (e.key !== 'Tab') return;
+
+            // Collect focusable elements from visible areas only
+            const tabbar = sheet.querySelector('[role="tablist"]');
+            const activePanel = sheet.querySelector('[role="tabpanel"]:not([style*="display: none"])');
+
+            const tabbarElements = tabbar
+                ? Array.from(tabbar.querySelectorAll(FOCUSABLE_SELECTOR))
+                : [];
+
+            const panelElements = activePanel
+                ? Array.from(activePanel.querySelectorAll(FOCUSABLE_SELECTOR)).filter(
+                    el => el.offsetParent !== null // Element is actually visible
+                  )
+                : [];
+
+            // Deduplicate (tab bar elements won't overlap with panel elements, but be safe)
+            const allFocusable = [...new Set([...tabbarElements, ...panelElements])];
+            if (allFocusable.length === 0) return;
+
+            const firstEl = allFocusable[0];
+            const lastEl = allFocusable[allFocusable.length - 1];
+
+            if (e.shiftKey) {
+                // Shift+Tab: if on first element, wrap to last
+                if (document.activeElement === firstEl) {
+                    e.preventDefault();
+                    lastEl.focus();
+                }
+            } else {
+                // Tab: if on last element, wrap to first
+                if (document.activeElement === lastEl) {
+                    e.preventDefault();
+                    firstEl.focus();
+                }
+            }
+        };
+
+        sheet.addEventListener('keydown', onTabKey);
+        _bottomSheetFocusTrapHandler = onTabKey;
+        vm._bottomSheetFocusTrapHandler = onTabKey; // Mirror on VM for testability
+    }
+
+    function _releaseFocusTrap(vm) {
+        const sheet = document.getElementById('bottomSheet');
+        if (sheet && _bottomSheetFocusTrapHandler) {
+            sheet.removeEventListener('keydown', _bottomSheetFocusTrapHandler);
+        }
+        _bottomSheetFocusTrapHandler = null;
+        if (vm) vm._bottomSheetFocusTrapHandler = null; // Mirror on VM for testability
+    }
+
     // ---- Compose extracted method modules ----
     // Each module accepts explicit `vm` parameters (no `this` dependency)
     // and returns plain functions that are spread into the Vue methods object.
@@ -467,6 +536,8 @@ export function createCollageMethods(base, domIds = {}) {
             this.bottomSheetOpen = false;
             // Release body scroll lock
             document.body?.classList.remove('no-scroll');
+            // Release focus trap
+            _releaseFocusTrap(this);
             // Return focus to hamburger button when bottom sheet closes
             if (wasBottomSheetOpen) {
                 const btn = document.getElementById('bottomSheetToggleBtn');
@@ -482,9 +553,31 @@ export function createCollageMethods(base, domIds = {}) {
                 this.rightSidebarMobileOpen = false;
                 // Lock body scroll when bottom sheet opens
                 document.body?.classList.add('no-scroll');
+                // Set up focus trap and move focus to first tab
+                // $nextTick ensures Vue has updated the DOM before querying elements
+                if (this.$nextTick) {
+                    this.$nextTick(() => {
+                        // Guard against rapid open/close — if sheet was closed
+                        // before this tick fired, skip setup
+                        if (!this.bottomSheetOpen) return;
+                        _trapFocusInBottomSheet(this);
+                        const firstTab = document.getElementById('bs-tab-images');
+                        if (firstTab) firstTab.focus();
+                    });
+                } else {
+                    // Fallback for tests without $nextTick
+                    _trapFocusInBottomSheet(this);
+                    const firstTab = document.getElementById('bs-tab-images');
+                    if (firstTab) firstTab.focus();
+                }
             } else {
                 // Release body scroll lock when bottom sheet closes
                 document.body?.classList.remove('no-scroll');
+                // Release focus trap
+                _releaseFocusTrap(this);
+                // Return focus to hamburger button
+                const btn = document.getElementById('bottomSheetToggleBtn');
+                if (btn) btn.focus();
             }
         },
         setBottomSheetTab(tabId) {
@@ -532,8 +625,12 @@ export function createCollageMethods(base, domIds = {}) {
             const minSwipeThreshold = Math.max(60, window.innerHeight * 0.08);
             // Only dismiss on downward swipe when content is at top
             if (deltaY > minSwipeThreshold && this.bsTouchStartScrollTop === 0) {
+                _releaseFocusTrap(this);
                 this.bottomSheetOpen = false;
                 document.body?.classList.remove('no-scroll');
+                // Return focus to hamburger button
+                const btn = document.getElementById('bottomSheetToggleBtn');
+                if (btn) btn.focus();
             }
             this.bsTouchStartY = null;
             this.bsTouchStartScrollTop = null;
@@ -547,6 +644,25 @@ export function createCollageMethods(base, domIds = {}) {
             this.bsTouchStartY = null;
             this.bsTouchStartScrollTop = null;
         },
+
+        // ---- Focus trap for bottom sheet aria-modal dialog ----
+        /**
+         * Sets up a focus trap within the bottom sheet.
+         * Tab/Shift+Tab cycles through focusable elements in the visible panel + tab bar.
+         * Must be called after the bottom sheet is open (DOM elements are visible).
+         */
+        trapFocusInBottomSheet() {
+            _trapFocusInBottomSheet(this);
+        },
+
+        /**
+         * Removes the focus trap from the bottom sheet.
+         * Call when the bottom sheet closes. Idempotent — safe to call multiple times.
+         */
+        releaseFocusTrap() {
+            _releaseFocusTrap(this);
+        },
+
         toggleSection(sectionId) {
             this.expandedSections[sectionId] = !this.expandedSections[sectionId];
         },

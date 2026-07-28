@@ -9,6 +9,7 @@
 - DragEvent Testing
 - Document-Level Event Listener Test Isolation
 - Testing undo/redo buttons
+- E2E Event Simulation Gotchas
 
 ## E2E Tests — Playwright
 
@@ -221,6 +222,45 @@ await page.click('#undoBtn');        // works — button is enabled
 
 Several Playwright methods do NOT fire the DOM events that Vue handlers depend on:
 
+### `page.keyboard.press('Escape')` Is Unreliable With Vue `.window` Modifier
+
+`page.keyboard.press('Escape')` does not reliably trigger Vue's `@keydown.escape.window.prevent` handler in headless Chromium, especially in mobile viewport with modal/overlay contexts.
+
+**Why it fails:** Vue's `.window` modifier attaches the listener directly to `window`. In headless Chromium, the keyboard event dispatched by Playwright may not propagate to the `window` listener when focus is inside a modal dialog or overlay.
+
+```javascript
+// Vue template — works in real browser, unreliable in headless E2E
+<div id="app" @keydown.escape.window.prevent="closeSidebars">
+
+// Playwright test — UNRELIABLE in headless mode
+await page.keyboard.press('Escape');
+// closeSidebars() may NOT be called
+```
+
+**Workarounds (ranked by preference):**
+
+1. **Backdrop click (Recommended)** — Click the overlay backdrop to exercise the same dismiss code path:
+   ```javascript
+   // Click above the bottom sheet (z-index: backdrop=140, sheet=160)
+   await page.mouse.click(100, 100);
+   await page.waitForTimeout(400);
+   ```
+   Tests the actual user interaction path (tap outside to dismiss).
+
+2. **Unit test the handler** — Test `closeSidebars()` directly in a Mocha/Chai unit test. Deterministic, no browser quirks.
+
+3. **`page.evaluate()` dispatch** — May still not work reliably since Vue `.window` listeners may not receive programmatically dispatched events:
+   ```javascript
+   await page.evaluate(() => {
+       const event = new KeyboardEvent('keydown', {
+           key: 'Escape', bubbles: true, cancelable: true,
+       });
+       window.dispatchEvent(event);
+   });
+   ```
+
+**Note:** `page.keyboard.press('Escape')` works fine for non-`.window` handlers (e.g., `@keydown.escape` on a specific element) and for `document`-level keyboard shortcut handlers like CollageMaker's KeyboardHandler.
+
 ### `el.focus()` Does NOT Fire `focus` Event
 
 Calling `element.focus()` changes focus state but does NOT fire a `focus` event. Vue `@focus` handlers (e.g., for capturing pre-change snapshots) won't execute.
@@ -306,3 +346,4 @@ await page.waitForSelector('#mocha .test', { timeout: 10000 });
 ### File References
 
 - `scripts/run-tests.js` — test runner DOM query fix
+- `_agent_docs/learnings/2026-07-28-playwright-escape-key-vue-window-modifier.md` — Escape key unreliability details
