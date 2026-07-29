@@ -220,7 +220,8 @@
 
             it('3.5.3.23 — .sidebar-collapsed class still works', () => {
                 expect(css).to.include('.sidebar-collapsed');
-                const collapsedMatch = css.match(/\.sidebar-collapsed[^{]*\{[^}]*\}/);
+                // Match scoped selector div.sidebar.sidebar-collapsed (not bare .sidebar-collapsed which would also hit toggle buttons)
+                const collapsedMatch = css.match(/\ndiv\.sidebar\.sidebar-collapsed\s*\{[^}]*\}/);
                 expect(collapsedMatch).to.not.be.null;
                 expect(collapsedMatch[0]).to.include('width: 0');
                 expect(collapsedMatch[0]).to.include('overflow: hidden');

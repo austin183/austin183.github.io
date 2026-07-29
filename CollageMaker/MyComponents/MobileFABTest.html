@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile FAB Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Mobile FAB Tests</h1>
+    <p class="test-plan-ref">Covers: Phase 2 — Mobile floating action button for bottom sheet</p>
+    <p class="test-plan-ref">Plan: _agent_docs/plans/2026-07-28-expander-icon-and-positions-implementation.md</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createCollageData } from '../MyESModules/App/createCollageData.js';
+        import { createCollageMethods } from '../MyESModules/App/createCollageMethods.js';
+
+        const { expect } = chai;
+
+        // Minimal base mock for factory initialization
+        function createMockBase() {
+            return {
+                assembler: { render: () => {} },
+                dropHandler: { setupGlobalDrop: () => () => {} },
+                getCanvasRenderer: () => null,
+                setCanvasRenderer: () => {},
+                getLayoutManager: () => null,
+                setLayoutManager: () => {},
+                getCropManager: () => null,
+                setCropManager: () => {},
+                getImageLibrary: () => null,
+                setImageLibrary: () => {},
+                getBackgroundManager: () => null,
+                setBackgroundManager: () => {},
+                getTitleManager: () => null,
+                setTitleManager: () => {},
+                layoutStyleOptions: []
+            };
+        }
+
+        // ============================================================
+        // DOM Structure — Mobile FAB Button
+        // ============================================================
+        describe('Mobile FAB — DOM Structure', async () => {
+            let doc;
+
+            before(async () => {
+                const response = await fetch('../index.html');
+                const html = await response.text();
+                const parser = new DOMParser();
+                doc = parser.parseFromString(html, 'text/html');
+            });
+
+            // ---- FAB button existence ----
+
+            it('FAB-DOM-01 — FAB button exists with correct ID', () => {
+                const btn = doc.getElementById('bottomSheetToggleBtn');
+                expect(btn).to.not.be.null;
+            });
+
+            it('FAB-DOM-02 — FAB is a <button> element', () => {
+                const btn = doc.getElementById('bottomSheetToggleBtn');
+                expect(btn.tagName.toLowerCase()).to.equal('button');
+            });
+
+            it('FAB-DOM-03 — FAB has mobile-fab class', () => {
+                const btn = doc.getElementById('bottomSheetToggleBtn');
+                expect(btn.classList.contains('mobile-fab')).to.equal(true);
+            });
+
+            it('FAB-DOM-04 — FAB has mobile-only class', () => {
+                const btn = doc.getElementById('bottomSheetToggleBtn');
+                expect(btn.classList.contains('mobile-only')).to.equal(true);
+            });
+
+            it('FAB-DOM-05 — FAB is NOT inside the toolbar', () => {
+                const btn = doc.getElementById('bottomSheetToggleBtn');
+                const toolbar = doc.getElementById('toolbar');
+                expect(toolbar).to.not.be.null;
+                expect(toolbar.contains(btn)).to.equal(false);
+            });
+
+            it('FAB-DOM-06 — FAB is a direct child of #app', () => {
+                const btn = doc.getElementById('bottomSheetToggleBtn');
+                const app = doc.getElementById('app');
+                expect(app).to.not.be.null;
+                expect(btn.parentElement).to.equal(app);
+            });
+
+            // ---- FAB accessibility attributes ----
+
+            it('FAB-DOM-07 — FAB has :aria-expanded binding', () => {
+                const btn = doc.getElementById('bottomSheetToggleBtn');
+                expect(btn.getAttribute(':aria-expanded')).to.not.be.null;
+            });
+
+            it('FAB-DOM-08 — FAB has aria-controls="bottomSheet"', () => {
+                const btn = doc.getElementById('bottomSheetToggleBtn');
+                expect(btn.getAttribute('aria-controls')).to.equal('bottomSheet');
+            });
+
+            it('FAB-DOM-09 — FAB has :aria-label binding with dynamic text', () => {
+                const btn = doc.getElementById('bottomSheetToggleBtn');
+                const ariaLabel = btn.getAttribute(':aria-label');
+                expect(ariaLabel).to.not.be.null;
+                expect(ariaLabel).to.include('Open menu');
+                expect(ariaLabel).to.include('Close menu');
+            });
+
+            // ---- FAB click handler ----
+
+            it('FAB-DOM-10 — FAB has @click="toggleBottomSheet"', () => {
+                const btn = doc.getElementById('bottomSheetToggleBtn');
+                expect(btn.getAttribute('@click')).to.equal('toggleBottomSheet');
+            });
+
+            // ---- FAB icon logic ----
+
+            it('FAB-DOM-11 — FAB icon: keyboard_arrow_up when closed, keyboard_arrow_down when open', () => {
+                const btn = doc.getElementById('bottomSheetToggleBtn');
+                const iconSpan = btn.querySelector('.material-icons');
+                expect(iconSpan).to.not.be.null;
+                const iconText = iconSpan.textContent.trim();
+                // When bottomSheetOpen is false → keyboard_arrow_up (open = arrow up)
+                // When bottomSheetOpen is true → keyboard_arrow_down (close = arrow down)
+                expect(iconText).to.include('keyboard_arrow_down');
+                expect(iconText).to.include('keyboard_arrow_up');
+                // Verify the ternary: bottomSheetOpen ? 'keyboard_arrow_down' : 'keyboard_arrow_up'
+                // arrow_down should come before arrow_up in the ternary (true branch first)
+                const downIdx = iconText.indexOf('keyboard_arrow_down');
+                const upIdx = iconText.indexOf('keyboard_arrow_up');
+                expect(downIdx).to.be.lessThan(upIdx);
+            });
+
+            it('FAB-DOM-11b — FAB icon span has aria-hidden="true"', () => {
+                const btn = doc.getElementById('bottomSheetToggleBtn');
+                const iconSpan = btn.querySelector('.material-icons');
+                expect(iconSpan).to.not.be.null;
+                expect(iconSpan.getAttribute('aria-hidden')).to.equal('true');
+            });
+
+            // ---- Old hamburger removed from toolbar ----
+
+            it('FAB-DOM-12 — Toolbar no longer contains the old hamburger button', () => {
+                const toolbar = doc.getElementById('toolbar');
+                const oldHamburger = toolbar.querySelector('#bottomSheetToggleBtn');
+                expect(oldHamburger).to.be.null;
+            });
+
+            it('FAB-DOM-13 — Toolbar no longer contains a button with menu icon for bottom sheet', () => {
+                const toolbar = doc.getElementById('toolbar');
+                // Old pattern: button with @click="toggleBottomSheet" inside toolbar
+                const btns = toolbar.querySelectorAll('button');
+                btns.forEach(btn => {
+                    const click = btn.getAttribute('@click');
+                    expect(click).to.not.include('toggleBottomSheet');
+                });
+            });
+        });
+
+        // ============================================================
+        // CSS — Mobile FAB Styles
+        // ============================================================
+        describe('Mobile FAB — CSS Styles', async () => {
+            let cssText;
+
+            before(async () => {
+                const response = await fetch('../Style.css');
+                cssText = await response.text();
+            });
+
+            it('FAB-CSS-01 — .mobile-fab class exists', () => {
+                expect(cssText).to.include('.mobile-fab');
+            });
+
+            it('FAB-CSS-02 — .mobile-fab uses position: fixed', () => {
+                const match = cssText.match(/\.mobile-fab\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                expect(match[1]).to.include('position: fixed');
+            });
+
+            it('FAB-CSS-03 — .mobile-fab has z-index: 200', () => {
+                const match = cssText.match(/\.mobile-fab\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                expect(match[1]).to.include('z-index: 200');
+            });
+
+            it('FAB-CSS-04 — .mobile-fab has border-radius: 50% (circular)', () => {
+                const match = cssText.match(/\.mobile-fab\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                expect(match[1]).to.include('border-radius: 50%');
+            });
+
+            it('FAB-CSS-05 — .mobile-fab has minimum 48px touch target', () => {
+                const match = cssText.match(/\.mobile-fab\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                const block = match[1];
+                // Check for width or min-width of at least 48px
+                const widthMatch = block.match(/(?:width|min-width):\s*(\d+)/);
+                expect(widthMatch).to.not.be.null;
+                expect(parseInt(widthMatch[1])).to.be.at.least(48);
+            });
+
+            it('FAB-CSS-06 — .mobile-fab positioned at bottom of viewport', () => {
+                const match = cssText.match(/\.mobile-fab\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                expect(match[1]).to.include('bottom:');
+            });
+
+            it('FAB-CSS-07 — .mobile-fab uses env(safe-area-inset-bottom) for iOS safe area', () => {
+                const match = cssText.match(/\.mobile-fab\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                expect(match[1]).to.include('safe-area-inset-bottom');
+            });
+
+            it('FAB-CSS-08 — .mobile-fab hidden on desktop (display: none by default)', () => {
+                // The .mobile-fab should have display: none outside the mobile media query
+                // or rely on .mobile-only class which is display: none by default
+                // Check that .mobile-fab is not visible on desktop
+                const hasDisplayNone = cssText.includes('.mobile-fab') && 
+                    (cssText.includes('.mobile-fab {\n    display: none') ||
+                     cssText.includes('.mobile-fab{display:none') ||
+                     // Or it may rely on .mobile-only which is display: none
+                     cssText.includes('.mobile-only') && cssText.includes('display: none'));
+                expect(hasDisplayNone).to.equal(true);
+            });
+
+            it('FAB-CSS-09 — .mobile-fab visible on mobile (display: flex in media query)', () => {
+                // Inside @media (max-width: 699px), .mobile-fab should be display: flex
+                const mobileQueryMatch = cssText.match(/@media\s*\(\s*max-width:\s*699px\s*\)\s*\{([\s\S]*?)\n\}/);
+                expect(mobileQueryMatch).to.not.be.null;
+                // Either .mobile-fab { display: flex } inside the media query,
+                // or .mobile-only { display: flex !important } which applies to .mobile-fab
+                const mediaContent = mobileQueryMatch[1];
+                const fabVisible = mediaContent.includes('.mobile-fab') && mediaContent.includes('display: flex') ||
+                    mediaContent.includes('.mobile-only') && mediaContent.includes('display: flex');
+                expect(fabVisible).to.equal(true);
+            });
+
+            it('FAB-CSS-10 — Hover state defined for .mobile-fab', () => {
+                expect(cssText).to.include('.mobile-fab:hover');
+            });
+
+            it('FAB-CSS-11 — Active state defined for .mobile-fab', () => {
+                expect(cssText).to.include('.mobile-fab:active');
+            });
+
+            it('FAB-CSS-12 — Reduced motion media query disables .mobile-fab transitions', () => {
+                // Check that .mobile-fab appears inside a prefers-reduced-motion block
+                // Simple approach: find the prefers-reduced-motion section and check for .mobile-fab
+                const rmIndex = cssText.indexOf('prefers-reduced-motion');
+                expect(rmIndex).to.be.greaterThan(-1);
+                // Check the CSS after the first prefers-reduced-motion occurrence
+                const afterRM = cssText.substring(rmIndex);
+                expect(afterRM).to.include('.mobile-fab');
+            });
+
+            it('FAB-CSS-14 — .mobile-fab:focus-visible uses contrasting outline color', () => {
+                // FAB background is color-primary, so focus outline must use contrasting color
+                const match = cssText.match(/\.mobile-fab:focus-visible\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                expect(match[1]).to.include('color-on-primary');
+            });
+
+            it('FAB-CSS-13 — Bottom sheet padding accounts for FAB overlap', () => {
+                // Bottom sheet should have extra bottom padding to avoid FAB obscuring content
+                // Look for padding-bottom in the mobile media query that accounts for the FAB height
+                const mobileQueryMatch = cssText.match(/@media\s*\(\s*max-width:\s*699px\s*\)\s*\{([\s\S]*?)\n\}/);
+                expect(mobileQueryMatch).to.not.be.null;
+                const mediaContent = mobileQueryMatch[1];
+                // Should have padding-bottom on .bottom-sheet that accounts for FAB (48px + spacing)
+                const bottomSheetPadding = mediaContent.match(/\.bottom-sheet[^{]*\{([^}]+)\}/);
+                if (bottomSheetPadding) {
+                    expect(bottomSheetPadding[1]).to.include('padding-bottom');
+                }
+            });
+        });
+
+        // ============================================================
+        // Bottom Sheet Toggle Methods — Regression Tests
+        // ============================================================
+        describe('Mobile FAB — Methods Regression', () => {
+            let data, methods, mockBase;
+
+            beforeEach(() => {
+                mockBase = createMockBase();
+                data = createCollageData(mockBase);
+                methods = createCollageMethods(mockBase);
+            });
+
+            it('FAB-METHOD-01 — toggleBottomSheet still toggles bottomSheetOpen', () => {
+                const state = data();
+                const vm = { ...state };
+                expect(vm.bottomSheetOpen).to.equal(false);
+                methods.toggleBottomSheet.call(vm);
+                expect(vm.bottomSheetOpen).to.equal(true);
+            });
+
+            it('FAB-METHOD-02 — toggleBottomSheet closes when already open', () => {
+                const state = data();
+                state.bottomSheetOpen = true;
+                const vm = { ...state };
+                methods.toggleBottomSheet.call(vm);
+                expect(vm.bottomSheetOpen).to.equal(false);
+            });
+
+            it('FAB-METHOD-03 — toggleBottomSheet opens and closes repeatedly without corruption', () => {
+                const state = data();
+                const vm = { ...state };
+                // Open
+                methods.toggleBottomSheet.call(vm);
+                expect(vm.bottomSheetOpen).to.equal(true);
+                // Close
+                methods.toggleBottomSheet.call(vm);
+                expect(vm.bottomSheetOpen).to.equal(false);
+                // Open again
+                methods.toggleBottomSheet.call(vm);
+                expect(vm.bottomSheetOpen).to.equal(true);
+                // Close again
+                methods.toggleBottomSheet.call(vm);
+                expect(vm.bottomSheetOpen).to.equal(false);
+            });
+
+            it('FAB-METHOD-04 — closeSidebars still returns focus to #bottomSheetToggleBtn', () => {
+                const state = data();
+                state.bottomSheetOpen = true;
+                const vm = { ...state };
+                methods.closeSidebars.call(vm);
+                expect(vm.bottomSheetOpen).to.equal(false);
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

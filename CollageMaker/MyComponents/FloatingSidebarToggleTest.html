@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Floating Sidebar Toggle Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Floating Sidebar Toggle Tests</h1>
+    <p class="test-plan-ref">Covers: Phase 1 — Desktop floating edge icons for sidebar toggles</p>
+    <p class="test-plan-ref">Plan: _agent_docs/plans/2026-07-28-expander-icon-and-positions-implementation.md</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createCollageData } from '../MyESModules/App/createCollageData.js';
+        import { createCollageMethods } from '../MyESModules/App/createCollageMethods.js';
+
+        const { expect } = chai;
+
+        // Minimal base mock for factory initialization
+        function createMockBase() {
+            return {
+                assembler: { render: () => {} },
+                dropHandler: { setupGlobalDrop: () => () => {} },
+                getCanvasRenderer: () => null,
+                setCanvasRenderer: () => {},
+                getLayoutManager: () => null,
+                setLayoutManager: () => {},
+                getCropManager: () => null,
+                setCropManager: () => {},
+                getImageLibrary: () => null,
+                setImageLibrary: () => {},
+                getBackgroundManager: () => null,
+                setBackgroundManager: () => {},
+                getTitleManager: () => null,
+                setTitleManager: () => {},
+                layoutStyleOptions: []
+            };
+        }
+
+        // ============================================================
+        // DOM Structure — Floating Toggle Buttons
+        // ============================================================
+        describe('Floating Sidebar Toggles — DOM Structure', async () => {
+            let doc;
+
+            before(async () => {
+                const response = await fetch('../index.html');
+                const html = await response.text();
+                const parser = new DOMParser();
+                doc = parser.parseFromString(html, 'text/html');
+            });
+
+            // ---- Left toggle button structure ----
+
+            it('FST-DOM-01 — Left toggle button exists with correct ID', () => {
+                const btn = doc.getElementById('leftSidebarToggleBtn');
+                expect(btn).to.not.be.null;
+            });
+
+            it('FST-DOM-02 — Left toggle is a <button> element', () => {
+                const btn = doc.getElementById('leftSidebarToggleBtn');
+                expect(btn.tagName.toLowerCase()).to.equal('button');
+            });
+
+            it('FST-DOM-03 — Left toggle has sidebar-float-btn class', () => {
+                const btn = doc.getElementById('leftSidebarToggleBtn');
+                expect(btn.classList.contains('sidebar-float-btn')).to.equal(true);
+            });
+
+            it('FST-DOM-04 — Left toggle has sidebar-float-left class', () => {
+                const btn = doc.getElementById('leftSidebarToggleBtn');
+                expect(btn.classList.contains('sidebar-float-left')).to.equal(true);
+            });
+
+            it('FST-DOM-05 — Left toggle has desktop-only class', () => {
+                const btn = doc.getElementById('leftSidebarToggleBtn');
+                expect(btn.classList.contains('desktop-only')).to.equal(true);
+            });
+
+            it('FST-DOM-06 — Left toggle is NOT inside the toolbar', () => {
+                const btn = doc.getElementById('leftSidebarToggleBtn');
+                const toolbar = doc.getElementById('toolbar');
+                expect(toolbar).to.not.be.null;
+                expect(toolbar.contains(btn)).to.equal(false);
+            });
+
+            it('FST-DOM-07 — Left toggle is a direct child of #app', () => {
+                const btn = doc.getElementById('leftSidebarToggleBtn');
+                const app = doc.getElementById('app');
+                expect(app).to.not.be.null;
+                expect(btn.parentElement).to.equal(app);
+            });
+
+            it('FST-DOM-08 — Left toggle has aria-controls="sidebar-left"', () => {
+                const btn = doc.getElementById('leftSidebarToggleBtn');
+                expect(btn.getAttribute('aria-controls')).to.equal('sidebar-left');
+            });
+
+            it('FST-DOM-09 — Left toggle has :aria-expanded binding', () => {
+                const btn = doc.getElementById('leftSidebarToggleBtn');
+                // In raw HTML, Vue bindings appear as :aria-expanded
+                expect(btn.getAttribute(':aria-expanded')).to.not.be.null;
+            });
+
+            it('FST-DOM-10 — Left toggle has :aria-label binding with dynamic text', () => {
+                const btn = doc.getElementById('leftSidebarToggleBtn');
+                const ariaLabel = btn.getAttribute(':aria-label');
+                expect(ariaLabel).to.not.be.null;
+                // Should contain "Collapse" and "Expand" for the dynamic label
+                expect(ariaLabel).to.include('Collapse');
+                expect(ariaLabel).to.include('Expand');
+            });
+
+            it('FST-DOM-11 — Left toggle has :title binding with dynamic tooltip', () => {
+                const btn = doc.getElementById('leftSidebarToggleBtn');
+                const title = btn.getAttribute(':title');
+                expect(title).to.not.be.null;
+                expect(title).to.include('Collapse');
+                expect(title).to.include('Expand');
+            });
+
+            it('FST-DOM-12 — Left toggle has @click="toggleLeftSidebar"', () => {
+                const btn = doc.getElementById('leftSidebarToggleBtn');
+                expect(btn.getAttribute('@click')).to.equal('toggleLeftSidebar');
+            });
+
+            // ---- Left toggle icon logic ----
+
+            it('FST-DOM-13 — Left toggle icon: chevron_left when open, chevron_right when closed', () => {
+                const btn = doc.getElementById('leftSidebarToggleBtn');
+                const iconSpan = btn.querySelector('.material-icons');
+                expect(iconSpan).to.not.be.null;
+                // Vue template interpolation — check the raw template text
+                const iconText = iconSpan.textContent.trim();
+                // When leftSidebarOpen is true → chevron_left (collapse left panel)
+                // When leftSidebarOpen is false → chevron_right (expand left panel)
+                expect(iconText).to.include('chevron_left');
+                expect(iconText).to.include('chevron_right');
+                // Verify the ternary: leftSidebarOpen ? 'chevron_left' : 'chevron_right'
+                // chevron_left should come before chevron_right in the ternary
+                const leftIdx = iconText.indexOf('chevron_left');
+                const rightIdx = iconText.indexOf('chevron_right');
+                expect(leftIdx).to.be.lessThan(rightIdx);
+            });
+
+            it('FST-DOM-13b — Left toggle icon span has aria-hidden="true"', () => {
+                const btn = doc.getElementById('leftSidebarToggleBtn');
+                const iconSpan = btn.querySelector('.material-icons');
+                expect(iconSpan).to.not.be.null;
+                expect(iconSpan.getAttribute('aria-hidden')).to.equal('true');
+            });
+
+            it('FST-DOM-14 — Left toggle has :class binding for sidebar-collapsed state', () => {
+                const btn = doc.getElementById('leftSidebarToggleBtn');
+                // Vue :class binding for sidebar-collapsed
+                const classBinding = btn.getAttribute(':class');
+                expect(classBinding).to.not.be.null;
+                expect(classBinding).to.include('sidebar-collapsed');
+            });
+
+            // ---- Right toggle button structure ----
+
+            it('FST-DOM-15 — Right toggle button exists with correct ID', () => {
+                const btn = doc.getElementById('sidebarToggleBtn');
+                expect(btn).to.not.be.null;
+            });
+
+            it('FST-DOM-16 — Right toggle is a <button> element', () => {
+                const btn = doc.getElementById('sidebarToggleBtn');
+                expect(btn.tagName.toLowerCase()).to.equal('button');
+            });
+
+            it('FST-DOM-17 — Right toggle has sidebar-float-btn class', () => {
+                const btn = doc.getElementById('sidebarToggleBtn');
+                expect(btn.classList.contains('sidebar-float-btn')).to.equal(true);
+            });
+
+            it('FST-DOM-18 — Right toggle has sidebar-float-right class', () => {
+                const btn = doc.getElementById('sidebarToggleBtn');
+                expect(btn.classList.contains('sidebar-float-right')).to.equal(true);
+            });
+
+            it('FST-DOM-19 — Right toggle has desktop-only class', () => {
+                const btn = doc.getElementById('sidebarToggleBtn');
+                expect(btn.classList.contains('desktop-only')).to.equal(true);
+            });
+
+            it('FST-DOM-20 — Right toggle is NOT inside the toolbar', () => {
+                const btn = doc.getElementById('sidebarToggleBtn');
+                const toolbar = doc.getElementById('toolbar');
+                expect(toolbar).to.not.be.null;
+                expect(toolbar.contains(btn)).to.equal(false);
+            });
+
+            it('FST-DOM-21 — Right toggle is a direct child of #app', () => {
+                const btn = doc.getElementById('sidebarToggleBtn');
+                const app = doc.getElementById('app');
+                expect(app).to.not.be.null;
+                expect(btn.parentElement).to.equal(app);
+            });
+
+            it('FST-DOM-22 — Right toggle has aria-controls="sidebar-right"', () => {
+                const btn = doc.getElementById('sidebarToggleBtn');
+                expect(btn.getAttribute('aria-controls')).to.equal('sidebar-right');
+            });
+
+            it('FST-DOM-23 — Right toggle has :aria-expanded binding', () => {
+                const btn = doc.getElementById('sidebarToggleBtn');
+                expect(btn.getAttribute(':aria-expanded')).to.not.be.null;
+            });
+
+            it('FST-DOM-24 — Right toggle has :aria-label binding with dynamic text', () => {
+                const btn = doc.getElementById('sidebarToggleBtn');
+                const ariaLabel = btn.getAttribute(':aria-label');
+                expect(ariaLabel).to.not.be.null;
+                expect(ariaLabel).to.include('Collapse');
+                expect(ariaLabel).to.include('Expand');
+            });
+
+            it('FST-DOM-25 — Right toggle has :title binding with dynamic tooltip', () => {
+                const btn = doc.getElementById('sidebarToggleBtn');
+                const title = btn.getAttribute(':title');
+                expect(title).to.not.be.null;
+                expect(title).to.include('Collapse');
+                expect(title).to.include('Expand');
+            });
+
+            it('FST-DOM-26 — Right toggle has @click="toggleRightSidebar"', () => {
+                const btn = doc.getElementById('sidebarToggleBtn');
+                expect(btn.getAttribute('@click')).to.equal('toggleRightSidebar');
+            });
+
+            // ---- Right toggle icon logic ----
+
+            it('FST-DOM-27 — Right toggle icon: chevron_right when open, chevron_left when closed', () => {
+                const btn = doc.getElementById('sidebarToggleBtn');
+                const iconSpan = btn.querySelector('.material-icons');
+                expect(iconSpan).to.not.be.null;
+                const iconText = iconSpan.textContent.trim();
+                // When rightSidebarOpen is true → chevron_right (collapse right panel)
+                // When rightSidebarOpen is false → chevron_left (expand right panel)
+                expect(iconText).to.include('chevron_right');
+                expect(iconText).to.include('chevron_left');
+                // Verify the ternary: rightSidebarOpen ? 'chevron_right' : 'chevron_left'
+                const rightIdx = iconText.indexOf('chevron_right');
+                const leftIdx = iconText.indexOf('chevron_left');
+                expect(rightIdx).to.be.lessThan(leftIdx);
+            });
+
+            it('FST-DOM-27b — Right toggle icon span has aria-hidden="true"', () => {
+                const btn = doc.getElementById('sidebarToggleBtn');
+                const iconSpan = btn.querySelector('.material-icons');
+                expect(iconSpan).to.not.be.null;
+                expect(iconSpan.getAttribute('aria-hidden')).to.equal('true');
+            });
+
+            it('FST-DOM-28 — Right toggle has :class binding for sidebar-collapsed state', () => {
+                const btn = doc.getElementById('sidebarToggleBtn');
+                const classBinding = btn.getAttribute(':class');
+                expect(classBinding).to.not.be.null;
+                expect(classBinding).to.include('sidebar-collapsed');
+            });
+
+            // ---- Toolbar no longer contains sidebar toggles ----
+
+            it('FST-DOM-29 — Toolbar no longer contains left sidebar toggle', () => {
+                const toolbar = doc.getElementById('toolbar');
+                const leftBtn = toolbar.querySelector('#leftSidebarToggleBtn');
+                expect(leftBtn).to.be.null;
+            });
+
+            it('FST-DOM-30 — Toolbar no longer contains right sidebar toggle', () => {
+                const toolbar = doc.getElementById('toolbar');
+                const rightBtn = toolbar.querySelector('#sidebarToggleBtn');
+                expect(rightBtn).to.be.null;
+            });
+
+            it('FST-DOM-31 — Toolbar no longer contains old toolbar-icon-btn sidebar toggles', () => {
+                const toolbar = doc.getElementById('toolbar');
+                // Old pattern: buttons with both toolbar-icon-btn and toggleSidebar in @click
+                const oldToggles = toolbar.querySelectorAll('.toolbar-icon-btn');
+                oldToggles.forEach(btn => {
+                    const click = btn.getAttribute('@click');
+                    expect(click).to.not.include('toggleLeftSidebar');
+                    expect(click).to.not.include('toggleRightSidebar');
+                });
+            });
+        });
+
+        // ============================================================
+        // CSS — Floating Toggle Styles Exist
+        // ============================================================
+        describe('Floating Sidebar Toggles — CSS Styles', async () => {
+            let cssText;
+
+            before(async () => {
+                const response = await fetch('../Style.css');
+                cssText = await response.text();
+            });
+
+            it('FST-CSS-01 — .sidebar-float-btn class exists', () => {
+                expect(cssText).to.include('.sidebar-float-btn');
+            });
+
+            it('FST-CSS-02 — .sidebar-float-btn uses position: fixed', () => {
+                // Find the .sidebar-float-btn block and verify position: fixed
+                const match = cssText.match(/\.sidebar-float-btn\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                expect(match[1]).to.include('position: fixed');
+            });
+
+            it('FST-CSS-03 — .sidebar-float-btn has z-index: 200', () => {
+                const match = cssText.match(/\.sidebar-float-btn\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                expect(match[1]).to.include('z-index: 200');
+            });
+
+            it('FST-CSS-04 — .sidebar-float-btn has border-radius: 50% (circular)', () => {
+                const match = cssText.match(/\.sidebar-float-btn\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                expect(match[1]).to.include('border-radius: 50%');
+            });
+
+            it('FST-CSS-05 — .sidebar-float-left class exists', () => {
+                expect(cssText).to.include('.sidebar-float-left');
+            });
+
+            it('FST-CSS-06 — .sidebar-float-right class exists', () => {
+                expect(cssText).to.include('.sidebar-float-right');
+            });
+
+            it('FST-CSS-07 — Hover state defined for .sidebar-float-btn', () => {
+                expect(cssText).to.include('.sidebar-float-btn:hover');
+            });
+
+            it('FST-CSS-08 — sidebar-collapsed class affects .sidebar-float-left position', () => {
+                // When sidebar is collapsed, left toggle should move to left edge with offset
+                expect(cssText).to.match(/\.sidebar-float-left\.sidebar-collapsed|\.sidebar-collapsed.*\.sidebar-float-left/);
+            });
+
+            it('FST-CSS-12 — Collapsed left toggle has left offset > 0 so button is visible', () => {
+                // Button at left: 0 is clipped by viewport edge — needs offset to be visible
+                const match = cssText.match(/\.sidebar-float-left\.sidebar-collapsed\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                const block = match[1];
+                expect(block).to.include('left:');
+                const leftValue = block.match(/left:\s*([\d.]+)\s*(?:px)?/i);
+                expect(leftValue).to.not.be.null;
+                expect(parseFloat(leftValue[1])).to.be.greaterThan(0);
+            });
+
+            it('FST-CSS-09 — sidebar-collapsed class affects .sidebar-float-right position', () => {
+                expect(cssText).to.match(/\.sidebar-float-right\.sidebar-collapsed|\.sidebar-collapsed.*\.sidebar-float-right/);
+            });
+
+            it('FST-CSS-13 — Collapsed right toggle has right offset > 0 so button is visible', () => {
+                // Button at right: 0 is clipped by viewport edge — needs offset to be visible
+                const match = cssText.match(/\.sidebar-float-right\.sidebar-collapsed\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                const block = match[1];
+                expect(block).to.include('right:');
+                const rightValue = block.match(/right:\s*([\d.]+)\s*(?:px)?/i);
+                expect(rightValue).to.not.be.null;
+                expect(parseFloat(rightValue[1])).to.be.greaterThan(0);
+            });
+
+            it('FST-CSS-11 — .sidebar-float-btn has :focus-visible style for keyboard navigation', () => {
+                expect(cssText).to.include('.sidebar-float-btn:focus-visible');
+            });
+
+            it('FST-CSS-10 — Transition on left/right properties for smooth animation', () => {
+                const match = cssText.match(/\.sidebar-float-btn\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                const block = match[1];
+                expect(block).to.include('transition');
+                // Should transition either left/right or use a general property
+                expect(block).to.include('left') || expect(block).to.include('right');
+            });
+        });
+
+        // ============================================================
+        // Sidebar Toggle Methods — Still Work (Regression)
+        // ============================================================
+        describe('Floating Sidebar Toggles — Methods Regression', () => {
+            let data, methods, mockBase;
+
+            beforeEach(() => {
+                mockBase = createMockBase();
+                data = createCollageData(mockBase);
+                methods = createCollageMethods(mockBase);
+            });
+
+            it('FST-METHOD-01 — toggleLeftSidebar still toggles leftSidebarOpen', () => {
+                const state = data();
+                const vm = { ...state };
+                expect(vm.leftSidebarOpen).to.equal(true);
+                methods.toggleLeftSidebar.call(vm);
+                expect(vm.leftSidebarOpen).to.equal(false);
+            });
+
+            it('FST-METHOD-02 — toggleRightSidebar still toggles rightSidebarOpen', () => {
+                const state = data();
+                const vm = { ...state };
+                expect(vm.rightSidebarOpen).to.equal(true);
+                methods.toggleRightSidebar.call(vm);
+                expect(vm.rightSidebarOpen).to.equal(false);
+            });
+
+            it('FST-METHOD-03 — toggleLeftSidebar re-opens when closed', () => {
+                const state = data();
+                state.leftSidebarOpen = false;
+                const vm = { ...state };
+                methods.toggleLeftSidebar.call(vm);
+                expect(vm.leftSidebarOpen).to.equal(true);
+            });
+
+            it('FST-METHOD-04 — toggleRightSidebar re-opens when closed', () => {
+                const state = data();
+                state.rightSidebarOpen = false;
+                const vm = { ...state };
+                methods.toggleRightSidebar.call(vm);
+                expect(vm.rightSidebarOpen).to.equal(true);
+            });
+
+            it('FST-METHOD-05 — closeSidebars still closes both mobile sidebars', () => {
+                const state = data();
+                state.leftSidebarMobileOpen = true;
+                state.rightSidebarMobileOpen = true;
+                const vm = { ...state };
+                methods.closeSidebars.call(vm);
+                expect(vm.leftSidebarMobileOpen).to.equal(false);
+                expect(vm.rightSidebarMobileOpen).to.equal(false);
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

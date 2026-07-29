@@ -397,6 +397,120 @@ body.drag-over .canvas-container {
     font-size: 20px;
 }
 
+/* ========================
+ * Floating Sidebar Toggles
+ * ======================== */
+
+/* Floating sidebar toggle buttons — positioned on viewport edges */
+.sidebar-float-btn {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 200;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-surface-variant);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--elevation-1);
+    transition: background-color var(--transition-fast),
+                box-shadow var(--transition-fast),
+                left 0.25s ease,
+                right 0.25s ease;
+    pointer-events: auto;
+}
+
+.sidebar-float-btn:hover {
+    background-color: var(--color-primary);
+    color: var(--color-on-primary);
+    box-shadow: var(--elevation-2);
+}
+
+.sidebar-float-btn .material-icons {
+    font-size: 20px;
+}
+
+/* Keyboard focus ring — visible only for keyboard navigation */
+.sidebar-float-btn:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+/* Left sidebar toggle — positioned on right edge of left sidebar */
+.sidebar-float-left {
+    left: 260px;
+}
+
+/* When left sidebar is collapsed, move near left edge of viewport (offset so button stays visible) */
+.sidebar-float-left.sidebar-collapsed {
+    left: 8px;
+}
+
+/* Right sidebar toggle — positioned on left edge of right sidebar */
+.sidebar-float-right {
+    right: 260px;
+}
+
+/* When right sidebar is collapsed, move near right edge of viewport (offset so button stays visible) */
+.sidebar-float-right.sidebar-collapsed {
+    right: 8px;
+}
+
+/* ========================
+ * Mobile FAB
+ * ======================== */
+
+/* Mobile FAB — floating action button for bottom sheet */
+.mobile-fab {
+    position: fixed;
+    bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+    right: var(--space-3);
+    z-index: 200;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background-color: var(--color-primary);
+    color: var(--color-on-primary);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--elevation-2);
+    transition: transform var(--transition-fast),
+                background-color var(--transition-fast);
+    pointer-events: auto;
+}
+
+.mobile-fab:hover {
+    transform: scale(1.05);
+}
+
+.mobile-fab:active {
+    transform: scale(0.95);
+}
+
+.mobile-fab .material-icons {
+    font-size: 24px;
+}
+
+/* Keyboard focus ring — visible only for keyboard navigation
+   Uses on-primary (white) to contrast against the primary-colored FAB background */
+.mobile-fab:focus-visible {
+    outline: 2px solid var(--color-on-primary);
+    outline-offset: 2px;
+}
+
+/* Hidden on desktop — shown on mobile via media query */
+.mobile-fab {
+    display: none;
+}
+
 /* Scrollbar styling */
 .image-library::-webkit-scrollbar,
 .sidebar::-webkit-scrollbar {
@@ -547,7 +661,7 @@ body.drag-over .canvas-container {
 }
 
 /* Sidebar collapsed state */
-.sidebar-collapsed {
+div.sidebar.sidebar-collapsed {
     width: 0 !important;
     min-width: 0 !important;
     padding: 0 !important;
@@ -1050,8 +1164,18 @@ input[type="range"].fullRange {
 
     /* Hide desktop elements on mobile */
     .app-title { display: none; }
+    .home-link { display: none; }
     .desktop-only { display: none !important; }
     .mobile-only { display: flex !important; }
+
+    /* Toolbar: prevent horizontal overflow on mobile */
+    .collage-toolbar {
+        overflow: hidden;
+    }
+    .toolbar-actions {
+        flex-wrap: nowrap;
+        min-width: 0;
+    }
 
     /* Hide sidebars on mobile (replaced by bottom sheet) */
     .sidebar-left,
@@ -1073,7 +1197,7 @@ input[type="range"].fullRange {
         z-index: 160;
         transform: translateY(100%);
         transition: transform 0.3s ease;
-        padding-bottom: env(safe-area-inset-bottom, 0px);
+        padding-bottom: calc(var(--space-3) + 48px + env(safe-area-inset-bottom, 0px));
     }
 
     .bottom-sheet-open {
@@ -1177,9 +1301,15 @@ input[type="range"].fullRange {
     }
 }
 
-/* Reduced motion — disable bottom sheet animation */
+/* Reduced motion — disable animations */
 @media (prefers-reduced-motion: reduce) {
     .bottom-sheet {
+        transition: none;
+    }
+    .mobile-fab {
+        transition: none;
+    }
+    .sidebar-float-btn {
         transition: none;
     }
 }

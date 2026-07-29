@@ -1,6 +1,6 @@
 ---
 name: building-web-apps
-description: Build static web apps with Vue 3 Options API, Canvas 2D, ES modules, CDN libraries. Covers factory testability (callback injection, provider functions, DOM ID injection, module extraction, service locator safety, return value notification, handler .call(this), closure safety, internal closure pattern, return-object exposure, mock VM construction, undo snapshots (segmented inline, atomic handler methods, lifecycle cleanup)), extensibility (strategy/registry), canvas clearing for exports, config rendering, shared offscreen canvas, render order, dual-canvas visibility guard, async UI cleanup (try/finally, concurrency guards), toast notifications, accessibility (ARIA live regions, custom button keyboard, aria-busy, reduced motion, canvas roles, ARIA tab pattern with aria-controls/aria-labelledby, focus return on dialog close, focus traps for aria-modal dialogs), drag cleanup, VISIBLE_MIN clamping, test-driven refactoring, Vue input patterns (@keydown.enter, v-model undo timing, segmented/checkbox inline snapshot/commit, atomic handler extraction, beforeUnmount cleanup, $nextTick race condition guards), multi-touch gestures (TouchEvent/PointerEvent/WheelEvent, pointerType guards, wheel pan/zoom, dual gesture direction conventions, touch-action: pan-y selective passthrough), multi-canvas pointer events (e.currentTarget for per-canvas coordinate math), mobile sidebar overlays (dual-state toggles, CSS !important cascade, global Escape, Playwright Escape key unreliability with .window modifier, overlay backdrops, aria-expanded), mobile bottom sheets (ID prefixing for content duplication, visual drag handle, auto-switch tab on content change, dvh height units), fixed element z-index occlusion (prevention checklist, Playwright "intercepts pointer events" diagnosis), iOS safe areas (viewport-fit=cover, 100dvh, fixed element treatment, CSS content validation testing), destination-out compositing, DPR/CORS, test runner DOM queries (querySelector over getElementById, offsetParent mounting for detached elements, getElementById mock null fallback). No build step. Use for CollageMaker features, rendering, state, testing.
+description: Build static web apps with Vue 3 Options API, Canvas 2D, ES modules, CDN libraries. Covers factory testability (callback injection, provider functions, DOM ID injection, module extraction, service locator safety, return value notification, handler .call(this), closure safety, internal closure pattern, return-object exposure, mock VM construction, undo snapshots (segmented inline, atomic handler methods, lifecycle cleanup)), extensibility (strategy/registry), canvas clearing for exports, config rendering, shared offscreen canvas, render order, dual-canvas visibility guard, async UI cleanup (try/finally, concurrency guards), toast notifications, accessibility (ARIA live regions, custom button keyboard, aria-busy, reduced motion, canvas roles, ARIA tab pattern with aria-controls/aria-labelledby, focus return on dialog close, focus traps for aria-modal dialogs), drag cleanup, VISIBLE_MIN clamping, test-driven refactoring, Vue input patterns (@keydown.enter, v-model undo timing, segmented/checkbox inline snapshot/commit, atomic handler extraction, beforeUnmount cleanup, $nextTick race condition guards), multi-touch gestures (TouchEvent/PointerEvent/WheelEvent, pointerType guards, wheel pan/zoom, dual gesture direction conventions, touch-action: pan-y selective passthrough), multi-canvas pointer events (e.currentTarget for per-canvas coordinate math), mobile sidebar overlays (dual-state toggles, CSS !important cascade, scoped CSS selectors for shared classes, global Escape, Playwright Escape key unreliability with .window modifier, overlay backdrops, aria-expanded), mobile bottom sheets (ID prefixing for content duplication, visual drag handle, auto-switch tab on content change, dvh height units), fixed element z-index occlusion (prevention checklist, Playwright "intercepts pointer events" diagnosis), iOS safe areas (viewport-fit=cover, 100dvh, fixed element treatment, CSS content validation testing), destination-out compositing, DPR/CORS, test runner DOM queries (querySelector over getElementById, offsetParent mounting for detached elements, getElementById mock null fallback). No build step. Use for CollageMaker features, rendering, state, testing.
 ---
 
 # Building Web Apps
@@ -496,6 +496,24 @@ toggleRightSidebar() {
 - Match specificity: include all conflicting classes in the selector
 - Only override conflicting properties, not all properties
 - Prefer avoiding `!important` when you control both desktop and mobile CSS
+
+**Scoped CSS Selectors for Shared Classes** — When a CSS class with `!important` properties is shared across different element types via framework bindings (Vue `:class`), scope the selector to prevent collateral damage:
+
+```css
+/* BAD — matches ANY element with the class, including buttons */
+.sidebar-collapsed {
+    width: 0 !important;
+}
+
+/* GOOD — only matches sidebar divs, not toggle buttons */
+div.sidebar.sidebar-collapsed {
+    width: 0 !important;
+}
+```
+
+- Separate the **state-signaling class** (bare, non-destructive) from the **style class** (scoped, with `!important`)
+- A bare `.class-name` is safe only when: single element type, no `!important`, or purely state-signaling
+- See `references/mobile-ui-patterns.md` for the full prevention checklist and debugging tips
 
 **Global Escape Key** — Use `@keydown.escape.window.prevent` on the app root to catch Escape regardless of focus state. The `.window` modifier attaches the listener to `window`.
 

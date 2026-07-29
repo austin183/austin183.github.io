@@ -4,6 +4,7 @@
 
 - Dual-State Toggle Pattern
 - CSS `!important` Cascade in Media Queries
+- Scoped CSS Selectors for Shared Classes
 - Vue `.window` Modifier for Global Escape Key
 - `display: none` for Overlay Backdrops
 - ARIA `aria-expanded` on Mobile Toggle Buttons
@@ -150,6 +151,107 @@ However, when desktop CSS is established and uses `!important` (like a shared co
 ### File References
 
 - `Style.css` — Mobile media queries with `!important` cascade overrides
+
+---
+
+## Scoped CSS Selectors for Shared Classes
+
+When a CSS class with `!important` properties is shared across different element types via framework bindings (Vue `:class`, React `className`, etc.), scope the selector with an element type or parent class to prevent collateral damage.
+
+### The Problem
+
+The `.sidebar-collapsed` class serves two purposes in CollageMaker:
+
+1. **On sidebar `<div>`s** — collapses the panel to zero width (desired)
+2. **On toggle `<button>`s** — indicates collapsed state for repositioning (desired)
+
+A bare class selector applies destructive styles to **all** elements carrying the class:
+
+```css
+/* BAD — matches ANY element with sidebar-collapsed, including toggle buttons */
+.sidebar-collapsed {
+    width: 0 !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    border-left: none !important;
+    overflow: hidden !important;
+}
+```
+
+The `!important` flag overrides the `.sidebar-float-btn` rule's `width: 40px`, rendering the buttons invisible (computed width: 0, collapsing to 1px due to flex shrink).
+
+### Why It Happens
+
+- Toggle buttons were **added after** the `.sidebar-collapsed` rule existed
+- The class name was reused for a different purpose (state tracking + positioning) without considering existing `!important` properties
+- `!important` makes specificity irrelevant — it always wins over non-`!important` declarations regardless of specificity
+
+### The Fix: Scope with Element Type + Parent Class
+
+```css
+/* GOOD — only matches <div class="sidebar sidebar-collapsed"> */
+div.sidebar.sidebar-collapsed {
+    width: 0 !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    border-left: none !important;
+    overflow: hidden !important;
+}
+```
+
+**Why this works:**
+- Toggle buttons have classes `sidebar-float-btn sidebar-float-left sidebar-collapsed` — they lack the `sidebar` class, so the scoped selector doesn't match them
+- Sidebar divs have classes `sidebar sidebar-left sidebar-collapsed` — they match `div`, `.sidebar`, and `.sidebar-collapsed`
+- Mobile overrides (`.sidebar-left.sidebar-collapsed.mobile-open`, etc.) still work because they're already more specific compound selectors
+
+### Pattern: Separate State Class from Style Class
+
+```css
+/* State class — bare, non-destructive (or no styles at all) */
+.sidebar-collapsed {
+    /* Only non-destructive properties, if any */
+}
+
+/* Style class — scoped to target element type */
+div.sidebar.sidebar-collapsed {
+    width: 0 !important;  /* Only affects sidebar divs */
+}
+
+/* Positioning class — scoped to target element type */
+.sidebar-float-left.sidebar-collapsed {
+    left: 8px;  /* Only affects left toggle buttons */
+}
+```
+
+### Prevention Checklist
+
+| Check | Action |
+|-------|--------|
+| Does the class have `!important` properties? | Scope with element type: `div.class-name` not `.class-name` |
+| Is the class applied to multiple element types? | Use compound selectors: `div.parent.child` not `.child` |
+| Will new elements reuse this class? | Document the class contract — what it styles vs what it signals |
+| Could `!important` be avoided? | Prefer higher specificity over `!important` when possible |
+
+### When Bare Class Selectors Are Safe
+
+A bare `.class-name` selector is safe when:
+- The class is **only** applied to one element type
+- The class has **no** `!important` properties
+- The class is used purely for **state signaling** (e.g., `.sidebar-collapsed` on buttons for positioning) and the destructive styles live in a scoped selector
+
+### Debugging: Unexpected Zero Dimensions
+
+When an element has unexpected zero width or height:
+
+1. **Check computed dimensions** — `getComputedStyle(el).width` will show `0px` or `1px`
+2. **Look for `!important` in matching rules** — DevTools shows `!important` rules; if nothing overrides them, they win
+3. **Check all classes on the element** — a shared class from a Vue `:class` binding might be applying unexpected styles
+4. **Search for the class in CSS** — `grep .class-name Style.css` to find all rules that could match
+
+### File References
+
+- `Style.css` — `div.sidebar.sidebar-collapsed` (line 614), `.sidebar-float-left.sidebar-collapsed` (line 450), `.sidebar-float-right.sidebar-collapsed` (line 460)
+- `index.html` — Vue `:class` bindings on sidebar divs and toggle buttons
 
 ---
 

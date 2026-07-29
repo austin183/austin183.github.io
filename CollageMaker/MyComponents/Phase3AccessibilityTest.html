@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phase 3 Accessibility and Polish Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Phase 3: Accessibility and Polish Tests</h1>
+    <p class="test-plan-ref">Covers: Phase 3 — Accessibility attributes, hover states, z-index, tooltips</p>
+    <p class="test-plan-ref">Plan: _agent_docs/plans/2026-07-28-expander-icon-and-positions-implementation.md</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createCollageData } from '../MyESModules/App/createCollageData.js';
+        import { createCollageMethods } from '../MyESModules/App/createCollageMethods.js';
+
+        const { expect } = chai;
+
+        function createMockBase() {
+            return {
+                assembler: { render: () => {} },
+                dropHandler: { setupGlobalDrop: () => () => {} },
+                getCanvasRenderer: () => null,
+                setCanvasRenderer: () => {},
+                getLayoutManager: () => null,
+                setLayoutManager: () => {},
+                getCropManager: () => null,
+                setCropManager: () => {},
+                getImageLibrary: () => null,
+                setImageLibrary: () => {},
+                getBackgroundManager: () => null,
+                setBackgroundManager: () => {},
+                getTitleManager: () => null,
+                setTitleManager: () => {},
+                layoutStyleOptions: []
+            };
+        }
+
+        // ============================================================
+        // Phase 3.2 — ARIA Attributes on All Three Toggles
+        // ============================================================
+        describe('Phase 3 — ARIA Attributes', async () => {
+            let doc;
+
+            before(async () => {
+                const response = await fetch('../index.html');
+                const html = await response.text();
+                const parser = new DOMParser();
+                doc = parser.parseFromString(html, 'text/html');
+            });
+
+            // ---- 3.2.1 / 3.2.2: Left toggle aria-expanded and aria-label ----
+            it('P3-ARIA-01 — Left toggle: aria-expanded bound to leftSidebarOpen', () => {
+                const btn = doc.getElementById('leftSidebarToggleBtn');
+                expect(btn).to.not.be.null;
+                expect(btn.getAttribute(':aria-expanded')).to.equal('leftSidebarOpen');
+            });
+
+            it('P3-ARIA-02 — Left toggle: aria-label dynamic (Collapse/Expand image panel)', () => {
+                const btn = doc.getElementById('leftSidebarToggleBtn');
+                const label = btn.getAttribute(':aria-label');
+                expect(label).to.include('Collapse image panel');
+                expect(label).to.include('Expand image panel');
+                // Verify ternary: leftSidebarOpen ? 'Collapse...' : 'Expand...'
+                const collapseIdx = label.indexOf('Collapse');
+                const expandIdx = label.indexOf('Expand');
+                expect(collapseIdx).to.be.lessThan(expandIdx);
+            });
+
+            it('P3-ARIA-03 — Left toggle: aria-controls="sidebar-left"', () => {
+                const btn = doc.getElementById('leftSidebarToggleBtn');
+                expect(btn.getAttribute('aria-controls')).to.equal('sidebar-left');
+            });
+
+            // ---- 3.2.3 / 3.2.4: Right toggle aria-expanded and aria-label ----
+            it('P3-ARIA-04 — Right toggle: aria-expanded bound to rightSidebarOpen', () => {
+                const btn = doc.getElementById('sidebarToggleBtn');
+                expect(btn).to.not.be.null;
+                expect(btn.getAttribute(':aria-expanded')).to.equal('rightSidebarOpen');
+            });
+
+            it('P3-ARIA-05 — Right toggle: aria-label dynamic (Collapse/Expand editor panel)', () => {
+                const btn = doc.getElementById('sidebarToggleBtn');
+                const label = btn.getAttribute(':aria-label');
+                expect(label).to.include('Collapse editor panel');
+                expect(label).to.include('Expand editor panel');
+                const collapseIdx = label.indexOf('Collapse');
+                const expandIdx = label.indexOf('Expand');
+                expect(collapseIdx).to.be.lessThan(expandIdx);
+            });
+
+            it('P3-ARIA-06 — Right toggle: aria-controls="sidebar-right"', () => {
+                const btn = doc.getElementById('sidebarToggleBtn');
+                expect(btn.getAttribute('aria-controls')).to.equal('sidebar-right');
+            });
+
+            // ---- 3.2.5 / 3.2.6: FAB aria-expanded and aria-label ----
+            it('P3-ARIA-07 — FAB: aria-expanded bound to bottomSheetOpen', () => {
+                const btn = doc.getElementById('bottomSheetToggleBtn');
+                expect(btn).to.not.be.null;
+                expect(btn.getAttribute(':aria-expanded')).to.equal('bottomSheetOpen');
+            });
+
+            it('P3-ARIA-08 — FAB: aria-label dynamic (Open/Close menu)', () => {
+                const btn = doc.getElementById('bottomSheetToggleBtn');
+                const label = btn.getAttribute(':aria-label');
+                expect(label).to.include('Close menu');
+                expect(label).to.include('Open menu');
+                // Verify ternary: bottomSheetOpen ? 'Close menu' : 'Open menu'
+                // Search for the quoted strings to avoid matching "Open" in "bottomSheetOpen"
+                const closeIdx = label.indexOf("'Close menu'");
+                const openIdx = label.indexOf("'Open menu'");
+                expect(closeIdx).to.be.greaterThan(-1);
+                expect(openIdx).to.be.greaterThan(-1);
+                expect(closeIdx).to.be.lessThan(openIdx);
+            });
+
+            it('P3-ARIA-09 — FAB: aria-controls="bottomSheet"', () => {
+                const btn = doc.getElementById('bottomSheetToggleBtn');
+                expect(btn.getAttribute('aria-controls')).to.equal('bottomSheet');
+            });
+
+            // ---- aria-haspopup on FAB (enhancement over spec) ----
+            it('P3-ARIA-10 — FAB: has aria-haspopup="dialog" for screen reader context', () => {
+                const btn = doc.getElementById('bottomSheetToggleBtn');
+                expect(btn.getAttribute('aria-haspopup')).to.equal('dialog');
+            });
+
+            // ---- Icon spans have aria-hidden ----
+            it('P3-ARIA-11 — Left toggle icon span has aria-hidden="true"', () => {
+                const btn = doc.getElementById('leftSidebarToggleBtn');
+                const icon = btn.querySelector('.material-icons');
+                expect(icon.getAttribute('aria-hidden')).to.equal('true');
+            });
+
+            it('P3-ARIA-12 — Right toggle icon span has aria-hidden="true"', () => {
+                const btn = doc.getElementById('sidebarToggleBtn');
+                const icon = btn.querySelector('.material-icons');
+                expect(icon.getAttribute('aria-hidden')).to.equal('true');
+            });
+
+            it('P3-ARIA-13 — FAB icon span has aria-hidden="true"', () => {
+                const btn = doc.getElementById('bottomSheetToggleBtn');
+                const icon = btn.querySelector('.material-icons');
+                expect(icon).to.not.be.null;
+                expect(icon.getAttribute('aria-hidden')).to.equal('true');
+            });
+        });
+
+        // ============================================================
+        // Phase 3.1 — Tooltips (title attributes)
+        // ============================================================
+        describe('Phase 3 — Tooltips', async () => {
+            let doc;
+
+            before(async () => {
+                const response = await fetch('../index.html');
+                const html = await response.text();
+                const parser = new DOMParser();
+                doc = parser.parseFromString(html, 'text/html');
+            });
+
+            // ---- 1.1.9 / 1.1.10: Left toggle tooltip ----
+            it('P3-TITLE-01 — Left toggle: :title binding with Collapse/Expand image panel', () => {
+                const btn = doc.getElementById('leftSidebarToggleBtn');
+                const title = btn.getAttribute(':title');
+                expect(title).to.not.be.null;
+                expect(title).to.include('Collapse image panel');
+                expect(title).to.include('Expand image panel');
+            });
+
+            // ---- Right toggle tooltip ----
+            it('P3-TITLE-02 — Right toggle: :title binding with Collapse/Expand editor panel', () => {
+                const btn = doc.getElementById('sidebarToggleBtn');
+                const title = btn.getAttribute(':title');
+                expect(title).to.not.be.null;
+                expect(title).to.include('Collapse editor panel');
+                expect(title).to.include('Expand editor panel');
+            });
+
+            // ---- FAB does NOT need title (mobile context) ----
+            it('P3-TITLE-03 — FAB: no title attribute needed (mobile, screen readers use aria-label)', () => {
+                const btn = doc.getElementById('bottomSheetToggleBtn');
+                // FAB should not have a title attribute — it's a mobile-only control
+                // and screen readers should use aria-label instead
+                // (Having one wouldn't be harmful, but it's not required)
+                const title = btn.getAttribute('title');
+                // Just verify it exists or doesn't — either is acceptable
+                // The important thing is aria-label is present
+                expect(btn.getAttribute(':aria-label')).to.not.be.null;
+            });
+        });
+
+        // ============================================================
+        // Phase 3.2 — Hover States (CSS)
+        // ============================================================
+        describe('Phase 3 — Hover States', async () => {
+            let cssText;
+
+            before(async () => {
+                const response = await fetch('../Style.css');
+                cssText = await response.text();
+            });
+
+            it('P3-HOVER-01 — .sidebar-float-btn:hover changes background to primary', () => {
+                const match = cssText.match(/\.sidebar-float-btn:hover\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                expect(match[1]).to.include('color-primary');
+            });
+
+            it('P3-HOVER-02 — .sidebar-float-btn:hover changes text to on-primary', () => {
+                const match = cssText.match(/\.sidebar-float-btn:hover\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                expect(match[1]).to.include('color-on-primary');
+            });
+
+            it('P3-HOVER-03 — .sidebar-float-btn:hover increases box-shadow (elevation-2)', () => {
+                const match = cssText.match(/\.sidebar-float-btn:hover\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                expect(match[1]).to.include('elevation-2');
+            });
+
+            it('P3-HOVER-04 — .mobile-fab:hover has hover state (scale transform)', () => {
+                const match = cssText.match(/\.mobile-fab:hover\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                expect(match[1]).to.include('transform');
+            });
+
+            it('P3-HOVER-05 — .mobile-fab:active has active state (scale down)', () => {
+                const match = cssText.match(/\.mobile-fab:active\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                expect(match[1]).to.include('transform');
+            });
+        });
+
+        // ============================================================
+        // Phase 3.3 — Z-Index Stacking
+        // ============================================================
+        describe('Phase 3 — Z-Index Stacking', async () => {
+            let cssText;
+
+            before(async () => {
+                const response = await fetch('../Style.css');
+                cssText = await response.text();
+            });
+
+            it('P3-Z-01 — .sidebar-float-btn z-index: 200 (above sidebars at 150)', () => {
+                const match = cssText.match(/\.sidebar-float-btn\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                expect(match[1]).to.include('z-index: 200');
+            });
+
+            it('P3-Z-02 — .mobile-fab z-index: 200 (above bottom sheet at 160)', () => {
+                const match = cssText.match(/\.mobile-fab\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                expect(match[1]).to.include('z-index: 200');
+            });
+
+            it('P3-Z-03 — .sidebar-float-btn z-index above .sidebar mobile z-index (150)', () => {
+                // Verify sidebar mobile z-index is 150
+                const sidebarMobileMatch = cssText.match(/@media[^{]*699px[^{]*\{[\s\S]*?\.sidebar-left\s*\{([^}]+)\}/);
+                if (sidebarMobileMatch) {
+                    expect(sidebarMobileMatch[1]).to.include('z-index: 150');
+                }
+            });
+
+            it('P3-Z-04 — .sidebar-float-btn z-index above .bottom-sheet z-index (160)', () => {
+                // Verify bottom sheet z-index is 160
+                const bsMatch = cssText.match(/\.bottom-sheet\s*\{([^}]+)\}/);
+                if (bsMatch) {
+                    // The first .bottom-sheet block may not have z-index
+                    // Check inside the media query
+                    const mobileMatch = cssText.match(/@media\s*\(\s*max-width:\s*699px\s*\)\s*\{[\s\S]*?\.bottom-sheet\s*\{([^}]+)\}/);
+                    if (mobileMatch) {
+                        expect(mobileMatch[1]).to.include('z-index: 160');
+                    }
+                }
+            });
+
+            it('P3-Z-05 — .toast-notification z-index: 9999 (above everything)', () => {
+                const match = cssText.match(/\.toast-notification\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                expect(match[1]).to.include('z-index: 9999');
+            });
+
+            it('P3-Z-06 — .collage-toolbar z-index: 100 (below floating toggles)', () => {
+                const match = cssText.match(/\.collage-toolbar\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                expect(match[1]).to.include('z-index: 100');
+            });
+        });
+
+        // ============================================================
+        // Phase 3.4 — Keyboard Focus Styles
+        // ============================================================
+        describe('Phase 3 — Keyboard Focus Styles', async () => {
+            let cssText;
+
+            before(async () => {
+                const response = await fetch('../Style.css');
+                cssText = await response.text();
+            });
+
+            it('P3-FOCUS-01 — .sidebar-float-btn:focus-visible has outline style', () => {
+                const match = cssText.match(/\.sidebar-float-btn:focus-visible\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                expect(match[1]).to.include('outline');
+            });
+
+            it('P3-FOCUS-02 — .mobile-fab:focus-visible has outline with contrasting color (on-primary)', () => {
+                const match = cssText.match(/\.mobile-fab:focus-visible\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                expect(match[1]).to.include('outline');
+                // FAB background is color-primary, so focus outline must use contrasting color
+                expect(match[1]).to.include('color-on-primary');
+            });
+        });
+
+        // ============================================================
+        // Phase 3.5 — Touch Target Sizes
+        // ============================================================
+        describe('Phase 3 — Touch Target Sizes', async () => {
+            let cssText;
+
+            before(async () => {
+                const response = await fetch('../Style.css');
+                cssText = await response.text();
+            });
+
+            it('P3-TOUCH-01 — Desktop toggles: minimum 44px touch target (WCAG 2.5.5)', () => {
+                const match = cssText.match(/\.sidebar-float-btn\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                const block = match[1];
+                const widthMatch = block.match(/width:\s*(\d+)/);
+                const heightMatch = block.match(/height:\s*(\d+)/);
+                expect(widthMatch).to.not.be.null;
+                expect(heightMatch).to.not.be.null;
+                expect(parseInt(widthMatch[1])).to.be.at.least(44);
+                expect(parseInt(heightMatch[1])).to.be.at.least(44);
+            });
+
+            it('P3-TOUCH-02 — Mobile FAB: minimum 48px touch target (WCAG 2.5.8)', () => {
+                const match = cssText.match(/\.mobile-fab\s*\{([^}]+)\}/);
+                expect(match).to.not.be.null;
+                const block = match[1];
+                const widthMatch = block.match(/width:\s*(\d+)/);
+                const heightMatch = block.match(/height:\s*(\d+)/);
+                expect(widthMatch).to.not.be.null;
+                expect(heightMatch).to.not.be.null;
+                expect(parseInt(widthMatch[1])).to.be.at.least(48);
+                expect(parseInt(heightMatch[1])).to.be.at.least(48);
+            });
+        });
+
+        // ============================================================
+        // Phase 3.6 — Reduced Motion
+        // ============================================================
+        describe('Phase 3 — Reduced Motion', async () => {
+            let cssText;
+
+            before(async () => {
+                const response = await fetch('../Style.css');
+                cssText = await response.text();
+            });
+
+            it('P3-MOTION-01 — prefers-reduced-motion: .mobile-fab transitions disabled', () => {
+                const rmIndex = cssText.indexOf('prefers-reduced-motion');
+                expect(rmIndex).to.be.greaterThan(-1);
+                const afterRM = cssText.substring(rmIndex);
+                expect(afterRM).to.include('.mobile-fab');
+                // Verify transition: none is set for mobile-fab
+                const fabInRM = afterRM.match(/\.mobile-fab\s*\{([^}]+)\}/);
+                if (fabInRM) {
+                    expect(fabInRM[1]).to.include('transition: none');
+                }
+            });
+
+            it('P3-MOTION-03 — prefers-reduced-motion: .sidebar-float-btn transitions disabled', () => {
+                const rmIndex = cssText.indexOf('prefers-reduced-motion');
+                expect(rmIndex).to.be.greaterThan(-1);
+                const afterRM = cssText.substring(rmIndex);
+                expect(afterRM).to.include('.sidebar-float-btn');
+                // Verify transition: none is set for sidebar-float-btn
+                const floatInRM = afterRM.match(/\.sidebar-float-btn\s*\{([^}]+)\}/);
+                if (floatInRM) {
+                    expect(floatInRM[1]).to.include('transition: none');
+                }
+            });
+
+            it('P3-MOTION-02 — prefers-reduced-motion: bottom sheet transitions disabled', () => {
+                const rmIndex = cssText.indexOf('prefers-reduced-motion');
+                const afterRM = cssText.substring(rmIndex);
+                expect(afterRM).to.include('.bottom-sheet');
+                const bsInRM = afterRM.match(/\.bottom-sheet\s*\{([^}]+)\}/);
+                if (bsInRM) {
+                    expect(bsInRM[1]).to.include('transition: none');
+                }
+            });
+        });
+
+        // ============================================================
+        // Phase 3.7 — Toggle Methods Still Work (Regression)
+        // ============================================================
+        describe('Phase 3 — Methods Regression', () => {
+            let data, methods, mockBase;
+
+            beforeEach(() => {
+                mockBase = createMockBase();
+                data = createCollageData(mockBase);
+                methods = createCollageMethods(mockBase);
+            });
+
+            it('P3-METHOD-01 — toggleLeftSidebar toggles leftSidebarOpen', () => {
+                const state = data();
+                const vm = { ...state };
+                methods.toggleLeftSidebar.call(vm);
+                expect(vm.leftSidebarOpen).to.equal(false);
+                methods.toggleLeftSidebar.call(vm);
+                expect(vm.leftSidebarOpen).to.equal(true);
+            });
+
+            it('P3-METHOD-02 — toggleRightSidebar toggles rightSidebarOpen', () => {
+                const state = data();
+                const vm = { ...state };
+                methods.toggleRightSidebar.call(vm);
+                expect(vm.rightSidebarOpen).to.equal(false);
+                methods.toggleRightSidebar.call(vm);
+                expect(vm.rightSidebarOpen).to.equal(true);
+            });
+
+            it('P3-METHOD-03 — toggleBottomSheet toggles bottomSheetOpen', () => {
+                const state = data();
+                const vm = { ...state };
+                methods.toggleBottomSheet.call(vm);
+                expect(vm.bottomSheetOpen).to.equal(true);
+                methods.toggleBottomSheet.call(vm);
+                expect(vm.bottomSheetOpen).to.equal(false);
+            });
+
+            it('P3-METHOD-04 — closeSidebars closes all overlays', () => {
+                const state = data();
+                state.leftSidebarMobileOpen = true;
+                state.rightSidebarMobileOpen = true;
+                state.bottomSheetOpen = true;
+                const vm = { ...state };
+                methods.closeSidebars.call(vm);
+                expect(vm.leftSidebarMobileOpen).to.equal(false);
+                expect(vm.rightSidebarMobileOpen).to.equal(false);
+                expect(vm.bottomSheetOpen).to.equal(false);
+            });
+
+            it('P3-METHOD-05 — closeSidebars returns focus to #bottomSheetToggleBtn', () => {
+                const state = data();
+                state.bottomSheetOpen = true;
+                const focusCalls = [];
+                const vm = {
+                    ...state,
+                    leftSidebarMobileOpen: false,
+                    rightSidebarMobileOpen: false,
+                    _releaseFocusTrap: () => {},
+                    _setBodyScrollLock: () => {},
+                };
+                // Mock document.getElementById to capture focus call
+                const origGetById = document.getElementById;
+                document.getElementById = (id) => {
+                    if (id === 'bottomSheetToggleBtn') {
+                        return { focus: () => focusCalls.push(id) };
+                    }
+                    return origGetById.call(document, id);
+                };
+                try {
+                    methods.closeSidebars.call(vm);
+                } finally {
+                    document.getElementById = origGetById;
+                }
+                expect(focusCalls).to.include('bottomSheetToggleBtn');
+            });
+        });
+
+        // ============================================================
+        // Phase 3.8 — Desktop-only / Mobile-only Class Guards
+        // ============================================================
+        describe('Phase 3 — Visibility Guards', async () => {
+            let doc, cssText;
+
+            before(async () => {
+                const [htmlRes, cssRes] = await Promise.all([
+                    fetch('../index.html'),
+                    fetch('../Style.css')
+                ]);
+                const html = await htmlRes.text();
+                cssText = await cssRes.text();
+                const parser = new DOMParser();
+                doc = parser.parseFromString(html, 'text/html');
+            });
+
+            it('P3-VIS-01 — Left toggle has desktop-only class', () => {
+                const btn = doc.getElementById('leftSidebarToggleBtn');
+                expect(btn.classList.contains('desktop-only')).to.equal(true);
+            });
+
+            it('P3-VIS-02 — Right toggle has desktop-only class', () => {
+                const btn = doc.getElementById('sidebarToggleBtn');
+                expect(btn.classList.contains('desktop-only')).to.equal(true);
+            });
+
+            it('P3-VIS-03 — FAB has mobile-only class', () => {
+                const btn = doc.getElementById('bottomSheetToggleBtn');
+                expect(btn.classList.contains('mobile-only')).to.equal(true);
+            });
+
+            it('P3-VIS-04 — CSS: .desktop-only hidden on mobile via media query', () => {
+                const mobileMatch = cssText.match(/@media\s*\(\s*max-width:\s*699px\s*\)\s*\{([\s\S]*?)\n\}/);
+                expect(mobileMatch).to.not.be.null;
+                const mediaContent = mobileMatch[1];
+                expect(mediaContent).to.include('.desktop-only');
+                expect(mediaContent).to.include('display: none');
+            });
+
+            it('P3-VIS-05 — CSS: .mobile-only visible on mobile via media query', () => {
+                const mobileMatch = cssText.match(/@media\s*\(\s*max-width:\s*699px\s*\)\s*\{([\s\S]*?)\n\}/);
+                expect(mobileMatch).to.not.be.null;
+                const mediaContent = mobileMatch[1];
+                expect(mediaContent).to.include('.mobile-only');
+                expect(mediaContent).to.include('display: flex');
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

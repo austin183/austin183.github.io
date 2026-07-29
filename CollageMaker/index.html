@@ -21,13 +21,6 @@
         <!-- Toolbar -->
         <div id="toolbar" class="collage-toolbar">
             <div class="app-title-group">
-                <!-- Hamburger menu — visible only on mobile, placed left to avoid theme toggle overlap -->
-                <button id="bottomSheetToggleBtn" class="pure-button toolbar-icon-btn mobile-only"
-                        @click="toggleBottomSheet"
-                        :aria-expanded="bottomSheetOpen"
-                        aria-label="Menu">
-                    <span class="material-icons">menu</span>
-                </button>
                 <h2 class="app-title">CollageMaker</h2>
                 <a href="/index.html" target="_blank" rel="noopener noreferrer" class="home-link" title="Go to home page" aria-label="Go to home page">
                     <span class="material-icons home-icon">home</span>
@@ -36,7 +29,7 @@
             <div class="toolbar-actions">
                 <button id="addImagesBtn" class="pure-button pure-button-primary" @click="triggerFilePicker">
                     <span class="material-icons" style="vertical-align: middle; margin-right: 4px;">add_photo_alternate</span>
-                    Add Images
+                    <span class="button-label">Add Images</span>
                 </button>
                 <input type="file" id="fileInput" ref="fileInput" multiple accept="image/*" style="display: none;" @change="handleFileInputChange">
                 <div class="toolbar-divider"></div>
@@ -48,17 +41,35 @@
                 </button>
                 <div class="toolbar-divider"></div>
                 <button id="clearAllBtn" class="pure-button" @click="clearAllImages" :disabled="images.length === 0">
-                    Clear All
-                </button>
-                <div class="toolbar-divider"></div>
-                <button id="leftSidebarToggleBtn" class="pure-button toolbar-icon-btn desktop-only" @click="toggleLeftSidebar" title="Toggle image panel" :aria-expanded="leftSidebarOpen" aria-label="Toggle image panel">
-                    <span class="material-icons">{{ leftSidebarOpen ? 'chevron_right' : 'chevron_left' }}</span>
-                </button>
-                <button id="sidebarToggleBtn" class="pure-button toolbar-icon-btn desktop-only" @click="toggleRightSidebar" title="Toggle editor panel" :aria-expanded="rightSidebarOpen" aria-label="Toggle editor panel">
-                    <span class="material-icons">{{ rightSidebarOpen ? 'chevron_right' : 'chevron_left' }}</span>
+                    <span class="material-icons" style="vertical-align: middle; margin-right: 4px;">delete_sweep</span>
+                    <span class="button-label">Clear All</span>
                 </button>
             </div>
         </div>
+
+        <!-- Left sidebar floating toggle — positioned on viewport edge -->
+        <button id="leftSidebarToggleBtn"
+                class="sidebar-float-btn sidebar-float-left desktop-only"
+                :class="{ 'sidebar-collapsed': !leftSidebarOpen }"
+                @click="toggleLeftSidebar"
+                :title="leftSidebarOpen ? 'Collapse image panel' : 'Expand image panel'"
+                :aria-expanded="leftSidebarOpen"
+                aria-controls="sidebar-left"
+                :aria-label="leftSidebarOpen ? 'Collapse image panel' : 'Expand image panel'">
+            <span class="material-icons" aria-hidden="true">{{ leftSidebarOpen ? 'chevron_left' : 'chevron_right' }}</span>
+        </button>
+
+        <!-- Right sidebar floating toggle — positioned on viewport edge -->
+        <button id="sidebarToggleBtn"
+                class="sidebar-float-btn sidebar-float-right desktop-only"
+                :class="{ 'sidebar-collapsed': !rightSidebarOpen }"
+                @click="toggleRightSidebar"
+                :title="rightSidebarOpen ? 'Collapse editor panel' : 'Expand editor panel'"
+                :aria-expanded="rightSidebarOpen"
+                aria-controls="sidebar-right"
+                :aria-label="rightSidebarOpen ? 'Collapse editor panel' : 'Expand editor panel'">
+            <span class="material-icons" aria-hidden="true">{{ rightSidebarOpen ? 'chevron_right' : 'chevron_left' }}</span>
+        </button>
 
         <!-- Three-Panel Layout -->
         <div id="mainLayout" class="main-layout">
@@ -678,8 +689,18 @@
                     </div>
                 </div>
             </div>
-                                    </div>
                                 </div>
+
+        <!-- Mobile FAB — floating action button for bottom sheet -->
+        <button id="bottomSheetToggleBtn" class="mobile-fab mobile-only"
+                @click="toggleBottomSheet"
+                :aria-expanded="bottomSheetOpen"
+                aria-controls="bottomSheet"
+                aria-haspopup="dialog"
+                :aria-label="bottomSheetOpen ? 'Close menu' : 'Open menu'">
+            <span class="material-icons" aria-hidden="true">{{ bottomSheetOpen ? 'keyboard_arrow_down' : 'keyboard_arrow_up' }}</span>
+        </button>
+                            </div>
 
     <script src="../src/js/themeSwitcher.js"></script>
     <script type="module">
