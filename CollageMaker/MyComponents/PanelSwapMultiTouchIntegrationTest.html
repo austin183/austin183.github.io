@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PanelSwap + MultiTouchHandler Integration Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — PanelSwap + MultiTouchHandler Integration Tests</h1>
+    <p class="test-plan-ref">Covers: Phase 1 — Panel Swap During Multitouch (cross-handler coordination)</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createPanelSwapHandler } from '../MyESModules/Interaction/PanelSwap.js';
+        import { createMultiTouchHandler } from '../MyESModules/Interaction/MultiTouchHandler.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // PanelSwap + MultiTouchHandler — cross-handler coordination
+        // Both handlers share the same canvas and state.
+        // CRITICAL: MultiTouchHandler attaches FIRST (as in production)
+        // so its handlers fire BEFORE PanelSwap handlers for each event.
+        // ============================================================
+        describe('PanelSwap + MultiTouchHandler — cross-handler coordination', () => {
+            let canvas;
+
+            function buildSharedState() {
+                return {
+                    panels: [
+                        { id: 'panel-0', imageIndex: 0, geometry: { type: 'rect', rect: { x: 0, y: 0, width: 480, height: 540 } } },
+                        { id: 'panel-1', imageIndex: 1, geometry: { type: 'rect', rect: { x: 480, y: 0, width: 480, height: 540 } } }
+                    ],
+                    panelAssignments: new Map([['panel-0', 0], ['panel-1', 1]]),
+                    crops: new Map(),
+                    images: [
+                        { width: 1920, height: 1080 },
+                        { width: 1280, height: 720 }
+                    ],
+                    selectedPanelId: 'panel-0',
+                    _multiTouchGestureActive: false,
+                    dragSourceId: null,
+                    dragTargetId: null
+                };
+            }
+
+            function buildHandlers(state) {
+                let swapPerformed = false;
+                let swapInfo = null;
+                let targetHoveredIds = [];
+
+                const swapHandler = createPanelSwapHandler({
+                    canvasId: 'integration-canvas',
+                    state: state,
+                    onPanelSelected: () => {},
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: (info) => { swapPerformed = true; swapInfo = info; },
+                    onCropPreviewRender: () => {},
+                    onTargetHovered: (id) => { targetHoveredIds.push(id); }
+                });
+
+                const multiTouchHandler = createMultiTouchHandler({
+                    canvasId: 'integration-canvas',
+                    cropManager: {
+                        adjustCrop: () => {},
+                        zoomCrop: () => {},
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: state,
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+
+                // CRITICAL: MultiTouchHandler attaches FIRST (as in production)
+                multiTouchHandler.attach();
+                swapHandler.attach();
+
+                return {
+                    swapHandler,
+                    multiTouchHandler,
+                    swapPerformed,
+                    swapInfo,
+                    targetHoveredIds,
+                    // Accessors for live state checks
+                    getLiveSwapPerformed: () => swapPerformed,
+                    getLiveSwapInfo: () => swapInfo
+                };
+            }
+
+            beforeEach(() => {
+                canvas = document.createElement('canvas');
+                canvas.id = 'integration-canvas';
+                canvas.width = 1920;
+                canvas.height = 1080;
+                canvas.style.cssText = 'width: 960px; height: 540px; position: fixed; top: 0px; left: 0px; z-index: -1;';
+                document.body.appendChild(canvas);
+            });
+
+            afterEach(() => {
+                if (canvas && canvas.parentNode) {
+                    canvas.parentNode.removeChild(canvas);
+                }
+            });
+
+            it('1.4.1 — two-finger gesture does NOT swap (the bug scenario)', () => {
+                const state = buildSharedState();
+                const handlers = buildHandlers(state);
+                const { swapHandler, multiTouchHandler } = handlers;
+
+                const img0Before = state.panels[0].imageIndex;
+                const img1Before = state.panels[1].imageIndex;
+
+                // Finger 1 down on panel-0
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+
+                // Finger 2 down — gesture starts, dragSourceId should be cleared
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 500, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+
+                // Fingers move across panel boundaries
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 1, clientX: 500, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 2, clientX: 100, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+
+                // Finger 1 lifts
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    pointerId: 1, clientX: 500, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+
+                // Finger 2 lifts
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    pointerId: 2, clientX: 100, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+
+                expect(handlers.getLiveSwapPerformed()).to.be.false;
+                expect(handlers.getLiveSwapInfo()).to.be.null;
+                expect(state.panels[0].imageIndex).to.equal(img0Before);
+                expect(state.panels[1].imageIndex).to.equal(img1Before);
+
+                swapHandler.detach();
+                multiTouchHandler.detach();
+            });
+
+            it('1.4.2 — two-finger gesture with no initial drag — no swap', () => {
+                const state = buildSharedState();
+                const handlers = buildHandlers(state);
+                const { swapHandler, multiTouchHandler } = handlers;
+
+                const img0Before = state.panels[0].imageIndex;
+
+                // Both fingers down simultaneously (no PanelSwap dragSourceId set)
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+
+                // Move
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 1, clientX: 300, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+
+                // Lift both
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    pointerId: 1, clientX: 300, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    pointerId: 2, clientX: 200, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+
+                expect(handlers.getLiveSwapPerformed()).to.be.false;
+                expect(state.panels[0].imageIndex).to.equal(img0Before);
+
+                swapHandler.detach();
+                multiTouchHandler.detach();
+            });
+
+            it('1.4.3 — gesture start clears pre-existing dragSourceId', () => {
+                const state = buildSharedState();
+                const handlers = buildHandlers(state);
+                const { swapHandler, multiTouchHandler } = handlers;
+
+                // Finger 1 down on panel-0 — PanelSwap sets dragSourceId
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+                expect(state.dragSourceId).to.equal('panel-0');
+
+                // Finger 2 down — startGesture() clears dragSourceId
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+
+                expect(state.dragSourceId).to.be.null;
+
+                swapHandler.detach();
+                multiTouchHandler.detach();
+            });
+
+            it('1.4.4 — gesture end restores normal single-finger swap behavior', () => {
+                const state = buildSharedState();
+                const handlers = buildHandlers(state);
+                const { swapHandler, multiTouchHandler } = handlers;
+
+                // Two-finger gesture
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+
+                // End gesture
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    pointerId: 1, clientX: 100, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    pointerId: 2, clientX: 200, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+
+                // Now single-finger drag from panel-0 to panel-1
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                }));
+
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 300, clientY: 200, bubbles: true
+                }));
+
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 350, clientY: 200, bubbles: true
+                }));
+
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    clientX: 350, clientY: 200, bubbles: true
+                }));
+
+                expect(handlers.getLiveSwapPerformed()).to.be.true;
+                expect(handlers.getLiveSwapInfo().sourceId).to.equal('panel-0');
+                expect(handlers.getLiveSwapInfo().targetId).to.equal('panel-1');
+
+                swapHandler.detach();
+                multiTouchHandler.detach();
+            });
+
+            it('1.4.5 — pointercancel during gesture prevents swap', () => {
+                const state = buildSharedState();
+                const handlers = buildHandlers(state);
+                const { swapHandler, multiTouchHandler } = handlers;
+
+                const img0Before = state.panels[0].imageIndex;
+
+                // Finger 1 down on panel-0
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+
+                // Finger 2 down — gesture starts
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+
+                // pointercancel fires (e.g., device rotation)
+                canvas.dispatchEvent(new PointerEvent('pointercancel', {
+                    pointerId: 1, clientX: 100, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+
+                // Subsequent pointerup should not trigger swap
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    pointerId: 2, clientX: 200, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+
+                expect(handlers.getLiveSwapPerformed()).to.be.false;
+                expect(state.panels[0].imageIndex).to.equal(img0Before);
+
+                swapHandler.detach();
+                multiTouchHandler.detach();
+            });
+
+            it('1.4.6 — dragTargetId not updated during gesture (visual feedback suppressed)', () => {
+                const state = buildSharedState();
+                const handlers = buildHandlers(state);
+                const { swapHandler, multiTouchHandler } = handlers;
+
+                // Finger 1 down on panel-0
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+
+                // Finger 2 down — gesture starts, dragSourceId cleared
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+
+                // Fingers cross panel boundaries — onTargetHovered should NOT fire
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 1, clientX: 500, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+
+                // targetHoveredIds should be empty (no visual feedback during gesture)
+                expect(handlers.targetHoveredIds).to.have.lengthOf(0);
+                expect(state.dragTargetId).to.be.null;
+
+                swapHandler.detach();
+                multiTouchHandler.detach();
+            });
+        });
+
+        mocha.run();
+    </script>
+</body>
+</html>

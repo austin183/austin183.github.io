@@ -258,8 +258,6 @@ export function swapPanelAssignments(state, sourceId, targetId, crops, images) {
 export function createPanelSwapHandler({ canvasId, state, onPanelSelected, onRenderScheduled, onSwapPerformed, onCropPreviewRender, onTargetHovered, onDragStart, onDragEnd }) {
     let handlerAttached = false;
     let isDragging = false;
-    let dragSourceId = null;
-    let dragTargetId = null;
     const DRAG_THRESHOLD = 10; // Minimum movement in CSS pixels to count as drag
 
     // Placeholder for bound handlers (set after handler object is created)
@@ -296,7 +294,7 @@ export function createPanelSwapHandler({ canvasId, state, onPanelSelected, onRen
         },
 
         _clearDragState() {
-            dragTargetId = null;
+            state.dragTargetId = null;
             if (onTargetHovered) {
                 onTargetHovered(null);
             }
@@ -310,7 +308,7 @@ export function createPanelSwapHandler({ canvasId, state, onPanelSelected, onRen
                 }
             }
             if (onDragEnd) onDragEnd();
-            dragSourceId = null;
+            state.dragSourceId = null;
             isDragging = false;
             this._dragStartCoords = null;
         },
@@ -387,13 +385,14 @@ export function createPanelSwapHandler({ canvasId, state, onPanelSelected, onRen
             if (!panelId) return;
 
             // Record drag start
-            dragSourceId = panelId;
+            state.dragSourceId = panelId;
             isDragging = false; // Not yet — need movement threshold
             this._dragStartCoords = { x: coords.x, y: coords.y };
         },
 
         _onPointerMove(e) {
-            if (!dragSourceId) return;
+            if (!state.dragSourceId) return;
+            if (state._multiTouchGestureActive) return;
 
             const coords = this._screenToCanvas(e);
             if (!coords) return;
@@ -420,10 +419,10 @@ export function createPanelSwapHandler({ canvasId, state, onPanelSelected, onRen
             const canvasHeight = canvas.getBoundingClientRect().height;
 
             const newTargetId = this._hitTestPanel(coords.x, coords.y, canvasWidth, canvasHeight);
-            if (newTargetId !== dragTargetId) {
-                dragTargetId = newTargetId;
+            if (newTargetId !== state.dragTargetId) {
+                state.dragTargetId = newTargetId;
                 if (onTargetHovered) {
-                    onTargetHovered(dragTargetId);
+                    onTargetHovered(state.dragTargetId);
                 }
                 if (onRenderScheduled) {
                     onRenderScheduled();
@@ -432,7 +431,7 @@ export function createPanelSwapHandler({ canvasId, state, onPanelSelected, onRen
         },
 
         _onPointerUp(e) {
-            if (!dragSourceId) return;
+            if (!state.dragSourceId) return;
 
             if (isDragging) {
                 // Find target panel under pointer
@@ -444,17 +443,17 @@ export function createPanelSwapHandler({ canvasId, state, onPanelSelected, onRen
 
                     const targetId = this._hitTestPanel(coords.x, coords.y, canvasWidth, canvasHeight);
 
-                    if (targetId && targetId !== dragSourceId) {
+                    if (targetId && targetId !== state.dragSourceId) {
                         // Perform swap
-                        const prevSource = state.panels.find(p => p.id === dragSourceId)?.imageIndex;
+                        const prevSource = state.panels.find(p => p.id === state.dragSourceId)?.imageIndex;
                         const prevTarget = state.panels.find(p => p.id === targetId)?.imageIndex;
 
-                        swapPanelAssignments(state, dragSourceId, targetId, state.crops, state.images);
+                        swapPanelAssignments(state, state.dragSourceId, targetId, state.crops, state.images);
 
                         // Notify for undo tracking
                         if (onSwapPerformed) {
                             onSwapPerformed({
-                                sourceId: dragSourceId,
+                                sourceId: state.dragSourceId,
                                 targetId: targetId,
                                 prevSourceIndex: prevSource,
                                 prevTargetIndex: prevTarget
@@ -470,7 +469,7 @@ export function createPanelSwapHandler({ canvasId, state, onPanelSelected, onRen
             } else {
                 // Not a drag — treat as click (panel selection)
                 if (onPanelSelected) {
-                    onPanelSelected(dragSourceId);
+                    onPanelSelected(state.dragSourceId);
                 }
             }
 
@@ -484,7 +483,7 @@ export function createPanelSwapHandler({ canvasId, state, onPanelSelected, onRen
     onPointerUp = (e) => handler._onPointerUp(e);
     onGlobalPointerUp = () => {
         // Only clean up if a drag is in progress (pointerup happened outside canvas)
-        if (isDragging || dragSourceId) {
+        if (isDragging || state.dragSourceId) {
             handler._clearDragState();
         }
     };

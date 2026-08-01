@@ -98,6 +98,9 @@ export function createCollageData(base) {
             // Drag target (for visual feedback during panel swap)
             dragTargetId: null,
 
+            // Drag source (for coordination with MultiTouchHandler)
+            dragSourceId: null,
+
             // Left sidebar sections
             leftSidebarSections: [
                 { id: 'layout', label: 'Layout' },

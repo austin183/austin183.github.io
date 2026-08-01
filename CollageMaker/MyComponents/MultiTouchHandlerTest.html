@@ -2367,6 +2367,191 @@
             });
         });
 
+        // ============================================================
+        // MultiTouchHandler — dragSourceId coordination (Phase 1: Panel Swap During Multitouch)
+        // startGesture() and _onPointerCancel() clear state.dragSourceId so PanelSwap
+        // does not perform an unintended swap when a finger lifts during a two-finger gesture.
+        // ============================================================
+        describe('MultiTouchHandler — dragSourceId coordination', () => {
+            it('1.3.1 — startGesture() clears state.dragSourceId', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-dragcoord1';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                const state = {
+                    selectedPanelId: 'panel-0',
+                    _multiTouchGestureActive: false,
+                    dragSourceId: 'panel-0'  // Simulates PanelSwap setting it on first finger's pointerdown
+                };
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-dragcoord1',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {}, getPanelImage: () => ({ width: 1920, height: 1080 }) },
+                    state: state,
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // First pointer down (no gesture yet)
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+                expect(state.dragSourceId).to.equal('panel-0'); // Still set
+
+                // Second pointer down — startGesture() should clear dragSourceId
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+
+                expect(state.dragSourceId).to.be.null;
+                expect(state._multiTouchGestureActive).to.be.true;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('1.3.2 — startGesture() does not error when dragSourceId is already null', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-dragcoord2';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                const state = {
+                    selectedPanelId: 'panel-0',
+                    _multiTouchGestureActive: false,
+                    dragSourceId: null  // Already null
+                };
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-dragcoord2',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {}, getPanelImage: () => ({ width: 1920, height: 1080 }) },
+                    state: state,
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Two pointers down — should not error
+                expect(() => {
+                    canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                        pointerId: 1, clientX: 100, clientY: 100,
+                        pointerType: 'touch', bubbles: true, cancelable: true
+                    }));
+                    canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                        pointerId: 2, clientX: 200, clientY: 200,
+                        pointerType: 'touch', bubbles: true, cancelable: true
+                    }));
+                }).to.not.throw();
+
+                expect(state._multiTouchGestureActive).to.be.true;
+                expect(state.dragSourceId).to.be.null;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('1.3.3 — _onPointerCancel() clears state.dragSourceId', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-dragcoord3';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                const state = {
+                    selectedPanelId: 'panel-0',
+                    _multiTouchGestureActive: false,
+                    dragSourceId: null
+                };
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-dragcoord3',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {}, getPanelImage: () => ({ width: 1920, height: 1080 }) },
+                    state: state,
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Start gesture
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+                expect(state._multiTouchGestureActive).to.be.true;
+
+                // Simulate PanelSwap somehow setting dragSourceId during gesture
+                state.dragSourceId = 'panel-0';
+
+                // pointercancel fires (e.g., device rotation)
+                canvas.dispatchEvent(new PointerEvent('pointercancel', {
+                    pointerId: 1, clientX: 100, clientY: 100,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+
+                expect(state._multiTouchGestureActive).to.be.false;
+                expect(state.dragSourceId).to.be.null;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('1.3.4 — gesture end (endGesture) does not side-effect state.dragSourceId', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-dragcoord4';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                const state = {
+                    selectedPanelId: 'panel-0',
+                    _multiTouchGestureActive: false,
+                    dragSourceId: null
+                };
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-dragcoord4',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {}, getPanelImage: () => ({ width: 1920, height: 1080 }) },
+                    state: state,
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                });
+                handler.attach();
+
+                // Start gesture
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+
+                // End gesture (one pointer up)
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    pointerId: 1, clientX: 100, clientY: 100,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+
+                // dragSourceId should remain null (no side effect from endGesture)
+                expect(state.dragSourceId).to.be.null;
+                expect(state._multiTouchGestureActive).to.be.false;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+        });
+
         mocha.run();
     </script>
 </body>

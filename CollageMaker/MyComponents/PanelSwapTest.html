@@ -1017,6 +1017,317 @@
             });
         });
 
+        // ============================================================
+        // PanelSwap — dragSourceId state coordination (Phase 1: Panel Swap During Multitouch)
+        // dragSourceId moved from local closure to state.dragSourceId so
+        // MultiTouchHandler can clear it at gesture start.
+        // ============================================================
+        describe('PanelSwap — dragSourceId state coordination', () => {
+            let canvas;
+
+            beforeEach(() => {
+                canvas = document.createElement('canvas');
+                canvas.id = 'swap-state-canvas';
+                canvas.width = 1920;
+                canvas.height = 1080;
+                canvas.style.cssText = 'width: 960px; height: 540px; position: fixed; top: 0px; left: 0px; z-index: -1;';
+                document.body.appendChild(canvas);
+            });
+
+            afterEach(() => {
+                if (canvas && canvas.parentNode) {
+                    canvas.parentNode.removeChild(canvas);
+                }
+            });
+
+            function createState() {
+                return {
+                    panels: [
+                        { id: 'panel-0', imageIndex: 0, geometry: { type: 'rect', rect: { x: 0, y: 0, width: 480, height: 540 } } },
+                        { id: 'panel-1', imageIndex: 1, geometry: { type: 'rect', rect: { x: 480, y: 0, width: 480, height: 540 } } }
+                    ],
+                    panelAssignments: new Map([['panel-0', 0], ['panel-1', 1]]),
+                    layoutStyle: LayoutStyle.HERO,
+                    _multiTouchGestureActive: false,
+                    dragSourceId: null,
+                    dragTargetId: null
+                };
+            }
+
+            it('1.2.1 — external code clearing state.dragSourceId prevents _onPointerMove hit testing', () => {
+                const state = createState();
+                let targetHoveredIds = [];
+
+                const handler = createPanelSwapHandler({
+                    canvasId: 'swap-state-canvas',
+                    state: state,
+                    onPanelSelected: () => {},
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: () => {},
+                    onTargetHovered: (id) => { targetHoveredIds.push(id); }
+                });
+                handler.attach();
+
+                // Pointer down on panel-0 — sets state.dragSourceId
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                }));
+
+                // External code (simulating MultiTouchHandler) clears dragSourceId
+                state.dragSourceId = null;
+
+                // Move — should return early because dragSourceId is null
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 300, clientY: 200, bubbles: true
+                }));
+
+                expect(targetHoveredIds).to.have.lengthOf(0);
+
+                handler.detach();
+            });
+
+            it('1.2.2 — external code clearing state.dragSourceId prevents _onPointerUp swap and selection', () => {
+                const state = createState();
+                let selectedPanelId = null;
+                let swapPerformed = false;
+
+                const handler = createPanelSwapHandler({
+                    canvasId: 'swap-state-canvas',
+                    state: state,
+                    onPanelSelected: (id) => { selectedPanelId = id; },
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: () => { swapPerformed = true; },
+                    onTargetHovered: () => {}
+                });
+                handler.attach();
+
+                // Pointer down on panel-0
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                }));
+
+                // External code clears dragSourceId
+                state.dragSourceId = null;
+
+                // Pointer up — should return early, no swap, no selection
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    clientX: 100, clientY: 200, bubbles: true
+                }));
+
+                expect(selectedPanelId).to.be.null;
+                expect(swapPerformed).to.be.false;
+
+                handler.detach();
+            });
+
+            it('1.2.3 — _onPointerMove skips hit testing when _multiTouchGestureActive is true', () => {
+                const state = createState();
+                let targetHoveredIds = [];
+
+                const handler = createPanelSwapHandler({
+                    canvasId: 'swap-state-canvas',
+                    state: state,
+                    onPanelSelected: () => {},
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: () => {},
+                    onTargetHovered: (id) => { targetHoveredIds.push(id); }
+                });
+                handler.attach();
+
+                // Pointer down on panel-0
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                }));
+
+                // Move to trigger drag threshold (stay within panel-0: CSS x=120 → logical x=240)
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 120, clientY: 200, bubbles: true
+                }));
+
+                // Now set gesture active
+                state._multiTouchGestureActive = true;
+
+                // Move over panel-1 — should be skipped
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 500, clientY: 200, bubbles: true
+                }));
+
+                // dragTargetId should NOT have been updated to panel-1
+                expect(targetHoveredIds).to.not.include('panel-1');
+                expect(state.dragTargetId).to.not.equal('panel-1');
+
+                handler.detach();
+            });
+
+            it('1.2.4 — _onPointerMove updates dragTargetId when _multiTouchGestureActive is false', () => {
+                const state = createState();
+                let targetHoveredIds = [];
+
+                const handler = createPanelSwapHandler({
+                    canvasId: 'swap-state-canvas',
+                    state: state,
+                    onPanelSelected: () => {},
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: () => {},
+                    onTargetHovered: (id) => { targetHoveredIds.push(id); }
+                });
+                handler.attach();
+
+                // Pointer down on panel-0
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                }));
+
+                // Move to trigger drag threshold
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 300, clientY: 200, bubbles: true
+                }));
+
+                // Gesture NOT active — move over panel-1 should update target
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 500, clientY: 200, bubbles: true
+                }));
+
+                expect(targetHoveredIds).to.include('panel-1');
+
+                handler.detach();
+            });
+
+            it('1.2.5 — _clearDragState clears state.dragSourceId', () => {
+                const state = createState();
+
+                const handler = createPanelSwapHandler({
+                    canvasId: 'swap-state-canvas',
+                    state: state,
+                    onPanelSelected: () => {},
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: () => {},
+                    onTargetHovered: () => {}
+                });
+                handler.attach();
+
+                // Pointer down on panel-0 — sets state.dragSourceId
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                }));
+
+                expect(state.dragSourceId).to.equal('panel-0');
+
+                // Clear drag state
+                handler._clearDragState();
+
+                expect(state.dragSourceId).to.be.null;
+
+                handler.detach();
+            });
+
+            it('1.2.6 — global window.pointerup cleans up state.dragSourceId', () => {
+                const state = createState();
+
+                const handler = createPanelSwapHandler({
+                    canvasId: 'swap-state-canvas',
+                    state: state,
+                    onPanelSelected: () => {},
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: () => {},
+                    onTargetHovered: () => {},
+                    onDragStart: () => {},
+                    onDragEnd: () => {}
+                });
+                handler.attach();
+
+                // Start drag
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                }));
+
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 300, clientY: 200, bubbles: true
+                }));
+
+                expect(state.dragSourceId).to.equal('panel-0');
+
+                // Simulate pointerup on window (outside canvas)
+                window.dispatchEvent(new PointerEvent('pointerup', {
+                    clientX: 9999, clientY: 9999, bubbles: true
+                }));
+
+                expect(state.dragSourceId).to.be.null;
+
+                handler.detach();
+            });
+
+            it('1.2.7 — single-finger drag-to-swap still works (regression)', () => {
+                const state = createState();
+                let swapInfo = null;
+
+                const handler = createPanelSwapHandler({
+                    canvasId: 'swap-state-canvas',
+                    state: state,
+                    onPanelSelected: () => {},
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: (info) => { swapInfo = info; },
+                    onTargetHovered: () => {}
+                });
+                handler.attach();
+
+                // Full drag: down → move (exceeds threshold) → move to panel-1 → up
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                }));
+
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 300, clientY: 200, bubbles: true
+                }));
+
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 350, clientY: 200, bubbles: true
+                }));
+
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    clientX: 350, clientY: 200, bubbles: true
+                }));
+
+                expect(swapInfo).to.not.be.null;
+                expect(swapInfo.sourceId).to.equal('panel-0');
+                expect(swapInfo.targetId).to.equal('panel-1');
+                expect(state.panels[0].imageIndex).to.equal(1);
+                expect(state.panels[1].imageIndex).to.equal(0);
+
+                handler.detach();
+            });
+
+            it('1.2.8 — click (no drag) selects panel without swapping (regression)', () => {
+                const state = createState();
+                let selectedPanelId = null;
+                let swapPerformed = false;
+
+                const handler = createPanelSwapHandler({
+                    canvasId: 'swap-state-canvas',
+                    state: state,
+                    onPanelSelected: (id) => { selectedPanelId = id; },
+                    onRenderScheduled: () => {},
+                    onSwapPerformed: () => { swapPerformed = true; },
+                    onTargetHovered: () => {}
+                });
+                handler.attach();
+
+                // Click on panel-0 (no movement)
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 100, clientY: 200, button: 0, bubbles: true
+                }));
+
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    clientX: 100, clientY: 200, bubbles: true
+                }));
+
+                expect(selectedPanelId).to.equal('panel-0');
+                expect(swapPerformed).to.be.false;
+
+                handler.detach();
+            });
+        });
+
         // Run mocha after all tests are defined
         window.addEventListener('load', () => {
             mocha.run();

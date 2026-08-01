@@ -143,6 +143,7 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
 
         gestureActive = true;
         state._multiTouchGestureActive = true;
+        state.dragSourceId = null; // Clear PanelSwap dragSourceId to prevent unintended swap
         initialMidpoint = computeTouchMidpoint(t1, t2);
         initialDistance = computeTouchDistance(t1, t2);
         return true;
@@ -293,6 +294,7 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
         }
         pointerGestureActive = false;
         state._multiTouchGestureActive = false;
+        state.dragSourceId = null; // Clear PanelSwap dragSourceId to prevent unintended swap
         // Release capture for any remaining pointers
         if (canvas && canvas.releasePointerCapture) {
             for (const pid of activePointers.keys()) {
