@@ -235,6 +235,44 @@ function drawInteractionOutline(ctx, x, y, w, h, state) {
 }
 
 /**
+ * Draws visible resize handle indicators for touch devices.
+ * Renders two small circles at the left and right edges of the title box.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} x - Box left edge (logical coords)
+ * @param {number} y - Box top edge (logical coords)
+ * @param {number} w - Box width
+ * @param {number} h - Box height
+ * @param {string|null} activeEdge - 'left-edge', 'right-edge', 'resize-left', 'resize-right', or null
+ */
+export function drawTouchResizeHandles(ctx, x, y, w, h, activeEdge) {
+    const handleRadius = 8; // Logical pixels — visible at all DPRs
+    const handleY = y + h / 2; // Centered vertically on box
+
+    const isLeftActive = activeEdge === 'left-edge' || activeEdge === 'resize-left';
+    const isRightActive = activeEdge === 'right-edge' || activeEdge === 'resize-right';
+
+    ctx.save();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+
+    // Draw left handle
+    ctx.beginPath();
+    ctx.arc(x, handleY, handleRadius, 0, Math.PI * 2);
+    ctx.fillStyle = isLeftActive ? '#3b82f6' : 'rgba(59, 130, 246, 0.6)';
+    ctx.fill();
+    ctx.stroke();
+
+    // Draw right handle
+    ctx.beginPath();
+    ctx.arc(x + w, handleY, handleRadius, 0, Math.PI * 2);
+    ctx.fillStyle = isRightActive ? '#3b82f6' : 'rgba(59, 130, 246, 0.6)';
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+/**
  * Renders the title onto the canvas context.
  * Supports multi-line text (up to 3 lines via \n characters).
  * @param {CanvasRenderingContext2D} ctx - The canvas 2D context
@@ -346,5 +384,11 @@ export function render(ctx, width, height, titleStyle, titleRuns, interactionSta
     if (interactionState && (interactionState.hoverTarget || interactionState.interactionMode)) {
         const outlineX = isLegacyMode ? boxLeft - PADDING : boxLeft;
         drawInteractionOutline(ctx, outlineX, bounds.y, boxWidth, bounds.height, interactionState);
+
+        // Draw touch resize handles when in interaction mode on touch devices
+        if (interactionState.pointerType === 'touch') {
+            const activeEdge = interactionState.hoverTarget || interactionState.interactionMode;
+            drawTouchResizeHandles(ctx, outlineX, bounds.y, boxWidth, bounds.height, activeEdge);
+        }
     }
 }

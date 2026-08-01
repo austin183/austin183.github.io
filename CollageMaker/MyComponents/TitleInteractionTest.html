@@ -1933,5 +1933,398 @@
             mocha.run();
         });
     </script>
+
+    <!-- Phase 4: pointerType tracking tests -->
+    <script type="module">
+        import { createTitleInteraction } from '../MyESModules/Interaction/TitleInteraction.js';
+
+        const { expect } = chai;
+
+        function makeTitleRun2({ text = 'Hello World', bold = false, italic = false, underline = false } = {}) {
+            return { text, bold, italic, underline };
+        }
+
+        function makeTitleStyle2({
+            fontSize = 36,
+            fontFamily = 'Arial',
+            alignment = 'center',
+            titleBoxWidth = 400,
+            titleBoxX = 500,
+            titleBoxY = 900
+        } = {}) {
+            return { fontSize, fontFamily, alignment, titleBoxWidth, titleBoxX, titleBoxY };
+        }
+
+        function createTestState2(titleStyle, titleRuns) {
+            return {
+                titleStyle: titleStyle || makeTitleStyle2(),
+                titleRuns: titleRuns || [makeTitleRun2()],
+                panels: [],
+                panelAssignments: new Map(),
+                _multiTouchGestureActive: false,
+                titleInteractionMode: null,
+                titleHoverTarget: null,
+                titleInteractionPointerType: null
+            };
+        }
+
+        function createTestCanvas2() {
+            const canvas = document.createElement('canvas');
+            canvas.id = 'title-interaction-ptr-test-canvas';
+            canvas.width = 1920;
+            canvas.height = 1080;
+            canvas.style.cssText = 'width: 960px; height: 540px; position: fixed; top: 0px; left: 0px; z-index: -1;';
+            document.body.appendChild(canvas);
+            return canvas;
+        }
+
+        // ============================================================
+        // Phase 4: pointerType tracking in TitleInteraction
+        // ============================================================
+        describe('Phase 4 — pointerType tracking in TitleInteraction', () => {
+            let canvas;
+
+            beforeEach(() => {
+                canvas = createTestCanvas2();
+            });
+
+            afterEach(() => {
+                if (canvas && canvas.parentNode) {
+                    canvas.parentNode.removeChild(canvas);
+                }
+            });
+
+            it('4.3.1 — Touch pointerdown sets titleInteractionPointerType to touch', () => {
+                const state = createTestState2(
+                    makeTitleStyle2({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun2({ text: 'Hello World' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-ptr-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Touch pointer down on title body
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 350, clientY: 456, button: 0, bubbles: true,
+                    pointerType: 'touch', pointerId: 1
+                }));
+
+                expect(state.titleInteractionPointerType).to.equal('touch');
+
+                handler.detach();
+            });
+
+            it('4.3.2 — Mouse pointerdown sets titleInteractionPointerType to mouse', () => {
+                const state = createTestState2(
+                    makeTitleStyle2({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun2({ text: 'Hello World' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-ptr-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 350, clientY: 456, button: 0, bubbles: true,
+                    pointerType: 'mouse', pointerId: 2
+                }));
+
+                expect(state.titleInteractionPointerType).to.equal('mouse');
+
+                handler.detach();
+            });
+
+            it('4.3.3 — pointerup clears titleInteractionPointerType', () => {
+                const state = createTestState2(
+                    makeTitleStyle2({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun2({ text: 'Hello World' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-ptr-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Touch pointer down
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 350, clientY: 456, button: 0, bubbles: true,
+                    pointerType: 'touch', pointerId: 1
+                }));
+
+                expect(state.titleInteractionPointerType).to.equal('touch');
+
+                // Pointer up
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    clientX: 350, clientY: 456, bubbles: true,
+                    pointerType: 'touch', pointerId: 1
+                }));
+
+                expect(state.titleInteractionPointerType).to.be.null;
+
+                handler.detach();
+            });
+
+            it('4.3.4 — Touch hover (pointermove) sets titleInteractionPointerType to touch', () => {
+                const state = createTestState2(
+                    makeTitleStyle2({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun2({ text: 'Hello World' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-ptr-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Touch hover over title body (no pointer down)
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 350, clientY: 456, bubbles: true,
+                    pointerType: 'touch', pointerId: 1
+                }));
+
+                expect(state.titleInteractionPointerType).to.equal('touch');
+                expect(state.titleHoverTarget).to.equal('body');
+
+                handler.detach();
+            });
+
+            it('4.3.5 — Hover outside title clears titleInteractionPointerType', () => {
+                const state = createTestState2(
+                    makeTitleStyle2({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun2({ text: 'Hello World' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-ptr-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Hover over title first
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 350, clientY: 456, bubbles: true,
+                    pointerType: 'touch', pointerId: 1
+                }));
+
+                expect(state.titleInteractionPointerType).to.equal('touch');
+
+                // Move away from title
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 100, clientY: 100, bubbles: true,
+                    pointerType: 'touch', pointerId: 1
+                }));
+
+                expect(state.titleInteractionPointerType).to.be.null;
+
+                handler.detach();
+            });
+
+            it('4.3.8 — Touch edge threshold meets WCAG 2.5.8 (44px minimum target)', () => {
+                // WCAG 2.5.8 requires touch targets to be at least 44 CSS pixels.
+                // The edge threshold should be >= 22px (half of 44px) so the hit zone
+                // extends at least 22px from the handle center on each side.
+                const state = createTestState2(
+                    makeTitleStyle2({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun2({ text: 'Hello World' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-ptr-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Title box: logical (500, 900), width 400, height ~60
+                // CSS: left = 250, right = 450, center Y = 441
+                // Test: touch pointer 21px from right edge should still hit
+                // (WCAG requires 44px target = 22px threshold from center)
+                const resultAt22 = handler._hitTestTitle(450 - 22, 441, 960, 540, 'touch');
+                expect(resultAt22.hit).to.be.true;
+                expect(resultAt22.target).to.equal('right-edge');
+
+                // Test: touch pointer 21px from left edge should still hit
+                const resultLeft22 = handler._hitTestTitle(250 + 22, 441, 960, 540, 'touch');
+                expect(resultLeft22.hit).to.be.true;
+                expect(resultLeft22.target).to.equal('left-edge');
+
+                handler.detach();
+            });
+
+            it('4.3.9 — pointerleave clears hover state and pointer type', () => {
+                // When pointer leaves canvas, hover state should be cleared
+                // so touch handles don't persist after pointer exits
+                const state = createTestState2(
+                    makeTitleStyle2({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun2({ text: 'Hello World' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                let renderScheduled = false;
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-ptr-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => { renderScheduled = true; },
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Hover over title first to establish state
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 350, clientY: 456, bubbles: true,
+                    pointerType: 'touch', pointerId: 1
+                }));
+
+                expect(state.titleHoverTarget).to.equal('body');
+                expect(state.titleInteractionPointerType).to.equal('touch');
+
+                // Pointer leaves canvas
+                renderScheduled = false;
+                canvas.dispatchEvent(new PointerEvent('pointerleave', {
+                    bubbles: true, pointerType: 'touch', pointerId: 1
+                }));
+
+                // Hover state should be cleared
+                expect(state.titleHoverTarget).to.be.null;
+                expect(state.titleInteractionPointerType).to.be.null;
+                // Should have scheduled a render to remove touch handles
+                expect(renderScheduled).to.be.true;
+
+                handler.detach();
+            });
+
+            it('4.3.6 — pointercancel clears titleInteractionPointerType', () => {
+                const state = createTestState2(
+                    makeTitleStyle2({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun2({ text: 'Hello World' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-ptr-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Touch pointer down
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 350, clientY: 456, button: 0, bubbles: true,
+                    pointerType: 'touch', pointerId: 1
+                }));
+
+                expect(state.titleInteractionPointerType).to.equal('touch');
+
+                // pointercancel (e.g., device rotation)
+                canvas.dispatchEvent(new PointerEvent('pointercancel', {
+                    clientX: 350, clientY: 456, bubbles: true,
+                    pointerType: 'touch', pointerId: 1
+                }));
+
+                expect(state.titleInteractionPointerType).to.be.null;
+                expect(state.titleInteractionMode).to.be.null;
+
+                handler.detach();
+            });
+        });
+    </script>
+</body>
+</html>
 </body>
 </html>

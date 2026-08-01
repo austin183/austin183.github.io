@@ -3,13 +3,12 @@
  * Provides two-finger pan (move image within panel) and pinch-to-zoom
  * for the selected panel's crop.
  *
- * Supports three input paths:
- * - TouchEvent: for touchscreen devices (two-finger touch)
+ * Supports two input paths:
+ * - PointerEvent: for all pointer types (touch, mouse, pen) with setPointerCapture.
+ *   Touch pointers are handled identically to mouse/pen pointers — no pointerType guards.
  * - WheelEvent: for trackpad gestures (macOS two-finger pan, pinch-to-zoom)
  *   The browser synthesizes trackpad gestures as wheel events (deltaY for pan,
  *   deltaZ for zoom), not as separate pointerdown events.
- * - PointerEvent: for multi-pointer input (e.g., stylus + touch hybrid devices)
- *   with a pointerType guard that delegates touch pointers to the TouchEvent path.
  *
  * Pure math functions are exported for unit testing without DOM dependencies.
  */
@@ -55,6 +54,22 @@ export function computePinchScale(initialDistance, currentDistance) {
 }
 
 /**
+ * Applies a root exponent to a pinch scale ratio to produce a responsive
+ * incremental zoom factor. Converts a total distance ratio into a small
+ * zoom step that feels natural on touch devices.
+ *
+ * Exponent 0.3: ratio 2.0 -> 2.0^0.3 ≈ 1.23 (responsive zoom step)
+ * Exponent 0.3: ratio 0.5 -> 0.5^0.3 ≈ 0.81 (responsive zoom-out step)
+ *
+ * @param {number} ratio - Pinch scale ratio from computePinchScale (> 0)
+ * @returns {number} Zoom factor (always positive, never NaN)
+ */
+export function applyZoomExponent(ratio) {
+    if (!Number.isFinite(ratio) || ratio <= 0) return 1.0;
+    return Math.pow(ratio, 0.3);
+}
+
+/**
  * Creates a multi-touch gesture handler for the main preview canvas.
  *
  * @param {Object} options
@@ -69,13 +84,10 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
     let canvas = null;
     let handlerAttached = false;
 
-    // Shared gesture state (used by both TouchEvent and PointerEvent paths)
+    // Shared gesture state
     let gestureActive = false;
     let initialMidpoint = null;
     let initialDistance = 0;
-
-    // TouchEvent-specific state
-    let activeTouchIds = null; // Set of touch identifiers we're tracking
 
     // PointerEvent-specific state
     let activePointers = new Map(); // pointerId -> { clientX, clientY }
@@ -89,26 +101,8 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
     let handleWindowBlur, handleVisibilityChange;
 
     // Placeholder for bound handlers
-    let onTouchStart, onTouchMove, onTouchEnd;
     let onPointerDown, onPointerMove, onPointerUp, onPointerCancel;
     let onWheel;
-
-    /**
-     * Finds two touch objects by identifier from a TouchList.
-     * @param {TouchList} touches
-     * @param {number} id1
-     * @param {number} id2
-     * @returns {[Object, Object]|null}
-     */
-    function findTwoTouches(touches, id1, id2) {
-        let t1 = null, t2 = null;
-        for (let i = 0; i < touches.length; i++) {
-            const t = touches[i];
-            if (t.identifier === id1) t1 = t;
-            else if (t.identifier === id2) t2 = t;
-        }
-        return (t1 && t2) ? [t1, t2] : null;
-    }
 
     /**
      * Estimates the scale factor from canvas CSS pixels to source image pixels.
@@ -188,10 +182,10 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
         // --- Zoom: pinch scale factor ---
         const scaleRatio = computePinchScale(initialDistance, currentDistance);
         // Use a root to convert the total ratio into a small incremental factor
-        // e.g., ratio 1.5 -> factor 1.5^0.15 ≈ 1.06 (small zoom step)
+        // e.g., ratio 2.0 -> factor 2.0^0.3 ≈ 1.23 (responsive zoom step)
         const zoomThreshold = 1.02;
         if (scaleRatio > zoomThreshold || scaleRatio < 1 / zoomThreshold) {
-            const factor = Math.pow(scaleRatio, 0.15);
+            const factor = applyZoomExponent(scaleRatio);
             cropManager.zoomCrop(panelId, factor);
             needsRender = true;
             // Reset initial distance to current to avoid accumulating scale
@@ -207,64 +201,16 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
     function endGesture() {
         gestureActive = false;
         state._multiTouchGestureActive = false;
-        activeTouchIds = null;
         initialMidpoint = null;
         initialDistance = 0;
         onRenderScheduled();
     }
 
     // =====================================================
-    // TouchEvent handlers
-    // =====================================================
-
-    function _onTouchStart(e) {
-        // Only activate for exactly 2 touches — 3+ fingers may trigger OS gestures
-        if (e.touches.length !== 2) return;
-
-        const t1 = e.touches[0];
-        const t2 = e.touches[1];
-
-        if (startGesture(t1, t2)) {
-            e.preventDefault();
-            activeTouchIds = new Set([t1.identifier, t2.identifier]);
-        }
-    }
-
-    function _onTouchMove(e) {
-        if (!gestureActive) return;
-
-        // Cancel gesture if touch count deviates from 2 (3+ fingers or 1 remaining)
-        if (e.touches.length !== 2) {
-            gestureActive = false;
-            activeTouchIds = null;
-            initialMidpoint = null;
-            initialDistance = 0;
-            return;
-        }
-
-        e.preventDefault();
-
-        // Find the two touches we're tracking
-        const touches = findTwoTouches(e.touches, ...activeTouchIds) || [e.touches[0], e.touches[1]];
-        processGesture(touches[0], touches[1]);
-    }
-
-    function _onTouchEnd(e) {
-        if (!gestureActive) return;
-
-        // If fewer than 2 touches remain, end the gesture
-        if (e.touches.length < 2) {
-            endGesture();
-        }
-    }
-
-    // =====================================================
-    // PointerEvent handlers (trackpad gestures)
+    // PointerEvent handlers (all pointer types: touch, mouse, pen)
     // =====================================================
 
     function _onPointerDown(e) {
-        // Skip touch pointers — delegate to TouchEvent path
-        if (e.pointerType === 'touch') return;
 
         activePointers.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
 
@@ -280,17 +226,26 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
             const pointers = [...activePointers.values()];
             if (!startGesture(pointers[0], pointers[1])) {
                 // No selected panel — clean up, do not intercept
+                // Save pointer IDs before clearing the map
+                const pids = [...activePointers.keys()];
                 activePointers.clear();
+                // Release capture for both pointers to avoid stale capture
+                if (canvas && canvas.releasePointerCapture) {
+                    for (const pid of pids) {
+                        try { canvas.releasePointerCapture(pid); } catch (_) {}
+                    }
+                }
                 return;
             }
             e.preventDefault();
             pointerGestureActive = true;
+        } else if (activePointers.size > 2) {
+            // Prevent OS-level 3+ finger gestures (app switcher, screenshot, etc.)
+            e.preventDefault();
         }
     }
 
     function _onPointerMove(e) {
-        // Skip touch pointers
-        if (e.pointerType === 'touch') return;
         if (!pointerGestureActive) return;
 
         e.preventDefault();
@@ -303,8 +258,6 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
     }
 
     function _onPointerUp(e) {
-        if (e.pointerType === 'touch') return;
-
         // Release capture for this pointer
         if (canvas && canvas.releasePointerCapture) {
             try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
@@ -328,8 +281,6 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
     }
 
     function _onPointerCancel(e) {
-        if (e.pointerType === 'touch') return;
-
         // Release capture for this pointer
         if (canvas && canvas.releasePointerCapture) {
             try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
@@ -409,13 +360,7 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
             canvas = document.getElementById(canvasId);
             if (!canvas) return;
 
-            // TouchEvent listeners
-            canvas.addEventListener('touchstart', onTouchStart, { passive: false });
-            canvas.addEventListener('touchmove', onTouchMove, { passive: false });
-            canvas.addEventListener('touchend', onTouchEnd, { passive: false });
-            canvas.addEventListener('touchcancel', onTouchEnd, { passive: false });
-
-            // PointerEvent listeners
+            // PointerEvent listeners (all pointer types: touch, mouse, pen)
             canvas.addEventListener('pointerdown', onPointerDown, { passive: false });
             canvas.addEventListener('pointermove', onPointerMove, { passive: false });
             canvas.addEventListener('pointerup', onPointerUp);
@@ -448,15 +393,9 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
             gestureActive = false;
             pointerGestureActive = false;
             state._multiTouchGestureActive = false;
-            activeTouchIds = null;
             activePointers.clear();
 
             if (canvas) {
-                canvas.removeEventListener('touchstart', onTouchStart, { passive: false });
-                canvas.removeEventListener('touchmove', onTouchMove, { passive: false });
-                canvas.removeEventListener('touchend', onTouchEnd, { passive: false });
-                canvas.removeEventListener('touchcancel', onTouchEnd, { passive: false });
-
                 canvas.removeEventListener('pointerdown', onPointerDown, { passive: false });
                 canvas.removeEventListener('pointermove', onPointerMove, { passive: false });
                 canvas.removeEventListener('pointerup', onPointerUp);
@@ -470,9 +409,6 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
         },
 
         // Expose private handlers for testing
-        _onTouchStart,
-        _onTouchMove,
-        _onTouchEnd,
         _onPointerDown,
         _onPointerMove,
         _onPointerUp,
@@ -481,9 +417,6 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
     };
 
     // Bind event handlers now that handler object exists
-    onTouchStart = (e) => handler._onTouchStart(e);
-    onTouchMove = (e) => handler._onTouchMove(e);
-    onTouchEnd = (e) => handler._onTouchEnd(e);
     onPointerDown = (e) => handler._onPointerDown(e);
     onPointerMove = (e) => handler._onPointerMove(e);
     onPointerUp = (e) => handler._onPointerUp(e);

@@ -99,12 +99,13 @@
         });
 
         // ============================================================
-        // 1.4.1 — TouchEvent pan delta negated (direct manipulation)
+        // 1.4.1 — PointerEvent (touch) pan delta negated (direct manipulation)
         // Dragging fingers RIGHT should produce NEGATIVE adjustCrop x
         // so that sourceRect.x decreases → image content moves RIGHT
+        // All touch gestures now use PointerEvent path with pointerType: 'touch'
         // ============================================================
-        describe('TouchEvent pan delta negation (direct manipulation)', () => {
-            it('1.4.1 — two-finger drag RIGHT produces negative adjustCrop x', async () => {
+        describe('PointerEvent (touch) pan delta negation (direct manipulation)', () => {
+            it('1.4.1 — two touch pointers drag RIGHT produces negative adjustCrop x', async () => {
                 const canvas = document.createElement('canvas');
                 canvas.id = 'mt-dir-touch-x';
                 canvas.style.width = '400px';
@@ -130,41 +131,35 @@
                 handler.attach();
 
                 // Start: midpoint at (150, 100)
-                const touchesStart = makeTouchList([
-                    makeTouch(1, 100, 100),
-                    makeTouch(2, 200, 100)
-                ]);
-                canvas.dispatchEvent(createMockTouchEvent('touchstart', {
-                    touches: touchesStart, targetTouches: touchesStart,
-                    changedTouches: touchesStart
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100, pointerType: 'touch'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 100, pointerType: 'touch'
                 }));
 
                 // Move RIGHT by 50px: midpoint goes from (150,100) to (200,100)
                 // dx = +50, dy = 0
                 // After negation: adjustCrop x should be negative
-                const touchesMove = makeTouchList([
-                    makeTouch(1, 150, 100),
-                    makeTouch(2, 250, 100)
-                ]);
-                canvas.dispatchEvent(createMockTouchEvent('touchmove', {
-                    touches: touchesMove, targetTouches: touchesMove,
-                    changedTouches: touchesMove
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 1, clientX: 150, clientY: 100, pointerType: 'touch'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 2, clientX: 250, clientY: 100, pointerType: 'touch'
                 }));
 
                 await new Promise(r => setTimeout(r, 10));
 
                 expect(adjustDelta).to.be.an('object');
                 // Dragging RIGHT (positive dx) should produce NEGATIVE adjustCrop x
-                // so that sourceRect.x decreases → image content moves RIGHT
                 expect(adjustDelta.x).to.be.lessThan(0);
-                // Y should be zero (no vertical movement)
                 expect(adjustDelta.y).to.equal(0);
 
                 handler.detach();
                 document.body.removeChild(canvas);
             });
 
-            it('1.4.2 — two-finger drag DOWN produces negative adjustCrop y', async () => {
+            it('1.4.2 — two touch pointers drag DOWN produces negative adjustCrop y', async () => {
                 const canvas = document.createElement('canvas');
                 canvas.id = 'mt-dir-touch-y';
                 canvas.style.width = '400px';
@@ -190,40 +185,32 @@
                 handler.attach();
 
                 // Start: midpoint at (150, 150)
-                const touchesStart = makeTouchList([
-                    makeTouch(1, 100, 100),
-                    makeTouch(2, 200, 200)
-                ]);
-                canvas.dispatchEvent(createMockTouchEvent('touchstart', {
-                    touches: touchesStart, targetTouches: touchesStart,
-                    changedTouches: touchesStart
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100, pointerType: 'touch'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200, pointerType: 'touch'
                 }));
 
                 // Move DOWN by 30px: midpoint goes from (150,150) to (150,180)
-                // dx = 0, dy = +30
-                // After negation: adjustCrop y should be negative
-                const touchesMove = makeTouchList([
-                    makeTouch(1, 100, 130),
-                    makeTouch(2, 200, 230)
-                ]);
-                canvas.dispatchEvent(createMockTouchEvent('touchmove', {
-                    touches: touchesMove, targetTouches: touchesMove,
-                    changedTouches: touchesMove
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 1, clientX: 100, clientY: 130, pointerType: 'touch'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 2, clientX: 200, clientY: 230, pointerType: 'touch'
                 }));
 
                 await new Promise(r => setTimeout(r, 10));
 
                 expect(adjustDelta).to.be.an('object');
-                // Dragging DOWN (positive dy) should produce NEGATIVE adjustCrop y
                 expect(adjustDelta.y).to.be.lessThan(0);
-                // X should be zero (no horizontal movement)
                 expect(adjustDelta.x).to.equal(0);
 
                 handler.detach();
                 document.body.removeChild(canvas);
             });
 
-            it('two-finger drag LEFT produces positive adjustCrop x', async () => {
+            it('two touch pointers drag LEFT produces positive adjustCrop x', async () => {
                 const canvas = document.createElement('canvas');
                 canvas.id = 'mt-dir-touch-left';
                 canvas.style.width = '400px';
@@ -249,38 +236,31 @@
                 handler.attach();
 
                 // Start: midpoint at (250, 100)
-                const touchesStart = makeTouchList([
-                    makeTouch(1, 200, 100),
-                    makeTouch(2, 300, 100)
-                ]);
-                canvas.dispatchEvent(createMockTouchEvent('touchstart', {
-                    touches: touchesStart, targetTouches: touchesStart,
-                    changedTouches: touchesStart
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 200, clientY: 100, pointerType: 'touch'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 300, clientY: 100, pointerType: 'touch'
                 }));
 
-                // Move LEFT by 50px: midpoint goes from (250,100) to (200,100)
-                // dx = -50
-                // After negation: adjustCrop x should be positive
-                const touchesMove = makeTouchList([
-                    makeTouch(1, 150, 100),
-                    makeTouch(2, 250, 100)
-                ]);
-                canvas.dispatchEvent(createMockTouchEvent('touchmove', {
-                    touches: touchesMove, targetTouches: touchesMove,
-                    changedTouches: touchesMove
+                // Move LEFT by 50px
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 1, clientX: 150, clientY: 100, pointerType: 'touch'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 2, clientX: 250, clientY: 100, pointerType: 'touch'
                 }));
 
                 await new Promise(r => setTimeout(r, 10));
 
                 expect(adjustDelta).to.be.an('object');
-                // Dragging LEFT (negative dx) should produce POSITIVE adjustCrop x
                 expect(adjustDelta.x).to.be.greaterThan(0);
 
                 handler.detach();
                 document.body.removeChild(canvas);
             });
 
-            it('two-finger drag UP produces positive adjustCrop y', async () => {
+            it('two touch pointers drag UP produces positive adjustCrop y', async () => {
                 const canvas = document.createElement('canvas');
                 canvas.id = 'mt-dir-touch-up';
                 canvas.style.width = '400px';
@@ -306,31 +286,24 @@
                 handler.attach();
 
                 // Start: midpoint at (150, 250)
-                const touchesStart = makeTouchList([
-                    makeTouch(1, 100, 200),
-                    makeTouch(2, 200, 300)
-                ]);
-                canvas.dispatchEvent(createMockTouchEvent('touchstart', {
-                    touches: touchesStart, targetTouches: touchesStart,
-                    changedTouches: touchesStart
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 200, pointerType: 'touch'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 300, pointerType: 'touch'
                 }));
 
-                // Move UP by 30px: midpoint goes from (150,250) to (150,220)
-                // dy = -30
-                // After negation: adjustCrop y should be positive
-                const touchesMove = makeTouchList([
-                    makeTouch(1, 100, 170),
-                    makeTouch(2, 200, 270)
-                ]);
-                canvas.dispatchEvent(createMockTouchEvent('touchmove', {
-                    touches: touchesMove, targetTouches: touchesMove,
-                    changedTouches: touchesMove
+                // Move UP by 30px
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 1, clientX: 100, clientY: 170, pointerType: 'touch'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 2, clientX: 200, clientY: 270, pointerType: 'touch'
                 }));
 
                 await new Promise(r => setTimeout(r, 10));
 
                 expect(adjustDelta).to.be.an('object');
-                // Dragging UP (negative dy) should produce POSITIVE adjustCrop y
                 expect(adjustDelta.y).to.be.greaterThan(0);
 
                 handler.detach();
@@ -473,7 +446,7 @@
         // 1.4.4 — Pinch zoom unchanged (regression)
         // ============================================================
         describe('Pinch zoom unchanged (regression)', () => {
-            it('1.4.4 — TouchEvent pinch open still zooms in (factor > 1)', async () => {
+            it('1.4.4 — Touch pointer pinch open still zooms in (factor > 1)', async () => {
                 const canvas = document.createElement('canvas');
                 canvas.id = 'mt-dir-pinch-touch';
                 canvas.style.width = '400px';
@@ -499,23 +472,19 @@
                 handler.attach();
 
                 // Start close together
-                const touchesStart = makeTouchList([
-                    makeTouch(1, 100, 100),
-                    makeTouch(2, 120, 120)
-                ]);
-                canvas.dispatchEvent(createMockTouchEvent('touchstart', {
-                    touches: touchesStart, targetTouches: touchesStart,
-                    changedTouches: touchesStart
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100, pointerType: 'touch'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 120, clientY: 120, pointerType: 'touch'
                 }));
 
                 // Spread apart significantly (pinch open)
-                const touchesMove = makeTouchList([
-                    makeTouch(1, 50, 50),
-                    makeTouch(2, 250, 250)
-                ]);
-                canvas.dispatchEvent(createMockTouchEvent('touchmove', {
-                    touches: touchesMove, targetTouches: touchesMove,
-                    changedTouches: touchesMove
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 1, clientX: 50, clientY: 50, pointerType: 'touch'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 2, clientX: 250, clientY: 250, pointerType: 'touch'
                 }));
 
                 await new Promise(r => setTimeout(r, 10));
@@ -573,7 +542,7 @@
         // 1.4.5 — One-finger touch ignored (regression)
         // ============================================================
         describe('One-finger touch ignored (regression)', () => {
-            it('1.4.5 — single-finger touchstart does not activate gesture', () => {
+            it('1.4.5 — single touch pointer does not activate gesture', () => {
                 const canvas = document.createElement('canvas');
                 canvas.id = 'mt-dir-single';
                 canvas.style.width = '400px';
@@ -592,10 +561,9 @@
                 });
                 handler.attach();
 
-                const touches = makeTouchList([makeTouch(1, 100, 100)]);
-                const evt = createMockTouchEvent('touchstart', {
-                    touches: touches, targetTouches: touches,
-                    changedTouches: touches
+                const evt = new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100,
+                    pointerType: 'touch', bubbles: true, cancelable: true
                 });
                 evt.preventDefault = () => { prevented = true; };
                 canvas.dispatchEvent(evt);
@@ -638,29 +606,23 @@
                 handler.attach();
 
                 // Start: midpoint at (150, 100)
-                const touchesStart = makeTouchList([
-                    makeTouch(1, 100, 100),
-                    makeTouch(2, 200, 100)
-                ]);
-                canvas.dispatchEvent(createMockTouchEvent('touchstart', {
-                    touches: touchesStart, targetTouches: touchesStart,
-                    changedTouches: touchesStart
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100, pointerType: 'touch'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 100, pointerType: 'touch'
                 }));
 
                 // Move only 1px right: midpoint goes from (150,100) to (151,100)
-                // dx = +1, which is below the moveThreshold of 2
-                const touchesMove = makeTouchList([
-                    makeTouch(1, 101, 100),
-                    makeTouch(2, 201, 100)
-                ]);
-                canvas.dispatchEvent(createMockTouchEvent('touchmove', {
-                    touches: touchesMove, targetTouches: touchesMove,
-                    changedTouches: touchesMove
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 1, clientX: 101, clientY: 100, pointerType: 'touch'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 2, clientX: 201, clientY: 100, pointerType: 'touch'
                 }));
 
                 await new Promise(r => setTimeout(r, 10));
 
-                // Sub-threshold movement should NOT trigger adjustCrop
                 expect(adjustCalled).to.be.false;
 
                 handler.detach();
@@ -698,25 +660,19 @@
                 handler.attach();
 
                 // Start: midpoint at (150, 150)
-                const touchesStart = makeTouchList([
-                    makeTouch(1, 100, 100),
-                    makeTouch(2, 200, 200)
-                ]);
-                canvas.dispatchEvent(createMockTouchEvent('touchstart', {
-                    touches: touchesStart, targetTouches: touchesStart,
-                    changedTouches: touchesStart
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100, pointerType: 'touch'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200, pointerType: 'touch'
                 }));
 
-                // Move diagonally right+down by 50px: midpoint goes from (150,150) to (200,200)
-                // dx = +50, dy = +50
-                // After negation: both x and y should be negative
-                const touchesMove = makeTouchList([
-                    makeTouch(1, 150, 150),
-                    makeTouch(2, 250, 250)
-                ]);
-                canvas.dispatchEvent(createMockTouchEvent('touchmove', {
-                    touches: touchesMove, targetTouches: touchesMove,
-                    changedTouches: touchesMove
+                // Move diagonally right+down by 50px
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 1, clientX: 150, clientY: 150, pointerType: 'touch'
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 2, clientX: 250, clientY: 250, pointerType: 'touch'
                 }));
 
                 await new Promise(r => setTimeout(r, 10));
@@ -789,20 +745,21 @@
 
         // ============================================================
         // CSS: touch-action on canvas
-        // This test verifies the CSS property value via computed styles
+        // Phase 1 migration: changed from pan-y to none to prevent
+        // browser gesture interference during title drag
         // ============================================================
         describe('Canvas touch-action CSS', () => {
-            it('canvas element should have touch-action: pan-y (not none)', () => {
+            it('canvas element should have touch-action: none (Phase 1 migration)', () => {
                 const canvas = document.createElement('canvas');
                 canvas.id = 'mt-css-test';
                 canvas.style.width = '400px';
                 canvas.style.height = '300px';
-                // Apply the same class that the app uses
-                canvas.style.touchAction = 'pan-y';
+                // Apply the same value that the app uses after Phase 1 migration
+                canvas.style.touchAction = 'none';
                 document.body.appendChild(canvas);
 
                 const style = window.getComputedStyle(canvas);
-                expect(style.touchAction).to.equal('pan-y');
+                expect(style.touchAction).to.equal('none');
 
                 document.body.removeChild(canvas);
             });

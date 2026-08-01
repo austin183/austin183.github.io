@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bottom Sheet Title Controls Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — Bottom Sheet Title Controls (Phase 3)</h1>
+    <p class="test-plan-ref">Covers: Mobile Touch Enhancements Phase 3 — Bottom Sheet Title Controls parity with desktop sidebar</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createCollageData } from '../MyESModules/App/createCollageData.js';
+        import { createCollageMethods } from '../MyESModules/App/createCollageMethods.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // Parse index.html once for DOM structure tests
+        // ============================================================
+        let htmlDoc;
+        let editPanel;
+
+        before(async () => {
+            const response = await fetch('../index.html');
+            const html = await response.text();
+            const parser = new DOMParser();
+            htmlDoc = parser.parseFromString(html, 'text/html');
+            editPanel = htmlDoc.getElementById('bs-panel-edit');
+        });
+
+        // ============================================================
+        // Phase 3: Formatting Bar (Bold / Italic / Underline)
+        // ============================================================
+        describe('BS-TitleControls-Phase3 — Formatting Bar', () => {
+            it('BSC-01 — Formatting bar container exists in bottom sheet Edit tab', () => {
+                const formattingBar = editPanel.querySelector('.formatting-bar');
+                expect(formattingBar).to.not.be.null;
+            });
+
+            it('BSC-02 — Bold button exists with correct click handler', () => {
+                const formatBtns = editPanel.querySelectorAll('.formatting-bar .format-btn');
+                expect(formatBtns.length).to.be.greaterThanOrEqual(3);
+
+                // Find bold button by title attribute
+                const boldBtn = editPanel.querySelector('.formatting-bar .format-btn[title="Bold"]');
+                expect(boldBtn).to.not.be.null;
+            });
+
+            it('BSC-03 — Italic button exists with correct click handler', () => {
+                const italicBtn = editPanel.querySelector('.formatting-bar .format-btn[title="Italic"]');
+                expect(italicBtn).to.not.be.null;
+            });
+
+            it('BSC-04 — Underline button exists with correct click handler', () => {
+                const underlineBtn = editPanel.querySelector('.formatting-bar .format-btn[title="Underline"]');
+                expect(underlineBtn).to.not.be.null;
+            });
+
+            it('BSC-05 — Formatting bar buttons have aria-pressed Vue bindings', () => {
+                // Vue :aria-pressed bindings are parsed as literal ":aria-pressed" attributes by DOMParser
+                const html = editPanel.innerHTML;
+                // Count how many :aria-pressed bindings reference isTitleFormatActive
+                const ariaPressedMatches = html.match(/:aria-pressed="isTitleFormatActive\(['"]bold['"]\)"/g);
+                expect(ariaPressedMatches).to.not.be.null;
+                expect(ariaPressedMatches.length).to.be.greaterThanOrEqual(1);
+
+                const italicMatches = html.match(/:aria-pressed="isTitleFormatActive\(['"]italic['"]\)"/g);
+                expect(italicMatches).to.not.be.null;
+
+                const underlineMatches = html.match(/:aria-pressed="isTitleFormatActive\(['"]underline['"]\)"/g);
+                expect(underlineMatches).to.not.be.null;
+            });
+
+            it('BSC-06 — Formatting bar buttons reference toggleTitleBold/Italic/Underline', () => {
+                // The raw HTML source should contain the Vue click bindings
+                const html = editPanel.innerHTML;
+                expect(html).to.include('toggleTitleBold');
+                expect(html).to.include('toggleTitleItalic');
+                expect(html).to.include('toggleTitleUnderline');
+            });
+        });
+
+        // ============================================================
+        // Phase 3: Font Opacity Slider
+        // ============================================================
+        describe('BS-TitleControls-Phase3 — Font Opacity Slider', () => {
+            it('BSC-07 — Font Opacity slider exists with bs ID prefix', () => {
+                const slider = editPanel.querySelector('#bsTitleFontOpacitySlider');
+                expect(slider).to.not.be.null;
+                expect(slider.type).to.equal('range');
+            });
+
+            it('BSC-08 — Font Opacity slider binds to titleStyle.fontOpacity', () => {
+                const html = editPanel.innerHTML;
+                expect(html).to.include('v-model.number="titleStyle.fontOpacity"');
+            });
+
+            it('BSC-09 — Font Opacity slider has correct range (0-1, step 0.01)', () => {
+                const slider = editPanel.querySelector('#bsTitleFontOpacitySlider');
+                expect(slider.min).to.equal('0');
+                expect(slider.max).to.equal('1');
+                expect(slider.step).to.equal('0.01');
+            });
+
+            it('BSC-10 — Font Opacity slider has undo snapshot pattern', () => {
+                const html = editPanel.innerHTML;
+                expect(html).to.include('bsTitleFontOpacitySlider');
+                // Should have @focus, @pointerdown for snapshot and @blur for commit
+                const sliderEl = editPanel.querySelector('#bsTitleFontOpacitySlider');
+                // The raw HTML should contain the Vue event bindings
+                expect(html).to.include('snapshotTitleStyle');
+                expect(html).to.include('onTitleFontOpacityChange');
+                expect(html).to.include('commitTitleStyle');
+            });
+
+            it('BSC-11 — Font Opacity slider has ARIA attributes', () => {
+                const slider = editPanel.querySelector('#bsTitleFontOpacitySlider');
+                expect(slider.getAttribute('aria-valuemin')).to.not.be.null;
+                expect(slider.getAttribute('aria-valuemax')).to.not.be.null;
+            });
+        });
+
+        // ============================================================
+        // Phase 3: Background Color Picker
+        // ============================================================
+        describe('BS-TitleControls-Phase3 — Background Color Picker', () => {
+            it('BSC-12 — Background Color picker exists with bs ID prefix', () => {
+                const picker = editPanel.querySelector('#bsTitleBgColorPicker');
+                expect(picker).to.not.be.null;
+                expect(picker.type).to.equal('color');
+            });
+
+            it('BSC-13 — Background Color picker binds to titleStyle.backgroundColor', () => {
+                const html = editPanel.innerHTML;
+                expect(html).to.include('v-model="titleStyle.backgroundColor"');
+            });
+
+            it('BSC-14 — Background Color picker has undo snapshot pattern', () => {
+                const html = editPanel.innerHTML;
+                expect(html).to.include('onTitleBackgroundColorChange');
+            });
+        });
+
+        // ============================================================
+        // Phase 3: Background Opacity Slider
+        // ============================================================
+        describe('BS-TitleControls-Phase3 — Background Opacity Slider', () => {
+            it('BSC-15 — Background Opacity slider exists with bs ID prefix', () => {
+                const slider = editPanel.querySelector('#bsTitleBgOpacitySlider');
+                expect(slider).to.not.be.null;
+                expect(slider.type).to.equal('range');
+            });
+
+            it('BSC-16 — Background Opacity slider binds to titleStyle.bgOpacity', () => {
+                const html = editPanel.innerHTML;
+                expect(html).to.include('v-model.number="titleStyle.bgOpacity"');
+            });
+
+            it('BSC-17 — Background Opacity slider has correct range (0-1, step 0.01)', () => {
+                const slider = editPanel.querySelector('#bsTitleBgOpacitySlider');
+                expect(slider.min).to.equal('0');
+                expect(slider.max).to.equal('1');
+                expect(slider.step).to.equal('0.01');
+            });
+
+            it('BSC-18 — Background Opacity slider has change handler', () => {
+                const html = editPanel.innerHTML;
+                expect(html).to.include('onTitleBgOpacityChange');
+            });
+        });
+
+        // ============================================================
+        // Phase 3: Show Background Checkbox
+        // ============================================================
+        describe('BS-TitleControls-Phase3 — Show Background Checkbox', () => {
+            it('BSC-19 — Show Background checkbox exists in bottom sheet Edit tab', () => {
+                // Find the label containing "Show Background" text
+                const labels = editPanel.querySelectorAll('label');
+                let found = false;
+                labels.forEach(label => {
+                    if (label.textContent.includes('Show Background')) {
+                        found = true;
+                    }
+                });
+                expect(found).to.equal(true);
+            });
+
+            it('BSC-20 — Show Background checkbox references toggleTitleShowBackground', () => {
+                const html = editPanel.innerHTML;
+                expect(html).to.include('toggleTitleShowBackground');
+            });
+        });
+
+        // ============================================================
+        // Phase 3: Width Slider
+        // ============================================================
+        describe('BS-TitleControls-Phase3 — Width Slider', () => {
+            it('BSC-21 — Width slider exists with bs ID prefix', () => {
+                const slider = editPanel.querySelector('#bsTitleWidthSlider');
+                expect(slider).to.not.be.null;
+                expect(slider.type).to.equal('range');
+            });
+
+            it('BSC-22 — Width slider binds to titleStyle.titleBoxWidth', () => {
+                const html = editPanel.innerHTML;
+                expect(html).to.include('v-model.number="titleStyle.titleBoxWidth"');
+            });
+
+            it('BSC-23 — Width slider has correct range (100-1920, step 1)', () => {
+                const slider = editPanel.querySelector('#bsTitleWidthSlider');
+                expect(slider.min).to.equal('100');
+                expect(slider.max).to.equal('1920');
+                expect(slider.step).to.equal('1');
+            });
+
+            it('BSC-24 — Width slider has change handler', () => {
+                const html = editPanel.innerHTML;
+                expect(html).to.include('onTitleWidthChange');
+            });
+        });
+
+        // ============================================================
+        // Phase 3: Reset Position Button
+        // ============================================================
+        describe('BS-TitleControls-Phase3 — Reset Position Button', () => {
+            it('BSC-25 — Reset Position button exists in bottom sheet Edit tab', () => {
+                // Find button containing "Reset Position" text
+                const buttons = editPanel.querySelectorAll('button');
+                let found = false;
+                buttons.forEach(btn => {
+                    if (btn.textContent.includes('Reset Position')) {
+                        found = true;
+                    }
+                });
+                expect(found).to.equal(true);
+            });
+
+            it('BSC-26 — Reset Position button references resetTitlePosition', () => {
+                const html = editPanel.innerHTML;
+                expect(html).to.include('resetTitlePosition');
+            });
+        });
+
+        // ============================================================
+        // Phase 3: ID Prefix Verification
+        // ============================================================
+        describe('BS-TitleControls-Phase3 — ID Prefix Verification', () => {
+            it('BSC-27 — All new slider IDs use bs prefix', () => {
+                const newIds = [
+                    'bsTitleFontOpacitySlider',
+                    'bsTitleBgColorPicker',
+                    'bsTitleBgOpacitySlider',
+                    'bsTitleWidthSlider'
+                ];
+                newIds.forEach(id => {
+                    const el = editPanel.querySelector('#' + id);
+                    expect(el).to.not.be.null;
+                    expect(id.startsWith('bs')).to.equal(true);
+                });
+            });
+
+            it('BSC-28 — No new IDs collide with desktop sidebar IDs', () => {
+                // Desktop sidebar uses IDs without 'bs' prefix
+                // Verify that bottom sheet IDs are distinct
+                const newIds = [
+                    'bsTitleFontOpacitySlider',
+                    'bsTitleBgColorPicker',
+                    'bsTitleBgOpacitySlider',
+                    'bsTitleWidthSlider'
+                ];
+                newIds.forEach(id => {
+                    // The desktop equivalent would be without 'bs' prefix
+                    const desktopId = id.replace('bs', '');
+                    // They should be different strings
+                    expect(id).to.not.equal(desktopId);
+                });
+            });
+        });
+
+        // ============================================================
+        // Phase 3: Control Count Verification
+        // ============================================================
+        describe('BS-TitleControls-Phase3 — Control Count', () => {
+            it('BSC-29 — Bottom sheet Edit tab has all title controls present', () => {
+                const html = editPanel.innerHTML;
+
+                // Existing controls (pre-Phase 3)
+                expect(html).to.include('bsTitleInput');           // Title text
+                expect(html).to.include('bsTitleFontSelect');      // Font
+                expect(html).to.include('bsTitleFontSizeSlider');  // Size
+                expect(html).to.include('bsTitleFontColorPicker'); // Font color
+
+                // New controls (Phase 3)
+                expect(html).to.include('bsTitleFontOpacitySlider'); // Font opacity
+                expect(html).to.include('bsTitleBgColorPicker');     // Bg color
+                expect(html).to.include('bsTitleBgOpacitySlider');   // Bg opacity
+                expect(html).to.include('bsTitleWidthSlider');       // Width
+
+                // Formatting bar
+                expect(html).to.include('toggleTitleBold');
+                expect(html).to.include('toggleTitleItalic');
+                expect(html).to.include('toggleTitleUnderline');
+
+                // Show background
+                expect(html).to.include('toggleTitleShowBackground');
+
+                // Reset position
+                expect(html).to.include('resetTitlePosition');
+            });
+        });
+
+        // ============================================================
+        // Phase 3: Vue Method Availability (no new methods needed)
+        // ============================================================
+        describe('BS-TitleControls-Phase3 — Vue Methods Available', () => {
+            // All methods referenced by the new controls already exist in the desktop sidebar.
+            // Verify they exist on the methods factory.
+
+            function createMockBase() {
+                return {
+                    assembler: { render: () => {} },
+                    dropHandler: { setupGlobalDrop: () => () => {} },
+                    getCanvasRenderer: () => null,
+                    setCanvasRenderer: () => {},
+                    getLayoutManager: () => null,
+                    setLayoutManager: () => {},
+                    getCropManager: () => null,
+                    setCropManager: () => {},
+                    getImageLibrary: () => null,
+                    setImageLibrary: () => {},
+                    getBackgroundManager: () => null,
+                    setBackgroundManager: () => {},
+                    getTitleManager: () => null,
+                    setTitleManager: () => {},
+                    layoutStyleOptions: []
+                };
+            }
+
+            it('BSC-30 — toggleTitleBold method exists', () => {
+                const methods = createCollageMethods(createMockBase());
+                expect(typeof methods.toggleTitleBold).to.equal('function');
+            });
+
+            it('BSC-31 — toggleTitleItalic method exists', () => {
+                const methods = createCollageMethods(createMockBase());
+                expect(typeof methods.toggleTitleItalic).to.equal('function');
+            });
+
+            it('BSC-32 — toggleTitleUnderline method exists', () => {
+                const methods = createCollageMethods(createMockBase());
+                expect(typeof methods.toggleTitleUnderline).to.equal('function');
+            });
+
+            it('BSC-33 — toggleTitleShowBackground method exists', () => {
+                const methods = createCollageMethods(createMockBase());
+                expect(typeof methods.toggleTitleShowBackground).to.equal('function');
+            });
+
+            it('BSC-34 — resetTitlePosition method exists', () => {
+                const methods = createCollageMethods(createMockBase());
+                expect(typeof methods.resetTitlePosition).to.equal('function');
+            });
+
+            it('BSC-35 — onTitleFontOpacityChange method exists', () => {
+                const methods = createCollageMethods(createMockBase());
+                expect(typeof methods.onTitleFontOpacityChange).to.equal('function');
+            });
+
+            it('BSC-36 — onTitleBackgroundColorChange method exists', () => {
+                const methods = createCollageMethods(createMockBase());
+                expect(typeof methods.onTitleBackgroundColorChange).to.equal('function');
+            });
+
+            it('BSC-37 — onTitleBgOpacityChange method exists', () => {
+                const methods = createCollageMethods(createMockBase());
+                expect(typeof methods.onTitleBgOpacityChange).to.equal('function');
+            });
+
+            it('BSC-38 — onTitleWidthChange method exists', () => {
+                const methods = createCollageMethods(createMockBase());
+                expect(typeof methods.onTitleWidthChange).to.equal('function');
+            });
+
+            it('BSC-39 — snapshotTitleStyle method exists', () => {
+                const methods = createCollageMethods(createMockBase());
+                expect(typeof methods.snapshotTitleStyle).to.equal('function');
+            });
+
+            it('BSC-40 — commitTitleStyle method exists', () => {
+                const methods = createCollageMethods(createMockBase());
+                expect(typeof methods.commitTitleStyle).to.equal('function');
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

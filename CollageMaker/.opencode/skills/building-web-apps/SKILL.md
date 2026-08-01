@@ -1,6 +1,6 @@
 ---
 name: building-web-apps
-description: Build static web apps with Vue 3 Options API, Canvas 2D, ES modules, CDN libraries. Covers factory testability (callback injection, provider functions, DOM ID injection, module extraction, service locator safety, return value notification, handler .call(this), closure safety, internal closure pattern, return-object exposure, mock VM construction, undo snapshots (segmented inline, atomic handler methods, lifecycle cleanup)), extensibility (strategy/registry), canvas clearing for exports, config rendering, shared offscreen canvas, render order, dual-canvas visibility guard, async UI cleanup (try/finally, concurrency guards), toast notifications, accessibility (ARIA live regions, custom button keyboard, aria-busy, reduced motion, canvas roles, ARIA tab pattern with aria-controls/aria-labelledby, focus return on dialog close, focus traps for aria-modal dialogs), drag cleanup, VISIBLE_MIN clamping, test-driven refactoring, Vue input patterns (@keydown.enter, v-model undo timing, segmented/checkbox inline snapshot/commit, atomic handler extraction, beforeUnmount cleanup, $nextTick race condition guards), multi-touch gestures (TouchEvent/PointerEvent/WheelEvent, pointerType guards, wheel pan/zoom, dual gesture direction conventions, touch-action: pan-y selective passthrough), multi-canvas pointer events (e.currentTarget for per-canvas coordinate math), mobile sidebar overlays (dual-state toggles, CSS !important cascade, scoped CSS selectors for shared classes, global Escape, Playwright Escape key unreliability with .window modifier, overlay backdrops, aria-expanded), mobile bottom sheets (ID prefixing for content duplication, visual drag handle, auto-switch tab on content change, dvh height units), fixed element z-index occlusion (prevention checklist, Playwright "intercepts pointer events" diagnosis), iOS safe areas (viewport-fit=cover, 100dvh, fixed element treatment, CSS content validation testing), destination-out compositing, DPR/CORS, test runner DOM queries (querySelector over getElementById, offsetParent mounting for detached elements, getElementById mock null fallback). No build step. Use for CollageMaker features, rendering, state, testing.
+description: Build static web apps with Vue 3 Options API, Canvas 2D, ES modules, CDN libraries. Covers factory testability (callback injection, provider functions, DOM ID injection, module extraction, service locator safety, return value notification, handler .call(this), closure safety, internal closure pattern, return-object exposure, mock VM construction, undo snapshots (segmented inline, atomic handler methods, lifecycle cleanup)), extensibility (strategy/registry), canvas clearing for exports, config rendering, shared offscreen canvas, render order, dual-canvas visibility guard, async UI cleanup (try/finally, concurrency guards), toast notifications, accessibility (ARIA live regions, custom button keyboard, aria-busy, reduced motion, canvas roles, ARIA tab pattern with aria-controls/aria-labelledby, focus return on dialog close, focus traps for aria-modal dialogs), drag cleanup, VISIBLE_MIN clamping, test-driven refactoring, Vue input patterns (@keydown.enter, v-model undo timing, segmented/checkbox inline snapshot/commit, atomic handler extraction, beforeUnmount cleanup, $nextTick race condition guards), multi-touch gestures (TouchEvent/PointerEvent/WheelEvent, pointerType guards, wheel pan/zoom, dual gesture direction conventions, pointer capture early-exit cleanup, 3+ finger OS gesture guard, touch-action: pan-y vs none trade-off, PointerEvent test migration), multi-canvas pointer events (e.currentTarget for per-canvas coordinate math), mobile sidebar overlays (dual-state toggles, CSS !important cascade, scoped CSS selectors for shared classes, global Escape, Playwright Escape key unreliability with .window modifier, overlay backdrops, aria-expanded), mobile bottom sheets (ID prefixing for content duplication, visual drag handle, auto-switch tab on content change, dvh height units), fixed element z-index occlusion (prevention checklist, Playwright "intercepts pointer events" diagnosis), iOS safe areas (viewport-fit=cover, 100dvh, fixed element treatment, CSS content validation testing), destination-out compositing, DPR/CORS, test runner DOM queries (querySelector over getElementById, offsetParent mounting for detached elements, getElementById mock null fallback, DOMParser Vue directive colon prefix), pure function numeric guards (Number.isFinite for NaN/Infinity). No build step. Use for CollageMaker features, rendering, state, testing.
 ---
 
 # Building Web Apps
@@ -20,7 +20,7 @@ Consult these files for verified patterns and gotchas:
 - `references/testing-unit.md` — Mocha/Chai unit tests, mocking patterns, integration testing, characterization tests before refactor
 - `references/testing-e2e.md` — Playwright E2E, page load strategy, pointer/Touch/Drag event testing, test runner DOM query gotchas, Escape key unreliability with Vue `.window` modifier
 - `references/testing-strategy.md` — Testing approach, gotchas, deferred features, assertion density
-- `references/interaction.md` — Keyboard shortcut patterns: three-layer architecture, modifier matching, focus suppression, preventDefault ordering, pointer handler coordination, global pointerup drag cleanup, VISIBLE_MIN drag boundary clamping, multi-touch and trackpad gestures (TouchEvent/PointerEvent dual path, pointerType guards, pointerType-based dynamic thresholds, wheel event pan/zoom, dual gesture direction conventions, setPointerCapture gotchas, releasePointerCapture hygiene, blur safety net, touch-action: pan-y selective passthrough), multi-canvas pointer events (e.currentTarget)
+- `references/interaction.md` — Keyboard shortcut patterns: three-layer architecture, modifier matching, focus suppression, preventDefault ordering, pointer handler coordination, global pointerup drag cleanup, VISIBLE_MIN drag boundary clamping, multi-touch and trackpad gestures (TouchEvent/PointerEvent dual path, pointerType guards, pointerType-based dynamic thresholds, wheel event pan/zoom, dual gesture direction conventions, setPointerCapture gotchas, releasePointerCapture hygiene, pointer capture early-exit cleanup, 3+ finger OS gesture guard, blur safety net, touch-action: pan-y vs none trade-off), multi-canvas pointer events (e.currentTarget)
 - `references/midiestro-pattern.md` — Entry point pattern, shared infrastructure, directory structure
 - `references/css-layout.md` — Flex column chain, `min-height: 0` requirement, responsive sidebar config, CSS computed value naming, mobile safe areas
 - `references/memory-management.md` — Disposing HTMLImageElement references, URL.createObjectURL cleanup, lifecycle cleanup ordering, canvas GPU memory release, visual state cleanup, image disposal when replacing references
@@ -277,6 +277,36 @@ export function loadImageFromFile(file) {
 }
 ```
 
+### Pure Function Numeric Guards
+Pure math functions that accept numeric parameters from runtime sources (touch coordinates, computed ratios, user input) MUST use `Number.isFinite()` — not comparison operators — as the first guard. JavaScript comparisons with `NaN` always return `false`, and `Infinity` is a valid positive number, so guards like `if (ratio <= 0)` silently pass invalid values through:
+
+```javascript
+// WRONG — NaN and Infinity bypass the comparison
+export function applyZoomExponent(ratio) {
+    if (ratio <= 0) return 1.0;  // NaN <= 0 is false, Infinity <= 0 is false
+    return Math.pow(ratio, 0.3); // NaN or Infinity propagates
+}
+
+// CORRECT — Number.isFinite catches NaN, Infinity, -Infinity, undefined
+export function applyZoomExponent(ratio) {
+    if (!Number.isFinite(ratio) || ratio <= 0) return 1.0;
+    return Math.pow(ratio, 0.3);
+}
+```
+
+**Why it matters:** NaN in Canvas 2D (`ctx.scale(NaN, NaN)`) silently corrupts the transform matrix. NaN in state (`width / NaN`) propagates through clamping (`Math.max(NaN, 1) === NaN`). Both produce silent rendering failures.
+
+**When to apply:** Any pure math function that accepts numeric parameters from potentially noisy sources AND returns values consumed by Canvas 2D, CSS transforms, or reactive state.
+
+**When NOT to apply:** Functions called only with compile-time constants, or where the caller guarantees finite inputs with a short, auditable call chain.
+
+**Testing:** Always assert NaN/Infinity/undefined inputs return safe defaults:
+```javascript
+expect(applyZoomExponent(NaN)).to.equal(1.0);
+expect(applyZoomExponent(Infinity)).to.equal(1.0);
+expect(applyZoomExponent(undefined)).to.equal(1.0);
+```
+
 ### Vue 3 Options API
 - Factory decomposition: `createCollageApp()` assembles data/methods/lifecycle/services
 - Reactive state in Vue `data()` return value
@@ -459,10 +489,16 @@ The WheelEvent path (`_onWheel`) never calls `processGesture()` — it computes 
 - **Unified gesture functions** — Extract `startGesture()`, `processGesture()`, `endGesture()` so both TouchEvent and PointerEvent paths share identical logic.
 - **Wheel event handler** — Handle `deltaX`/`deltaY` for pan and `deltaZ` for zoom. Also check `ctrlKey + deltaY` as a cross-platform zoom fallback (Windows mice). Attach with `{ passive: false }`.
 - **Exactly 2 fingers** — For TouchEvent, check `e.touches.length !== 2`. Mobile OSes reserve 3+ finger gestures.
-- **touch-action: pan-y** — Use `touch-action: pan-y` (not `none`) for selective gesture passthrough: one-finger vertical drag scrolls the page, two-finger gestures go to JavaScript. Requires `e.preventDefault()` on `touchmove` when two-finger gesture is active. Avoid `touch-action: none` — it blocks all page scrolling and makes the app feel "stuck" on mobile.
+- **3+ finger OS gesture guard (PointerEvent)** — The TouchEvent path implicitly blocks 3+ fingers via `e.touches.length !== 2`. The PointerEvent path needs an explicit guard because each pointer arrives as a separate event. Without `preventDefault()` on the 3rd+ pointer, the OS may intercept the gesture mid-interaction:
+  ```javascript
+  if (activePointers.size === 2) { /* start gesture */ }
+  else if (activePointers.size > 2) { e.preventDefault(); }
+  ```
+- **touch-action: pan-y vs none** — Default to `touch-action: pan-y` for selective gesture passthrough: one-finger vertical drag scrolls the page, two-finger gestures go to JavaScript. Requires `e.preventDefault()` on `touchmove` when two-finger gesture is active. Use `touch-action: none` only when: canvas fills the viewport (no content below to scroll to), custom two-finger pan/zoom is a core interaction, and alternative scroll targets exist (sidebars, bottom sheets). Document the trade-off in a CSS comment.
 - **Window blur safety net** — Listen for `window.blur` and `document.visibilitychange` to cancel stuck gesture state if the user switches tabs/windows mid-gesture.
 - **preventDefault after gesture check (TouchEvent/PointerEvent)** — Only call `preventDefault()` when the gesture actually activates (e.g., panel is selected), not unconditionally.
 - **preventDefault two-level guard (WheelEvent)** — Wheel events need a stricter two-level guard: (1) is a panel selected? (2) are there actual pan or zoom deltas? If either check fails, do NOT call `preventDefault()`. Without Level 2, single-finger mouse scroll over canvas with a panel selected blocks page scrolling. Also guard `ctrlKey + deltaY`: if `ctrlKey` is true but all deltas are zero, skip `preventDefault()` to avoid blocking browser zoom.
+- **PointerEvent for unit tests** — Prefer `new PointerEvent('pointerdown', { pointerType: 'touch', pointerId: 1, ... })` over TouchEvent mock construction. PointerEvent is a native browser constructor; TouchEvent requires `Object.defineProperty` + mock TouchList. Two `pointerdown` events replace one `touchstart` with two touches. See `references/testing-e2e.md` for patterns.
 - See `references/interaction.md` for the full dual-input path patterns, wheel event handling, pointer capture gotchas, blur safety net, and gesture direction conventions.
 
 ### Responsive Mobile UI
@@ -656,6 +692,7 @@ showToast(message, type, duration) {
       return vm;
   }
   ```
+- **DOMParser on Vue templates** — directive attributes (`:aria-pressed`, `:class`, etc.) are parsed literally with the colon prefix. Use `getAttribute(':aria-pressed')` not `getAttribute('aria-pressed')`. See `references/testing-unit.md`
 - See `references/testing-unit.md` for patterns on testing state and combined edge cases, `references/testing-strategy.md` for deferred features
 
 ### Extensibility Patterns

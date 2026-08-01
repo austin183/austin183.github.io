@@ -51,7 +51,8 @@ export function createRenderMethods(base) {
                 titleStyle: vm.titleStyle,
                 titleRuns: vm.titleRuns,
                 titleHoverTarget: vm.titleHoverTarget || null,
-                titleInteractionMode: vm.titleInteractionMode || null
+                titleInteractionMode: vm.titleInteractionMode || null,
+                titleInteractionPointerType: vm.titleInteractionPointerType || null
             });
 
             ctx.restore();

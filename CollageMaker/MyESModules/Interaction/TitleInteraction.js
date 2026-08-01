@@ -26,10 +26,11 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
     let dragStartBoxY = null;   // Logical coordinates
     let dragStartBoxWidth = null; // Logical pixels
     let capturedPointerId = undefined;
+    let lastPointerType = null; // 'mouse', 'touch', or 'pen'
 
     const DRAG_THRESHOLD = 3;         // CSS pixels — minimum movement to trigger drag
     const EDGE_THRESHOLD_FINE = 8;    // CSS pixels — mouse/pen resize handle hit area
-    const EDGE_THRESHOLD_COARSE = 16; // CSS pixels — touch resize handle hit area (WCAG)
+    const EDGE_THRESHOLD_COARSE = 22; // CSS pixels — touch resize handle hit area (WCAG 44px target / 2)
 
     // Shared offscreen canvas for text measurement — avoids creating
     // a new canvas per pointermove during drag/resize operations
@@ -39,7 +40,7 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
     const measureCtx = measureCanvas.getContext('2d');
 
     // Placeholder for bound handlers (set after handler object is created)
-    let onPointerDown, onPointerMove, onPointerUp, onGlobalPointerUp;
+    let onPointerDown, onPointerMove, onPointerUp, onGlobalPointerUp, onPointerLeave;
 
     const handler = {
         attach() {
@@ -53,6 +54,7 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
             canvas.addEventListener('pointermove', onPointerMove);
             canvas.addEventListener('pointerup', onPointerUp);
             canvas.addEventListener('pointercancel', onPointerUp);
+            canvas.addEventListener('pointerleave', onPointerLeave);
             // Global cleanup: catches drags that end outside the canvas
             window.addEventListener('pointerup', onGlobalPointerUp);
         },
@@ -68,6 +70,7 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
             canvas.removeEventListener('pointermove', onPointerMove);
             canvas.removeEventListener('pointerup', onPointerUp);
             canvas.removeEventListener('pointercancel', onPointerUp);
+            canvas.removeEventListener('pointerleave', onPointerLeave);
             window.removeEventListener('pointerup', onGlobalPointerUp);
         },
 
@@ -89,7 +92,9 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
             // Update reactive state
             state.titleInteractionMode = null;
             state.titleHoverTarget = null;
+            state.titleInteractionPointerType = null;
             lastHoverTarget = null;
+            lastPointerType = null;
 
             const canvas = document.getElementById(canvasId);
             if (canvas) {
@@ -292,6 +297,8 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
             // and backs off — prevents panel drag starting behind the title
             state.titleHoverTarget = hit.target;
             state.titleInteractionMode = interactionType;
+            lastPointerType = e.pointerType;
+            state.titleInteractionPointerType = lastPointerType;
 
             // Set cursor based on target
             canvas.style.cursor = hit.target === 'body' ? 'grab' : 'ew-resize';
@@ -398,9 +405,11 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
             const hit = this._hitTestTitle(coords.x, coords.y, canvasWidth, canvasHeight, e.pointerType);
             if (hit.hit) {
                 state.titleHoverTarget = hit.target;
+                state.titleInteractionPointerType = e.pointerType;
                 canvas.style.cursor = hit.target === 'body' ? 'grab' : 'ew-resize';
             } else {
                 state.titleHoverTarget = null;
+                state.titleInteractionPointerType = null;
                 canvas.style.cursor = '';
             }
             // Schedule render only when hover state changes (outline visibility)
@@ -409,6 +418,33 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
                 if (onRenderScheduled) {
                     onRenderScheduled();
                 }
+            }
+        },
+
+        /**
+         * Handles pointerleave events — clears hover state when pointer
+         * exits the canvas so touch handles don't persist.
+         * Does NOT clear active drag/resize interaction (pointer capture
+         * still delivers events even outside canvas bounds).
+         * @param {PointerEvent} e
+         * @private
+         */
+        _onPointerLeave() {
+            // Only clear hover state — active interaction uses pointer capture
+            // so pointerleave fires but events still arrive via capture
+            if (isInteracting) return;
+
+            state.titleHoverTarget = null;
+            state.titleInteractionPointerType = null;
+            lastHoverTarget = null;
+
+            const canvas = document.getElementById(canvasId);
+            if (canvas) {
+                canvas.style.cursor = '';
+            }
+
+            if (onRenderScheduled) {
+                onRenderScheduled();
             }
         },
 
@@ -426,6 +462,7 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
     onPointerDown = (e) => handler._onPointerDown(e);
     onPointerMove = (e) => handler._onPointerMove(e);
     onPointerUp = (e) => handler._onPointerUp(e);
+    onPointerLeave = (e) => handler._onPointerLeave(e);
     onGlobalPointerUp = () => {
         // Only clean up if an interaction is in progress (pointerup happened outside canvas)
         if (isInteracting || dragStartCoords) {

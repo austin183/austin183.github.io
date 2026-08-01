@@ -18,8 +18,10 @@
 - setPointerCapture / releasePointerCapture lifecycle
 - pointercancel cleanup
 - pointer capture testing pattern
+- pointer capture early-exit cleanup
 - Window blur / visibilitychange safety net
-- touch-action: pan-y selective passthrough
+- touch-action: pan-y selective passthrough and none trade-off
+- 3+ finger OS gesture guard (PointerEvent)
 - VISIBLE_MIN drag boundary clamping
 - Testing gesture direction
 
@@ -571,6 +573,45 @@ expect(releasedIds).to.include(1);
 expect(releasedIds).to.include(2); // Remaining pointer also released
 ```
 
+### Pointer Capture Early-Exit Cleanup
+
+When `setPointerCapture()` is called on every `pointerdown` but the gesture fails to start (e.g., no selected panel), the capture is never released. This leaves stale pointer capture state on the canvas.
+
+**Root cause:** The `_onPointerDown` handler captures the pointer immediately (before knowing if the gesture will start), but only releases capture in `_onPointerUp`/`_onPointerCancel`. If `startGesture()` returns false and the handler returns early, those release paths are never reached.
+
+**Fix — release capture in the same handler when the gesture fails to start:**
+
+```javascript
+function _onPointerDown(e) {
+    activePointers.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
+
+    if (canvas && canvas.setPointerCapture) {
+        try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+    }
+
+    if (activePointers.size === 2) {
+        const pointers = [...activePointers.values()];
+        if (!startGesture(pointers[0], pointers[1])) {
+            // No selected panel — clean up and release capture
+            const pids = [...activePointers.keys()]; // Save BEFORE clear
+            activePointers.clear();
+            if (canvas && canvas.releasePointerCapture) {
+                for (const pid of pids) {
+                    try { canvas.releasePointerCapture(pid); } catch (_) {}
+                }
+            }
+            return;
+        }
+        e.preventDefault();
+        pointerGestureActive = true;
+    }
+}
+```
+
+**Key ordering:** Save pointer IDs from `activePointers.keys()` BEFORE calling `activePointers.clear()`. Once cleared, the keys are gone.
+
+**Testing:** Override `canvas.releasePointerCapture` to capture released IDs, then verify both pointers are released when the second `pointerdown` fires with no selected panel.
+
 ## Window Blur / Visibility Change Safety Net
 
 If the user switches tabs, minimizes the browser, or the window loses focus during an active gesture, the browser may pause or silently cancel pointer/touch events. The gesture state (`gestureActive`, `activePointers`) remains set, causing subsequent interactions to be misinterpreted.
@@ -602,7 +643,7 @@ document.removeEventListener('visibilitychange', handleVisibilityChange);
 
 **Always guard the cleanup with a state check** (`if (gestureActive)`) to avoid unnecessary work on every blur event.
 
-## touch-action: pan-y Selective Passthrough
+## touch-action: pan-y Selective Passthrough and `none` Trade-off
 
 The CSS `touch-action` property controls which touch gestures the browser handles natively vs. which are passed to JavaScript:
 
@@ -612,10 +653,7 @@ The CSS `touch-action` property controls which touch gestures the browser handle
 | `pan-y` | One-finger vertical scroll | Two-finger gestures, horizontal swipes |
 | `manipulation` | Scroll and zoom | Nothing (default browser behavior) |
 
-**Use `pan-y` when:**
-- You want one-finger vertical drag to scroll the page (not trigger app gestures)
-- You still want JavaScript to handle two-finger gestures (pan, pinch-to-zoom)
-- You want JavaScript to handle horizontal one-finger swipes (e.g., panel swapping)
+**Default: Use `pan-y`** when you want one-finger vertical drag to scroll the page and two-finger gestures to go to JavaScript.
 
 **Implementation:**
 ```css
@@ -636,7 +674,28 @@ function _onTouchMove(e) {
 }
 ```
 
-**Anti-pattern:** Using `touch-action: none` blocks ALL browser gestures, including page scrolling. On mobile, this makes the app feel "stuck" — users cannot scroll to see content below the fold.
+### When to use `touch-action: none`
+
+For apps where the canvas fills the viewport and custom two-finger gestures are critical, `touch-action: none` may be the correct choice:
+
+- Canvas fills the viewport (no content below to scroll to)
+- Custom two-finger pan/zoom is a core interaction
+- Title drag or other single-finger canvas interactions must not be interrupted by browser gestures (pull-to-refresh, scroll)
+- Alternative scroll targets exist (sidebars, bottom sheets with their own scroll containers)
+
+Document the trade-off in a CSS comment:
+```css
+/* touch-action: none prevents browser gesture interference (pull-to-refresh,
+   iOS back-swipe, scroll) during title drag and two-finger pan/zoom.
+   Acceptable trade-off: canvas fills the viewport on mobile, so page
+   scrolling is not needed. Sidebars and bottom sheet have their own scroll. */
+touch-action: none;
+```
+
+**When to keep `touch-action: pan-y`:**
+- Page has scrollable content outside the canvas
+- One-finger vertical drag should scroll the page
+- Two-finger gestures are secondary to page navigation
 
 **iOS Safari note:** `pan-y` does NOT prevent the browser's edge-swipe back gesture. Two-finger horizontal swipe from the screen edge may still trigger browser navigation. This is an acceptable trade-off.
 
@@ -759,6 +818,25 @@ _onTouchMove(e) {
     // ... gesture processing
 }
 ```
+
+### 3+ Finger OS Gesture Guard (PointerEvent Path)
+
+On iOS and Android, 3-finger or 4-finger touches trigger OS-level gestures (app switcher, screenshot, notification panel). If your PointerEvent handler doesn't call `preventDefault()` on the 3rd+ pointer, the OS may intercept the gesture mid-interaction.
+
+**Why this matters:** The TouchEvent path had `if (e.touches.length !== 2) return;` which implicitly blocked 3+ fingers. The PointerEvent path needs an explicit guard because each pointer arrives as a separate event.
+
+**Fix — add a guard for 3+ pointers in `_onPointerDown`:**
+
+```javascript
+if (activePointers.size === 2) {
+    // ... start gesture
+} else if (activePointers.size > 2) {
+    // Prevent OS-level 3+ finger gestures
+    e.preventDefault();
+}
+```
+
+**Testing:** Fire three `pointerdown` events and verify the third calls `preventDefault()`.
 
 ### removeEventListener Must Match addEventListener Options
 

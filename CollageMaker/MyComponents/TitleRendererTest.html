@@ -21,7 +21,7 @@
     <script>mocha.setup('bdd');</script>
 
     <script type="module">
-        import { render, computeBounds } from '../MyESModules/Rendering/TitleRenderer.js';
+        import { render, computeBounds, drawTouchResizeHandles } from '../MyESModules/Rendering/TitleRenderer.js';
 
         const { expect } = chai;
 
@@ -48,7 +48,10 @@
                 strokeRect: [],
                 strokeStyle: [],
                 lineWidth: [],
-                setLineDash: []
+                setLineDash: [],
+                beginPath: [],
+                arc: [],
+                stroke: []
             };
 
             // Create a proxy to intercept property assignments and method calls
@@ -125,7 +128,34 @@
                             return target.setLineDash.call(target, dash);
                         };
                     }
-                    return target[prop];
+                    if (prop === 'beginPath') {
+                        return function() {
+                            calls.beginPath.push({});
+                            return target.beginPath.call(target);
+                        };
+                    }
+                    if (prop === 'arc') {
+                        return function(x, y, radius, startAngle, endAngle) {
+                            calls.arc.push({ x, y, radius, startAngle, endAngle });
+                            return target.arc.call(target, x, y, radius, startAngle, endAngle);
+                        };
+                    }
+                    if (prop === 'stroke') {
+                        return function() {
+                            calls.stroke.push({});
+                            return target.stroke.call(target);
+                        };
+                    }
+                    if (prop === 'fill') {
+                        return function() {
+                            calls.fill = calls.fill || [];
+                            calls.fill.push({});
+                            return target.fill.call(target);
+                        };
+                    }
+                    // Bind unintercepted methods to preserve `this`
+                    const val = target[prop];
+                    return typeof val === 'function' ? val.bind(target) : val;
                 }
             });
 
@@ -892,6 +922,263 @@
                 expect(calls.strokeRect.length).to.be.at.least(1);
                 // strokeStyle should be solid blue (#3b82f6) when dragging
                 expect(calls.strokeStyle).to.include('#3b82f6');
+            });
+        });
+
+        // ============================================================
+        // Phase 4: Touch Resize Handles (drawTouchResizeHandles)
+        // ============================================================
+        describe('Phase 4 — Touch Resize Handles', () => {
+            it('4.4.1 — drawTouchResizeHandles draws two arcs at correct positions', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                // x=500, y=900, w=400, h=60, activeEdge=null
+                drawTouchResizeHandles(ctx, 500, 900, 400, 60, null);
+
+                // Two arcs should be drawn — one at left edge, one at right edge
+                expect(calls.arc.length).to.equal(2);
+                // Left handle: center at (500, 900 + 60/2) = (500, 930)
+                expect(calls.arc[0].x).to.equal(500);
+                expect(calls.arc[0].y).to.equal(930);
+                // Right handle: center at (500 + 400, 930) = (900, 930)
+                expect(calls.arc[1].x).to.equal(900);
+                expect(calls.arc[1].y).to.equal(930);
+                // Both should be full circles
+                expect(calls.arc[0].startAngle).to.equal(0);
+                expect(calls.arc[0].endAngle).to.equal(Math.PI * 2);
+                expect(calls.arc[1].startAngle).to.equal(0);
+                expect(calls.arc[1].endAngle).to.equal(Math.PI * 2);
+            });
+
+            it('4.4.2 — drawTouchResizeHandles handle radius is 8 logical pixels', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                drawTouchResizeHandles(ctx, 100, 200, 300, 80, null);
+
+                expect(calls.arc[0].radius).to.equal(8);
+                expect(calls.arc[1].radius).to.equal(8);
+            });
+
+            it('4.4.3 — drawTouchResizeHandles active edge left: left handle has solid blue fill', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                drawTouchResizeHandles(ctx, 500, 900, 400, 60, 'left-edge');
+
+                // First fillStyle should be solid blue for active left handle
+                expect(calls.fillStyle[0]).to.equal('#3b82f6');
+                // Second fillStyle should be semi-transparent for inactive right handle
+                expect(calls.fillStyle[1]).to.equal('rgba(59, 130, 246, 0.6)');
+            });
+
+            it('4.4.4 — drawTouchResizeHandles active edge right: right handle has solid blue fill', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                drawTouchResizeHandles(ctx, 500, 900, 400, 60, 'right-edge');
+
+                // First fillStyle should be semi-transparent for inactive left handle
+                expect(calls.fillStyle[0]).to.equal('rgba(59, 130, 246, 0.6)');
+                // Second fillStyle should be solid blue for active right handle
+                expect(calls.fillStyle[1]).to.equal('#3b82f6');
+            });
+
+            it('4.4.5 — drawTouchResizeHandles no active edge: both handles semi-transparent', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                drawTouchResizeHandles(ctx, 500, 900, 400, 60, null);
+
+                // Both fillStyles should be semi-transparent
+                expect(calls.fillStyle[0]).to.equal('rgba(59, 130, 246, 0.6)');
+                expect(calls.fillStyle[1]).to.equal('rgba(59, 130, 246, 0.6)');
+            });
+
+            it('4.4.6 — drawTouchResizeHandles active interaction mode resize-left: left handle active', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                drawTouchResizeHandles(ctx, 500, 900, 400, 60, 'resize-left');
+
+                // resize-left contains 'left' so left handle should be active
+                expect(calls.fillStyle[0]).to.equal('#3b82f6');
+                expect(calls.fillStyle[1]).to.equal('rgba(59, 130, 246, 0.6)');
+            });
+
+            it('4.4.7 — drawTouchResizeHandles active interaction mode resize-right: right handle active', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                drawTouchResizeHandles(ctx, 500, 900, 400, 60, 'resize-right');
+
+                expect(calls.fillStyle[0]).to.equal('rgba(59, 130, 246, 0.6)');
+                expect(calls.fillStyle[1]).to.equal('#3b82f6');
+            });
+
+            it('4.4.8 — drawTouchResizeHandles uses white stroke with lineWidth 2', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                drawTouchResizeHandles(ctx, 500, 900, 400, 60, null);
+
+                // strokeStyle should be white
+                expect(calls.strokeStyle.length).to.be.at.least(1);
+                expect(calls.strokeStyle).to.include('#ffffff');
+                // lineWidth should be 2
+                expect(calls.lineWidth.length).to.be.at.least(1);
+                expect(calls.lineWidth).to.include(2);
+            });
+
+            it('4.4.9 — drawTouchResizeHandles uses save/restore to isolate state', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                drawTouchResizeHandles(ctx, 500, 900, 400, 60, null);
+
+                expect(calls.save.length).to.equal(1);
+                expect(calls.restore.length).to.equal(1);
+            });
+
+            it('4.4.10 — drawTouchResizeHandles each handle has beginPath before arc', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                drawTouchResizeHandles(ctx, 500, 900, 400, 60, null);
+
+                // Two beginPath calls (one before each arc)
+                expect(calls.beginPath.length).to.equal(2);
+                // Two arc calls
+                expect(calls.arc.length).to.equal(2);
+            });
+
+            // ---- render() integration: touch handles drawn only for touch pointerType ----
+            it('4.2.1 — render() draws touch handles when pointerType is touch', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({
+                    alignment: 'center',
+                    titleBoxWidth: 400
+                });
+                const runs = [makeTitleRun({ text: 'Hi' })];
+                const interactionState = {
+                    hoverTarget: 'body',
+                    interactionMode: null,
+                    pointerType: 'touch'
+                };
+                render(ctx, 1920, 1080, style, runs, interactionState);
+
+                // Touch resize handles should draw two arcs
+                expect(calls.arc.length).to.equal(2);
+            });
+
+            it('4.2.2 — render() does NOT draw touch handles when pointerType is mouse', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({
+                    alignment: 'center',
+                    titleBoxWidth: 400
+                });
+                const runs = [makeTitleRun({ text: 'Hi' })];
+                const interactionState = {
+                    hoverTarget: 'body',
+                    interactionMode: null,
+                    pointerType: 'mouse'
+                };
+                render(ctx, 1920, 1080, style, runs, interactionState);
+
+                // No touch resize handles for mouse
+                expect(calls.arc.length).to.equal(0);
+            });
+
+            it('4.2.3 — render() does NOT draw touch handles when pointerType is pen', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({
+                    alignment: 'center',
+                    titleBoxWidth: 400
+                });
+                const runs = [makeTitleRun({ text: 'Hi' })];
+                const interactionState = {
+                    hoverTarget: 'body',
+                    interactionMode: null,
+                    pointerType: 'pen'
+                };
+                render(ctx, 1920, 1080, style, runs, interactionState);
+
+                // No touch resize handles for pen
+                expect(calls.arc.length).to.equal(0);
+            });
+
+            it('4.2.4 — render() does NOT draw touch handles when pointerType is missing', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({
+                    alignment: 'center',
+                    titleBoxWidth: 400
+                });
+                const runs = [makeTitleRun({ text: 'Hi' })];
+                const interactionState = {
+                    hoverTarget: 'body',
+                    interactionMode: null
+                    // No pointerType
+                };
+                render(ctx, 1920, 1080, style, runs, interactionState);
+
+                // No touch resize handles when pointerType is absent
+                expect(calls.arc.length).to.equal(0);
+            });
+
+            it('4.2.5 — render() does NOT draw touch handles without interaction state', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({
+                    alignment: 'center',
+                    titleBoxWidth: 400
+                });
+                const runs = [makeTitleRun({ text: 'Hi' })];
+                render(ctx, 1920, 1080, style, runs, null);
+
+                // No touch resize handles without interaction state
+                expect(calls.arc.length).to.equal(0);
+            });
+
+            it('4.2.6 — render() touch handle active edge matches hoverTarget', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({
+                    alignment: 'center',
+                    titleBoxWidth: 400
+                });
+                const runs = [makeTitleRun({ text: 'Hi' })];
+                const interactionState = {
+                    hoverTarget: 'left-edge',
+                    interactionMode: null,
+                    pointerType: 'touch'
+                };
+                render(ctx, 1920, 1080, style, runs, interactionState);
+
+                // Two arcs drawn for handles
+                expect(calls.arc.length).to.equal(2);
+                // Left handle should be active (solid blue)
+                // The drawTouchResizeHandles fillStyles appear after the interaction outline fillStyles
+                // Find the fillStyles set by drawTouchResizeHandles (they come after save/restore from outline)
+                const fillStyles = calls.fillStyle;
+                // There should be solid blue fill among them (from active left handle)
+                expect(fillStyles).to.include('#3b82f6');
+            });
+
+            it('4.2.7 — render() touch handle active edge matches interactionMode resize-right', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({
+                    alignment: 'center',
+                    titleBoxWidth: 400
+                });
+                const runs = [makeTitleRun({ text: 'Hi' })];
+                const interactionState = {
+                    hoverTarget: null,
+                    interactionMode: 'resize-right',
+                    pointerType: 'touch'
+                };
+                render(ctx, 1920, 1080, style, runs, interactionState);
+
+                expect(calls.arc.length).to.equal(2);
+                // Right handle should be active
+                const fillStyles = calls.fillStyle;
+                expect(fillStyles).to.include('#3b82f6');
+            });
+
+            it('4.2.8 — render() touch handles not drawn when interaction state has no hover or mode', () => {
+                const { ctx, calls } = createMockCtx(1920, 1080);
+                const style = makeTitleStyle({
+                    alignment: 'center',
+                    titleBoxWidth: 400
+                });
+                const runs = [makeTitleRun({ text: 'Hi' })];
+                const interactionState = {
+                    hoverTarget: null,
+                    interactionMode: null,
+                    pointerType: 'touch'
+                };
+                render(ctx, 1920, 1080, style, runs, interactionState);
+
+                // No handles when neither hoverTarget nor interactionMode is set
+                expect(calls.arc.length).to.equal(0);
             });
         });
     </script>

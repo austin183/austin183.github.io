@@ -342,7 +342,11 @@ body.drag-over .canvas-container {
     border-radius: var(--radius-small);
     box-shadow: var(--elevation-2);
     background-color: #ffffff;
-    touch-action: pan-y;
+    /* touch-action: none prevents browser gesture interference (pull-to-refresh,
+       iOS back-swipe, scroll) during title drag and two-finger pan/zoom.
+       Acceptable trade-off: canvas fills the viewport on mobile, so page
+       scrolling is not needed. Sidebars and bottom sheet have their own scroll. */
+    touch-action: none;
 }
 
 /* Detail Section */

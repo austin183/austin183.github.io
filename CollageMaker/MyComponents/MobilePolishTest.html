@@ -157,19 +157,21 @@
         });
 
         // ============================================================
-        // 3.5 — Canvas touch-action: pan-y (regression from Phase 1)
+        // 3.5 — Canvas touch-action: none (Phase 1 PointerEvents migration)
+        // Changed from pan-y to none to prevent browser gesture interference
+        // during title drag on mobile.
         // ============================================================
-        describe('Phase 3.5 — Canvas touch-action: pan-y (regression)', async () => {
+        describe('Phase 3.5 — Canvas touch-action: none (Phase 1 migration)', async () => {
             let css;
 
             before(async () => {
                 css = await loadCSS();
             });
 
-            it('3.5.1 — #previewCanvas has touch-action: pan-y (not none)', () => {
+            it('3.5.1 — #previewCanvas has touch-action: none', () => {
                 const canvasMatch = css.match(/#previewCanvas\s*\{[^}]*\}/);
                 expect(canvasMatch).to.not.be.null;
-                expect(canvasMatch[0]).to.include('touch-action: pan-y');
+                expect(canvasMatch[0]).to.include('touch-action: none');
             });
         });
 

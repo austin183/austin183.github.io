@@ -24,6 +24,7 @@
 - Return Object Exposure for Internal Functions
 - DOM Mounting for offsetParent-Dependent Tests
 - getElementById Mock Safety
+- DOMParser Vue Directive Attributes
 
 ## Unit Tests — Mocha + Chai
 
@@ -858,3 +859,55 @@ if (btn) btn.focus(); // Safe — null check prevents error
 ```
 
 **When to apply:** Any test that mocks `document.getElementById` and needs to handle IDs beyond the mocked set.
+
+## DOMParser Vue Directive Attributes
+
+When using `DOMParser` to test Vue template structure, Vue directive attributes (prefixed with `:`) are parsed as literal attribute names including the colon. The parser has no knowledge of Vue.js — it treats HTML statically.
+
+### The Gotcha
+
+```javascript
+// index.html contains: <button :aria-pressed="isTitleFormatActive('bold')">Bold</button>
+
+const parser = new DOMParser();
+const doc = parser.parseFromString(html, 'text/html');
+const btn = doc.querySelector('button[title="Bold"]');
+
+btn.getAttribute('aria-pressed');       // → null (WRONG)
+btn.getAttribute(':aria-pressed');      // → "isTitleFormatActive('bold')" (CORRECT)
+btn.hasAttribute(':aria-pressed');     // → true (CORRECT)
+```
+
+### Testing Strategies
+
+**Search inner HTML for binding strings** — simplest approach for verifying binding presence:
+```javascript
+const html = editPanel.innerHTML;
+expect(html).to.include(':aria-pressed="isTitleFormatActive');
+```
+
+**Regex on inner HTML** — for specific binding values:
+```javascript
+const matches = html.match(/:aria-pressed="isTitleFormatActive\(['"]bold['"]\)"/g);
+expect(matches).to.not.be.null;
+```
+
+**Query with colon-prefixed attribute names** — for attribute presence on specific elements:
+```javascript
+expect(btn.hasAttribute(':aria-pressed')).to.equal(true);
+expect(btn.getAttribute(':aria-pressed')).to.equal("isTitleFormatActive('bold')");
+```
+
+### What NOT to Do
+
+```javascript
+// These always return null on Vue templates parsed by DOMParser:
+element.getAttribute('aria-pressed');  // Vue uses :aria-pressed
+element.getAttribute('class');         // Vue uses :class
+element.getAttribute('disabled');      // Vue uses :disabled
+element.getAttribute('value');         // Vue uses :value
+```
+
+**When this applies:** DOM structure tests, accessibility attribute checks, template parity tests — any test using `DOMParser` on Vue template HTML. Does NOT apply to Playwright (renders Vue in a real browser) or compiled output tests.
+
+**File Reference:** `MyComponents/BottomSheetTitleControlsTest.html` — BSC-05 demonstrates the gotcha and fix.

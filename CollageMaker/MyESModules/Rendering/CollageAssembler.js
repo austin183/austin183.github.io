@@ -40,7 +40,7 @@ export function createCollageAssembler() {
          * @param {boolean} [options.showDebugOverlay] - Show saliency debug markers
          * @param {Map} [options.focusPoints] - Map of imageIndex -> focusPoint { x, y }
          */
-        render(ctx, { panels, images, crops, panelAssignments, backgroundColor, canvasSize, selectedPanelId, hoveredPanelId, dragTargetId, backgroundState, overlayState, titleStyle, titleRuns, showDebugOverlay, focusPoints, titleHoverTarget, titleInteractionMode }) {
+        render(ctx, { panels, images, crops, panelAssignments, backgroundColor, canvasSize, selectedPanelId, hoveredPanelId, dragTargetId, backgroundState, overlayState, titleStyle, titleRuns, showDebugOverlay, focusPoints, titleHoverTarget, titleInteractionMode, titleInteractionPointerType }) {
             const w = canvasSize.width;
             const h = canvasSize.height;
 
@@ -96,7 +96,8 @@ export function createCollageAssembler() {
             if (titleStyle && titleRuns) {
                 renderTitle(ctx, w, h, titleStyle, titleRuns, {
                     hoverTarget: titleHoverTarget || null,
-                    interactionMode: titleInteractionMode || null
+                    interactionMode: titleInteractionMode || null,
+                    pointerType: titleInteractionPointerType || null
                 });
             }
         },

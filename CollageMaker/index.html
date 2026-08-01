@@ -429,6 +429,49 @@
                                 </button>
                             </div>
                         </div>
+                        <div class="detail-section">
+                            <div class="formatting-bar">
+                                <button class="format-btn" :class="{ active: isTitleFormatActive('bold') }" @mousedown.prevent @click="toggleTitleBold" title="Bold" :disabled="titleSelectionStart === titleSelectionEnd" :aria-pressed="isTitleFormatActive('bold')">
+                                    <strong>B</strong>
+                                </button>
+                                <button class="format-btn" :class="{ active: isTitleFormatActive('italic') }" @mousedown.prevent @click="toggleTitleItalic" title="Italic" :disabled="titleSelectionStart === titleSelectionEnd" :aria-pressed="isTitleFormatActive('italic')">
+                                    <em>I</em>
+                                </button>
+                                <button class="format-btn" :class="{ active: isTitleFormatActive('underline') }" @mousedown.prevent @click="toggleTitleUnderline" title="Underline" :disabled="titleSelectionStart === titleSelectionEnd" :aria-pressed="isTitleFormatActive('underline')">
+                                    <u>U</u>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="detail-section">
+                            <label for="bsTitleFontOpacitySlider">Font Opacity: {{ Math.round(titleStyle.fontOpacity * 100) }}%</label>
+                            <input type="range" id="bsTitleFontOpacitySlider" v-model.number="titleStyle.fontOpacity" min="0" max="1" step="0.01" :aria-valuenow="Math.round(titleStyle.fontOpacity * 100) + '%'" aria-valuemin="0%" aria-valuemax="100%" class="fullRange" @focus="snapshotTitleStyle" @pointerdown="snapshotTitleStyle" @input="onTitleFontOpacityChange" @blur="commitTitleStyle">
+                        </div>
+                        <div class="detail-section">
+                            <label for="bsTitleBgColorPicker">Background Color</label>
+                            <div class="color-picker-row">
+                                <input type="color" id="bsTitleBgColorPicker" v-model="titleStyle.backgroundColor" @focus="snapshotTitleStyle" @input="onTitleBackgroundColorChange" @blur="commitTitleStyle">
+                            </div>
+                        </div>
+                        <div class="detail-section">
+                            <label for="bsTitleBgOpacitySlider">Bg Opacity: {{ Math.round(titleStyle.bgOpacity * 100) }}%</label>
+                            <input type="range" id="bsTitleBgOpacitySlider" v-model.number="titleStyle.bgOpacity" min="0" max="1" step="0.01" :aria-valuenow="Math.round(titleStyle.bgOpacity * 100) + '%'" aria-valuemin="0%" aria-valuemax="100%" class="fullRange" @focus="snapshotTitleStyle" @pointerdown="snapshotTitleStyle" @input="onTitleBgOpacityChange" @blur="commitTitleStyle">
+                        </div>
+                        <div class="detail-section">
+                            <label>
+                                <input type="checkbox" :checked="titleStyle.showBackground" @change="toggleTitleShowBackground">
+                                Show Background
+                            </label>
+                        </div>
+                        <div class="detail-section">
+                            <label for="bsTitleWidthSlider">Width: {{ titleStyle.titleBoxWidth ? Math.round(titleStyle.titleBoxWidth) : 'Auto' }}</label>
+                            <input type="range" id="bsTitleWidthSlider" v-model.number="titleStyle.titleBoxWidth" min="100" max="1920" step="1" :aria-valuenow="(titleStyle.titleBoxWidth ? Math.round(titleStyle.titleBoxWidth) + 'px' : 'Auto')" aria-valuemin="100px" aria-valuemax="1920px" class="fullRange" @focus="snapshotTitleStyle" @pointerdown="snapshotTitleStyle" @input="onTitleWidthChange" @blur="commitTitleStyle">
+                        </div>
+                        <div class="detail-section">
+                            <button class="pure-button reset-title-btn" @click="resetTitlePosition">
+                                <span class="material-icons" style="font-size: 16px; vertical-align: middle; margin-right: 4px;" aria-hidden="true">restart_alt</span>
+                                Reset Position
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Export Panel: DUPLICATE of sidebar-right export content — see Phase 3 migration -->

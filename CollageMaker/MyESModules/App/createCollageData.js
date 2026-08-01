@@ -53,6 +53,7 @@ export function createCollageData(base) {
             titleSelectionEnd: 0,
             titleHoverTarget: null,
             titleInteractionMode: null,
+            titleInteractionPointerType: null,
 
             // Overlay
             overlayImage: null,
