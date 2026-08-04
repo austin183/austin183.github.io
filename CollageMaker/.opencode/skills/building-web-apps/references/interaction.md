@@ -7,6 +7,7 @@
 - preventDefault ordering
 - Test conventions
 - Pointer handler coordination
+- Dual-pointer guard consistency (_multiTouchGestureActive on both down and move)
 - Global pointerup for drag cleanup
 - Multi-touch and trackpad gestures
 - TouchEvent / PointerEvent dual-input path
@@ -198,6 +199,46 @@ Use layout-gated delegation when:
 - One handler is layout-specific (hex drag-and-drop)
 - The other handler is general-purpose (panel selection)
 - You want to avoid attach/detach cycles on layout changes
+
+### Dual-Pointer Guard Consistency
+
+Every pointer handler that coordinates with `MultiTouchHandler` via `_multiTouchGestureActive` must guard **both** `_onPointerDown` AND `_onPointerMove`. Guarding only `_onPointerDown` leaves a race window:
+
+1. **Finger 1 touches interactive element** → `_onPointerDown` runs, `_multiTouchGestureActive` is `false`, sets pending state (`dragStartCoords`, `interactionType`)
+2. **Finger 2 touches canvas** → `MultiTouchHandler` sees `activePointers.size === 2`, calls `startGesture()`, sets `_multiTouchGestureActive = true`
+3. **Fingers move** → `_onPointerMove` fires with NO guard, computes delta from `dragStartCoords`, crosses the drag threshold, and activates the interaction
+
+The `_onPointerDown` guard prevents **new** interactions from starting during a gesture. The `_onPointerMove` guard prevents **pending** interactions (pointerdown happened but drag threshold not yet crossed) from activating during a gesture:
+
+```javascript
+// _onPointerDown — prevents new interactions from starting during gesture
+_onPointerDown(e) {
+    if (state._multiTouchGestureActive) return;
+    // ... set pending state (dragStartCoords, interactionType)
+}
+
+// _onPointerMove — prevents pending interactions from activating during gesture
+_onPointerMove(e) {
+    if (state._multiTouchGestureActive) return;
+    // ... threshold check, drag/resize, hover feedback
+}
+```
+
+**Guard scope:** The `_onPointerMove` guard applies to **ALL** pointermove processing, including hover feedback (cursor changes, hover target state). Hover state changes during a gesture cause unnecessary renders and visual flicker. Hover state restores naturally when the gesture ends and the next `pointermove` fires.
+
+**No guard needed on `_onPointerUp`** — cleanup is always idempotent and safe regardless of gesture state.
+
+**Checklist for new handlers** sharing a canvas with `MultiTouchHandler`:
+- [ ] `_onPointerDown` checks `if (state._multiTouchGestureActive) return;`
+- [ ] `_onPointerMove` checks `if (state._multiTouchGestureActive) return;`
+- [ ] `_onPointerUp` / cleanup is idempotent (no guard needed)
+
+**Existing handlers audit:**
+
+| Handler | `_onPointerDown` guard | `_onPointerMove` guard |
+|---------|----------------------|----------------------|
+| `PanelSwap` | Yes | Yes |
+| `TitleInteraction` | Yes | Yes |
 
 ## Global Pointerup for Drag Cleanup
 

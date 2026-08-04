@@ -78,9 +78,11 @@ export function applyZoomExponent(ratio) {
  * @param {Object} options.state - Reactive state with selectedPanelId
  * @param {Function} options.onCropPreviewRender - Call to re-render crop preview
  * @param {Function} options.onRenderScheduled - Call to re-render main canvas
+ * @param {Function} [options.onGestureStart] - Called when a two-finger gesture begins,
+ *   before any gesture processing. Use to cancel pending interactions in other handlers.
  * @returns {Object} MultiTouchHandler with attach() and detach()
  */
-export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPreviewRender, onRenderScheduled }) {
+export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPreviewRender, onRenderScheduled, onGestureStart }) {
     let canvas = null;
     let handlerAttached = false;
 
@@ -146,6 +148,13 @@ export function createMultiTouchHandler({ canvasId, cropManager, state, onCropPr
         state.dragSourceId = null; // Clear PanelSwap dragSourceId to prevent unintended swap
         initialMidpoint = computeTouchMidpoint(t1, t2);
         initialDistance = computeTouchDistance(t1, t2);
+
+        // Notify other handlers that a gesture has started so they can
+        // cancel pending interactions (e.g., TitleInteraction pending drag)
+        if (onGestureStart) {
+            onGestureStart();
+        }
+
         return true;
     }
 

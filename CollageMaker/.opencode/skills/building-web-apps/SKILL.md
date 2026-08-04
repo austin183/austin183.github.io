@@ -1,6 +1,6 @@
 ---
 name: building-web-apps
-description: Build static web apps with Vue 3 Options API, Canvas 2D, ES modules, CDN libraries. Covers factory testability (callback injection, provider functions, DOM ID injection, module extraction, service locator safety, return value notification, handler .call(this), closure safety, internal closure pattern, return-object exposure, mock VM construction, undo snapshots (segmented inline, atomic handler methods, lifecycle cleanup)), extensibility (strategy/registry), canvas clearing for exports, config rendering, shared offscreen canvas, render order, dual-canvas visibility guard, async UI cleanup (try/finally, concurrency guards), toast notifications, accessibility (ARIA live regions, custom button keyboard, aria-busy, reduced motion, canvas roles, ARIA tab pattern with aria-controls/aria-labelledby, focus return on dialog close, focus traps for aria-modal dialogs), drag cleanup, VISIBLE_MIN clamping, test-driven refactoring, Vue input patterns (@keydown.enter, v-model undo timing, segmented/checkbox inline snapshot/commit, atomic handler extraction, beforeUnmount cleanup, $nextTick race condition guards), multi-touch gestures (TouchEvent/PointerEvent/WheelEvent, pointerType guards, wheel pan/zoom, dual gesture direction conventions, pointer capture early-exit cleanup, 3+ finger OS gesture guard, touch-action: pan-y vs none trade-off, PointerEvent test migration), multi-canvas pointer events (e.currentTarget for per-canvas coordinate math), mobile sidebar overlays (dual-state toggles, CSS !important cascade, scoped CSS selectors for shared classes, global Escape, Playwright Escape key unreliability with .window modifier, overlay backdrops, aria-expanded), mobile bottom sheets (ID prefixing for content duplication, visual drag handle, auto-switch tab on content change, dvh height units), fixed element z-index occlusion (prevention checklist, Playwright "intercepts pointer events" diagnosis), iOS safe areas (viewport-fit=cover, 100dvh, fixed element treatment, CSS content validation testing), destination-out compositing, DPR/CORS, test runner DOM queries (querySelector over getElementById, offsetParent mounting for detached elements, getElementById mock null fallback, DOMParser Vue directive colon prefix), pure function numeric guards (Number.isFinite for NaN/Infinity). No build step. Use for CollageMaker features, rendering, state, testing.
+description: Build static web apps with Vue 3 Options API, Canvas 2D, ES modules, CDN libraries. Covers factory testability (callback injection, provider functions, DOM ID injection, module extraction, service locator safety, return value notification, handler .call(this), closure safety, internal closure pattern, return-object exposure, mock VM construction, undo snapshots (segmented inline, atomic handler methods, lifecycle cleanup)), extensibility (strategy/registry), canvas clearing for exports, config rendering, shared offscreen canvas, render order, dual-canvas visibility guard, async UI cleanup (try/finally, concurrency guards), toast notifications, accessibility (ARIA live regions, custom button keyboard, aria-busy, reduced motion, canvas roles, ARIA tab pattern with aria-controls/aria-labelledby, focus return on dialog close, focus traps for aria-modal dialogs), drag cleanup, VISIBLE_MIN clamping, test-driven refactoring, Vue input patterns (@keydown.enter, v-model undo timing, segmented/checkbox inline snapshot/commit, atomic handler extraction, beforeUnmount cleanup, $nextTick race condition guards), multi-touch gestures (TouchEvent/PointerEvent/WheelEvent, pointerType guards, wheel pan/zoom, dual gesture direction conventions, pointer capture early-exit cleanup, 3+ finger OS gesture guard, touch-action: pan-y vs none trade-off, PointerEvent test migration, dual-pointer guard consistency for _multiTouchGestureActive), multi-canvas pointer events (e.currentTarget for per-canvas coordinate math), mobile sidebar overlays (dual-state toggles, CSS !important cascade, scoped CSS selectors for shared classes, global Escape, Playwright Escape key unreliability with .window modifier, overlay backdrops, aria-expanded), mobile bottom sheets (ID prefixing for content duplication, visual drag handle, auto-switch tab on content change, dvh height units), fixed element z-index occlusion (prevention checklist, Playwright "intercepts pointer events" diagnosis), iOS safe areas (viewport-fit=cover, 100dvh, fixed element treatment, CSS content validation testing), destination-out compositing, DPR/CORS, test runner DOM queries (querySelector over getElementById, offsetParent mounting for detached elements, getElementById mock null fallback, DOMParser Vue directive colon prefix), pure function numeric guards (Number.isFinite for NaN/Infinity). No build step. Use for CollageMaker features, rendering, state, testing.
 ---
 
 # Building Web Apps
@@ -452,6 +452,39 @@ state._multiTouchGestureActive = false; // on gesture end
 - **CSS pixel threshold** — device-independent, feels consistent on high-DPR displays
 - **Global pointerup for drag cleanup** — Always add a `window.addEventListener('pointerup', ...)` listener alongside the element-level listener. If the user releases the pointer outside the element (off-screen drag, tab switch), the element-level `pointerup` never fires and drag state gets stuck. See `references/interaction.md` for the pattern.
 - See `references/interaction.md` for the full pattern and gotchas
+
+#### Dual-Pointer Guard Consistency
+
+Every pointer handler that coordinates with `MultiTouchHandler` via `_multiTouchGestureActive` must guard **both** `_onPointerDown` AND `_onPointerMove`. Guarding only `_onPointerDown` leaves a race window:
+
+1. **Finger 1 touches title** → `_onPointerDown` runs, `_multiTouchGestureActive` is `false`, sets pending state (`dragStartCoords`, `interactionType`)
+2. **Finger 2 touches canvas** → `MultiTouchHandler` sets `_multiTouchGestureActive = true`
+3. **Fingers move** → `_onPointerMove` fires with NO guard, crosses the drag threshold, and activates the interaction
+
+The `_onPointerDown` guard prevents **new** interactions from starting during a gesture. The `_onPointerMove` guard prevents **pending** interactions (pointerdown happened but drag threshold not yet crossed) from activating during a gesture:
+
+```javascript
+// _onPointerDown — prevents new interactions from starting during gesture
+_onPointerDown(e) {
+    if (state._multiTouchGestureActive) return;
+    // ... set pending state (dragStartCoords, interactionType)
+}
+
+// _onPointerMove — prevents pending interactions from activating during gesture
+_onPointerMove(e) {
+    if (state._multiTouchGestureActive) return;
+    // ... threshold check, drag/resize, hover feedback
+}
+```
+
+**Guard scope:** The `_onPointerMove` guard applies to **ALL** pointermove processing, including hover feedback (cursor changes, hover target state). Hover state changes during a gesture cause unnecessary renders and visual flicker. Hover state restores naturally when the gesture ends and the next `pointermove` fires.
+
+**No guard needed on `_onPointerUp`** — cleanup is always idempotent and safe regardless of gesture state.
+
+**Checklist for new handlers** sharing a canvas with `MultiTouchHandler`:
+- [ ] `_onPointerDown` checks `if (state._multiTouchGestureActive) return;`
+- [ ] `_onPointerMove` checks `if (state._multiTouchGestureActive) return;`
+- [ ] `_onPointerUp` / cleanup is idempotent (no guard needed)
 
 ### Multi-Touch and Trackpad Gestures
 

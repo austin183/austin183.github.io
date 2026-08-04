@@ -192,6 +192,14 @@ export function createCollageLifecycle(base, domIds = {}) {
                 },
                 onRenderScheduled: () => {
                     this._scheduleRender();
+                },
+                onGestureStart: () => {
+                    // Cancel any pending title interaction when a two-finger gesture starts.
+                    // This prevents the title from moving when finger 1 rests on the title
+                    // area while finger 2 initiates a pinch/pan gesture.
+                    if (this._titleInteraction && this._titleInteraction.cancelPendingInteraction) {
+                        this._titleInteraction.cancelPendingInteraction();
+                    }
                 }
             });
             this._multiTouchHandler.attach();

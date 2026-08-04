@@ -2552,6 +2552,159 @@
             });
         });
 
+        // ============================================================
+        // Phase 2 (Title Intercept Fix): onGestureStart callback
+        // ============================================================
+        describe('MultiTouchHandler — onGestureStart callback', () => {
+            it('2.3.1 — onGestureStart callback called on gesture start', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-gesture-callback1';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                let gestureStartCalled = false;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-gesture-callback1',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {}, getPanelImage: () => ({ width: 1920, height: 1080 }) },
+                    state: { selectedPanelId: 'panel-0', _multiTouchGestureActive: false, dragSourceId: null },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {},
+                    onGestureStart: () => { gestureStartCalled = true; }
+                });
+                handler.attach();
+
+                // First pointer down
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100,
+                    pointerType: 'mouse', bubbles: true, cancelable: true
+                }));
+
+                expect(gestureStartCalled).to.be.false;
+
+                // Second pointer down — gesture starts
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200,
+                    pointerType: 'mouse', bubbles: true, cancelable: true
+                }));
+
+                expect(gestureStartCalled).to.be.true;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('2.3.2 — missing onGestureStart does not cause error', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-gesture-callback2';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-gesture-callback2',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {}, getPanelImage: () => ({ width: 1920, height: 1080 }) },
+                    state: { selectedPanelId: 'panel-0', _multiTouchGestureActive: false, dragSourceId: null },
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {}
+                    // No onGestureStart
+                });
+                handler.attach();
+
+                // Two pointers down — should not throw
+                expect(() => {
+                    canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                        pointerId: 1, clientX: 100, clientY: 100,
+                        pointerType: 'mouse', bubbles: true, cancelable: true
+                    }));
+                    canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                        pointerId: 2, clientX: 200, clientY: 200,
+                        pointerType: 'mouse', bubbles: true, cancelable: true
+                    }));
+                }).to.not.throw();
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('2.3.3 — onGestureStart NOT called when startGesture fails (no selected panel)', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-gesture-callback3';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                let gestureStartCalled = false;
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-gesture-callback3',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {}, getPanelImage: () => ({ width: 1920, height: 1080 }) },
+                    state: { selectedPanelId: null, _multiTouchGestureActive: false, dragSourceId: null }, // No panel selected
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {},
+                    onGestureStart: () => { gestureStartCalled = true; }
+                });
+                handler.attach();
+
+                // Two pointers down — startGesture fails because no panel selected
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100,
+                    pointerType: 'mouse', bubbles: true, cancelable: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200,
+                    pointerType: 'mouse', bubbles: true, cancelable: true
+                }));
+
+                // onGestureStart should NOT have been called
+                expect(gestureStartCalled).to.be.false;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+
+            it('onGestureStart called synchronously with gesture start (touch pointer)', () => {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'mt-gesture-callback4';
+                canvas.style.width = '400px';
+                canvas.style.height = '300px';
+                document.body.appendChild(canvas);
+
+                let gestureStartCalled = false;
+                const state = { selectedPanelId: 'panel-0', _multiTouchGestureActive: false, dragSourceId: null };
+
+                const handler = createMultiTouchHandler({
+                    canvasId: 'mt-gesture-callback4',
+                    cropManager: { adjustCrop: () => {}, zoomCrop: () => {}, getPanelImage: () => ({ width: 1920, height: 1080 }) },
+                    state: state,
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {},
+                    onGestureStart: () => {
+                        // Callback fires synchronously — flag should already be set
+                        expect(state._multiTouchGestureActive).to.be.true;
+                        gestureStartCalled = true;
+                    }
+                });
+                handler.attach();
+
+                // Two touch pointers
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200,
+                    pointerType: 'touch', bubbles: true, cancelable: true
+                }));
+
+                expect(gestureStartCalled).to.be.true;
+
+                handler.detach();
+                document.body.removeChild(canvas);
+            });
+        });
+
         mocha.run();
     </script>
 </body>

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TitleInteraction + MultiTouchHandler Integration Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>CollageMaker — TitleInteraction + MultiTouchHandler Integration Tests</h1>
+    <p class="test-plan-ref">Covers: Phase 2 — Title Multi-Touch Intercept Fix (cross-handler coordination)</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createTitleInteraction } from '../MyESModules/Interaction/TitleInteraction.js';
+        import { createMultiTouchHandler } from '../MyESModules/Interaction/MultiTouchHandler.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // TitleInteraction + MultiTouchHandler — cross-handler coordination
+        // Both handlers share the same canvas and state.
+        // CRITICAL: MultiTouchHandler attaches FIRST (as in production)
+        // so its handlers fire BEFORE TitleInteraction handlers for each event.
+        // ============================================================
+        describe('TitleInteraction + MultiTouchHandler — cross-handler coordination', () => {
+            let canvas;
+
+            function makeTitleRun({ text = 'Hello World' } = {}) {
+                return { text, bold: false, italic: false, underline: false };
+            }
+
+            function makeTitleStyle({
+                fontSize = 36,
+                fontFamily = 'Arial',
+                alignment = 'center',
+                titleBoxWidth = 400,
+                titleBoxX = 500,
+                titleBoxY = 900
+            } = {}) {
+                return { fontSize, fontFamily, alignment, titleBoxWidth, titleBoxX, titleBoxY };
+            }
+
+            function buildSharedState(titleStyle, titleRuns) {
+                return {
+                    titleStyle: titleStyle || makeTitleStyle(),
+                    titleRuns: titleRuns || [makeTitleRun()],
+                    panels: [],
+                    panelAssignments: new Map(),
+                    selectedPanelId: 'panel-0',
+                    _multiTouchGestureActive: false,
+                    titleInteractionMode: null,
+                    titleHoverTarget: null,
+                    titleInteractionPointerType: null,
+                    dragSourceId: null
+                };
+            }
+
+            function buildHandlers(state) {
+                let cancelCalled = false;
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                // MultiTouchHandler attaches FIRST (as in production)
+                const multiTouchHandler = createMultiTouchHandler({
+                    canvasId: 'integration-canvas',
+                    cropManager: {
+                        adjustCrop: () => {},
+                        zoomCrop: () => {},
+                        getPanelImage: () => ({ width: 1920, height: 1080 })
+                    },
+                    state: state,
+                    onCropPreviewRender: () => {},
+                    onRenderScheduled: () => {},
+                    onGestureStart: () => {
+                        // Wire: when gesture starts, cancel pending title interaction
+                        if (titleHandler && titleHandler.cancelPendingInteraction) {
+                            cancelCalled = true;
+                            titleHandler.cancelPendingInteraction();
+                        }
+                    }
+                });
+
+                const titleHandler = createTitleInteraction({
+                    canvasId: 'integration-canvas',
+                    state: state,
+                    titleManager: titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                // CRITICAL: MultiTouchHandler attaches FIRST (as in production)
+                multiTouchHandler.attach();
+                titleHandler.attach();
+
+                return {
+                    titleHandler,
+                    multiTouchHandler,
+                    getCancelCalled: () => cancelCalled
+                };
+            }
+
+            beforeEach(() => {
+                canvas = document.createElement('canvas');
+                canvas.id = 'integration-canvas';
+                canvas.width = 1920;
+                canvas.height = 1080;
+                canvas.style.cssText = 'width: 960px; height: 540px; position: fixed; top: 0px; left: 0px; z-index: -1;';
+                document.body.appendChild(canvas);
+            });
+
+            afterEach(() => {
+                if (canvas && canvas.parentNode) {
+                    canvas.parentNode.removeChild(canvas);
+                }
+            });
+
+            it('2.1.1 — Finger 1 on title + Finger 2 starts gesture: title pending state cancelled', () => {
+                const state = buildSharedState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+                const handlers = buildHandlers(state);
+
+                // Step 1: Finger 1 touches title area (pointerdown on title)
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 350, clientY: 456, button: 0, bubbles: true,
+                    pointerType: 'touch', cancelable: true
+                }));
+
+                // Title should have pending state set by pointerdown
+                expect(state.titleInteractionMode).to.equal('drag');
+                expect(state.titleHoverTarget).to.equal('body');
+
+                // Step 2: Finger 2 touches canvas — gesture starts
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200, bubbles: true,
+                    pointerType: 'touch', cancelable: true
+                }));
+
+                // Gesture should be active
+                expect(state._multiTouchGestureActive).to.be.true;
+
+                // onGestureStart callback should have fired and cancelled title pending state
+                expect(handlers.getCancelCalled()).to.be.true;
+                // Title pending state should be cleared
+                expect(state.titleInteractionMode).to.be.null;
+                expect(state.titleHoverTarget).to.be.null;
+                expect(state.titleInteractionPointerType).to.be.null;
+
+                handlers.titleHandler.detach();
+                handlers.multiTouchHandler.detach();
+            });
+
+            it('2.1.2 — Gesture proceeds normally after title cancel', () => {
+                const state = buildSharedState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+                const handlers = buildHandlers(state);
+
+                let adjustCalled = false;
+                handlers.multiTouchHandler._cropManager = {
+                    adjustCrop: () => { adjustCalled = true; },
+                    zoomCrop: () => {},
+                    getPanelImage: () => ({ width: 1920, height: 1080 })
+                };
+
+                // Step 1: Finger 1 touches title
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 350, clientY: 456, button: 0, bubbles: true,
+                    pointerType: 'touch', cancelable: true
+                }));
+
+                // Step 2: Finger 2 starts gesture
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200, bubbles: true,
+                    pointerType: 'touch', cancelable: true
+                }));
+
+                expect(state._multiTouchGestureActive).to.be.true;
+
+                // Step 3: Move fingers — gesture should process normally
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 1, clientX: 400, clientY: 500, bubbles: true,
+                    pointerType: 'touch', cancelable: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 2, clientX: 300, clientY: 300, bubbles: true,
+                    pointerType: 'touch', cancelable: true
+                }));
+
+                // Title should NOT be moving (pending state was cancelled)
+                // Gesture should be processing (no title interference)
+                expect(state.titleInteractionMode).to.be.null;
+
+                // Step 4: End gesture
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    pointerId: 1, clientX: 400, clientY: 500, bubbles: true,
+                    pointerType: 'touch', cancelable: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    pointerId: 2, clientX: 300, clientY: 300, bubbles: true,
+                    pointerType: 'touch', cancelable: true
+                }));
+
+                expect(state._multiTouchGestureActive).to.be.false;
+
+                handlers.titleHandler.detach();
+                handlers.multiTouchHandler.detach();
+            });
+
+            it('2.1.3 — Single finger on title still works when no gesture starts', () => {
+                const state = buildSharedState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+                const handlers = buildHandlers(state);
+
+                // Step 1: Finger touches title
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 350, clientY: 456, button: 0, bubbles: true,
+                    pointerType: 'touch', cancelable: true
+                }));
+
+                // Step 2: Only one finger — no gesture starts
+                // Title pending state should remain (not cancelled)
+                expect(state.titleInteractionMode).to.equal('drag');
+                expect(handlers.getCancelCalled()).to.be.false;
+
+                // Step 3: Move finger — title drag should activate
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 1, clientX: 400, clientY: 456, bubbles: true,
+                    pointerType: 'touch', cancelable: true
+                }));
+
+                // Title interaction mode should still be 'drag'
+                expect(state.titleInteractionMode).to.equal('drag');
+
+                handlers.titleHandler.detach();
+                handlers.multiTouchHandler.detach();
+            });
+
+            it('2.1.4 — After gesture ends, single-finger title drag works (regression)', () => {
+                const state = buildSharedState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+                const handlers = buildHandlers(state);
+
+                // Step 1: Two-finger gesture
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 100, clientY: 100, bubbles: true,
+                    pointerType: 'touch', cancelable: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200, bubbles: true,
+                    pointerType: 'touch', cancelable: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    pointerId: 1, clientX: 100, clientY: 100, bubbles: true,
+                    pointerType: 'touch', cancelable: true
+                }));
+                canvas.dispatchEvent(new PointerEvent('pointerup', {
+                    pointerId: 2, clientX: 200, clientY: 200, bubbles: true,
+                    pointerType: 'touch', cancelable: true
+                }));
+
+                expect(state._multiTouchGestureActive).to.be.false;
+
+                // Step 2: Single-finger title drag
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 3, clientX: 350, clientY: 456, button: 0, bubbles: true,
+                    pointerType: 'touch', cancelable: true
+                }));
+
+                expect(state.titleInteractionMode).to.equal('drag');
+
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    pointerId: 3, clientX: 400, clientY: 456, bubbles: true,
+                    pointerType: 'touch', cancelable: true
+                }));
+
+                expect(state.titleInteractionMode).to.equal('drag');
+
+                handlers.titleHandler.detach();
+                handlers.multiTouchHandler.detach();
+            });
+
+            it('2.1.5 — Title pointer capture released after cancel', () => {
+                const state = buildSharedState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+                const handlers = buildHandlers(state);
+
+                let releasedIds = [];
+                canvas.releasePointerCapture = (pid) => { releasedIds.push(pid); };
+
+                // Step 1: Finger 1 touches title — captures pointer
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 1, clientX: 350, clientY: 456, button: 0, bubbles: true,
+                    pointerType: 'touch', cancelable: true
+                }));
+
+                // Step 2: Finger 2 starts gesture — cancels title pending
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    pointerId: 2, clientX: 200, clientY: 200, bubbles: true,
+                    pointerType: 'touch', cancelable: true
+                }));
+
+                // Title's pointer capture should have been released by cancelPendingInteraction
+                expect(releasedIds).to.include(1);
+
+                handlers.titleHandler.detach();
+                handlers.multiTouchHandler.detach();
+            });
+        });
+
+        mocha.run();
+    </script>
+</body>
+</html>

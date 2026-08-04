@@ -108,6 +108,49 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
         },
 
         /**
+         * Cancels pending title interaction state (pointerdown happened but
+         * drag threshold not yet crossed). This is called by MultiTouchHandler's
+         * onGestureStart callback when a two-finger gesture begins while a
+         * finger is resting on the title area.
+         * No-op if no pending state or if interaction is already active.
+         */
+        cancelPendingInteraction() {
+            // Only cancel pending state — not active interaction
+            if (isInteracting) return;
+            if (!dragStartCoords) return;
+
+            // Clear pending drag state
+            dragStartCoords = null;
+            dragStartBoxX = null;
+            dragStartBoxY = null;
+            dragStartBoxWidth = null;
+            interactionType = null;
+
+            // Clear reactive state
+            state.titleInteractionMode = null;
+            state.titleHoverTarget = null;
+            state.titleInteractionPointerType = null;
+            lastHoverTarget = null;
+            lastPointerType = null;
+
+            // Reset cursor
+            const canvas = document.getElementById(canvasId);
+            if (canvas) {
+                canvas.style.cursor = '';
+                // Release pointer capture if held
+                if (canvas.releasePointerCapture && capturedPointerId !== undefined) {
+                    try { canvas.releasePointerCapture(capturedPointerId); } catch (_) {}
+                    capturedPointerId = undefined;
+                }
+            }
+
+            // Schedule render to clear visual feedback (interaction outline)
+            if (onRenderScheduled) {
+                onRenderScheduled();
+            }
+        },
+
+        /**
          * Converts CSS pointer coordinates to logical canvas coordinates.
          * @param {PointerEvent} e
          * @returns {{ x: number, y: number } | null}
@@ -316,6 +359,11 @@ export function createTitleInteraction({ canvasId, state, titleManager, onRender
          * @private
          */
         _onPointerMove(e) {
+            // Skip if multi-touch gesture is active — prevents title from
+            // being dragged/resized when one finger is on the title during
+            // a two-finger pinch or pan gesture.
+            if (state._multiTouchGestureActive) return;
+
             const canvas = document.getElementById(canvasId);
             if (!canvas) return;
 

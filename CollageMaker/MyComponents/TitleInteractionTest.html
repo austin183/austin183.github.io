@@ -959,6 +959,389 @@
 
                 handler.detach();
             });
+
+            // Phase 1: _onPointerMove guard tests
+
+            it('1.2.1 — _onPointerMove returns early when _multiTouchGestureActive is true', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+                state._multiTouchGestureActive = true;
+
+                let renderCount = 0;
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => { renderCount++; },
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // pointermove fires while gesture is active — should return immediately
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 350, clientY: 456, bubbles: true
+                }));
+
+                // No hover state should be set (guard returns before hover logic)
+                expect(state.titleHoverTarget).to.be.null;
+                // No render should be scheduled
+                expect(renderCount).to.equal(0);
+
+                handler.detach();
+            });
+
+            it('1.2.2 — _onPointerMove processes normally when gesture is NOT active', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+                state._multiTouchGestureActive = false;
+
+                let renderCount = 0;
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => { renderCount++; },
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // pointermove fires with no gesture active — normal processing
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 350, clientY: 456, bubbles: true
+                }));
+
+                // Hover state should be set
+                expect(state.titleHoverTarget).to.equal('body');
+                // Render should be scheduled (hover state changed from null to 'body')
+                expect(renderCount).to.be.at.least(1);
+
+                handler.detach();
+            });
+
+            it('1.2.3 — Drag threshold NOT crossed during active gesture', () => {
+                // Simulate: finger 1 touched title (pointerdown set dragStartCoords),
+                // then finger 2 started a gesture (_multiTouchGestureActive = true).
+                // Now pointermove fires with large delta — should NOT cross threshold.
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                let interactionStarted = false;
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => { interactionStarted = true; },
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Step 1: pointerdown on title (sets pending state)
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 350, clientY: 456, button: 0, bubbles: true
+                }));
+
+                // Step 2: simulate multi-touch gesture starting
+                state._multiTouchGestureActive = true;
+
+                // Step 3: pointermove with large delta (exceeds DRAG_THRESHOLD = 3)
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 500, clientY: 456, bubbles: true
+                }));
+
+                // Drag should NOT have started
+                expect(interactionStarted).to.be.false;
+                // titleInteractionMode should still be 'drag' (set by pointerdown, not cleared by guard)
+                // The guard in _onPointerMove prevents threshold crossing, not state clearing
+                expect(state.titleInteractionMode).to.equal('drag');
+
+                handler.detach();
+            });
+
+            it('1.2.4 — Active drag halted when gesture becomes active', () => {
+                // Simulate: drag is active, then gesture starts mid-drag.
+                // Subsequent pointermove should return immediately.
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                let positionCalls = [];
+                const titleManager = {
+                    setPosition: (x, y) => { positionCalls.push({ x, y }); },
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Step 1: pointerdown on title body
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 350, clientY: 456, button: 0, bubbles: true
+                }));
+
+                // Step 2: move to cross drag threshold — starts interaction
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 400, clientY: 456, bubbles: true
+                }));
+
+                // Drag is now active — verify
+                expect(state.titleInteractionMode).to.equal('drag');
+                const positionsBeforeGesture = positionCalls.length;
+
+                // Step 3: gesture starts
+                state._multiTouchGestureActive = true;
+
+                // Step 4: move far — should be blocked by guard
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 800, clientY: 456, bubbles: true
+                }));
+
+                // No new position calls during gesture
+                expect(positionCalls.length).to.equal(positionsBeforeGesture);
+
+                handler.detach();
+            });
+
+            it('1.2.5 — Hover feedback NOT updated during gesture', () => {
+                // When gesture is active, pointermove should not update hover state.
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+                state._multiTouchGestureActive = true;
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // pointermove over title body while gesture active
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 350, clientY: 456, bubbles: true
+                }));
+
+                // Hover target should NOT be set (guard returns before hover logic)
+                expect(state.titleHoverTarget).to.be.null;
+                // Cursor should NOT be changed
+                expect(canvas.style.cursor).to.equal('');
+
+                handler.detach();
+            });
+
+            it('1.2.6 — Hover feedback works normally when gesture is NOT active (regression)', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+                state._multiTouchGestureActive = false;
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Hover over title body
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 350, clientY: 456, bubbles: true
+                }));
+
+                expect(state.titleHoverTarget).to.equal('body');
+                expect(canvas.style.cursor).to.equal('grab');
+
+                handler.detach();
+            });
+
+            it('1.1.3 — Single-finger drag still works when gesture is NOT active (regression)', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                let positionCalls = [];
+                const titleManager = {
+                    setPosition: (x, y) => { positionCalls.push({ x, y }); },
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Single-finger drag: pointerdown → pointermove (exceeds threshold)
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 350, clientY: 456, button: 0, bubbles: true
+                }));
+
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 400, clientY: 456, bubbles: true
+                }));
+
+                expect(state.titleInteractionMode).to.equal('drag');
+                expect(positionCalls.length).to.be.at.least(1);
+
+                handler.detach();
+            });
+
+            it('1.1.4 — Single-finger resize still works when gesture is NOT active (regression)', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                let widthCalls = [];
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: (w) => { widthCalls.push(w); },
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Single-finger resize: pointerdown on right edge → pointermove right
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 447, clientY: 456, button: 0, bubbles: true
+                }));
+
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 500, clientY: 456, bubbles: true
+                }));
+
+                expect(state.titleInteractionMode).to.equal('resize-right');
+                expect(widthCalls.length).to.be.at.least(1);
+
+                handler.detach();
+            });
+
+            it('1.1.5 — Single-finger hover still works when gesture is NOT active (regression)', () => {
+                const state = createTestState(
+                    makeTitleStyle({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun({ text: 'Hello World' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-interaction-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Hover over title body
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 350, clientY: 456, bubbles: true
+                }));
+
+                expect(state.titleHoverTarget).to.equal('body');
+                expect(canvas.style.cursor).to.equal('grab');
+
+                // Move away — hover cleared
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 100, clientY: 100, bubbles: true
+                }));
+
+                expect(state.titleHoverTarget).to.be.null;
+                expect(canvas.style.cursor).to.equal('');
+
+                handler.detach();
+            });
         });
 
         // ============================================================
@@ -2319,6 +2702,314 @@
 
                 expect(state.titleInteractionPointerType).to.be.null;
                 expect(state.titleInteractionMode).to.be.null;
+
+                handler.detach();
+            });
+        });
+
+        // ============================================================
+        // Phase 2 (Title Intercept Fix): cancelPendingInteraction
+        // ============================================================
+        describe('Phase 2 — cancelPendingInteraction', () => {
+            let canvas;
+
+            function makeTitleRun3({ text = 'Hello World' } = {}) {
+                return { text, bold: false, italic: false, underline: false };
+            }
+
+            function makeTitleStyle3({
+                fontSize = 36,
+                fontFamily = 'Arial',
+                alignment = 'center',
+                titleBoxWidth = 400,
+                titleBoxX = 500,
+                titleBoxY = 900
+            } = {}) {
+                return { fontSize, fontFamily, alignment, titleBoxWidth, titleBoxX, titleBoxY };
+            }
+
+            function createTestState3(titleStyle, titleRuns) {
+                return {
+                    titleStyle: titleStyle || makeTitleStyle3(),
+                    titleRuns: titleRuns || [makeTitleRun3()],
+                    panels: [],
+                    panelAssignments: new Map(),
+                    _multiTouchGestureActive: false,
+                    titleInteractionMode: null,
+                    titleHoverTarget: null,
+                    titleInteractionPointerType: null
+                };
+            }
+
+            beforeEach(() => {
+                canvas = document.createElement('canvas');
+                canvas.id = 'title-cancel-test-canvas';
+                canvas.width = 1920;
+                canvas.height = 1080;
+                canvas.style.cssText = 'width: 960px; height: 540px; position: fixed; top: 0px; left: 0px; z-index: -1;';
+                document.body.appendChild(canvas);
+            });
+
+            afterEach(() => {
+                if (canvas && canvas.parentNode) {
+                    canvas.parentNode.removeChild(canvas);
+                }
+            });
+
+            it('2.2.1 — cancelPendingInteraction clears pending state', () => {
+                const state = createTestState3(
+                    makeTitleStyle3({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun3({ text: 'Hello World' })]
+                );
+
+                let renderCount = 0;
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-cancel-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => { renderCount++; },
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Step 1: pointerdown on title body — sets pending state
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 350, clientY: 456, button: 0, bubbles: true,
+                    pointerType: 'touch', pointerId: 1
+                }));
+
+                // Pending state should be set
+                expect(state.titleInteractionMode).to.equal('drag');
+                expect(state.titleHoverTarget).to.equal('body');
+                expect(state.titleInteractionPointerType).to.equal('touch');
+
+                // Step 2: cancel pending interaction
+                handler.cancelPendingInteraction();
+
+                // All pending state should be cleared
+                expect(state.titleInteractionMode).to.be.null;
+                expect(state.titleHoverTarget).to.be.null;
+                expect(state.titleInteractionPointerType).to.be.null;
+                // Render should have been scheduled to clear visual feedback
+                expect(renderCount).to.be.at.least(1);
+
+                handler.detach();
+            });
+
+            it('2.2.2 — cancelPendingInteraction is no-op when no pending state', () => {
+                const state = createTestState3(
+                    makeTitleStyle3({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun3({ text: 'Hello World' })]
+                );
+
+                let renderCount = 0;
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-cancel-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => { renderCount++; },
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // No pointerdown happened — no pending state
+                handler.cancelPendingInteraction();
+
+                // Should not throw and should not schedule a render
+                expect(renderCount).to.equal(0);
+                // State should remain unchanged
+                expect(state.titleInteractionMode).to.be.null;
+
+                handler.detach();
+            });
+
+            it('2.2.3 — cancelPendingInteraction does NOT clear active interaction', () => {
+                const state = createTestState3(
+                    makeTitleStyle3({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun3({ text: 'Hello World' })]
+                );
+
+                let interactionEndCalled = false;
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-cancel-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => { interactionEndCalled = true; }
+                });
+
+                handler.attach();
+
+                // Step 1: pointerdown on title body
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 350, clientY: 456, button: 0, bubbles: true
+                }));
+
+                // Step 2: move to cross drag threshold — starts active interaction
+                canvas.dispatchEvent(new PointerEvent('pointermove', {
+                    clientX: 400, clientY: 456, bubbles: true
+                }));
+
+                expect(state.titleInteractionMode).to.equal('drag');
+
+                // Step 3: cancelPendingInteraction — should be no-op for active interaction
+                handler.cancelPendingInteraction();
+
+                // Active interaction should NOT be cleared
+                expect(state.titleInteractionMode).to.equal('drag');
+                // onInteractionEnd should NOT have been called
+                expect(interactionEndCalled).to.be.false;
+
+                handler.detach();
+            });
+
+            it('2.2.4 — cancelPendingInteraction releases pointer capture', () => {
+                const state = createTestState3(
+                    makeTitleStyle3({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun3({ text: 'Hello World' })]
+                );
+
+                let capturedIds = [];
+                let releasedIds = [];
+                canvas.setPointerCapture = (pid) => { capturedIds.push(pid); };
+                canvas.releasePointerCapture = (pid) => { releasedIds.push(pid); };
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-cancel-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Step 1: pointerdown with pointerId — captures pointer
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 350, clientY: 456, button: 0, bubbles: true,
+                    pointerType: 'touch', pointerId: 99
+                }));
+
+                // Step 2: cancel pending interaction
+                handler.cancelPendingInteraction();
+
+                // Pointer capture should be released
+                expect(releasedIds).to.include(99);
+
+                handler.detach();
+            });
+
+            it('2.2.5 — cancelPendingInteraction resets cursor', () => {
+                const state = createTestState3(
+                    makeTitleStyle3({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun3({ text: 'Hello World' })]
+                );
+
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-cancel-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => {},
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Step 1: pointerdown on title body — cursor set to 'grab'
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 350, clientY: 456, button: 0, bubbles: true
+                }));
+
+                expect(canvas.style.cursor).to.equal('grab');
+
+                // Step 2: cancel pending interaction
+                handler.cancelPendingInteraction();
+
+                // Cursor should be reset
+                expect(canvas.style.cursor).to.equal('');
+
+                handler.detach();
+            });
+
+            it('2.2.6 — cancelPendingInteraction schedules render', () => {
+                const state = createTestState3(
+                    makeTitleStyle3({ titleBoxX: 500, titleBoxY: 900, titleBoxWidth: 400 }),
+                    [makeTitleRun3({ text: 'Hello World' })]
+                );
+
+                let renderCount = 0;
+                const titleManager = {
+                    setPosition: () => {},
+                    setWidth: () => {},
+                    getRuns: () => state.titleRuns,
+                    getState: () => ({ runs: state.titleRuns, style: state.titleStyle })
+                };
+
+                const handler = createTitleInteraction({
+                    canvasId: 'title-cancel-test-canvas',
+                    state,
+                    titleManager,
+                    onRenderScheduled: () => { renderCount++; },
+                    onInteractionStart: () => {},
+                    onInteractionEnd: () => {}
+                });
+
+                handler.attach();
+
+                // Step 1: pointerdown on title body
+                canvas.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: 350, clientY: 456, button: 0, bubbles: true
+                }));
+
+                const rendersAfterDown = renderCount;
+
+                // Step 2: cancel pending interaction
+                handler.cancelPendingInteraction();
+
+                // Should have scheduled at least one more render
+                expect(renderCount).to.be.greaterThan(rendersAfterDown);
 
                 handler.detach();
             });
