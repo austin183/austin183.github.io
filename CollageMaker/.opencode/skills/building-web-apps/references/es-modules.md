@@ -1,5 +1,16 @@
 # ES Module Conventions
 
+## Contents
+
+- [Named exports only](#named-exports-only)
+- [Barrel exports](#barrel-exports)
+- [Relative imports with `.js` extension](#relative-imports-with-js-extension)
+- [Factory functions](#factory-functions)
+- [Pure functions for math](#pure-functions-for-math)
+- [Pure function numeric guards](#pure-function-numeric-guards)
+- [Barrel export verification](#barrel-export-verification)
+- [Gotchas](#gotchas)
+
 ## Named Exports Only
 
 ```javascript
@@ -58,6 +69,37 @@ Layout math modules export pure functions:
 // FitMath.js — pure functions, no side effects
 export function fit(sourceSize, containerSize) { ... }
 export function sourceRect(imageSize, panelSize) { ... }
+```
+
+## Pure Function Numeric Guards
+
+Pure math functions that accept numeric parameters from runtime sources (touch coordinates, computed ratios, user input) MUST use `Number.isFinite()` — not comparison operators — as the first guard. JavaScript comparisons with `NaN` always return `false`, and `Infinity` is a valid positive number, so guards like `if (ratio <= 0)` silently pass invalid values through:
+
+```javascript
+// WRONG — NaN and Infinity bypass the comparison
+export function applyZoomExponent(ratio) {
+    if (ratio <= 0) return 1.0;  // NaN <= 0 is false, Infinity <= 0 is false
+    return Math.pow(ratio, 0.3); // NaN or Infinity propagates
+}
+
+// CORRECT — Number.isFinite catches NaN, Infinity, -Infinity, undefined
+export function applyZoomExponent(ratio) {
+    if (!Number.isFinite(ratio) || ratio <= 0) return 1.0;
+    return Math.pow(ratio, 0.3);
+}
+```
+
+**Why it matters:** NaN in Canvas 2D (`ctx.scale(NaN, NaN)`) silently corrupts the transform matrix. NaN in state (`width / NaN`) propagates through clamping (`Math.max(NaN, 1) === NaN`). Both produce silent rendering failures.
+
+**When to apply:** Any pure math function that accepts numeric parameters from potentially noisy sources AND returns values consumed by Canvas 2D, CSS transforms, or reactive state.
+
+**When NOT to apply:** Functions called only with compile-time constants, or where the caller guarantees finite inputs with a short, auditable call chain.
+
+**Testing:** Always assert NaN/Infinity/undefined inputs return safe defaults:
+```javascript
+expect(applyZoomExponent(NaN)).to.equal(1.0);
+expect(applyZoomExponent(Infinity)).to.equal(1.0);
+expect(applyZoomExponent(undefined)).to.equal(1.0);
 ```
 
 ## Barrel Export Verification

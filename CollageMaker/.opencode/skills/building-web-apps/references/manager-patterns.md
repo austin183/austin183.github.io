@@ -2,6 +2,16 @@
 
 This reference documents the two main patterns for state managers in the CollageMaker app, when to use each, and how they integrate with undo/redo systems.
 
+## Contents
+
+- [Pattern 1: Action-based managers](#pattern-1-action-based-managers)
+- [Pattern 2: Direct mutation managers](#pattern-2-direct-mutation-managers)
+- [When to use each pattern](#when-to-use-each-pattern)
+- [Integration with undo/redo systems](#integration-with-undoredo-systems)
+- [Common pitfalls](#common-pitfalls)
+- [Return value for side-effect notification](#return-value-for-side-effect-notification)
+- [Related references](#related-references)
+
 ## Pattern 1: Action-Based Managers
 
 **Examples:** `CropManager`
@@ -195,7 +205,3 @@ onTitleTextChange() {
 - `references/vue-options-api.md` — Array mutation patterns for Vue reactivity
 - `references/memory-management.md` — Disposing image references when replacing them
 - `references/testing-unit.md` — Integration testing for handler-manager composition
-
----
-
-Base directory: `.opencode/skills/building-web-apps/`

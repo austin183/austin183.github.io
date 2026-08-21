@@ -304,7 +304,3 @@ Guard with `if (this.method)` because commit methods may not exist if the handle
 - `2026-07-21-undo-batching-segmented-controls.md` — segmented controls need inline snapshot/commit
 - `2026-07-22-atomic-undo-methods-extracting-inline-expressions.md` — extract inline snapshot/commit into atomic handler methods
 - `undomanager-batch-bug.md` — UndoManager batch composition bug
-
----
-
-Base directory: `.opencode/skills/building-web-apps/`

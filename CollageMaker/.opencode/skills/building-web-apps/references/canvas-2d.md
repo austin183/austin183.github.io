@@ -1,5 +1,21 @@
 # Canvas 2D Rendering
 
+## Contents
+
+- [Lifecycle pattern](#lifecycle-pattern)
+- [DPR scaling](#dpr-scaling)
+- [Rendering pipeline](#rendering-pipeline)
+- [Same-panel overlap guard](#same-panel-overlap-guard)
+- [CoreGraphics → Canvas 2D mapping](#coregraphics--canvas-2d-mapping)
+- [Semi-transparent image compositing](#semi-transparent-image-compositing)
+- [Config-based rendering helpers](#config-based-rendering-helpers)
+- [Gotchas](#gotchas)
+- [Backward-compatible renderer extensions](#backward-compatible-renderer-extensions)
+- [Shared offscreen canvas for text measurement](#shared-offscreen-canvas-for-text-measurement)
+- [Offscreen canvas export](#offscreen-canvas-export)
+- [Canvas `destination-out` compositing for shape cutouts](#canvas-destination-out-compositing-for-shape-cutouts)
+- [Dual-canvas visibility guard](#dual-canvas-visibility-guard)
+
 ## Lifecycle Pattern
 
 ```javascript

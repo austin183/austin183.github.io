@@ -1,5 +1,15 @@
 # Memory Management Patterns
 
+## Contents
+
+- [Disposing HTMLImageElement references](#disposing-htmlimageelement-references)
+- [URL.createObjectURL cleanup](#urlcreateobjecturl-cleanup)
+- [Lifecycle cleanup checklist](#lifecycle-cleanup-checklist)
+- [Lifecycle cleanup ordering](#lifecycle-cleanup-ordering)
+- [Visual state cleanup](#visual-state-cleanup)
+- [Canvas GPU memory release](#canvas-gpu-memory-release)
+- [Gotchas](#gotchas)
+
 ## Disposing HTMLImageElement References
 
 When images are removed from Vue state, the `HTMLImageElement` references must be explicitly nullified to allow garbage collection. Failing to do so keeps images in memory indefinitely.
@@ -174,7 +184,3 @@ Use this pattern in canvas renderer `dispose()` methods to ensure GPU memory is 
 1. **Base64 thumbnails temporarily increase memory** — Converting images to base64 strings creates additional copies. This is acceptable for operations like `clearAll()` but could be optimized later if needed.
 2. **Offscreen canvases are auto-collected** — If created as local variables and not attached to DOM, they don't need explicit cleanup.
 3. **Dispose utilities must be used consistently** — Creating `disposeImageItem()` but not using it in `ImageLibrary.js` is a common oversight caught by world-review.
-
----
-
-Base directory: `.opencode/skills/building-web-apps/`

@@ -1,5 +1,21 @@
 # Vue 3 Options API Patterns
 
+## Contents
+
+- [Factory decomposition](#factory-decomposition)
+- [Duplicate method keys silently shadow new methods](#duplicate-method-keys-silently-shadow-new-methods)
+- [Reactive state](#reactive-state)
+- [Array mutation for Vue reactivity](#array-mutation-for-vue-reactivity)
+- [provide() timing](#provide-timing)
+- [@mousedown.prevent for text selection preservation](#mousedownprevent-for-text-selection-preservation)
+- [$refs on native form inputs](#refs-on-native-form-inputs)
+- [v-model timing for undo snapshots](#v-model-timing-for-undo-snapshots)
+- [Range input with null default](#range-input-with-null-default)
+- [$nextTick race condition guard](#nexttick-race-condition-guard)
+- [Async handlers: keep the deterministic path await-free](#async-handlers-keep-the-deterministic-path-await-free)
+- [Async UI state cleanup (try/finally + concurrency guard)](#async-ui-state-cleanup-tryfinally--concurrency-guard)
+- [Files](#files)
+
 ## Factory Decomposition
 
 The Vue app is assembled from separate factory functions. The assembly function must explicitly merge methods (never use `...spread` for lifecycle configs that may contain a `methods:` key):
@@ -38,6 +54,31 @@ export function createCollageApp({
 3. **Methods must be inside `methods:` block** — Functions at root level of Options API config are NOT bound to `this`. Only functions inside `methods: { }` and lifecycle hooks get bound. Root-level helper functions will cause `TypeError: X is not a function` when called via `this.X()`
 4. **Object spread order overwrites silently** — When merging configs, later properties overwrite earlier ones. Never use `...lifecycleConfig` after setting `methods:` if lifecycle may contain a `methods:` key
 5. **State managers** — Receive Vue instance reference and mutate reactive properties directly
+
+## Duplicate Method Keys Silently Shadow New Methods
+
+A `*Methods` factory returns a **plain object literal**. JS object literals resolve duplicate keys by **last occurrence wins** — no error, no warning. A leftover stub below a new implementation silently overrides it, so the app and the tests both run the *old* (empty) method.
+
+**Real incident:** a Phase 5 `createMetronomadMethods()` implemented the real `onRestart` in the middle of the factory while a Phase 1 stub `onRestart()` still sat at the bottom. All 4 tests failed with `expected [] to deeply equal [ ['restart', …] ]` — the handler looked implemented, yet the engine never saw a call.
+
+This is the mirror image of the barrel trap documented in `references/es-modules.md` (re-exporting a missing name yields silent `undefined`). Same family — silent failure in the factory plumbing — but the opposite symptom:
+
+| Trap | Symptom |
+|------|---------|
+| Barrel re-export of a missing name | `undefined` import, call throws |
+| Duplicate method key in a factory | **Old behavior persists**, tests fail as if nothing was implemented |
+
+### The Rule
+
+After adding or replacing a method in a `*Methods` factory (or any object-literal factory), verify the name appears exactly once in the file:
+
+```bash
+grep -c "onRestart" MyESModules/App/createMetronomadMethods.js   # expect 1 (the definition)
+```
+
+Or when editing: replace the stub **in place** (include it in the same edit), never insert the real method above an existing stub of the same name.
+
+**Failing signature to remember:** *tests fail as if the handler is still a stub, even though you can see the implementation in the file.*
 
 ## Reactive State
 
@@ -218,6 +259,74 @@ this.$nextTick(() => {
 ### When to Apply
 
 Any `$nextTick` callback that performs DOM-dependent side effects (focus management, element queries, measurements) should include a guard that checks the triggering state is still current.
+
+## Async Handlers: Keep the Deterministic Path Await-Free
+
+An `async` function runs its body **synchronously up to the first `await` it actually reaches**. So if the common path never reaches an `await`, the handler behaves exactly like a sync function — and mock-VM tests can assert on it synchronously:
+
+```javascript
+async onPlayToggle() {
+    if (this.isParamLocked) {          // stop path — no await, returns sync
+        this._engine.stop();
+        return;
+    }
+    if (!this.isReady) return;         // no await
+    const ctx = this._clock;
+    if (ctx && ctx.state !== 'running') {
+        const resumed = await this._resumeWithTimeout(ctx);  // the ONLY await
+        if (!resumed) { this.errorMessage = '…'; return; }
+    }
+    this._engine.startSequence(this._sequenceParams());      // reached sync when ctx is running
+}
+```
+
+The deterministic tests call `vm.onPlayToggle()` with **no `await`** and assert `engine.calls` immediately — valid because with `_clock` undefined or `state === 'running'`, no `await` is reached.
+
+### Why It Matters
+
+- **Testability:** the deterministic scenarios (the bulk of the contract) stay synchronous — fast, and free of async-suite timing hazards (see the async-suite completion-wait pattern in `references/testing-unit.md`). Only the genuinely async branch (never-settling resume → real timer) is tested with `await`.
+- **Behavior:** Vue click handlers don't care about the returned promise; keeping the fast path sync means no microtask delay between the click and the engine call — relevant for the "Stop within 50 ms" class of guarantees.
+
+### The Anti-Pattern
+
+Placing an `await` *before* the guard checks (e.g., `const ctx = await maybeResume()` unconditionally) makes the whole handler async-in-practice: every mock-VM test must `await`, and the stop path gets an unnecessary microtask hop. Structure the `await` inside the branch that needs it.
+
+### Generalization
+
+Applies to any async handler/factory method whose async-ness is branch-local: push the `await` as deep into the branch as possible and keep the happy path await-free, so the synchronous contract surface stays synchronously testable.
+
+## Async UI State Cleanup (try/finally + Concurrency Guard)
+
+When an async operation shows a UI element (loading overlay, progress bar, spinner) at the start and hides it at the end, use **try/finally** to guarantee cleanup even if the operation throws:
+
+```javascript
+// CORRECT — endImageLoading() always runs
+this.beginImageLoading(total);
+try {
+    await imageLibrary.addImages(files, onProgress);
+} finally {
+    this.endImageLoading();
+}
+```
+
+- **`finally` always runs** — whether the `await` resolves, rejects, or the function returns early. It is the only JavaScript construct that guarantees cleanup across all exit paths.
+- **Idempotent cleanup is safe** — if the normal path already called `endImageLoading()` via a progress callback, the `finally` call is harmless (no-op when already hidden).
+- **Error path is the key benefit** — if `addImages()` throws (e.g., corrupt images), the progress callback never reaches completion. Without `finally`, the overlay stays visible forever.
+
+**Concurrency guard** — pair with an early-return guard to prevent state corruption from rapid successive operations:
+
+```javascript
+beginImageLoading(total) {
+    if (this.imageLoadingProgress.visible) return; // Already loading — skip
+    this.imageLoadingProgress.visible = true;
+    this.imageLoadingProgress.current = 0;
+    this.imageLoadingProgress.total = total;
+},
+```
+
+**Distinction from timeout cleanup** — The Web Workers "clear timeouts on every exit path" pattern handles **scheduled callbacks** (explicit `clearTimeout()` on each path). The try/finally pattern here handles **paired state changes** (guaranteeing the "end" always follows the "begin" across async boundaries). See `references/web-workers.md` for the timeout pattern.
+
+**When to use:** Any async operation that shows/hides a UI element, or any paired begin/end state changes around async work.
 
 ## Files
 

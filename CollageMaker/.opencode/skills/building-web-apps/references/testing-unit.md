@@ -2,6 +2,7 @@
 
 ## Contents
 - Unit Tests — Mocha + Chai
+- In-Browser Runner: Async Suites Undercount Results
 - Real Objects Over Mocks
 - Mocking Browser APIs
 - RAF Mocking
@@ -11,6 +12,7 @@
 - Test State, Not Just Actions
 - Tolerance Precision in Positioning Tests
 - Testing Default Behavior Explicitly
+- Asserting Synchronous Side Effects of Async APIs
 - Testing Combined Edge Cases
 - Writing Robust Positioning Tests
 - Self-Calibrating Hit Test Coordinates
@@ -69,6 +71,30 @@ Loaded via CDN, run in-browser via test HTML pages.
 2. `mocha.setup('bdd')` must be called before `describe`/`it` blocks
 3. `mocha.run()` must be called after all test definitions
 4. Test files live in `MyComponents/`
+
+### In-Browser Runner: Async Suites Undercount Results
+
+The in-browser test runner (`scripts/run-tests.cjs`) waits for the **first** rendered test result (`#mocha .test`) before extracting `runner.passes()/failures()`. For all-synchronous suites the whole run finishes before the first result paints, so extraction is safe. The moment a suite contains real async work (decoding, timers, awaited RAF flushes), extraction fires **mid-run**: in-flight tests are invisible, and a *failing* async test that hasn't finished yet silently vanishes.
+
+**Signature of a mid-run snapshot:** "N passing / 0 failing" where N < registered test count. It looks like a clean pass but is a partial snapshot.
+
+**Fix: wait for run completion before extracting** — every registered test accounted for:
+
+```js
+await page.waitForFunction(() => {
+    const runner = (typeof mocha !== 'undefined' && mocha._runner) ||
+        (window.Mocha && window.Mocha.runner);
+    if (!runner || !runner.stats) return false;
+    const s = runner.stats;
+    // Done when every registered test is accounted for.
+    return s.tests > 0 &&
+        s.tests === s.passes + s.failures + s.pending;
+}, { timeout: 30000 });
+```
+
+- `runner.stats.tests` is the total registered count; mid-run it **exceeds** the sum of the three outcome buckets and equals it only at completion.
+- Avoid `runner.state === 'finished'` — the Runner state values vary across Mocha versions.
+- Keep the 30 s `waitForFunction` timeout as a fall-through so a hung suite still produces a (partial) report instead of crashing the runner.
 
 ### Mocking Browser APIs
 
@@ -437,6 +463,29 @@ it('uses default style values for empty titleStyle object', () => {
 
 **Why include this:** Even though the implementation has defaults, someone might refactor it to remove defaults or change them. This test documents and protects the contract.
 
+### Asserting Synchronous Side Effects of Async APIs
+
+An async function executes **synchronously up to its first `await`**. Call the function and assert on the side-effect log *before* awaiting the returned promise to prove a callback fired with zero I/O in flight — no fake timers, no microtask pumping:
+
+```javascript
+const events = [];
+const onStateChange = (state, detail) =>
+    events.push([state, detail ? detail.fileName : null]);
+
+const promise = loader.loadFile(file);
+// No await yet — everything up to the first `await` has already run.
+expect(events).to.deep.equal([['decoding', 'ok.mp3']]);
+
+await promise;
+expect(events).to.deep.equal([['decoding', 'ok.mp3'], ['idle', null]]);
+```
+
+- **Proves ordering, not just occurrence** — if someone later "optimizes" by firing the callback inside a `.then()` or after the first I/O, the synchronous assertion fails immediately.
+- **Pins the UX contract** — e.g., a "Decoding <name>…" status must appear the instant a file is dropped, before `arrayBuffer()` is even read.
+- **Complements the RAF callback collector** — that pattern covers *frame* ordering; this covers *first-await* ordering.
+- **When it does NOT work** — if the interesting work starts in a microtask (leading `await Promise.resolve()`, `queueMicrotask`), the pre-await window is empty and the assertion passes trivially with `[]`. Verify the test *fails* under a delayed implementation: move the callback after the first `await` by hand and watch it break.
+- For callbacks that legitimately fire after I/O, use plain `await` + ordered-log assertions instead.
+
 ### Testing Combined Edge Cases
 
 Test multiple flags/inputs simultaneously to catch composition bugs:
@@ -526,6 +575,8 @@ expect(errorThrown).to.not.be.null;
 ```javascript
 expect(str).to.match(/^blob:/);
 ```
+
+**`deep.equal` distinguishes trailing `undefined`** — `['idle']` and `['idle', undefined]` are *not* deep-equal (different array lengths). Event-recorder helpers that push `[state, detail && detail.fileName]` record a trailing `undefined` for detail-less events and silently break every "no detail" assertion. Normalize absent details to an explicit sentinel (`null`) in the recorder: `[state, detail ? detail.fileName : null]`.
 
 ### Integration Testing After Modularization
 

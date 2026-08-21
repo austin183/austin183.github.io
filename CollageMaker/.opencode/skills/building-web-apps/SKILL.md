@@ -1,6 +1,13 @@
 ---
 name: building-web-apps
-description: Build static web apps with Vue 3 Options API, Canvas 2D, ES modules, CDN libraries. Covers factory testability (callback injection, provider functions, DOM ID injection, module extraction, service locator safety, return value notification, handler .call(this), closure safety, internal closure pattern, return-object exposure, mock VM construction, undo snapshots (segmented inline, atomic handler methods, lifecycle cleanup)), extensibility (strategy/registry), canvas clearing for exports, config rendering, shared offscreen canvas, render order, dual-canvas visibility guard, async UI cleanup (try/finally, concurrency guards), toast notifications, accessibility (ARIA live regions, custom button keyboard, aria-busy, reduced motion, canvas roles, ARIA tab pattern with aria-controls/aria-labelledby, focus return on dialog close, focus traps for aria-modal dialogs), drag cleanup, VISIBLE_MIN clamping, test-driven refactoring, Vue input patterns (@keydown.enter, v-model undo timing, segmented/checkbox inline snapshot/commit, atomic handler extraction, beforeUnmount cleanup, $nextTick race condition guards), multi-touch gestures (TouchEvent/PointerEvent/WheelEvent, pointerType guards, wheel pan/zoom, dual gesture direction conventions, pointer capture early-exit cleanup, 3+ finger OS gesture guard, touch-action: pan-y vs none trade-off, PointerEvent test migration, dual-pointer guard consistency for _multiTouchGestureActive), multi-canvas pointer events (e.currentTarget for per-canvas coordinate math), mobile sidebar overlays (dual-state toggles, CSS !important cascade, scoped CSS selectors for shared classes, global Escape, Playwright Escape key unreliability with .window modifier, overlay backdrops, aria-expanded), mobile bottom sheets (ID prefixing for content duplication, visual drag handle, auto-switch tab on content change, dvh height units), fixed element z-index occlusion (prevention checklist, Playwright "intercepts pointer events" diagnosis), iOS safe areas (viewport-fit=cover, 100dvh, fixed element treatment, CSS content validation testing), destination-out compositing, DPR/CORS, test runner DOM queries (querySelector over getElementById, offsetParent mounting for detached elements, getElementById mock null fallback, DOMParser Vue directive colon prefix), pure function numeric guards (Number.isFinite for NaN/Infinity). No build step. Use for CollageMaker features, rendering, state, testing.
+description: >-
+  Build static web apps with Vue 3 Options API, Canvas 2D, ES modules, and CDN
+  libraries — no build step. Covers factory wiring and testability, state
+  managers, undo/redo snapshots, canvas rendering, keyboard/pointer/gesture
+  interaction, accessibility, mobile UI, Web Audio scheduling, Web Workers,
+  and testing patterns (Mocha/Chai unit + Playwright E2E, including
+  timing-sensitive audio-clock assertions). Use for CollageMaker or
+  Metronomad features, rendering, state, and testing.
 ---
 
 # Building Web Apps
@@ -13,12 +20,13 @@ description: Build static web apps with Vue 3 Options API, Canvas 2D, ES modules
 
 Consult these files for verified patterns and gotchas:
 
-- `references/vue-options-api.md` — Vue 3 Options API factory decomposition, provide() timing, @mousedown.prevent, $refs on native form inputs, array mutation patterns for reactivity, v-model timing for undo snapshots
+- `references/factory-patterns.md` — Factory wiring & testability: callback injection, handler binding convention, DOM ID injection, internal vs. module extraction, provider functions vs. direct callbacks, closure reference safety for undo commands, service locator access safety, return object exposure, internal closure pattern
+- `references/vue-options-api.md` — Vue 3 Options API factory decomposition, duplicate method keys silently shadowing new methods, provide() timing, @mousedown.prevent, $refs on native form inputs, array mutation patterns for reactivity, v-model timing for undo snapshots, async handlers with await-free deterministic paths, async UI state cleanup (try/finally + concurrency guard)
 - `references/canvas-2d.md` — Canvas 2D rendering, DPR scaling, semi-transparent compositing, config-based rendering helpers, shared offscreen canvas for measurement, offscreen export, dual-canvas visibility guard
-- `references/es-modules.md` — ES module conventions and barrel exports
+- `references/es-modules.md` — ES module conventions, barrel exports, pure function numeric guards (Number.isFinite)
 - `references/rich-text-runs.md` — Run-based text formatting, merge/split algorithm
-- `references/testing-unit.md` — Mocha/Chai unit tests, mocking patterns, integration testing, characterization tests before refactor
-- `references/testing-e2e.md` — Playwright E2E, page load strategy, pointer/Touch/Drag event testing, test runner DOM query gotchas, Escape key unreliability with Vue `.window` modifier
+- `references/testing-unit.md` — Mocha/Chai unit tests, mocking patterns, in-browser runner completion wait for async suites, asserting synchronous side effects of async APIs, integration testing, characterization tests before refactor
+- `references/testing-e2e.md` — Playwright E2E, page load strategy, pointer/Touch/Drag event testing, real DataTransfer drop-zone tests, sub-second timing assertions (in-page transition logger), `page.evaluate` serialization gotchas, test runner DOM query gotchas, Escape key unreliability with Vue `.window` modifier
 - `references/testing-strategy.md` — Testing approach, gotchas, deferred features, assertion density
 - `references/interaction.md` — Keyboard shortcut patterns: three-layer architecture, modifier matching, focus suppression, preventDefault ordering, pointer handler coordination, global pointerup drag cleanup, VISIBLE_MIN drag boundary clamping, multi-touch and trackpad gestures (TouchEvent/PointerEvent dual path, pointerType guards, pointerType-based dynamic thresholds, wheel event pan/zoom, dual gesture direction conventions, setPointerCapture gotchas, releasePointerCapture hygiene, pointer capture early-exit cleanup, 3+ finger OS gesture guard, blur safety net, touch-action: pan-y vs none trade-off), multi-canvas pointer events (e.currentTarget)
 - `references/midiestro-pattern.md` — Entry point pattern, shared infrastructure, directory structure
@@ -27,8 +35,10 @@ Consult these files for verified patterns and gotchas:
 - `references/manager-patterns.md` — Action-based vs. direct mutation state managers, when to use each pattern, undo/redo integration, return value pattern for side-effect notification
 - `references/undo-snapshots.md` — Undo/redo snapshot patterns: shallow copy reference preservation, onUndoCommand callback injection, crops deep copy with null guard, File object redo limitations, testing disposed-image toast
 - `references/web-workers.md` — Web Worker lifecycle, timeout guard pattern, clearing timeouts on every exit path, mock Worker pattern for testing
+- `references/audio-scheduling.md` — Web Audio: "A Tale of Two Clocks" scheduling (immediate precision start + lookahead loop with monotonic scheduled flags), terminal-event vs. poll-driven state transition race, generation/epoch guards (capture-after-bump rule), single terminal event convention, fake context/clock/RAF/timer test harness (shared ordered `calls` log), zero-crossing frequency + tail-silence assertions for synthesized audio
 - `references/accessibility.md` — ARIA patterns for segmented controls (radiogroup), color picker accessibility, custom button keyboard activation (Enter + Space), aria-busy loading states, prefers-reduced-motion, ARIA live regions (toast notifications), interactive canvas role selection, touch target sizing (WCAG 2.5.8, 44x44px minimum, sizing property selection), ARIA tab pattern (id + aria-controls + aria-labelledby wiring), focus return on dialog close (WCAG 2.4.3)
 - `references/mobile-ui-patterns.md` — Dual-state toggle pattern (desktop vs mobile sidebar), CSS `!important` cascade in media queries, Vue `.window` modifier for global Escape, `display: none` overlay backdrops, `aria-expanded` on mobile toggles, bottom sheet patterns (ID prefixing for content duplication, visual drag handle, auto-switch tab on content change), fixed element z-index occlusion (prevention checklist), Playwright "visible but unclickable" diagnosis
+- `references/toast.md` — Toast notification implementation (reactive state, showToast method, template, timer cleanup, coalescing, ARIA live region roles)
 
 ## Core Conventions
 
@@ -42,231 +52,24 @@ Consult these files for verified patterns and gotchas:
 - Create instances via factory functions, not classes
 - Plain objects for data models
 - Pure functions for layout math
+- **Duplicate method keys silently shadow** — object-literal factories resolve duplicate keys by last occurrence, so a leftover stub below a new implementation silently wins (tests fail as if the handler is still a stub). After adding/replacing a method, grep the name — expect exactly 1 hit — and replace stubs in place, never insert above them. See `references/vue-options-api.md`
 
 ### Factory Testability Patterns
 
-**Callback Injection for Handler DIP** — Decouple Vue handler modules from render logic by injecting callbacks that receive the Vue instance:
-```javascript
-// Handler factory accepts callback that receives Vue instance
-export function createLayoutHandlers(getLayoutManager, onRenderScheduled) {
-    return {
-        onLayoutStyleChange() {
-            const lm = getLayoutManager();
-            if (lm) lm.setLayoutStyle(this.layoutStyle);
-            onRenderScheduled(this); // Pass Vue instance to callback
-        }
-    };
-}
+Full patterns with code: see `references/factory-patterns.md`. Guardrails:
 
-// Wiring: build internal functions first, then handlers
-export function createCollageMethods(base) {
-    function _scheduleRender(vm) {
-        const renderer = base.getCanvasRenderer();
-        // ... render logic using vm.state
-    }
-    const layoutHandlers = createLayoutHandlers(
-        () => base.getLayoutManager(),
-        (vm) => _scheduleRender(vm)
-    );
-    return {
-        _scheduleRender() { _scheduleRender(this); },
-        onLayoutStyleChange() { layoutHandlers.onLayoutStyleChange.call(this); }
-    };
-}
-```
-- Internal functions are pure closures over `base` (services) accepting explicit `vm` parameter — no `this` dependency
-- Callbacks are created at factory time, capturing the internal function reference
-- **Do NOT use `() => this._scheduleRender()` as callback** — at factory creation time, `this` is not the Vue instance
-- **Handler binding convention** — All handlers from extracted modules use `.call(this, ...)` in `createCollageMethods.js` to bind the Vue instance as `this`. This gives handlers access to `this.titleText`, `this.showToast`, etc. Always follow this convention for new handlers — verify by checking existing handler bindings before adding new ones.
-
-**DOM ID Injection** — Accept DOM element IDs as factory configuration instead of hardcoding `document.getElementById()`:
-```javascript
-const DEFAULT_DOM_IDS = { previewCanvas: 'previewCanvas', cropPreviewCanvas: 'cropPreviewCanvas' };
-export function createCollageLifecycle(base, domIds = {}) {
-    const ids = { ...DEFAULT_DOM_IDS, ...domIds };
-    // Use ids.previewCanvas instead of hardcoded string
-}
-```
-- Always provide sensible defaults so existing callers don't break
-- Tests can supply mock IDs to verify `getElementById` is called with the correct ID
-
-**Internal vs. Module Extraction** — Callback injection is the *primary* DIP improvement. Module extraction is the *secondary* SRP improvement. If internal functions have clear boundaries AND the file exceeds ~400 lines, extraction is worthwhile: it yields independent testability, clearer module boundaries, and reduced cognitive load (the composition layer becomes a wiring diagram rather than intertwined logic). If the file stays under ~400 lines and functions are tightly coupled to Vue internals, skip extraction to avoid unnecessary import complexity.
-
-**Callback Wiring in Extracted Modules** — When extracted modules depend on each other, accept callback objects as factory parameters instead of importing sibling modules. This prevents circular dependencies and preserves one-way dependency flow: `Composition → Extracted Modules`.
-
-**Return Value for Side-Effect Notification** — When a manager method performs a mutation that may trigger a side effect (e.g., truncation, clipping), return a result object describing what happened. The caller decides what to do with it. This cleanly separates state mutation from notification:
-```javascript
-// Manager: mutates state, returns metadata — knows nothing about toasts
-setText(text) {
-    const wasTruncated = lines.length > 3;
-    // ... clamp state ...
-    return { truncated: wasTruncated };
-}
-
-// Handler: uses return value to decide on user feedback
-onTitleTextChange() {
-    const result = titleManager.setText(this.titleText);
-    if (result && result.truncated && this.showToast) {
-        this.showToast('Title limited to 3 lines', 'info', 3000);
-    }
-}
-```
-- Manager stays focused on state — no knowledge of UI feedback mechanisms
-- Handler owns notification decisions — can adapt feedback per context
-- See `references/manager-patterns.md` for the full pattern
-
-**Provider Functions vs. Direct Callbacks** — Choose based on whether the referenced objects are stable:
-
-- **Direct callbacks** — Use when the referenced objects are stable for the factory's lifetime (simpler, less indirection):
-```javascript
-// Safe: layoutManager is never replaced after factory creation
-const layoutHandlers = createLayoutHandlers(
-    () => base.getLayoutManager(),
-    (vm) => renderMethods._scheduleRender(vm)  // Direct callback — renderMethods is stable
-);
-```
-
-- **Provider functions** — Use when callbacks reference objects that may be replaced after factory creation. The provider returns the callback at *call time*, not factory time:
-```javascript
-// Provider functions return the callback at undo/redo time, preventing stale references
-const undoMethods = createUndoMethods(base, {
-    getOnRenderScheduled: () => (vm) => renderMethods._scheduleRender(vm),
-    getOnCropPreviewRender: () => (vm) => cropPreviewMethods._scheduleCropPreviewRender(vm)
-});
-```
-
-Inside the factory, invoke providers with a defensive guard:
-```javascript
-const getOnRenderScheduled = callbacks.getOnRenderScheduled || (() => () => {});
-// ...
-function _invokeProvider(provider, vm) {
-    const callback = provider();
-    if (typeof callback === 'function') { callback(vm); }
-}
-_invokeProvider(getOnRenderScheduled, vm);
-```
-
-**Closure Reference Safety for Undo Commands** — When building undo/redo closures that reference a mutable outer variable (e.g., a snapshot variable later set to `null`), copy the values into a local `const` before building the closure. JavaScript closures capture variables by reference, not by value:
-
-```javascript
-// WRONG — titleUndoSnapshot is captured by reference, later nullified
-this.undoManager.push({
-    undo: () => {
-        this.titleStyle.titleBoxX = titleUndoSnapshot.titleBoxX; // → TypeError: null
-    }
-});
-titleUndoSnapshot = null; // Breaks the closure
-
-// CORRECT — local const captures values at closure creation time
-const preState = { ...titleUndoSnapshot };
-this.undoManager.push({
-    undo: () => {
-        this.titleStyle.titleBoxX = preState.titleBoxX; // Safe — preState is const
-    }
-});
-titleUndoSnapshot = null; // Does not affect the closure
-```
-
-- This pattern is common in interaction handlers that capture a pre-state snapshot, build an undo command at interaction end, then null the snapshot variable
-- The crop drag undo in `createCollageLifecycle.js` already demonstrates the correct pattern: `const preState = { ...cropUndoSnapshot };`
-- Any closure referencing an outer variable that is later reassigned is vulnerable — look for this during code review
-
-**Undo Snapshot Patterns** — When building undo/redo commands for image operations, snapshot state *before* disposal:
-
-```javascript
-// Snapshot BEFORE disposal — shallow copy preserves DOM element references
-const removedItem = { ...this.images[index] };
-imageLibrary.disposeImage(index);
-// removedItem.image is still valid — spread copies the reference value, not a shared property
-```
-
-- **Shallow copy preserves references** — `{ ...item }` copies property *values* (which are references to `HTMLImageElement`). After `disposeImage` nulls the original, the snapshot's reference remains valid. Undo can restore the image.
-- **onUndoCommand callback** — Handler factories accept optional `onUndoCommand(vm, cmd)` to push undo commands without knowing about UndoManager. The `cmd.undoFn(vm)` / `cmd.redoFn(vm)` signatures receive the Vue instance as a parameter (not `this`). Optional for backward compatibility.
-- **Crops deep copy** — Use `JSON.parse(JSON.stringify(this.crops || []))`. Guard against null: `JSON.stringify(null)` returns `"null"`, and `JSON.parse("null")` returns `null`, breaking array operations.
-- **Add Images redo limitation** — `File` objects are not serializable and are lost after file input resets. Redo restores crop state but cannot re-add images. Acceptable UX trade-off.
-- **Testing disposed-image toast** — Normal disposal preserves the image reference in the snapshot, so you can't test the "Cannot undo" toast that way. Create a test item with `image: null` from the start.
-- See `references/undo-snapshots.md` for the full patterns
-
-**Service Locator Access Safety** — Two rules for accessing the `base` service locator:
-
-1. **Use consistent optional chaining** — Always access optional services with `base?.getService?.() || null`. Using `base.getService()` without optional chaining throws if the service is not registered. Apply the same pattern across all modules.
-2. **Look up services inside callbacks, not outside** — When a callback may execute long after factory creation, look up the service inside the callback. Capturing the service at factory time risks a stale or undefined reference if the service is later disposed or replaced:
-```javascript
-// WRONG — assembler captured at factory time, may be stale when callback runs
-const asm = assembler();
-renderer.scheduleRender(function (ctx, width, height) {
-    asm.render(ctx, { ... }); // THROWS if asm is undefined
-});
-
-// CORRECT — assembler looked up at render time
-renderer.scheduleRender(function (ctx, width, height) {
-    const asm = assembler();
-    if (!asm) return;
-    asm.render(ctx, { ... });
-});
-```
-
-**Return Object Exposure for Internal Functions** — When an internal factory function has meaningful behavior worth testing (error handling, validation, etc.) but is genuinely internal (not needed by other modules), expose it as a method on the factory's return object instead of exporting it as a module-level named export:
-```javascript
-// Internal function — scoped to factory, not exported
-function pushUndoCommand(vm, cmd) {
-    if (vm.undoManager) {
-        vm.undoManager.push({
-            label: cmd.label,
-            undo: () => {
-                try { cmd.undoFn(vm); } catch (e) {
-                    console.error(`Undo error (${cmd.label}):`, e);
-                    if (vm.showToast) {
-                        vm.showToast('Undo failed. Please try again.', 'error', 5000);
-                    }
-                }
-            },
-            // ... redo wrapper
-        });
-        vm._updateUndoState();
-    }
-}
-
-// Expose on return object for testability
-return {
-    // ... other methods
-    pushUndoCommand(vm, cmd) {
-        pushUndoCommand(vm, cmd);
-    },
-};
-```
-
-- Keeps the function scoped to the factory — no new import dependency for tests
-- Preserves closure benefits — function still captures factory-scoped dependencies
-- Use when the function relies on factory-scoped closures and you don't want to extract it to a separate module
-- Avoid when the function is already testable through the public API, or is simple enough that integration testing suffices
-
-**Internal Closure Pattern for Factory Testability** — When a Vue factory method calls other methods on `this`, tests that mock partial VMs (spreading only state, not all methods) break. Use factory-scoped closures to avoid `this` dependencies in internal lifecycle methods:
-```javascript
-// Factory-scoped internal functions — no this dependency
-let _focusTrapHandler = null;
-
-function _trapFocus(vm) { /* ... */ }
-function _releaseFocus(vm) { /* ... */ }
-
-return {
-    // Internal lifecycle methods use closures directly
-    toggleBottomSheet() {
-        if (this.isOpen) {
-            _trapFocus(this);
-        } else {
-            _releaseFocus(this);
-        }
-    },
-
-    // Public API delegates to closures (for external callers / tests)
-    trapFocusInBottomSheet() { _trapFocus(this); },
-    releaseFocusTrap() { _releaseFocus(this); }
-};
-```
-- Internal functions capture factory dependencies (like constants, shared state) without creating new import dependencies
-- Public methods delegate to closures, enabling both internal lifecycle use and external testability
-- Prefer over module-level exports when the function relies on factory-scoped closures
+- **Callback injection is the primary DIP improvement** — internal functions are pure closures over `base` (services) accepting an explicit `vm` parameter, no `this` dependency. **Never use `() => this.x()` as a factory-time callback** — at factory creation, `this` is not the Vue instance.
+- **Handler binding convention** — all handlers from extracted modules are bound via `.call(this, ...)` in `createCollageMethods.js` so they see `this.titleText`, `this.showToast`, etc. Follow this for all new handlers.
+- **DOM ID injection** — accept DOM element IDs as factory config (with defaults) instead of hardcoding `document.getElementById()`, so tests can verify the correct ID is used.
+- **Internal vs. module extraction** — extraction is a secondary SRP improvement. Extract only when functions have clear boundaries AND the file exceeds ~400 lines; otherwise keep them internal to avoid import complexity.
+- **Callback wiring between extracted modules** — accept callback objects as factory parameters instead of importing sibling modules; preserves one-way dependency flow and prevents circular imports.
+- **Provider functions vs. direct callbacks** — use direct callbacks when the referenced objects are stable for the factory's lifetime; use provider functions (return the callback at call time) when the object may be replaced after factory creation (e.g., undo/redo paths).
+- **Closure reference safety** — closures capture variables by reference. When an undo/redo closure references a mutable outer variable that is later nulled, copy the values into a local `const` first (`const preState = { ...snapshot };` before building the closure).
+- **Service locator access safety** — (1) always use `base?.getService?.() || null` for optional services, consistently across modules; (2) look up services *inside* callbacks, not at factory time — a service captured early may be stale or undefined when the callback runs.
+- **Return object exposure** — internal functions worth testing (error handling, validation) that rely on factory-scoped closures: expose as a method on the factory return object instead of a module-level export.
+- **Internal closure pattern** — when factory methods call other methods on `this`, partial mock-VM tests break; use factory-scoped closures for internal lifecycle methods with public methods delegating to them.
+- **Return value for side-effect notification** — managers return result metadata (e.g., `{ truncated: true }`); handlers decide on user feedback. See `references/manager-patterns.md`.
+- **Undo snapshot patterns** — snapshot before disposal; shallow copy preserves DOM element references; use `onUndoCommand(vm, cmd)` callback injection. See `references/undo-snapshots.md`.
 
 ### Guard Against Null Inputs
 Browser API utilities that accept user input MUST guard against null/undefined. Return `Promise.resolve(null)` for null input rather than throwing:
@@ -278,140 +81,16 @@ export function loadImageFromFile(file) {
 ```
 
 ### Pure Function Numeric Guards
-Pure math functions that accept numeric parameters from runtime sources (touch coordinates, computed ratios, user input) MUST use `Number.isFinite()` — not comparison operators — as the first guard. JavaScript comparisons with `NaN` always return `false`, and `Infinity` is a valid positive number, so guards like `if (ratio <= 0)` silently pass invalid values through:
-
-```javascript
-// WRONG — NaN and Infinity bypass the comparison
-export function applyZoomExponent(ratio) {
-    if (ratio <= 0) return 1.0;  // NaN <= 0 is false, Infinity <= 0 is false
-    return Math.pow(ratio, 0.3); // NaN or Infinity propagates
-}
-
-// CORRECT — Number.isFinite catches NaN, Infinity, -Infinity, undefined
-export function applyZoomExponent(ratio) {
-    if (!Number.isFinite(ratio) || ratio <= 0) return 1.0;
-    return Math.pow(ratio, 0.3);
-}
-```
-
-**Why it matters:** NaN in Canvas 2D (`ctx.scale(NaN, NaN)`) silently corrupts the transform matrix. NaN in state (`width / NaN`) propagates through clamping (`Math.max(NaN, 1) === NaN`). Both produce silent rendering failures.
-
-**When to apply:** Any pure math function that accepts numeric parameters from potentially noisy sources AND returns values consumed by Canvas 2D, CSS transforms, or reactive state.
-
-**When NOT to apply:** Functions called only with compile-time constants, or where the caller guarantees finite inputs with a short, auditable call chain.
-
-**Testing:** Always assert NaN/Infinity/undefined inputs return safe defaults:
-```javascript
-expect(applyZoomExponent(NaN)).to.equal(1.0);
-expect(applyZoomExponent(Infinity)).to.equal(1.0);
-expect(applyZoomExponent(undefined)).to.equal(1.0);
-```
+Pure math functions accepting numeric parameters from runtime sources (touch coordinates, computed ratios, user input) MUST use `Number.isFinite()` as the first guard — not comparison operators. `NaN <= 0` is `false` and `Infinity` is a valid positive number, so comparison guards silently pass invalid values through. NaN in Canvas 2D silently corrupts the transform matrix; NaN in state propagates through clamping (`Math.max(NaN, 1) === NaN`). Always test NaN/Infinity/undefined inputs. See `references/es-modules.md` for the full pattern, applicability limits, and test examples.
 
 ### Vue 3 Options API
 - Factory decomposition: `createCollageApp()` assembles data/methods/lifecycle/services
 - Reactive state in Vue `data()` return value
 - State managers receive Vue instance reference
 - **Range inputs with null default** — `v-model.number` on `<input type="range">` coerces `null` to the `min` attribute. Use `:value` with a fallback and `@input` handler instead. See `references/vue-options-api.md`
-- **`@keydown.enter` for textarea newline prevention** — Use `@keydown.enter` (not `@input`) to intercept Enter before Vue's `v-model` processes it. The `@input` event fires after the model update, which is too late for prevention. Useful for enforcing line limits:
-```html
-<textarea @keydown.enter="onTitleEnterKey" v-model="titleText" rows="3">
-```
-```javascript
-onTitleEnterKey(event) {
-    const lineCount = (this.titleText || '').split('\n').length;
-    if (lineCount >= 3) {
-        event.preventDefault(); // Block 4th line
-        this.showToast('Maximum 3 lines reached', 'info', 2000);
-    }
-}
-```
-- **Always pair Enter prevention with user feedback** — Blocking Enter without explanation feels like a bug. Show a brief toast so the user understands why the key was suppressed.
-- **v-model timing for undo snapshots** — `v-model` updates reactive data **before** `@change` (select) or `@input` (range/text) fires. By the time your handler runs, `this.someValue` is already the NEW value — you cannot capture the pre-change state inside the handler. Use pre-change events to snapshot:
-
-  - **`<select>`**: `@focus` to snapshot, `@change` to compare and push undo:
-    ```html
-    <select v-model="layoutStyle" @focus="snapshotLayoutStyle" @change="onLayoutStyleChange">
-    ```
-    ```javascript
-    snapshotLayoutStyle() { layoutStyleSnapshot = this.layoutStyle; }
-    onLayoutStyleChange() {
-        if (layoutStyleSnapshot !== null && this.layoutStyle !== layoutStyleSnapshot) {
-            // Push undo command with layoutStyleSnapshot as pre-state
-        }
-    }
-    ```
-
-  - **`<input type="range">`**: `@focus` + `@pointerdown` to snapshot, `@input` to update, `@blur` to commit:
-    ```html
-    <input type="range" v-model.number="gutter"
-           @focus="snapshotLayoutOptions" @pointerdown="snapshotLayoutOptions"
-           @input="onGutterChange" @blur="commitLayoutOptions">
-    ```
-    - `@focus` captures on keyboard navigation (tab to slider)
-    - `@pointerdown` captures on mouse/touch — **use `@pointerdown`, NOT `@mousedown`**, because `@mousedown` does NOT fire on touch devices for form elements. `@pointerdown` unifies mouse, touch, and pen.
-    - **Batching**: Range `@input` fires continuously during drag. Snapshot on interaction start (`@focus`/`@pointerdown`), update layout on every `@input`, commit batched undo command on `@blur`.
-
-  - **`<input type="color">`**: `@focus` to snapshot, `@input` to update, `@blur` to commit. Same pattern as range inputs.
-
-  - **`<textarea>`**: `@focus` to snapshot, `@input` to update, `@blur` to commit. Same pattern as range inputs.
-
-  - **`<button>` (segmented controls) and `<input type="checkbox">`**: These elements lack natural blur events. Use **inline snapshot/commit** in the `@click`/`@change` handler — each click is a discrete, atomic action:
-    ```html
-    <button @click="snapshotTitleStyle(); titleStyle.alignment = 'left'; onTitleAlignmentChange(); commitTitleStyle()">
-        Left
-    </button>
-    <input type="checkbox" v-model="titleStyle.showBackground"
-           @change="snapshotTitleStyle(); onTitleShowBackgroundChange(); commitTitleStyle()">
-    ```
-
-  - **Atomic handler methods (refinement)** — When you have 3+ inline expressions performing the same snapshot/mutate/commit cycle, or when you need to test the undo lifecycle in isolation, extract each into a dedicated handler method. This decouples tests from template implementation details:
-    ```html
-    <button @click="setTitleAlignment('left')">Left</button>
-    ```
-    ```javascript
-    setTitleAlignment(alignment) {
-        const preState = this.titleStyle.alignment;
-        this.titleStyle.alignment = alignment;
-        const titleManager = getTitleManager();
-        if (titleManager) titleManager.setAlignment(alignment);
-        onRenderScheduled(this);
-        if (onUndoCommand && preState !== alignment) {
-            onUndoCommand(this, {
-                label: 'Change Title Style',
-                undoFn: (v) => { /* restore preState */ },
-                redoFn: (v) => { /* re-apply alignment */ }
-            });
-        }
-    }
-    ```
-    **Design rules for atomic methods:**
-    - **Setters: guard against no-op** — skip undo when value is unchanged (`if (preState !== newValue)`). Clicking "Center" when already centered should not produce an undo command.
-    - **Toggles: always push undo** — a toggle always changes the value (false→true or true→false), so no guard is needed.
-    - **Removals: early return** — if there's nothing to remove, return early. The template may guard with `v-if`, but method-level guards provide defense-in-depth for programmatic calls.
-
-  - **Lifecycle cleanup**: Commit all pending snapshots in `beforeUnmount` to prevent lost edits when the Vue app is destroyed. Guard with `if (this.method)` since commit methods may not exist:
-    ```javascript
-    beforeUnmount() {
-        if (this.commitTitleText) this.commitTitleText();
-        if (this.commitTitleStyle) this.commitTitleStyle();
-        // ... other commit methods
-    }
-    ```
-
-  - **Testing inline snapshot/commit**: Simulate Vue event order — call snapshot handler, change value, call change handler:
-    ```javascript
-    handlers.snapshotLayoutStyle.call(vm);
-    vm.layoutStyle = 'hex';  // v-model updates
-    handlers.onLayoutStyleChange.call(vm);  // @change fires
-    ```
-
-  - **Testing atomic handler methods**: Call the method directly — no Vue event simulation needed:
-    ```javascript
-    handlers.setTitleAlignment.call(vm, 'left');
-    expect(undoCommands.length).to.equal(1);
-    expect(vm.titleStyle.alignment).to.equal('left');
-    ```
-- See `references/vue-options-api.md` for provide() timing and array mutation patterns
+- **`@keydown.enter` for textarea newline prevention** — Use `@keydown.enter` (not `@input`) to intercept Enter before `v-model` processes it — `@input` fires after the model update, too late to prevent. **Always pair Enter prevention with user feedback** (brief toast) so the suppressed key doesn't feel like a bug. See `references/accessibility.md`
+- **Keep async handlers' deterministic path await-free** — an `async` handler runs synchronously up to the first `await` it actually reaches. Push `await` as deep into the branch that needs it as possible so the common path stays sync: fast, no microtask delay, and mock-VM tests can assert synchronously. See `references/vue-options-api.md`
+- **v-model timing for undo snapshots** — `v-model` updates reactive data **before** `@change`/`@input` fires, so the handler sees the NEW value. Snapshot pre-state on pre-change events: `@focus` (keyboard) + `@pointerdown` (mouse/touch — NOT `@mousedown`, which doesn't fire on touch form elements) for range inputs; `@focus` for select/color/textarea; commit batched undo on `@blur`. Segmented control buttons and checkboxes have no blur event — use inline snapshot/commit in `@click`/`@change`, or extract atomic handler methods (setters guard against no-op; toggles always push undo; removals early-return). Commit pending snapshots in `beforeUnmount`. See `references/undo-snapshots.md` and `references/vue-options-api.md` for full patterns and test conventions
 
 ### Canvas 2D
 - Lifecycle pattern: `init()` → `resize()` → `scheduleRender()` → `dispose()`
@@ -432,171 +111,39 @@ onTitleEnterKey(event) {
 
 ### Pointer Handler Coordination
 
-When multiple pointer event handlers attach to the same canvas, use **gesture-active flag coordination** to prevent conflicting event processing:
+When multiple pointer event handlers attach to the same canvas, use **gesture-active flag coordination** (`state._multiTouchGestureActive`): handlers always stay attached and do an O(1) flag check instead of attach/detach cycles on layout change. A 10 CSS pixel drag threshold distinguishes click from drag.
 
-```javascript
-// PanelSwapHandler — always active, skips if multi-touch gesture active
-_onPointerDown(e) {
-    if (state._multiTouchGestureActive) return;
-    // ... panel swap handling (works in all layouts)
-}
-
-// MultiTouchHandler — sets flag on gesture start/end
-state._multiTouchGestureActive = true;  // on gesture start
-state._multiTouchGestureActive = false; // on gesture end
-```
-
-- **GestureHandler no longer handles pointerdown** — swap handler's `_onPointerUp` handles click-to-select; GestureHandler provides hover-only
-- **Both handlers always attached** — no attach/detach cycles on layout change; O(1) flag check at pointerdown time
-- **Drag threshold distinguishes click from drag** — 10 CSS pixels of movement triggers drag mode; below threshold, treat as click
-- **CSS pixel threshold** — device-independent, feels consistent on high-DPR displays
-- **Global pointerup for drag cleanup** — Always add a `window.addEventListener('pointerup', ...)` listener alongside the element-level listener. If the user releases the pointer outside the element (off-screen drag, tab switch), the element-level `pointerup` never fires and drag state gets stuck. See `references/interaction.md` for the pattern.
-- See `references/interaction.md` for the full pattern and gotchas
-
-#### Dual-Pointer Guard Consistency
-
-Every pointer handler that coordinates with `MultiTouchHandler` via `_multiTouchGestureActive` must guard **both** `_onPointerDown` AND `_onPointerMove`. Guarding only `_onPointerDown` leaves a race window:
-
-1. **Finger 1 touches title** → `_onPointerDown` runs, `_multiTouchGestureActive` is `false`, sets pending state (`dragStartCoords`, `interactionType`)
-2. **Finger 2 touches canvas** → `MultiTouchHandler` sets `_multiTouchGestureActive = true`
-3. **Fingers move** → `_onPointerMove` fires with NO guard, crosses the drag threshold, and activates the interaction
-
-The `_onPointerDown` guard prevents **new** interactions from starting during a gesture. The `_onPointerMove` guard prevents **pending** interactions (pointerdown happened but drag threshold not yet crossed) from activating during a gesture:
-
-```javascript
-// _onPointerDown — prevents new interactions from starting during gesture
-_onPointerDown(e) {
-    if (state._multiTouchGestureActive) return;
-    // ... set pending state (dragStartCoords, interactionType)
-}
-
-// _onPointerMove — prevents pending interactions from activating during gesture
-_onPointerMove(e) {
-    if (state._multiTouchGestureActive) return;
-    // ... threshold check, drag/resize, hover feedback
-}
-```
-
-**Guard scope:** The `_onPointerMove` guard applies to **ALL** pointermove processing, including hover feedback (cursor changes, hover target state). Hover state changes during a gesture cause unnecessary renders and visual flicker. Hover state restores naturally when the gesture ends and the next `pointermove` fires.
-
-**No guard needed on `_onPointerUp`** — cleanup is always idempotent and safe regardless of gesture state.
-
-**Checklist for new handlers** sharing a canvas with `MultiTouchHandler`:
-- [ ] `_onPointerDown` checks `if (state._multiTouchGestureActive) return;`
-- [ ] `_onPointerMove` checks `if (state._multiTouchGestureActive) return;`
-- [ ] `_onPointerUp` / cleanup is idempotent (no guard needed)
+- **Guard BOTH `_onPointerDown` AND `_onPointerMove`** against the gesture-active flag. The down guard prevents *new* interactions during a gesture; the move guard prevents *pending* interactions (pointerdown fired, threshold not yet crossed) from activating — including hover feedback, which causes flicker and spurious renders during gestures. No guard needed on `_onPointerUp` — cleanup is idempotent.
+- **Global pointerup for drag cleanup** — always add a `window` `pointerup` listener alongside the element-level one; if the pointer releases off-screen, element-level `pointerup` never fires and drag state gets stuck.
+- See `references/interaction.md` for the full pattern, race walkthrough, and checklist for new handlers
 
 ### Multi-Touch and Trackpad Gestures
 
-Pan and zoom gestures must support **three input paths** for cross-platform coverage:
+Pan and zoom must support **three input paths**: TouchEvent (mobile touchscreen), PointerEvent two-pointer (Windows precision touchpad, some Linux), and **WheelEvent (macOS trackpad — universal)**.
 
-| Path | Platform | Events |
-|------|----------|--------|
-| **TouchEvent** | Mobile touchscreen | `touchstart`/`touchmove`/`touchend` |
-| **PointerEvent** | Windows precision touchpad, some Linux | `pointerdown`/`pointermove`/`pointerup` (two pointers) |
-| **WheelEvent** | macOS trackpad (universal) | `wheel` with `deltaX`/`deltaY` (pan) and `deltaZ` (zoom) |
-
-**Critical: macOS trackpad gestures are wheel events, NOT pointer events.** The browser synthesizes two-finger trackpad input as a single `wheel` event. A PointerEvent-based two-pointer approach never activates on macOS.
-
-**Dual gesture direction conventions:** TouchEvent/PointerEvent and WheelEvent use **opposite** sign conventions for pan:
-
-| Input Path | Convention | Delta Sign | User Action → Content Movement |
-|------------|-----------|------------|--------------------------------|
-| **TouchEvent** (touchscreen) | Direct manipulation | **Negate** | Drag right → content moves right |
-| **PointerEvent** (hybrid) | Direct manipulation | **Negate** | Drag right → content moves right |
-| **WheelEvent** (trackpad) | Scrolling | **No negation** | Scroll down → view moves down |
-
-```javascript
-// TouchEvent / PointerEvent — negate for "drag follows finger"
-const dx = currentMidpoint.x - initialMidpoint.x;
-cropManager.adjustCrop(panelId, { x: -dx * imageScale, y: -dy * imageScale });
-
-// WheelEvent — no negation (scrolling convention)
-cropManager.adjustCrop(panelId, { x: e.deltaX * sensitivity * imageScale, y: e.deltaY * sensitivity * imageScale });
-```
-
-The WheelEvent path (`_onWheel`) never calls `processGesture()` — it computes its own delta inline, making it easy to apply different conventions.
-
-**Key patterns:**
-- **PointerType guard** — On hybrid devices (touchscreen + trackpad), guard PointerEvent handlers with `if (e.pointerType === 'touch') return;` to avoid double-firing with the TouchEvent path.
-- **Unified gesture functions** — Extract `startGesture()`, `processGesture()`, `endGesture()` so both TouchEvent and PointerEvent paths share identical logic.
-- **Wheel event handler** — Handle `deltaX`/`deltaY` for pan and `deltaZ` for zoom. Also check `ctrlKey + deltaY` as a cross-platform zoom fallback (Windows mice). Attach with `{ passive: false }`.
-- **Exactly 2 fingers** — For TouchEvent, check `e.touches.length !== 2`. Mobile OSes reserve 3+ finger gestures.
-- **3+ finger OS gesture guard (PointerEvent)** — The TouchEvent path implicitly blocks 3+ fingers via `e.touches.length !== 2`. The PointerEvent path needs an explicit guard because each pointer arrives as a separate event. Without `preventDefault()` on the 3rd+ pointer, the OS may intercept the gesture mid-interaction:
-  ```javascript
-  if (activePointers.size === 2) { /* start gesture */ }
-  else if (activePointers.size > 2) { e.preventDefault(); }
-  ```
-- **touch-action: pan-y vs none** — Default to `touch-action: pan-y` for selective gesture passthrough: one-finger vertical drag scrolls the page, two-finger gestures go to JavaScript. Requires `e.preventDefault()` on `touchmove` when two-finger gesture is active. Use `touch-action: none` only when: canvas fills the viewport (no content below to scroll to), custom two-finger pan/zoom is a core interaction, and alternative scroll targets exist (sidebars, bottom sheets). Document the trade-off in a CSS comment.
-- **Window blur safety net** — Listen for `window.blur` and `document.visibilitychange` to cancel stuck gesture state if the user switches tabs/windows mid-gesture.
-- **preventDefault after gesture check (TouchEvent/PointerEvent)** — Only call `preventDefault()` when the gesture actually activates (e.g., panel is selected), not unconditionally.
-- **preventDefault two-level guard (WheelEvent)** — Wheel events need a stricter two-level guard: (1) is a panel selected? (2) are there actual pan or zoom deltas? If either check fails, do NOT call `preventDefault()`. Without Level 2, single-finger mouse scroll over canvas with a panel selected blocks page scrolling. Also guard `ctrlKey + deltaY`: if `ctrlKey` is true but all deltas are zero, skip `preventDefault()` to avoid blocking browser zoom.
-- **PointerEvent for unit tests** — Prefer `new PointerEvent('pointerdown', { pointerType: 'touch', pointerId: 1, ... })` over TouchEvent mock construction. PointerEvent is a native browser constructor; TouchEvent requires `Object.defineProperty` + mock TouchList. Two `pointerdown` events replace one `touchstart` with two touches. See `references/testing-e2e.md` for patterns.
-- See `references/interaction.md` for the full dual-input path patterns, wheel event handling, pointer capture gotchas, blur safety net, and gesture direction conventions.
+- **Critical: macOS trackpad gestures are wheel events, NOT pointer events.** A two-pointer PointerEvent approach never activates on macOS. Handle `deltaX`/`deltaY` for pan and `deltaZ` for zoom; also `ctrlKey + deltaY` as a Windows-mouse zoom fallback. Attach with `{ passive: false }`.
+- **Dual gesture direction conventions** — TouchEvent/PointerEvent use direct manipulation (**negate** the delta so content follows the finger); WheelEvent uses the scrolling convention (**no negation**). The wheel path computes its delta inline and never calls `processGesture()`.
+- **PointerType guard** — on hybrid devices, guard PointerEvent handlers with `if (e.pointerType === 'touch') return;` to avoid double-firing with the TouchEvent path.
+- **Exactly 2 fingers** — TouchEvent: `e.touches.length !== 2` (mobile OSes reserve 3+ finger gestures). PointerEvent needs an explicit guard: `preventDefault()` on the 3rd+ pointer, or the OS may intercept mid-interaction.
+- **preventDefault discipline** — TouchEvent/PointerEvent: only `preventDefault()` when the gesture actually activates. WheelEvent: two-level guard (panel selected? AND actual pan/zoom deltas?) — otherwise single-finger mouse scroll or browser zoom gets blocked.
+- **touch-action** — default `touch-action: pan-y` (one-finger scrolls page, two-finger goes to JS; requires `preventDefault()` on two-finger `touchmove`). Use `none` only when the canvas fills the viewport and custom pan/zoom is a core interaction — document the trade-off in a CSS comment.
+- **Window blur safety net** — `window.blur` + `document.visibilitychange` cancel stuck gesture state on tab switch.
+- **Unified gesture functions** — `startGesture()`/`processGesture()`/`endGesture()` shared by TouchEvent and PointerEvent paths.
+- **Unit tests** — prefer `new PointerEvent('pointerdown', { pointerType: 'touch', pointerId: 1, ... })` over TouchEvent mocks (native constructor, no `Object.defineProperty` TouchList). Two `pointerdown` events replace one `touchstart`.
+- See `references/interaction.md` for the full dual-input path patterns, pointer capture lifecycle, dynamic thresholds, and direction testing.
 
 ### Responsive Mobile UI
 
-**Dual-State Toggle Pattern** — When a UI element has different visibility mechanisms on desktop vs mobile, use **two independent reactive state properties** toggled by a single method. CSS media queries determine which state has visual effect:
+Full patterns, anti-patterns, and file references: `references/mobile-ui-patterns.md`. Guardrails:
 
-```javascript
-// GOOD — CSS media queries determine which state matters
-toggleRightSidebar() {
-    this.rightSidebarOpen = !this.rightSidebarOpen;
-    this.rightSidebarMobileOpen = !this.rightSidebarMobileOpen;
-    if (this.rightSidebarMobileOpen) {
-        this.leftSidebarMobileOpen = false; // mutual exclusion
-    }
-}
-```
-
-**Anti-pattern:** Never use `window.innerWidth` checks in JavaScript to decide which state to toggle. This duplicates the CSS breakpoint value, breaks if the breakpoint changes, and doesn't handle rapid resize.
-
-**CSS `!important` Cascade** — When desktop CSS uses `!important`, mobile media query overrides must use **equally specific selectors with `!important`** to win:
-
-```css
-@media (max-width: 699px) {
-    .sidebar-right.sidebar-collapsed.mobile-open {
-        width: 280px !important;
-        overflow: visible !important;
-    }
-}
-```
-
-- Match specificity: include all conflicting classes in the selector
-- Only override conflicting properties, not all properties
-- Prefer avoiding `!important` when you control both desktop and mobile CSS
-
-**Scoped CSS Selectors for Shared Classes** — When a CSS class with `!important` properties is shared across different element types via framework bindings (Vue `:class`), scope the selector to prevent collateral damage:
-
-```css
-/* BAD — matches ANY element with the class, including buttons */
-.sidebar-collapsed {
-    width: 0 !important;
-}
-
-/* GOOD — only matches sidebar divs, not toggle buttons */
-div.sidebar.sidebar-collapsed {
-    width: 0 !important;
-}
-```
-
-- Separate the **state-signaling class** (bare, non-destructive) from the **style class** (scoped, with `!important`)
-- A bare `.class-name` is safe only when: single element type, no `!important`, or purely state-signaling
-- See `references/mobile-ui-patterns.md` for the full prevention checklist and debugging tips
-
-**Global Escape Key** — Use `@keydown.escape.window.prevent` on the app root to catch Escape regardless of focus state. The `.window` modifier attaches the listener to `window`.
-
-**E2E caveat:** `page.keyboard.press('Escape')` is unreliable for `.window` handlers in headless Chromium (especially mobile viewport + modal). Use backdrop click or unit test instead. See `references/testing-e2e.md`.
-
-**Overlay Backdrops** — Use `display: none` (not `opacity: 0`) for overlay backdrops. `display: none` removes the element from the rendering and event flow entirely, preventing click interception when hidden. Trade-off: no CSS transitions.
-
-**ARIA `aria-expanded`** — Bind `:aria-expanded` to the **mobile** state property in dual-state toggles, since that's what controls overlay visibility on mobile.
-
-See `references/mobile-ui-patterns.md` for full patterns, anti-patterns, and file references.
-
-**Bottom Sheets** — When duplicating sidebar content into a bottom sheet, prefix all IDs with `bs` to avoid DOM collisions. Use `dvh` units for height (not `vh`) to account for iOS Safari's dynamic address bar. Add a visual drag handle for dismiss discoverability. Auto-switch to the Images tab when new images are added. See `references/mobile-ui-patterns.md`.
-
-**Fixed Element Z-Index Occlusion** — `position: fixed` elements with high z-index occlude flow content regardless of DOM order. Place mobile-only toolbar elements on the opposite side from fixed overlays. When Playwright reports "intercepts pointer events", the error message names the occluding element. See `references/mobile-ui-patterns.md`.
+- **Dual-state toggle** — desktop vs mobile visibility use **two independent reactive state properties** toggled by one method; CSS media queries decide which state has visual effect. **Never check `window.innerWidth` in JS** to pick the state — it duplicates the breakpoint and breaks on resize.
+- **CSS `!important` cascade** — mobile media query overrides must use equally specific selectors with `!important` to beat desktop `!important`; only override conflicting properties.
+- **Scoped selectors for shared classes** — scope `!important` classes by element type (e.g., `div.sidebar.sidebar-collapsed`) when the class is shared via `:class`; separate the state-signaling class from the style class.
+- **Global Escape** — `@keydown.escape.window.prevent` on the app root. E2E caveat: `page.keyboard.press('Escape')` is unreliable for `.window` handlers in headless Chromium — use backdrop click or unit test.
+- **Overlay backdrops** — `display: none` (not `opacity: 0`) so hidden backdrops don't intercept clicks.
+- **`aria-expanded`** — bind to the *mobile* state property in dual-state toggles.
+- **Bottom sheets** — prefix duplicated sidebar IDs with `bs`; use `dvh` (not `vh`) for iOS dynamic address bar; visual drag handle; auto-switch to Images tab on new images.
+- **Fixed element z-index occlusion** — `position: fixed` occludes flow content regardless of DOM order; place mobile toolbars on the opposite side from fixed overlays. Playwright "intercepts pointer events" names the occluding element.
 
 ### File Input Handlers
 
@@ -613,86 +160,11 @@ handleFileInputChange() {
 
 ### Async UI State Cleanup
 
-When an async operation shows a UI element (loading overlay, progress bar, spinner) at the start and hides it at the end, use **try/finally** to guarantee cleanup even if the operation throws:
-
-```javascript
-// CORRECT — endImageLoading() always runs
-this.beginImageLoading(total);
-try {
-    await imageLibrary.addImages(files, onProgress);
-} finally {
-    this.endImageLoading();
-}
-```
-
-- **`finally` always runs** — whether the `await` resolves, rejects, or the function returns early. It is the only JavaScript construct that guarantees cleanup across all exit paths.
-- **Idempotent cleanup is safe** — if the normal path already called `endImageLoading()` via a progress callback, the `finally` call is harmless (no-op when already hidden).
-- **Error path is the key benefit** — if `addImages()` throws (e.g., corrupt images), the progress callback never reaches completion. Without `finally`, the overlay stays visible forever.
-
-**Concurrency guard** — pair with an early-return guard to prevent state corruption from rapid successive operations:
-
-```javascript
-beginImageLoading(total) {
-    if (this.imageLoadingProgress.visible) return; // Already loading — skip
-    this.imageLoadingProgress.visible = true;
-    this.imageLoadingProgress.current = 0;
-    this.imageLoadingProgress.total = total;
-},
-```
-
-**Distinction from timeout cleanup** — The Web Workers "clear timeouts on every exit path" pattern handles **scheduled callbacks** (explicit `clearTimeout()` on each path). The try/finally pattern handles **paired state changes** (guaranteeing the "end" always follows the "begin" across async boundaries). See "Web Workers" section for the timeout pattern.
-
-**When to use:** Any async operation that shows/hides a UI element, or any paired begin/end state changes around async work.
+Async operations that show/hide a UI element (loading overlay, progress, spinner) MUST wrap the await in **try/finally** so the "end" always follows the "begin" (the error path is the key benefit — without it, a thrown operation leaves the overlay visible forever). Pair with an early-return **concurrency guard** (`if (this.imageLoadingProgress.visible) return;`) to prevent rapid successive operations from corrupting state. Idempotent cleanup is safe. Distinction: this pattern handles *paired state changes* across async boundaries; the Web Workers pattern handles *scheduled callbacks* (explicit `clearTimeout()` on each path). See `references/vue-options-api.md` for the full pattern.
 
 ### Toast Notifications
 
-Minimal toast system using reactive state + `setTimeout` for auto-dismiss. No dedicated component — just data, a method, and a template element.
-
-```javascript
-// Reactive state in createCollageData.js
-toast: {
-    message: '',
-    type: '',       // 'info', 'success', 'error'
-    visible: false,
-    timer: null
-},
-
-// Method in createCollageMethods.js
-showToast(message, type, duration) {
-    type = type || 'info';
-    duration = duration != null ? duration : 5000;
-    if (this.toast.timer) clearTimeout(this.toast.timer);
-    this.toast.message = message;
-    this.toast.type = type;
-    this.toast.visible = true;
-    this.toast.timer = setTimeout(() => {
-        this.toast.visible = false;
-        this.toast.message = '';
-        this.toast.timer = null;
-    }, duration);
-},
-```
-
-```html
-<!-- Template in index.html -->
-<div class="toast-notification"
-     v-show="toast.visible"
-     :class="'toast-' + toast.type"
-     role="status"
-     aria-live="polite">
-    <span class="material-icons" aria-hidden="true">
-        {{ toast.type === 'error' ? 'error' : 'info' }}
-    </span>
-    {{ toast.message }}
-</div>
-```
-
-**Key gotchas:**
-- **Timer cleanup in `beforeUnmount()`** — Clear the toast timer to prevent updating reactive state on a destroyed instance: `if (this.toast && this.toast.timer) { clearTimeout(this.toast.timer); this.toast.timer = null; }`
-- **Toast coalescing** — Rapid successive calls clear the previous timer and overwrite the message. Only the last message is shown. Prevents spam but loses quick successive errors.
-- **`v-show` with CSS transitions** — `v-show` toggles `display: none`, which cannot be CSS-transitioned. For fade animations, use `v-if` with `<transition>` or bind `visibility` + `opacity` via inline styles. For simple toasts, `v-show` is acceptable (instant show/hide).
-- **Mobile safe areas** — Use `calc(16px + env(safe-area-inset-bottom, 0px))` for bottom-positioned fixed elements to avoid iOS home indicator overlap. Requires `viewport-fit=cover` in the viewport meta tag or `env()` returns 0. See `references/css-layout.md` for the complete safe area pattern.
-- **ARIA live region role** — Use `role="status" aria-live="polite"` for info/success toasts. Consider `role="alert"` for critical errors. Never combine `role="alert"` with `aria-live="polite"` — they contradict each other. Always add `aria-hidden="true"` to decorative icons inside live regions. See `references/accessibility.md`.
+Minimal toast system: reactive state (`toast: { message, type, visible, timer }`) + `showToast(message, type, duration)` + a `v-show` template element with `role="status" aria-live="polite"`. No dedicated component. Key gotchas: clear the timer in `beforeUnmount()`, rapid calls coalesce (only the last message shows), `v-show` can't be CSS-transitioned, bottom position needs `calc(16px + env(safe-area-inset-bottom, 0px))`, never combine `role="alert"` with `aria-live="polite"`. See `references/toast.md` for the full implementation and `references/accessibility.md` for live region rules.
 
 ### Testing
 - Mocha + Chai via CDN for unit tests (browser-based)
@@ -702,29 +174,17 @@ showToast(message, type, duration) {
 - **Characterization tests before refactor** — Before refactoring shared code, add tests that capture current observable behavior. This ensures the refactor doesn't change behavior, especially for subtle differences between callers (e.g., one method sets `shadowColor`, another doesn't). See `references/testing-unit.md`
 - Mock browser APIs by intercepting `document.createElement` and `localStorage` (bind original, always restore)
 - Mock `requestAnimationFrame`/`cancelAnimationFrame` with a callback collector + `flushRAF()` for deterministic debounce testing — see `references/testing-unit.md`
+- **In-browser Mocha runner undercounts async suites** — waiting for the first rendered result then extracting `runner.passes()/failures()` snapshots a mid-run state when the suite has real async work; failing in-flight tests vanish and "N passing / 0 failing" with N < registered looks like a clean pass. Wait for `runner.stats.tests === passes + failures + pending` before extracting (30 s `waitForFunction` timeout as fall-through). See `references/testing-unit.md`
+- **Assert synchronous side effects of async APIs** — an async function runs synchronously up to its first `await`, so call it, assert the side-effect log *before* awaiting (proves the callback fired with zero I/O in flight, no fake timers), then `await` for the terminal state. Verify the test fails if the callback is moved after the first `await`. See `references/testing-unit.md`
 - Use Proxy-based wrapper for Canvas 2D context mocking instead of `Object.defineProperty` — see `references/testing-unit.md`
 - For render order verification, wrap `ctx.stroke()`/`ctx.strokeRect()` to capture canvas state at call time (context method wrapping) — see `references/testing-unit.md`
 - For hit testing on computed/auto-fit elements, import the production computation function (e.g., `computeBounds`) to derive coordinates — see `references/testing-unit.md` self-calibrating hit test coordinates
-- `DragEvent.dataTransfer` cannot be mocked in constructor — test listener presence via `preventDefault()` tracking
+- `DragEvent.dataTransfer` rejects plain-object mocks — unit tests verify listener presence via `preventDefault()` tracking; E2E drop-zone tests use a **genuine `new DataTransfer()`** in the constructor dict (Chromium). See `references/testing-e2e.md`
+- **Sub-second timing assertions must be measured in-page** — node-side polls are starved under load (variable 0.3–0.9 s error). Install a 5 ms in-page transition logger and anchor `t0` in the same `evaluate` as the trigger action; assert on the read-back log. Reserve node-side expects for existence checks. See `references/testing-e2e.md`
+- **`page.evaluate` bodies are standalone programs** — spec-scope helpers are undefined in-page, and the `ReferenceError` is *silent* inside `setInterval` callbacks (empty-data assertion instead of the real error). Define every helper locally; pass data via `page.evaluate(fn, arg)`. See `references/testing-e2e.md`
 - Mock `window.Worker` with `Object.defineProperty` + setter for `onmessage` to capture the handler, then fire synthetic messages. Override timeout config (e.g., `INFERENCE_TIMEOUT_MS = 50`) to test timeout paths without waiting. See `references/web-workers.md`
 - Document-level listeners leak across tests — use describe-level `afterEach` cleanup, never `beforeEach` + per-test setup
-- **Mock VM Construction** — When testing a factory that returns many methods, spread the factory methods first, then override specific methods with spies. `Object.assign(vm, methods)` or `{ ...methods }` overwrites properties set before it:
-  ```javascript
-  function buildVm(undoManager) {
-      const base = makeMockBase(undoManager);
-      const methods = createCollageMethods(base);
-
-      // Spread factory methods FIRST
-      const vm = { ...methods };
-
-      // Override specific methods with spies (MUST come after spread)
-      vm.showToast = (msg, type, duration) => {
-          vm._toastCalls.push({ message: msg, type, duration });
-      };
-
-      return vm;
-  }
-  ```
+- **Mock VM Construction** — when testing a factory that returns many methods, spread the factory methods first (`const vm = { ...methods }`), THEN override specific methods with spies — `Object.assign`/spread overwrites properties set before it. See `references/testing-unit.md`
 - **DOMParser on Vue templates** — directive attributes (`:aria-pressed`, `:class`, etc.) are parsed literally with the colon prefix. Use `getAttribute(':aria-pressed')` not `getAttribute('aria-pressed')`. See `references/testing-unit.md`
 - See `references/testing-unit.md` for patterns on testing state and combined edge cases, `references/testing-strategy.md` for deferred features
 
@@ -764,6 +224,16 @@ ctx.fillRect(0, 0, exportSize.width, exportSize.height);
 ### Memory Management
 See `references/memory-management.md` for patterns on disposing image references, URL cleanup, lifecycle ordering (remove listeners before disposing renderers), canvas GPU memory release (`width = 0; height = 0`), and visual state cleanup.
 
+### Web Audio Scheduling
+- **"A Tale of Two Clocks"** — sources with a known start time are `start(when, offset)`-ed *immediately* at the call site (sample-accurate). A ~25 ms `setInterval` tick schedules only the rest, within a ~100 ms horizon, using a monotonic `scheduled` flag per event (no duplicates, no gaps). Precompute the full schedule as pure data; the tick only performs it.
+- **Phase/position are pure functions of the audio clock** (`now` + a precomputed beat grid), never accumulated per frame — accumulation drifts and breaks after suspend/resume.
+- **Terminal handlers must accept every in-sequence state** — when visible state flips on a poll tick but termination is event-driven (`onended`), the end event can arrive *before* the flip tick (offset leaves < one tick of audio). The handler must accept every state reachable after the sequence started; generation guards handle cross-sequence rejection, not state guards.
+- **Generation guards: capture the epoch *after* any operation that may bump it**, or drop the guard — and be deliberate about which mechanism (epoch vs. resource cleanup) actually provides the one-shot guarantee.
+- **Terminal events are single** — emit `'ended'`, not `'stopped'` + `'ended'`; pin the exact event sequence in tests.
+- **Engine tests use ZERO real AudioContext** — fake context (recording stubs + shared ordered `calls` log for start/stop ordering assertions), fake clock (`currentTime` advanced by hand), fake RAF collector, fake timers with per-period ticking. Only the buffer-*render* block opens one real context in `before`/`after`.
+- **Synthesized audio assertions** — zero-crossing count for dominant frequency with ±10–15% tolerance bands (pure tones only), plus a tail-silence check (`max(abs(last N samples)) < 0.001`) for missing decays. Assert the frequency constant AND the rendered buffer — the constant pins intent, the render pins reality.
+- See `references/audio-scheduling.md` for full patterns, harness code, and applicability limits.
+
 ### Web Workers
 - **Timeout guard pattern** — Use `setTimeout` as a safety net for long-running workers. The timeout is NOT the primary flow; the worker message is.
 - **Clear timeouts on every exit path** — ready, failed, error, and dispose. A stale callback on a disposed object causes errors or memory leaks.
@@ -797,8 +267,3 @@ See `references/memory-management.md` for patterns on disposing image references
     - **Run world-review after tests pass but before marking a feature complete** — Tests verify *specified* behavior; world-review catches UX gaps that unit tests miss (e.g., blocking a key without feedback feels like a bug, placeholder text not announced by screen readers). It is the last quality gate before shipping.
 7. **When refactoring to new patterns, update dependent code** — check all imports that may be affected by API changes; ensure backward compatibility where possible
 8. Verify: run `node scripts/run-tests.js`, check dev server, confirm no regressions
-
----
-
-Base directory for this skill: `.opencode/skills/building-web-apps/`
-Relative paths in this skill are relative to this base directory.

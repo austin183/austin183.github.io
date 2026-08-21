@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Metronomad</title>
+    <link href="../src/css/variables.css" rel="stylesheet">
+    <link href="../src/css/Style.css" rel="stylesheet">
+    <link href="./Style.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+
+<body>
+    <button id="themeToggle" onclick="toggleTheme()" title="Toggle theme">
+        <span id="theme-icon" class="material-icons">bedtime</span>
+    </button>
+
+    <div id="app">
+        <header class="app-header">
+            <h1 class="app-title">Metronomad</h1>
+            <a href="/index.html" target="_blank" rel="noopener noreferrer" class="home-link"
+               title="Go to home page" aria-label="Go to home page">
+                <span class="material-icons home-icon">home</span>
+            </a>
+        </header>
+
+        <main class="app-main">
+            <!-- Drop zone — hero in the no-file state -->
+            <section id="dropZone" class="drop-zone"
+                     :class="{ 'drop-zone--hero': appState === 'noFile', 'drop-zone--dragover': isDragOver }"
+                     @dragover.prevent="onDragOver"
+                     @dragleave.prevent="onDragLeave"
+                     @drop.prevent="onDrop"
+                     aria-label="Audio file drop zone">
+                <p class="drop-zone-status">
+                    <template v-if="decoding.active">Decoding {{ decoding.fileName }}…</template>
+                    <template v-else-if="appState === 'noFile'">Drop an audio file here</template>
+                    <template v-else>Drop a new song</template>
+                </p>
+                <button id="browseBtn" class="mn-btn" type="button" @click="onBrowseClick">Browse…</button>
+                <input type="file" id="fileInput" accept="audio/*" class="file-input-hidden"
+                       tabindex="-1" aria-label="Choose an audio file" @change="onFileInputChange">
+            </section>
+
+            <!-- File row (KB-2: name truncated with ellipsis, full name in title) -->
+            <div v-if="fileName" class="file-row">
+                <span class="material-icons file-icon" aria-hidden="true">music_note</span>
+                <span class="file-name" :title="fileName">{{ fileName }}</span>
+                <span class="file-duration">{{ formattedDuration }}</span>
+            </div>
+
+            <!-- Parameter controls (locked while audio runs — U-12) -->
+            <section class="controls"
+                     :class="{ 'controls--locked': isParamLocked }"
+                     :title="isParamLocked ? 'Locked until next Play' : ''"
+                     aria-label="Timing controls">
+                <div class="control-group">
+                    <label for="bpmInput">BPM</label>
+                    <div class="bpm-stepper">
+                        <button id="bpmMinusBtn" class="mn-btn stepper-btn" type="button"
+                                aria-label="Decrease BPM by 1" :disabled="!isReady" @click="onBpmStep(-1)">−</button>
+                        <input type="number" id="bpmInput" min="30" max="250" step="1"
+                               :value="bpm" :disabled="!isReady"
+                               @input="onBpmInput($event.target.value)">
+                        <button id="bpmPlusBtn" class="mn-btn stepper-btn" type="button"
+                                aria-label="Increase BPM by 1" :disabled="!isReady" @click="onBpmStep(1)">+</button>
+                    </div>
+                    <p v-if="bpmClamped" class="clamp-hint" role="status">BPM limited to 30–250</p>
+                </div>
+
+                <div class="control-group control-group--offset">
+                    <label for="offsetInput">Offset</label>
+                    <input type="range" id="offsetScrubber" min="0" :max="duration" step="0.1"
+                           :value="offset" :disabled="!isReady" :tabindex="isReady ? 0 : -1"
+                           aria-label="Start offset" @input="onOffsetScrub($event.target.value)">
+                    <input type="text" id="offsetInput" v-model="offsetText" :disabled="!isReady"
+                           placeholder="mm:ss.t" autocomplete="off"
+                           @keyup.enter="onOffsetCommit" @blur="onOffsetCommit">
+                    <p v-if="offsetClamped" class="clamp-hint" role="status">{{ offsetHint }}</p>
+                </div>
+
+                <div class="control-group">
+                    <label for="countInInput">Count-in (beats)</label>
+                    <input type="number" id="countInInput" min="1" max="16" step="1"
+                           :value="countInBeats" :disabled="!isReady"
+                               @input="onCountInInput($event.target.value)">
+                </div>
+            </section>
+
+            <!-- Playback buttons (single Play↔Stop toggle — spec §14.5) -->
+            <div class="playback-controls">
+                <button id="playStopBtn" ref="playStopBtn" class="mn-btn mn-btn--primary" type="button"
+                        :disabled="!isReady && !isParamLocked" @click="onPlayToggle">
+                    <span class="material-icons" aria-hidden="true">{{ isParamLocked ? 'stop' : 'play_arrow' }}</span>
+                    <span class="btn-label">{{ isParamLocked ? 'Stop' : 'Play' }}</span>
+                </button>
+                <button id="restartBtn" class="mn-btn" type="button"
+                        :disabled="!isSequenceRunning" @click="onRestart">
+                    <span class="material-icons" aria-hidden="true">replay</span>
+                    <span class="btn-label">Restart</span>
+                </button>
+                <button id="previewBtn" class="mn-btn" type="button"
+                        :disabled="!isReady" @click="onPreview">
+                    <span class="material-icons" aria-hidden="true">preview</span>
+                    <span class="btn-label">Preview</span>
+                </button>
+            </div>
+
+            <!-- Beat dots — visual only (aria-hidden); data-beat is the E2E hook (KB-6).
+                 The active/pulse/static classes are managed imperatively by
+                 createBeatDots (Phase 6) — do not re-bind them here. -->
+            <div id="beatDots" class="beat-dots" aria-hidden="true" :data-beat="activeBeatIndex">
+                <span v-for="dot in 4" :key="dot"
+                      :id="'beatDot-' + (dot - 1)"
+                      class="beat-dot"
+                      :class="{ 'beat-dot--downbeat': dot === 1 }"></span>
+            </div>
+
+            <!-- Progress with offset marker (B-04 aria-label) -->
+            <div class="progress" role="progressbar" :aria-label="progressAriaLabel"
+                 aria-valuemin="0" :aria-valuemax="duration" :aria-valuenow="songPosition">
+                <div class="progress-track">
+                    <div class="progress-fill" :style="{ width: progressPercent + '%' }"></div>
+                    <div v-if="fileName" class="progress-offset-marker"
+                         :style="{ left: offsetMarkerPercent + '%' }"></div>
+                </div>
+                <div v-if="fileName" class="progress-readout">
+                    {{ formattedPosition }} / {{ formattedDuration }}
+                </div>
+            </div>
+
+            <!-- Non-blocking error overlay (D8) -->
+            <div v-if="errorMessage" role="alert" class="error-banner">{{ errorMessage }}</div>
+        </main>
+
+        <!-- Polite live region for state announcements (V-07) -->
+        <div role="status" aria-live="polite" class="sr-only">{{ announcement }}</div>
+    </div>
+
+    <script src="https://unpkg.com/vue@3.5.30/dist/vue.global.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
+    <script src="../src/js/themeSwitcher.js"></script>
+    <script type="module">
+        import { createMetronomadApp } from './MyESModules/App/createMetronomadApp.js';
+        import { createMetronomadData } from './MyESModules/App/createMetronomadData.js';
+        import { createMetronomadMethods } from './MyESModules/App/createMetronomadMethods.js';
+        import { createMetronomadLifecycle } from './MyESModules/App/createMetronomadLifecycle.js';
+
+        const { createApp } = Vue;
+
+        createMetronomadApp({
+            createApp,
+            dataConfig: createMetronomadData(),
+            methodsConfig: createMetronomadMethods(),
+            lifecycleConfig: createMetronomadLifecycle()
+        }).mount('#app');
+    </script>
+</body>
+
+</html>

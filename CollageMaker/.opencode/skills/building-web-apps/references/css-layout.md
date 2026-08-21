@@ -1,5 +1,12 @@
 # CSS Layout
 
+## Contents
+
+- [Flex column chain: `min-height: 0` requirement](#flex-column-chain-min-height-0-requirement)
+- [Responsive sidebar config](#responsive-sidebar-config)
+- [CSS computed value naming](#css-computed-value-naming)
+- [Mobile safe areas](#mobile-safe-areas)
+
 ## Flex Column Chain: `min-height: 0` Requirement
 
 **Rule:** Every flex item with `flex: 1` (or `flex-grow: 1`) inside a `flex-direction: column` container must have `min-height: 0` to respect the parent's height constraint.

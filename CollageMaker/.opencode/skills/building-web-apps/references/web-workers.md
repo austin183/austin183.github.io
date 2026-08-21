@@ -157,7 +157,3 @@ it('disposal prevents timeout callback from updating state', () => {
 1. **Error message wording** — Use "timeout" (not "timed out") to match test assertions like `.include('timeout')`
 2. **Worker `'error'` events** — The `onerror` event on the worker (not a `'failed'` message) can leave timeouts uncleared if not handled. Always attach an `onerror` handler that clears the timeout.
 3. **Config override scope** — When overriding `INFERENCE_TIMEOUT_MS` for tests, restore the original value in `afterEach` to avoid affecting other tests.
-
----
-
-Base directory: `.opencode/skills/building-web-apps/`
