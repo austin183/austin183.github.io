@@ -8,6 +8,7 @@
  * every common codec — research §6); that path is unit F-02 + manual Safari.
  */
 
+const fs = require('fs');
 const { test, expect } = require('@playwright/test');
 const { FIXTURE, BAD_FIXTURE, waitForAppMount, loadFixture } = require('./helpers.cjs');
 
@@ -55,22 +56,28 @@ test.describe('Phase 7 — error handling (E2E-2.x)', () => {
     await expect(page.locator('#offsetInput')).toHaveValue('0:03.0');
     await expect(offsetHint).toBeVisible();
 
-    // BPM above range → 250, with hint
+    // BPM above range → 250, with hint (C-1: the field is a commit-on-
+    // Enter/blur draft, so each fill needs a commit before the assertions).
     await page.fill('#bpmInput', '999');
+    await page.keyboard.press('Enter');
     await expect(page.locator('#bpmInput')).toHaveValue('250');
     await expect(bpmHint).toBeVisible();
 
     // BPM below range → 30, with hint
     await page.fill('#bpmInput', '10');
+    await page.keyboard.press('Enter');
     await expect(page.locator('#bpmInput')).toHaveValue('30');
     await expect(bpmHint).toBeVisible();
   });
 
-  test('E2E-2.2 drop lock: file drop during playback is rejected', async ({ page }) => {
+  test('E2E-2.2 drop lock: file drop during playback is rejected; Browse disabled (R-I1.2)', async ({ page }) => {
     await loadFixture(page);
     await page.click('#playStopBtn');
     await expect.poll(() => page.evaluate(() => document.body.dataset.state), { timeout: 10000 })
       .toBe('playing');
+
+    // R-I1.2: Browse is disabled (not merely dimmed) while a sequence runs
+    await expect(page.locator('#browseBtn')).toBeDisabled();
 
     // A real DataTransfer + DragEvent: the app's drop handler reads
     // event.dataTransfer.files (mocking dataTransfer is impossible per the
@@ -104,5 +111,22 @@ test.describe('Phase 7 — error handling (E2E-2.x)', () => {
     await expect(page.locator('div[role="alert"]')).toBeVisible();
     await expect(page.locator('body')).toHaveAttribute('data-state', 'noFile');
     expect(errors, 'no console/page errors').toEqual([]);
+  });
+
+  test('E2E-U-21 long filename: full name preserved in title (N-22)', async ({ page }) => {
+    // A 40-char name: the row truncates the display via CSS ellipsis, but the
+    // full name must be reachable in the title attribute (KB-2).
+    const longName = 'this-is-a-rather-long-song-file-name.mp3';
+    await waitForAppMount(page);
+
+    await page.setInputFiles('#fileInput', [{
+      name: longName,
+      mimeType: 'audio/mpeg',
+      buffer: fs.readFileSync(FIXTURE)
+    }]);
+
+    await expect(page.locator('body')).toHaveAttribute('data-state', 'ready');
+    await expect(page.locator('.file-name')).toHaveAttribute('title', longName);
+    await expect(page.locator('.file-name')).toHaveText(longName);
   });
 });

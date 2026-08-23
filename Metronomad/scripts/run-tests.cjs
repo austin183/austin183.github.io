@@ -5,9 +5,17 @@
  *
  * Adapted from CollageMaker/scripts/run-tests.js (BASE_DIR → Metronomad).
  *
+ * I-9 (review-fix plan): the runner can no longer report green with zero
+ * tests executed. A missing Mocha runner (CDN blocked, page error) or a
+ * suite that registers 0 tests is a per-file FAILURE with a non-zero exit.
+ *
+ * Server: the user-started server on :8000 is REQUIRED (repo rule — the
+ * runner never spawns its own). Paths are derived from __dirname, so the
+ * script works from any cwd.
+ *
  * Usage:
- *   node run-tests.cjs                    # Runs all Test.html files in MyComponents
- *   node run-tests.cjs [test-file-path]   # Run a specific test file
+ *   node scripts/run-tests.cjs                    # Runs all Test.html files in MyComponents
+ *   node scripts/run-tests.cjs [test-file-path]   # Run a specific test file
  *
  * Default: Metronomad/MyComponents/*Test.html (all matching files)
  */
@@ -15,15 +23,13 @@
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
-const { exec } = require('child_process');
 
-const BASE_DIR = '/Users/austin/workspace/austin183.github.io/Metronomad';
-const MYCOMPONENTS_DIR = path.join(BASE_DIR, 'MyComponents');
+// cwd-independent: everything resolves from this script's location.
+const ROOT = path.resolve(__dirname, '..');
+const MYCOMPONENTS_DIR = path.join(ROOT, 'MyComponents');
 const SERVER_PORT = 8000;
-const SERVER_ROOT = '/Users/austin/workspace/austin183.github.io';
 
-let serverProcess = null;
-
+// Is the user-started server on :8000 serving the repo root?
 function checkServer() {
     return new Promise((resolve) => {
         const options = {
@@ -44,43 +50,43 @@ function checkServer() {
     });
 }
 
-function startServer() {
-    return new Promise((resolve, reject) => {
-        // Check if server is already running first
-        checkServer().then(ready => {
-            if (ready) {
-                resolve(true);
-                return;
-            }
-
-            // Start new server
-            const serverCmd = `cd ${SERVER_ROOT} && python3 -m http.server ${SERVER_PORT}`;
-            serverProcess = exec(serverCmd);
-
-            // Give server time to start
-            setTimeout(() => {
-                checkServer().then(resolve, () => reject(new Error('Failed to verify server started')));
-            }, 1000);
-        });
-    });
-}
-
-function cleanupServer() {
-    if (serverProcess) {
-        try {
-            process.kill(serverProcess.pid, 'SIGTERM');
-        } catch (e) {
-            // Process already terminated
-        }
-        serverProcess = null;
-    }
-}
-
+/**
+ * Harness instrumentation (I-9). Mocha 10's browser build exposes NO runner
+ * on the global (mocha._runner does not exist) and its stats.tests counts
+ * COMPLETED tests, not the registered total — so neither can signal
+ * completion. The reliable signal is the Runner's 'end' event, and the
+ * Runner is only reachable as the return value of mocha.run().
+ *
+ * This init script registers a load listener BEFORE the test page's own
+ * (init scripts run first, so its listener dispatches first on 'load'),
+ * wraps mocha.run to capture the returned runner, and marks
+ * window.__mochaRun settled when the run's 'end' event fires. The HTML
+ * reporter renders its final stats before that event, so the DOM and the
+ * runner stats are both final when we extract.
+ */
 async function runTests(testPath, baseUrl = 'http://localhost:' + SERVER_PORT) {
     const { chromium } = require('playwright');
 
     const browser = await chromium.launch({ headless: true });
     const context = await browser.newContext();
+    await context.addInitScript(() => {
+        window.__mochaRun = null; // { unavailable } | { settled, runner }
+        window.addEventListener('load', () => {
+            if (typeof mocha === 'undefined' || typeof mocha.run !== 'function') {
+                window.__mochaRun = { unavailable: true };
+                return;
+            }
+            const originalRun = mocha.run;
+            mocha.run = function (...args) {
+                const runner = originalRun.apply(mocha, args);
+                window.__mochaRun = { settled: false, runner };
+                if (runner && typeof runner.on === 'function') {
+                    runner.on('end', () => { window.__mochaRun.settled = true; });
+                }
+                return runner;
+            };
+        }, { once: true });
+    });
     const page = await context.newPage();
 
     // Capture ALL console messages to file
@@ -103,35 +109,27 @@ async function runTests(testPath, baseUrl = 'http://localhost:' + SERVER_PORT) {
         await page.goto(baseUrl + '/' + testPath, {
             waitUntil: 'domcontentloaded'
         });
-        // Wait for external resources (Mocha/Chai CDN) to load
+        // Wait for the page to expose #mocha (CDN scripts load after DOM parse)
         await page.waitForSelector('#mocha', { state: 'attached', timeout: 10000 });
 
-        // Wait for mocha to finish running by looking for test result elements.
-        try {
-            await page.waitForSelector('#mocha .test', { state: 'attached', timeout: 10000 });
-        } catch (_) {
-            // Fallback: if no tests match, wait a bit for mocha to run
-            await page.waitForTimeout(2000);
-        }
-
-        // Wait for the FULL run to finish. The first `.test` element appears
-        // after the first SYNCHRONOUS test, but async suites (real audio
-        // decoding, timers) keep running — extracting mid-run undercounts.
+        // Wait for the run to SETTLE: the captured runner's 'end' event
+        // (window.__mochaRun.settled — see the init script), or a blocked CDN
+        // (unavailable is marked on 'load'). A suite that never calls
+        // mocha.run() or a test that never resolves hits the timeout; the
+        // verdict evaluate below names the failure.
         try {
             await page.waitForFunction(() => {
-                const runner = (typeof mocha !== 'undefined' && mocha._runner) ||
-                    (window.Mocha && window.Mocha.runner);
-                if (!runner || !runner.stats) return false;
-                const s = runner.stats;
-                // Done when every registered test is accounted for.
-                return s.tests > 0 &&
-                    s.tests === s.passes + s.failures + s.pending;
-            }, { timeout: 30000 });
+                const run = window.__mochaRun;
+                return !!run && (run.unavailable || run.settled);
+            }, null, { timeout: 30000 });
         } catch (_) {
-            // Fall through: extraction reports whatever completed
+            // Fall through: the verdict reports whatever state the run is in.
         }
 
-        // Extract test results by parsing the DOM
+        // Extract test results (I-9: a missing runner, a run that never
+        // started, or a 0-test suite is an ERROR, never a green 0/0 line).
+        // Runner stats are final (the 'end' event fires after the reporter
+        // renders); failure details come from the rendered DOM.
         const results = await page.evaluate(() => {
             const mochaEl = document.querySelector('#mocha');
             if (!mochaEl) {
@@ -142,30 +140,31 @@ async function runTests(testPath, baseUrl = 'http://localhost:' + SERVER_PORT) {
                 return { error: 'Could not find #mocha element - the test page did not load correctly' };
             }
 
-            // Try to get Mocha's internal state for pass/fail/pending counts
-            let runner;
-            if (typeof mocha !== 'undefined' && mocha._runner) {
-                runner = mocha._runner;
-            } else if (window.Mocha && window.Mocha.runner) {
-                runner = window.Mocha.runner;
+            const run = window.__mochaRun;
+            if (!run) {
+                return { error: 'mocha.run() was never reached within the timeout — test page error or hung suite' };
+            }
+            if (run.unavailable) {
+                return { error: 'Mocha unavailable (no runner) — CDN blocked or test page error' };
+            }
+            if (!run.settled) {
+                const s = run.runner && run.runner.stats;
+                return {
+                    error: `run did not settle within the timeout (${s ? s.tests : 0} tests complete)`
+                };
             }
 
-            const passesEl = mochaEl.querySelector('.passes em');
-            const failuresEl = mochaEl.querySelector('.failures em');
-
-            let passes = 0;
-            let failures = 0;
-            let pendings = [];
-
-            if (runner) {
-                passes = runner.passes().length;
-                failures = runner.failures().length;
-                pendings = runner.pending();
-            } else {
-                // Fallback: parse from DOM stats elements
-                passes = passesEl ? parseInt(passesEl.textContent) || 0 : 0;
-                failures = failuresEl ? parseInt(failuresEl.textContent) || 0 : 0;
+            const stats = run.runner && run.runner.stats;
+            if (!stats) {
+                return { error: 'Mocha runner unavailable (no stats) — test page error' };
             }
+            if (stats.tests === 0) {
+                return { error: '0 tests — the suite loaded but registered no tests' };
+            }
+
+            const passes = stats.passes;
+            const failures = stats.failures;
+            const pendings = stats.pending;
 
             // Get failure details from DOM
             const failureDetails = [];
@@ -258,26 +257,22 @@ async function testFileExists(testPath) {
 
 // Main
 async function main() {
+    // The runner requires the user-started server on :8000 (repo rule —
+    // it never spawns one itself).
+    if (!(await checkServer())) {
+        throw new Error('No server on :8000 — start it first: bash start-server.sh (from the repo root)');
+    }
+
     // Get test file(s) - either from args or find all Test.html files
     const providedPath = process.argv[2];
-    let testFiles;
-
-    if (providedPath) {
-        // Single file mode - pass the path as-is, testFileExists will try all possibilities
-        testFiles = [providedPath];
-    } else {
-        // Auto-discover all Test.html files
-        testFiles = findTestFiles();
-    }
+    const testFiles = providedPath ? [providedPath] : findTestFiles();
 
     if (testFiles.length === 0) {
         throw new Error('No test files found');
     }
 
-    // Ensure server is running (auto-starts if needed)
-    await startServer();
-
     const fileResults = [];
+    const fileErrors = [];
 
     // Run each test file
     for (const testFile of testFiles) {
@@ -291,7 +286,17 @@ async function main() {
             const results = await runTests(resolvedPath);
 
             if (results.error) {
-                throw new Error("ResultsError: " + results.error);
+                throw new Error(results.error);
+            }
+
+            if (results.failures > 0) {
+                // Surface the failing test names + first error line so the
+                // non-zero exit is diagnosable from the runner output alone.
+                const details = (results.failureDetails || []).map(
+                    f => `  ✗ ${f.title}: ${f.message}`
+                ).join('\n');
+                console.error(`${results.failures} failing test(s):\n${details || '  (no details captured)'}`);
+                throw new Error(`${results.failures} failing test(s)`);
             }
 
             fileResults.push({
@@ -299,20 +304,19 @@ async function main() {
                 ...results
             });
         } catch (error) {
-            // Log error but continue to next file instead of stopping
-            console.error(`Error running ${testFile}: ${error.message}`);
+            // Collect the per-file failure; the run still exits non-zero.
+            fileErrors.push({ file: testFile, error: error.message });
         }
     }
 
-    if (fileResults.length === 0) {
-        throw new Error('No test files ran successfully');
+    if (fileResults.length > 0) {
+        console.log(JSON.stringify({ files: fileResults }, null, 2));
     }
 
-    const summary = { files: fileResults };
-    console.log(JSON.stringify(summary, null, 2));
+    if (fileErrors.length > 0) {
+        console.error(JSON.stringify({ errors: fileErrors }, null, 2));
+        throw new Error(`Test run failed — ${fileErrors.map(e => `${e.file}: ${e.error}`).join(' | ')}`);
+    }
 }
-
-// Cleanup on exit
-process.on('exit', cleanupServer);
 
 main();

@@ -31,12 +31,7 @@ export function createMetronomadMethods() {
             const files = event && event.dataTransfer && event.dataTransfer.files;
             const file = files && files[0];
             if (!file) return;
-
-            if (this.isParamLocked) {
-                this.errorMessage = 'Drop a new song after stopping';
-                return;
-            }
-            this.onFileDropped(file);
+            this.onFileDropped(file); // all acceptance guards live in the choke point (R-I1)
         },
 
         // --- Browse / file input ---
@@ -53,9 +48,20 @@ export function createMetronomadMethods() {
 
         // --- File loading (V-05: decoding false on ALL paths; errors are
         // non-blocking overlays — the app keeps its last valid state, D8) ---
+        // U-13/R-I1: single file-acceptance choke point for drop AND
+        // browse. Guard order (RD-2): param-lock first (friendly message),
+        // then single-flight decode — silent no-op (R-I2). loadFile emits
+        // 'decoding' synchronously before its first await (fileLoader.js),
+        // so the flag is visible to any same-tick or later drop event.
         async onFileDropped(file) {
             const loader = this._fileLoader;
             if (!loader) return;
+
+            if (this.isParamLocked) {
+                this.errorMessage = 'Drop a new song after stopping';
+                return;
+            }
+            if (this.decoding.active) return; // I-2: a decode is already in flight
 
             try {
                 const result = await loader.loadFile(file);
@@ -94,38 +100,58 @@ export function createMetronomadMethods() {
             return { value, clamped: value !== parsed };
         },
 
-        onBpmInput(rawValue) {
-            const result = this._parseParamInput(rawValue, clampBpm);
-            if (result === null) {
+        // V-03/C-1 (RD-1, N-16): restore the last valid value for a param
+        // whose entry was empty/non-numeric on commit. One helper for both
+        // inputs; the draft re-syncs to the restored model so the field and
+        // model never diverge (U-11 rev).
+        _restoreLastValid(kind) {
+            if (kind === 'bpm') {
                 const last = Number.isFinite(this._lastValidBpm) ? this._lastValidBpm : BPM_DEFAULT;
                 this.bpm = last;
                 this._lastValidBpm = last;
+                this.bpmText = String(last);
                 this.bpmClamped = false;
-                return;
+            } else {
+                const last = Number.isFinite(this._lastValidCountIn) ? this._lastValidCountIn : COUNT_IN_DEFAULT;
+                this.countInBeats = last;
+                this._lastValidCountIn = last;
+                this.countInText = String(last);
+                this.countInClamped = false;
             }
+        },
+
+        // C-1 (RD-1): BPM commits only on Enter/blur — the per-keystroke
+        // clamp is deleted; the draft (bpmText) absorbs typing freely and
+        // the model moves here. A clamped commit reverts the draft to the
+        // committed display and surfaces the hint (U-11 rev).
+        commitBpmEntry() {
+            const result = this._parseParamInput(this.bpmText, clampBpm);
+            if (result === null) { this._restoreLastValid('bpm'); return; }
             this.bpm = result.value;
-            this.bpmClamped = result.clamped;
             this._lastValidBpm = result.value;
+            this.bpmText = String(result.value);
+            this.bpmClamped = result.clamped;
         },
 
         onBpmStep(delta) {
             const raw = this.bpm + delta;
             const next = clampBpm(raw);
             this.bpm = next;
+            this.bpmText = String(next); // sync the draft (R-C1.4)
             this.bpmClamped = next !== raw;
             this._lastValidBpm = next;
         },
 
-        onCountInInput(rawValue) {
-            const result = this._parseParamInput(rawValue, clampCountIn);
-            if (result === null) {
-                const last = Number.isFinite(this._lastValidCountIn) ? this._lastValidCountIn : COUNT_IN_DEFAULT;
-                this.countInBeats = last;
-                this._lastValidCountIn = last;
-                return;
-            }
+        // C-1 (RD-1): count-in commits only on Enter/blur; the draft
+        // (countInText) absorbs typing. N-20: a clamped commit surfaces the
+        // "Count-in limited to 1–16" hint.
+        commitCountInEntry() {
+            const result = this._parseParamInput(this.countInText, clampCountIn);
+            if (result === null) { this._restoreLastValid('countIn'); return; }
             this.countInBeats = result.value;
             this._lastValidCountIn = result.value;
+            this.countInText = String(result.value);
+            this.countInClamped = result.clamped;
         },
 
         // U-10: scrubber input → offset + offsetText (the field mirrors the
@@ -301,7 +327,11 @@ export function createMetronomadMethods() {
                     break;
                 case ENGINE_STATES.STOPPED:
                     this._stopBeatDots();
-                    this._returnToReady('Stopped');
+                    // I-4/U-09: user Stop during preview announces "Preview
+                    // stopped" like the auto-end path. isPreviewing is still
+                    // true here — read it BEFORE _returnToReady clears it.
+                    const wasPreviewing = this.isPreviewing;
+                    this._returnToReady(wasPreviewing ? 'Preview stopped' : 'Stopped');
                     break;
                 // 'ended' / 'previewEnded' are terminal events, not states —
                 // the engine emits exactly one of them per finished run. Both

@@ -42,6 +42,12 @@ export function clampCountIn(value) {
  * Clamp an offset to [0, duration] and quantize to tenths (display
  * precision). Invalid duration → 0.
  *
+ * Quantize-THEN-reclamp (RD-4, T-35): the tenths quantization may not
+ * exceed the duration — a 2.96 s song must never clamp to 3.0 (which
+ * startSequence rejects as end-of-song and would leave the field showing
+ * a position the engine will not play). The epsilon absorbs float error
+ * (2.9 × 10 === 28.999…96) so exact tenths quantize to themselves.
+ *
  * @param {number} value
  * @param {number} duration
  * @returns {number}
@@ -50,5 +56,6 @@ export function clampOffset(value, duration) {
     if (!Number.isFinite(duration) || duration < 0) return 0;
     if (!Number.isFinite(value)) return 0;
     const clamped = Math.min(duration, Math.max(0, value));
-    return Math.round(clamped * 10) / 10;
+    const quantized = Math.floor(clamped * 10 + 1e-9) / 10;
+    return Math.min(duration, quantized);
 }

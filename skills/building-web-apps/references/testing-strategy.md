@@ -67,6 +67,7 @@ Design browser-dependent utilities as pure functions that can be unit tested wit
 21. **Worker timeout guards** — Always clear `setTimeout` IDs on every exit path (ready, failed, error, dispose). Guard the callback with `if (this.isDisposed || !this.worker) return;`. See `references/web-workers.md`.
 22. **TouchEvent requires real Touch objects** — Cannot create `Touch` instances from JS. Use `Object.defineProperty` on a plain `Event` to set `touches`/`targetTouches`/`changedTouches`. Mock TouchLists need `length`, indexed access, `item()`, and `Symbol.iterator`. See `references/testing-e2e.md` TouchEvent section.
 23. **Multi-touch: exactly 2 fingers, not 2+** — Mobile OSes reserve 3-finger gestures for system navigation (iOS: back/forward; Android: split-screen). Check `e.touches.length !== 2` and cancel gesture if count deviates.
+24. **One-shot tests are blind to input-handler transitions** — a per-keystroke clamp (corrupting text the user is mid-typing) is invisible to tests that feed complete values. For handlers that parse/clamp/commit text inputs, replay the keystroke sequence (every intermediate draft) and assert the invariant at every step. See `references/testing-unit.md` "Testing Input Handlers".
 
 ## Testing Strategy for Deduplication
 

@@ -317,6 +317,28 @@ await page.evaluate((args) => {
 }, { selector: '#myRange', value: 10 });
 ```
 
+### `page.fill()` Does NOT Commit Enter/blur Fields
+
+`page.fill(selector, value)` focuses the element, sets the value, and fires a single `input` event. It does **not** fire `blur`, and it does **not** fire `keyup.enter`. For a field whose model updates only on commit (the commit-on-Enter/blur pattern: `v-model` draft + `@keyup.enter` / `@blur`), `fill()` updates the **draft** but never commits the **model**:
+
+```js
+await page.fill('#countInInput', '2');   // draft text = "2", but countInBeats is still 4
+// ... the sequence runs with count-in 4, not 2 — silently wrong parameters
+```
+
+The failure is **silent**: no error, the field visibly shows the right text, but the underlying model — and therefore the behavior under test — uses the stale value. The wrongness shows up later as a timing/state assertion failing at a confusing spot, not at the `fill`.
+
+**Rule:** treat `fill()` as a **draft** setter, not a **commit**. Whenever the app's contract is "the value is not applied until the user commits," the E2E must reproduce that commit:
+
+```js
+await page.fill('#countInInput', String(value));
+await page.keyboard.press('Enter');      // fires @keyup.enter → commit
+```
+
+Press Enter explicitly rather than relying on incidental blur — a genuine blur (focusing another element) also commits, but it depends on focus order and what the test touches next.
+
+**When you change an input's contract** (convert a field from `@input`-driven to commit-on-Enter/blur, or vice-versa), grep the E2E specs for `fill('<that-id>')` and add/remove the explicit commit at each site. Fields that already committed via Enter already press Enter in their tests — only the newly-converted fields need the change.
+
 ### Sidebar Sections Collapsed by Default
 
 CollageMaker right sidebar sections (Title, Background, Overlay, etc.) are collapsed by default. Tests must expand sections before interacting with their contents.
@@ -425,6 +447,8 @@ await page.waitForTimeout(1000);
 await page.waitForSelector('#mocha .test', { timeout: 10000 });
 ```
 
+**Scope note:** `#mocha .test` only detects the *first rendered result*, not suite completion. For a full completion gate before extracting stats, use the Runner `end` event — see `testing-unit.md` "In-Browser Runner: Reliable Completion Signal (Mocha 10)". Waiting for the first result then extracting snapshots mid-run state for async suites.
+
 **Rule:** Always use `querySelector` over `getElementById` in test runners when the DOM may be dynamically modified by test frameworks.
 
 ### File References
@@ -433,3 +457,4 @@ await page.waitForSelector('#mocha .test', { timeout: 10000 });
 - `_agent_docs/learnings/2026-07-28-playwright-escape-key-vue-window-modifier.md` — Escape key unreliability details
 - `Metronomad/test/e2e/playback.spec.cjs` — working in-page timing logger + scheduled action helpers
 - `Metronomad/_agent_docs/learnings/2026-08-20-playwright-in-page-timing-and-evaluate-closures.md` — full diagnosis and origin of the timing/evaluate rules
+- `Metronomad/_agent_docs/learnings/2026-08-22-playwright-fill-does-not-commit-enter-blur-fields.md` — origin of the `fill()` draft-vs-commit rule

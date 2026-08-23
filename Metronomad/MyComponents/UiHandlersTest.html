@@ -203,6 +203,150 @@
         });
 
         // ============================================================
+        // R-I1 — file-acceptance choke point (I-1): the lock check lives in
+        // onFileDropped so BOTH drop and browse are covered (RD-2)
+        // ============================================================
+        describe('R-I1 file-acceptance choke point', () => {
+            it('R-I1.1 — playing: onFileDropped rejects before any load (drop AND browse)', async () => {
+                const loadCalls = [];
+                const vm = buildVm();
+                vm.appState = 'playing';
+                vm.fileName = 'song.mp3';
+                vm._fileLoader = {
+                    loadFile: (file) => {
+                        loadCalls.push(file.name);
+                        return Promise.resolve({ ok: true, fileName: file.name, duration: 3.0, buffer: fakeBuffer });
+                    }
+                };
+
+                await vm.onFileDropped({ name: 'other.mp3' });
+
+                expect(loadCalls).to.deep.equal([]); // loader never called
+                expect(vm.errorMessage).to.equal('Drop a new song after stopping');
+                expect(vm.appState).to.equal('playing'); // unchanged
+                expect(vm.fileName).to.equal('song.mp3'); // UI never references the new file
+            });
+
+            it('R-I1.1b — playing: onDrop resets isDragOver and rejects via the same choke point', async () => {
+                const loadCalls = [];
+                const vm = buildVm();
+                vm.appState = 'playing';
+                vm.isDragOver = true;
+                vm._fileLoader = {
+                    loadFile: (file) => { loadCalls.push(file.name); return Promise.resolve({ ok: false }); }
+                };
+
+                vm.onDrop({ dataTransfer: { files: [{ name: 'other.mp3' }] } });
+
+                expect(vm.isDragOver).to.equal(false);
+                expect(loadCalls).to.deep.equal([]);
+                expect(vm.errorMessage).to.equal('Drop a new song after stopping');
+                expect(vm.appState).to.equal('playing');
+            });
+        });
+
+        // ============================================================
+        // R-I2 — single-flight decode (I-2): a drop while decoding.active
+        // is rejected; the first load's continuation wins. The spies mirror
+        // the real loader: they set decoding synchronously before awaiting
+        // (RD-3 — 'decoding' is emitted before the first await).
+        // ============================================================
+        describe('R-I2 single-flight decode', () => {
+            // A controllable loader: records calls, flips decoding on (sync),
+            // and only settles when the test resolves it.
+            function makeControllableLoader(vm) {
+                const calls = [];
+                let settle = null;
+                vm._fileLoader = {
+                    loadFile(file) {
+                        calls.push(file.name);
+                        vm.decoding = { active: true, fileName: file.name };
+                        return new Promise((resolve) => { if (settle === null) settle = resolve; }); // keep A's
+                    }
+                };
+                const okResult = () => ({ ok: true, fileName: calls[0], duration: 3.0, buffer: fakeBuffer });
+                return { calls, resolveFirst: () => settle(okResult()) };
+            }
+
+            it('R-I2.1 — second drop while decoding is rejected; first load wins on resolve', async () => {
+                const vm = buildVm();
+                const loader = makeControllableLoader(vm);
+
+                const first = vm.onFileDropped({ name: 'a.mp3' });
+                expect(loader.calls).to.deep.equal(['a.mp3']);
+
+                await vm.onFileDropped({ name: 'b.mp3' }); // rejected — silent no-op
+                expect(loader.calls).to.deep.equal(['a.mp3']); // second loadFile never called
+
+                loader.resolveFirst();
+                await first;
+
+                expect(vm.appState).to.equal('ready'); // first continuation wins
+                expect(vm.fileName).to.equal('a.mp3');
+                expect(vm._buffer).to.equal(fakeBuffer);
+                expect(vm.decoding.active).to.equal(false); // cleared exactly once, by the first finally
+            });
+
+            it('R-I2.2 — decoding stays true (Play stays disabled) until the first load settles', async () => {
+                const vm = buildVm();
+                const loader = makeControllableLoader(vm);
+
+                const first = vm.onFileDropped({ name: 'a.mp3' });
+                await vm.onFileDropped({ name: 'b.mp3' }); // rejected while pending
+
+                expect(vm.decoding.active).to.equal(true); // the flag-lie the review names
+                expect(vm.isReady).to.equal(false); // Play never enabled mid-decode
+
+                loader.resolveFirst();
+                await first;
+
+                expect(vm.decoding.active).to.equal(false);
+            });
+
+            it('R-I2.3 — exactly one decoded buffer live: b\'s decode never starts', async () => {
+                const vm = buildVm();
+                const calls = [];
+                let settleA = null;
+                vm._fileLoader = {
+                    loadFile(file) {
+                        calls.push(file.name);
+                        vm.decoding = { active: true, fileName: file.name };
+                        return new Promise((resolve) => { if (settleA === null) settleA = resolve; }); // keep A's
+                    }
+                };
+
+                const a = vm.onFileDropped({ name: 'a.mp3' });
+                await vm.onFileDropped({ name: 'b.mp3' });
+
+                settleA({ ok: true, fileName: 'a.mp3', duration: 3.0, buffer: { tag: 'a', duration: 3.0 } });
+                await a;
+
+                expect(calls).to.deep.equal(['a.mp3']); // b's decode never started (F-05 invariant)
+                expect(vm._buffer.tag).to.equal('a'); // a's buffer is the one live
+            });
+
+            it('N-23 — shorter file after Stop: offset/offsetText re-clamped to the new duration', async () => {
+                const vm = buildVm();
+                vm.appState = 'ready';
+                vm.fileName = 'long.mp3';
+                vm.duration = 10.0;
+                vm.offset = 8.0;
+                vm.offsetText = '0:08.0';
+                vm._fileLoader = {
+                    loadFile: async (file) => ({ ok: true, fileName: file.name, duration: 3.0, buffer: fakeBuffer })
+                };
+
+                await vm.onFileDropped({ name: 'short.mp3' });
+
+                expect(vm.appState).to.equal('ready');
+                expect(vm.fileName).to.equal('short.mp3');
+                expect(vm.duration).to.equal(3.0);
+                expect(vm.offset).to.equal(3.0); // re-clamped on the ok-path
+                expect(vm.offsetText).to.equal('0:03.0');
+            });
+        });
+
+        // ============================================================
         // V-02 — onRestart (count-in/song sequence only; KB-5)
         // ============================================================
         describe('V-02 onRestart', () => {
@@ -265,78 +409,188 @@
         });
 
         // ============================================================
-        // V-03 — BPM / count-in inputs (U-11) + steppers
+        // V-03 — BPM / count-in commit (U-11 rev) + steppers
+        // C-1 (RD-1): the field is a v-model draft (bpmText/countInText);
+        // the model moves ONLY on Enter/blur commit or via the stepper.
+        // The per-keystroke @input clamp is gone — the flagship regression
+        // that C-1 let slip is R-C1.1 below.
         // ============================================================
-        describe('V-03 BPM and count-in inputs', () => {
-            it('onBpmInput clamps to 30–250 with the clamp hint (U-11)', () => {
+        describe('V-03 BPM and count-in commit (U-11 rev)', () => {
+            it('commitBpmEntry clamps to 30–250 with the hint and re-syncs the field (U-11 rev)', () => {
                 const vm = buildVm();
-                vm.onBpmInput('251');
+                vm.bpmText = '999';
+                vm.commitBpmEntry();
                 expect(vm.bpm).to.equal(250);
+                expect(vm.bpmText).to.equal('250');
                 expect(vm.bpmClamped).to.equal(true);
 
-                vm.onBpmInput('10');
+                vm.bpmText = '10';
+                vm.commitBpmEntry();
                 expect(vm.bpm).to.equal(30);
                 expect(vm.bpmClamped).to.equal(true);
 
-                vm.onBpmInput('180');
+                vm.bpmText = '180';
+                vm.commitBpmEntry();
                 expect(vm.bpm).to.equal(180);
+                expect(vm.bpmText).to.equal('180');
                 expect(vm.bpmClamped).to.equal(false);
             });
 
-            it('onBpmInput: empty / non-numeric restores the previous valid value', () => {
+            it('commitBpmEntry: empty / non-numeric restores the previous valid value (field + model)', () => {
                 const vm = buildVm();
-                vm.onBpmInput('180');
-                vm.onBpmInput('');
+                vm.bpmText = '180';
+                vm.commitBpmEntry();
                 expect(vm.bpm).to.equal(180);
+
+                vm.bpmText = '';
+                vm.commitBpmEntry();
+                expect(vm.bpm).to.equal(180);
+                expect(vm.bpmText).to.equal('180');
                 expect(vm.bpmClamped).to.equal(false);
 
-                vm.onBpmInput('abc');
+                vm.bpmText = 'abc';
+                vm.commitBpmEntry();
                 expect(vm.bpm).to.equal(180);
+                expect(vm.bpmText).to.equal('180');
             });
 
-            it('onBpmInput: first input empty (no previous value) → default 120', () => {
+            it('commitBpmEntry: empty on a fresh field (no previous value) → default 120', () => {
                 const vm = buildVm();
-                vm.onBpmInput('');
+                vm.bpmText = '';
+                vm.commitBpmEntry();
                 expect(vm.bpm).to.equal(120);
+                expect(vm.bpmText).to.equal('120');
             });
 
-            it('onBpmStep: ±1 with clamp at the boundaries (U-11)', () => {
+            it('onBpmStep: ±1 with clamp at the boundaries, and it syncs the draft', () => {
                 const vm = buildVm();
                 vm.bpm = 120;
+                vm.bpmText = '120';
                 vm.onBpmStep(1);
                 expect(vm.bpm).to.equal(121);
+                expect(vm.bpmText).to.equal('121');
                 expect(vm.bpmClamped).to.equal(false);
 
                 vm.bpm = 250;
+                vm.bpmText = '250';
                 vm.onBpmStep(1); // press + at the boundary
                 expect(vm.bpm).to.equal(250);
                 expect(vm.bpmClamped).to.equal(true);
 
                 vm.bpm = 30;
+                vm.bpmText = '30';
                 vm.onBpmStep(-1);
                 expect(vm.bpm).to.equal(30);
                 expect(vm.bpmClamped).to.equal(true);
             });
 
-            it('onCountInInput clamps to 1–16', () => {
+            it('commitCountInEntry clamps to 1–16 with the hint (N-20) and re-syncs the field', () => {
                 const vm = buildVm();
-                vm.onCountInInput('0');
+                vm.countInText = '0';
+                vm.commitCountInEntry();
                 expect(vm.countInBeats).to.equal(1);
+                expect(vm.countInText).to.equal('1');
 
-                vm.onCountInInput('99');
+                vm.countInText = '99';
+                vm.commitCountInEntry();
                 expect(vm.countInBeats).to.equal(16);
+                expect(vm.countInText).to.equal('16');
+                expect(vm.countInClamped).to.equal(true);
 
-                vm.onCountInInput('7');
+                vm.countInText = '7';
+                vm.commitCountInEntry();
                 expect(vm.countInBeats).to.equal(7);
-
-                vm.onCountInInput('abc');
-                expect(vm.countInBeats).to.equal(7); // last valid restored (same pattern as BPM)
+                expect(vm.countInClamped).to.equal(false);
             });
 
-            it('onCountInInput: non-numeric with no previous value → default 4 (T-30)', () => {
+            it('commitCountInEntry: non-numeric / empty restores the previous valid value; fresh → default 4 (T-30)', () => {
                 const vm = buildVm();
-                vm.onCountInInput('abc');
+                vm.countInText = '7';
+                vm.commitCountInEntry();
+                expect(vm.countInBeats).to.equal(7);
+
+                vm.countInText = 'abc';
+                vm.commitCountInEntry();
+                expect(vm.countInBeats).to.equal(7); // last valid restored
+                expect(vm.countInText).to.equal('7');
+
+                const fresh = buildVm();
+                fresh.countInText = '';
+                fresh.commitCountInEntry();
+                expect(fresh.countInBeats).to.equal(4);
+                expect(fresh.countInText).to.equal('4');
+            });
+        });
+
+        // ============================================================
+        // R-C1 — per-keystroke typing (the regression class C-1 let slip):
+        // the draft absorbs every keystroke; the model moves only on
+        // commit (or via the stepper). Field and model never diverge.
+        // ============================================================
+        describe('R-C1 per-keystroke typing (C-1)', () => {
+            it('R-C1.1 — BPM: draft absorbs keystrokes; model stays until commit', () => {
+                const vm = buildVm();
+                expect(vm.bpm).to.equal(120);
+                expect(vm.bpmText).to.equal('120');
+
+                for (const draft of ['9', '90', '190']) {
+                    vm.bpmText = draft; // simulated keystroke — no commit
+                    expect(vm.bpm, `bpm unchanged after typing "${draft}"`).to.equal(120);
+                    expect(vm.bpmClamped, `no hint after typing "${draft}"`).to.equal(false);
+                }
+
+                vm.commitBpmEntry();
+                expect(vm.bpm).to.equal(190); // in range — no clamp
+                expect(vm.bpmText).to.equal('190');
+                expect(vm.bpmClamped).to.equal(false);
+            });
+
+            it('R-C1.2 — count-in: model stays until commit; no accidental restore of the prior value', () => {
+                const vm = buildVm();
                 expect(vm.countInBeats).to.equal(4);
+
+                vm.countInText = '1'; // "1" typed over "4" — draft only
+                expect(vm.countInBeats).to.equal(4); // model unchanged
+                vm.commitCountInEntry(); // blur/Enter commits 1 (valid)
+                expect(vm.countInBeats).to.equal(1); // not a restore of 4
+                expect(vm.countInText).to.equal('1');
+
+                const vm2 = buildVm();
+                vm2.countInText = '16';
+                expect(vm2.countInBeats).to.equal(4);
+                vm2.commitCountInEntry();
+                expect(vm2.countInBeats).to.equal(16);
+            });
+
+            it('R-C1.3 — commit with an empty field restores the last valid value, no hint', () => {
+                const vm = buildVm();
+                vm.bpmText = '150';
+                vm.commitBpmEntry();
+                expect(vm.bpm).to.equal(150);
+
+                vm.bpmText = ''; // cleared mid-entry, then blur/Enter
+                vm.commitBpmEntry();
+                expect(vm.bpm).to.equal(150);
+                expect(vm.bpmText).to.equal('150');
+                expect(vm.bpmClamped).to.equal(false);
+            });
+
+            it('R-C1.4 — the stepper syncs the draft (no divergence in either direction)', () => {
+                const vm = buildVm();
+                vm.bpm = 249;
+                vm.bpmText = '249';
+                vm.onBpmStep(1);
+                expect(vm.bpm).to.equal(250);
+                expect(vm.bpmText).to.equal('250'); // field follows the model
+            });
+
+            it('R-C1.5 — commit count-in "99" → clamps to 16, field "16", hint (N-20)', () => {
+                const vm = buildVm();
+                vm.countInText = '99';
+                vm.commitCountInEntry();
+                expect(vm.countInBeats).to.equal(16);
+                expect(vm.countInText).to.equal('16');
+                expect(vm.countInClamped).to.equal(true);
             });
         });
 
@@ -522,6 +776,41 @@
                 const vm = buildVm();
                 vm.onAudioInterrupted();
                 expect(vm.announcement).to.equal('Audio was interrupted — press Play to try again');
+            });
+        });
+
+        // ============================================================
+        // R-I4 — user Stop during preview announces "Preview stopped"
+        // (I-4, U-09 rev): isPreviewing is read BEFORE _returnToReady clears it
+        // ============================================================
+        describe('R-I4 preview stop announcement (I-4, U-09 rev)', () => {
+            it('R-I4.1 — "stopped" while previewing → "Preview stopped" + ready + position reset', () => {
+                const vm = buildVm();
+                vm.appState = 'ready';
+                vm.isPreviewing = true;
+                vm.fileName = 'song.mp3';
+                vm.offset = 1.0;
+                vm.songPosition = 2.2;
+
+                vm.onEngineStateChange('stopped');
+
+                expect(vm.announcement).to.equal('Preview stopped');
+                expect(vm.isPreviewing).to.equal(false);
+                expect(vm.appState).to.equal('ready');
+                expect(vm.songPosition).to.equal(1.0); // reset to the offset marker
+            });
+
+            it('R-I4.3 — "stopped" outside preview → "Stopped" (non-preview path untouched)', () => {
+                const vm = buildVm();
+                vm.appState = 'countingIn';
+                vm.isPreviewing = false;
+                vm.fileName = 'song.mp3';
+                vm.offset = 0.5;
+
+                vm.onEngineStateChange('stopped');
+
+                expect(vm.announcement).to.equal('Stopped');
+                expect(vm.appState).to.equal('ready');
             });
         });
 

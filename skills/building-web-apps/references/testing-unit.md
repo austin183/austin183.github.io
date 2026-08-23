@@ -2,7 +2,7 @@
 
 ## Contents
 - Unit Tests — Mocha + Chai
-- In-Browser Runner: Async Suites Undercount Results
+- In-Browser Runner: Reliable Completion Signal (Mocha 10)
 - Real Objects Over Mocks
 - Mocking Browser APIs
 - RAF Mocking
@@ -12,6 +12,7 @@
 - Test State, Not Just Actions
 - Tolerance Precision in Positioning Tests
 - Testing Default Behavior Explicitly
+- Testing Input Handlers: Replay the Keystroke Sequence
 - Asserting Synchronous Side Effects of Async APIs
 - Testing Combined Edge Cases
 - Writing Robust Positioning Tests
@@ -72,29 +73,47 @@ Loaded via CDN, run in-browser via test HTML pages.
 3. `mocha.run()` must be called after all test definitions
 4. Test files live in `MyComponents/`
 
-### In-Browser Runner: Async Suites Undercount Results
+### In-Browser Runner: Reliable Completion Signal (Mocha 10)
 
-The in-browser test runner (`scripts/run-tests.cjs`) waits for the **first** rendered test result (`#mocha .test`) before extracting `runner.passes()/failures()`. For all-synchronous suites the whole run finishes before the first result paints, so extraction is safe. The moment a suite contains real async work (decoding, timers, awaited RAF flushes), extraction fires **mid-run**: in-flight tests are invisible, and a *failing* async test that hasn't finished yet silently vanishes.
+The in-browser test runner (`scripts/run-tests.cjs`) must wait for the run to **settle** before extracting results. Extracting after the first rendered result (`#mocha .test`) snapshots mid-run state for any suite with real async work: in-flight tests are invisible, and a *failing* async test that hasn't finished yet vanishes — "N passing / 0 failing" with N < registered count looks like a clean pass.
 
-**Signature of a mid-run snapshot:** "N passing / 0 failing" where N < registered test count. It looks like a clean pass but is a partial snapshot.
+**Two completion conditions that look right but are broken in the mocha 10 browser build (verified 10.2.0):**
 
-**Fix: wait for run completion before extracting** — every registered test accounted for:
+1. `mocha._runner` **does not exist** — v10's `run()` creates the runner locally and returns it; it is never assigned on the instance, so the check is always falsy.
+2. `runner.stats.tests === passes + failures + pending` is **vacuously true** — `stats.tests` counts *completed* tests (incremented in the same `test end` handler as the outcome buckets), so the equality holds at *every* instant, not only at completion.
+
+A broken gate is invisible when a generous timeout silently does the real work: with both conditions dead, `waitForFunction` rode the full 30 s per file and fell through to a DOM parse — correct numbers, but ~30 s × file count of pure stall.
+
+**Correct signal: the Runner's `end` event**, reachable only via the return value of `mocha.run()`. Inject an init script that wraps `mocha.run` *before* the test page's own `load` listener (init scripts run first, so their listener dispatches first on `load`):
 
 ```js
+await context.addInitScript(() => {
+    window.__mochaRun = null; // { unavailable } | { settled, runner }
+    window.addEventListener('load', () => {
+        if (typeof mocha === 'undefined' || typeof mocha.run !== 'function') {
+            window.__mochaRun = { unavailable: true };   // CDN blocked
+            return;
+        }
+        const originalRun = mocha.run;
+        mocha.run = function (...args) {
+            const runner = originalRun.apply(mocha, args);
+            window.__mochaRun = { settled: false, runner };
+            runner.on('end', () => { window.__mochaRun.settled = true; });
+            return runner;
+        };
+    }, { once: true });
+});
+// ...navigate, then:
 await page.waitForFunction(() => {
-    const runner = (typeof mocha !== 'undefined' && mocha._runner) ||
-        (window.Mocha && window.Mocha.runner);
-    if (!runner || !runner.stats) return false;
-    const s = runner.stats;
-    // Done when every registered test is accounted for.
-    return s.tests > 0 &&
-        s.tests === s.passes + s.failures + s.pending;
-}, { timeout: 30000 });
+    const run = window.__mochaRun;
+    return !!run && (run.unavailable || run.settled);
+}, null, { timeout: 30000 });
 ```
 
-- `runner.stats.tests` is the total registered count; mid-run it **exceeds** the sum of the three outcome buckets and equals it only at completion.
-- Avoid `runner.state === 'finished'` — the Runner state values vary across Mocha versions.
-- Keep the 30 s `waitForFunction` timeout as a fall-through so a hung suite still produces a (partial) report instead of crashing the runner.
+Then read `window.__mochaRun.runner.stats` (final at `end`) for `passes`/`failures`/`pending`, and parse the `.fail` DOM for failure detail. A blocked CDN, a run that never starts, or a hung suite now resolves to a fast, named per-file error instead of a 30 s stall.
+
+- Keep the timeout fall-through but make it **diagnostic** — name the failure ("mocha.run() never reached", "Mocha unavailable (no runner)", "did not settle (N tests complete)") rather than a silent stall that happens to land on the right answer.
+- **Exit non-zero on any per-file failure.** A v1 runner exited 0 even when individual tests failed (it only threw when *every* file failed) — "green" CI output did not mean "no failing tests." Collect per-file errors, including `N failing test(s)` with each failing title + first error line, and fail the process on any of them.
 
 ### Mocking Browser APIs
 
@@ -426,6 +445,23 @@ expect(calls.fillText.length).to.equal(1);
 // After (action + state)
 expect(calls.fillStyle).to.include('#FFFFFF'); // fontColor
 ```
+
+### Testing Input Handlers: Replay the Keystroke Sequence
+
+For a handler that **parses / clamps / commits** a text input, one-shot endpoint tests are blind to the most common defect class: a per-`input` clamp that corrupts text the user is mid-typing. Each one-shot input (`'251'`, `'10'`, `'180'`) is a *complete* number, so clamping it is correct and the test passes — but real typing is a *sequence* (`1` → `12` → `120`). An intermediate draft (`1`, below a min of 30) gets clamped, and subsequent keystrokes append to the *clamped* text (`30`, `300`, `3002`…). The regression test must replay the keystroke sequence and assert the invariant at *every* step, not only the final value:
+
+```js
+// The draft (bpmText) absorbs every keystroke; the model moves only on commit.
+for (const draft of ['9', '90', '190']) {
+    vm.bpmText = draft;                 // simulate one keystroke — no commit
+    expect(vm.bpm).to.equal(120);       // model unchanged at every intermediate step
+    expect(vm.bpmClamped).to.equal(false);
+}
+vm.commitBpmEntry();
+expect(vm.bpm).to.equal(190);           // model moves on commit (190 is in range)
+```
+
+**Generalization:** wherever a handler's correctness depends on the *sequence of intermediate states* — text inputs, incremental parsers, accumulators, undo stacks, streaming decoders — feed the intermediate states and assert the invariant throughout. One-shot tests pin the endpoints and are blind to the path between them; the defect lives in the **transitions**. When fixing an input-handling defect, write the per-keystroke test *first*.
 
 ### Tolerance Precision in Positioning Tests
 

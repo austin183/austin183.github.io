@@ -214,10 +214,13 @@ export function createPlaybackEngine({
     // ---- public API -----------------------------------------------------
     function startSequence({ buffer, bpm, countInBeats, offset }) {
         // P-13 defense-in-depth: validate before touching anything.
+        // offset >= duration (I-3/RD-4): a past-the-end offset starts a
+        // zero-sample source — count-in into silence. One rule, both entry
+        // points (preview's D2 guard already rejects the same condition).
         if (!buffer ||
             !Number.isFinite(bpm) || bpm < BPM_MIN || bpm > BPM_MAX ||
             !Number.isInteger(countInBeats) || countInBeats < COUNT_IN_MIN || countInBeats > COUNT_IN_MAX ||
-            !Number.isFinite(offset) || offset < 0) {
+            !Number.isFinite(offset) || offset < 0 || offset >= buffer.duration) {
             return { ok: false };
         }
 

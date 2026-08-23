@@ -23,9 +23,12 @@
 const { test, expect } = require('@playwright/test');
 const { loadFixture, appState } = require('./helpers.cjs');
 
-/** Set the count-in input to an exact value. */
+/** Set the count-in input to an exact value.
+ *  C-1: the field is a commit-on-Enter/blur draft, so commit explicitly —
+ *  fill() alone only sets the draft text, not the model. */
 async function setCountIn(page, value) {
   await page.fill('#countInInput', String(value));
+  await page.keyboard.press('Enter');
 }
 
 /**
@@ -311,6 +314,48 @@ test.describe('Phase 7 — playback (E2E-1.x)', () => {
     const beatsSeen = [...new Set(timeline.map((e) => e.beat))];
     for (const b of ['0', '1', '2', '3']) {
       expect(beatsSeen, `dot ${b} lit during the sequence`).toContain(b);
+    }
+  });
+
+  test('E2E-R-C1.1 BPM types per-keystroke, commits on Enter, runs at the typed rate', async ({ page }) => {
+    await loadFixture(page);
+
+    // The review's live-repro path (C-1): select-all, then type one
+    // keystroke at a time (pressSequentially — never fill). The field is a
+    // draft; the model must not move until commit, and the display must
+    // never diverge from the keystrokes.
+    await page.locator('#bpmInput').click({ clickCount: 3 });
+    await page.locator('#bpmInput').pressSequentially('9');
+    await expect(page.locator('#bpmInput')).toHaveValue('9');   // draft only
+    await page.locator('#bpmInput').pressSequentially('0');
+    await expect(page.locator('#bpmInput')).toHaveValue('90');  // still draft
+
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#bpmInput')).toHaveValue('90');  // committed, in range
+
+    // The sequence really runs at 90 BPM: beat = 60/90 ≈ 667 ms. Grid law:
+    // count-in 4 (default) → song starts at t0 + (4+1)·667 ≈ 3333 ms.
+    await startRecordedSequence(page);
+    await expect.poll(() => appState(page), { timeout: 10000 }).toBe('ready');
+    const timeline = await readTimeline(page);
+
+    const countingIn = firstAt(timeline, 'countingIn');
+    expect(countingIn, 'countingIn entry').toBeTruthy();
+    expect(countingIn.t, `countingIn at ${countingIn.t.toFixed(0)} ms`).toBeLessThanOrEqual(300);
+
+    const playing = firstAt(timeline, 'playing');
+    expect(playing, 'playing entry').toBeTruthy();
+    expect(Math.abs(playing.t - 3333), `playing flip at ${playing.t.toFixed(0)} ms (want ~3333)`)
+      .toBeLessThanOrEqual(300);
+
+    // dot-to-dot spacing ≈ 667 ms across the count-in — proof it runs at 90
+    // BPM, not the 120 default (a 120 BPM run would flip at ~2500 ms with
+    // 500 ms gaps).
+    const dots = timeline.filter((e) => e.state === 'countingIn' && e.beat !== '-1');
+    expect(dots.length, `count-in dot advances (got ${dots.length})`).toBeGreaterThanOrEqual(3);
+    for (let i = 1; i < dots.length; i++) {
+      const gap = dots[i].t - dots[i - 1].t;
+      expect(Math.abs(gap - 667), `beat gap ${gap.toFixed(0)} ms (want ~667)`).toBeLessThanOrEqual(150);
     }
   });
 });

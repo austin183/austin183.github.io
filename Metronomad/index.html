@@ -38,7 +38,8 @@
                     <template v-else-if="appState === 'noFile'">Drop an audio file here</template>
                     <template v-else>Drop a new song</template>
                 </p>
-                <button id="browseBtn" class="mn-btn" type="button" @click="onBrowseClick">Browse…</button>
+                <button id="browseBtn" class="mn-btn" type="button" :disabled="isParamLocked"
+                        @click="onBrowseClick">Browse…</button>
                 <input type="file" id="fileInput" accept="audio/*" class="file-input-hidden"
                        tabindex="-1" aria-label="Choose an audio file" @change="onFileInputChange">
             </section>
@@ -61,8 +62,8 @@
                         <button id="bpmMinusBtn" class="mn-btn stepper-btn" type="button"
                                 aria-label="Decrease BPM by 1" :disabled="!isReady" @click="onBpmStep(-1)">−</button>
                         <input type="number" id="bpmInput" min="30" max="250" step="1"
-                               :value="bpm" :disabled="!isReady"
-                               @input="onBpmInput($event.target.value)">
+                               v-model="bpmText" :disabled="!isReady"
+                               @keyup.enter="commitBpmEntry" @blur="commitBpmEntry">
                         <button id="bpmPlusBtn" class="mn-btn stepper-btn" type="button"
                                 aria-label="Increase BPM by 1" :disabled="!isReady" @click="onBpmStep(1)">+</button>
                     </div>
@@ -83,8 +84,9 @@
                 <div class="control-group">
                     <label for="countInInput">Count-in (beats)</label>
                     <input type="number" id="countInInput" min="1" max="16" step="1"
-                           :value="countInBeats" :disabled="!isReady"
-                               @input="onCountInInput($event.target.value)">
+                           v-model="countInText" :disabled="!isReady"
+                               @keyup.enter="commitCountInEntry" @blur="commitCountInEntry">
+                    <p v-if="countInClamped" class="clamp-hint" role="status">Count-in limited to 1–16</p>
                 </div>
             </section>
 

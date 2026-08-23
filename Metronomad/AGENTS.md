@@ -43,7 +43,7 @@ The user starts the server — **agents never start it**: `bash start-server.sh`
 ## Testing
 
 ```bash
-node scripts/run-tests.cjs        # all Mocha unit suites (MyComponents/*Test.html), from anywhere
+node scripts/run-tests.cjs        # all Mocha unit suites (MyComponents/*Test.html), from any cwd; needs the server on :8000
 npx playwright test               # E2E (chromium only), from this directory; needs the server on :8000
 ```
 
@@ -67,7 +67,7 @@ Test conventions:
 
 - `_agent_docs/specifications/metronomad-v1-specification.md` — the spec
 - `_agent_docs/research/howlerjs-research.md` — Howler v2.2.3 research (pitfalls §5, codec matrix §6)
-- `_agent_docs/plans/2026-08-17-metronomad-v1/` — implementation plan (index.md phase map, context.md decisions D1–D11 + known behaviors KB-1…KB-9, behavior-specs.md scenario IDs)
+- `_agent_docs/plans/2026-08-17-metronomad-v1/` — implementation plan (index.md phase map, context.md decisions D1–D11 + known behaviors KB-1…KB-10, behavior-specs.md scenario IDs)
 - `_agent_docs/sessions/` — per-phase TDD session summaries
 - `.pi/skills/building-web-apps/SKILL.md` — the project skill (symlinked) with verified patterns and gotchas
 

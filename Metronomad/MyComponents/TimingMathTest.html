@@ -228,6 +228,12 @@
             it('T-34 — invalid duration (NaN) → 0', () => {
                 expect(clampOffset(1, NaN)).to.equal(0);
             });
+
+            it('T-35 — quantize-then-reclamp: never > duration (2.96 s song, I-3)', () => {
+                expect(clampOffset(2.96, 2.96)).to.equal(2.9);
+                expect(clampOffset(2.94, 2.96)).to.equal(2.9);
+                expect(clampOffset(3.0, 2.96)).to.equal(2.9);
+            });
         });
 
         // Run mocha after all tests are defined

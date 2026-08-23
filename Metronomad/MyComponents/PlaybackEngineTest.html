@@ -245,7 +245,8 @@
 
             it('P-01 — startSequence schedules clicks at t_p+k·b (accent first) and song at t_p+(N+1)·b; state countingIn → playing once each', () => {
                 const { engine, tickScheduler, tickWatch, context, clickBuffers, clock, events } = makeEngine({ clock: createFakeClock(100.0) });
-                const buffer = fakeBuffer(3.0);
+                // Buffer long enough for offset 90 (P-13 rev: offset < duration required).
+                const buffer = fakeBuffer(120.0);
 
                 const result = engine.startSequence({ buffer, bpm: 120, countInBeats: 4, offset: 90.0 });
                 expect(result).to.deep.include({ ok: true });
@@ -381,6 +382,25 @@
                 const r2 = engine.preview({ buffer: fakeBuffer(3.0), offset: 2.9 });
                 expect(r2).to.deep.include({ ok: true });
                 expect(context.sources[1].startedWith.duration).to.be.closeTo(0.1, 0.001);
+            });
+
+            it('R-I4.2 — user stop() during preview: events exactly [preview, stopped]; stale preview onended ignored (I-4)', () => {
+                const { engine, context, events, timers } = makeEngine({ clock: createFakeClock(50.0) });
+
+                expect(engine.preview({ buffer: fakeBuffer(3.0), offset: 1.0 })).to.deep.include({ ok: true });
+
+                engine.stop(); // user Stop — the toggle shows Stop during preview (KB-5)
+
+                expect(engine.state).to.equal(ENGINE_STATES.STOPPED);
+                expect(events).to.deep.equal(['preview', 'stopped']); // never 'previewEnded'
+                expect(context.sources.every(s => s.stopped)).to.equal(true);
+                expect(timers.count()).to.equal(0); // watch cleared
+
+                // The source was stopped before it could end naturally — its
+                // stale onended must be ignored (D4 generation guard).
+                context.sources[0].onended();
+                expect(engine.state).to.equal(ENGINE_STATES.STOPPED);
+                expect(events).to.deep.equal(['preview', 'stopped']); // no further events
             });
 
             it('P-07 (edge) — song ending before the countingIn→playing tick still terminates (no frozen state)', () => {
@@ -529,7 +549,7 @@
                 engine.stop();
             });
 
-            it('P-13 — invalid params → { ok: false }, no sources, state unchanged (defense-in-depth)', () => {
+            it('P-13 (rev) — invalid params (incl. offset ≥ duration) → { ok: false }, no sources, state unchanged', () => {
                 const h = makeEngine({ clock: createFakeClock(5.0) });
                 const { engine, tickScheduler, tickWatch, context, events } = h;
 
@@ -538,6 +558,15 @@
                 expect(engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 17, offset: 0 }))
                     .to.deep.include({ ok: false });
                 expect(engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: -1 }))
+                    .to.deep.include({ ok: false });
+                // I-3/RD-4: end-of-song offsets must be rejected like preview's D2 guard —
+                // otherwise the count-in plays into silence (zero-sample source).
+                expect(engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 3.0 }))
+                    .to.deep.include({ ok: false });
+                expect(engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 3.0001 }))
+                    .to.deep.include({ ok: false });
+                // Preview's existing D2 guard, now asserted explicitly (P-13 rev).
+                expect(engine.preview({ buffer: fakeBuffer(3.0), offset: 3.0 }))
                     .to.deep.include({ ok: false });
                 expect(context.sources).to.have.length(0);
                 expect(engine.state).to.equal(ENGINE_STATES.STOPPED);

@@ -33,10 +33,18 @@ export function createMetronomadData() {
             offset: 0,
             offsetText: '0:00.0',
 
-            // Clamp hints (U-10/U-11)
+            // BPM / count-in draft text (C-1, RD-1): bound via v-model;
+            // the model (bpm/countInBeats) moves only on Enter/blur commit
+            // or via the stepper. Initialized from the spec defaults so the
+            // field and model agree from first render.
+            bpmText: '120',
+            countInText: '4',
+
+            // Clamp hints (U-10/U-11; countInClamped is N-20)
             bpmClamped: false,
             offsetClamped: false,
             offsetHint: '',
+            countInClamped: false,
 
             // Feedback (D8: errors are non-blocking overlays)
             errorMessage: '',
