@@ -33,6 +33,14 @@ export const ENGINE_STATES = {
     PREVIEW: 'preview'
 };
 
+// Terminal EVENTS (not states — the engine emits exactly one per finished
+// run) carried through the same onStateChange channel. N-7: exported so
+// consumers switch on constants, not magic strings (R-N7.1).
+export const ENGINE_EVENTS = {
+    ENDED: 'ended',
+    PREVIEW_ENDED: 'previewEnded'
+};
+
 export const SCHEDULER = {
     TICK_MS: 25,
     LOOKAHEAD_SEC: 0.1,
@@ -129,6 +137,17 @@ export function createPlaybackEngine({
         _gains = [];
     }
 
+    // N-6: the shared terminal transition (song end / preview end).
+    // Silent `_state` reset — deliberately bypassing `_setState`, which
+    // would emit 'stopped' as a SECOND event; `event` is the single
+    // terminal emit (exactly one of ENGINE_EVENTS.* per finished run).
+    // Gen/state guards live in the callers' onended handlers.
+    function _finish(event) {
+        _teardown();
+        _state = ENGINE_STATES.STOPPED;
+        _emit(event);
+    }
+
     // D4: bump the generation and tear down any live sources/timers.
     // Does NOT change _state — callers set the resulting state explicitly.
     function _teardown() {
@@ -184,6 +203,11 @@ export function createPlaybackEngine({
         // State flip: song start is sample-accurate (D5); the visible state
         // follows the clock crossing the song-start time.
         if (now >= _seq.songStart.time) {
+            // N-1: every click is strictly before songStart — nothing is
+            // left to schedule. Clear the interval here (a 30-min song
+            // must not run ~72,000 no-op ticks); the D10 watch keeps
+            // running through playback (R-N1.1).
+            if (_schedulerId !== null) { _clearInterval(_schedulerId); _schedulerId = null; }
             _setState(ENGINE_STATES.PLAYING);
         }
     }
@@ -230,9 +254,7 @@ export function createPlaybackEngine({
             // of song, onended can arrive before the flip tick ran — the
             // sequence must still terminate (no frozen state).
             if (_state !== ENGINE_STATES.PLAYING && _state !== ENGINE_STATES.COUNTING_IN) return;
-            _teardown();
-            _state = ENGINE_STATES.STOPPED; // silent — 'ended' is the single terminal event
-            _emit('ended');
+            _finish(ENGINE_EVENTS.ENDED);
         };
         _songSource.start(_seq.songStart.time, _seq.songStart.offset);
 
@@ -240,7 +262,17 @@ export function createPlaybackEngine({
         _startWatch();
         _setState(ENGINE_STATES.COUNTING_IN);
 
-        return { ok: true, schedule: _seq };
+        // N-4: return a FROZEN SNAPSHOT, not the live _seq — the internal
+        // sequence owns the `scheduled` flags the scheduler trusts, and
+        // exposing it live let readers mutate scheduler state. Same shape
+        // (tests read schedule.songStart / .clicks); writes are no-ops.
+        return { ok: true, schedule: Object.freeze({
+            tP,
+            interval,
+            offset,
+            clicks: Object.freeze(_seq.clicks.map((c) => Object.freeze({ time: c.time, isAccent: c.isAccent, scheduled: c.scheduled }))),
+            songStart: Object.freeze({ time: built.songStart.time, offset: built.songStart.offset })
+        })};
     }
 
     function stop() {
@@ -272,9 +304,7 @@ export function createPlaybackEngine({
         _previewSource.onended = () => {
             if (gen !== _generation) return;
             if (_state !== ENGINE_STATES.PREVIEW) return;
-            _teardown();
-            _state = ENGINE_STATES.STOPPED; // silent — 'previewEnded' is the single terminal event
-            _emit('previewEnded');
+            _finish(ENGINE_EVENTS.PREVIEW_ENDED);
         };
         _previewSource.start(start, offset, duration);
 

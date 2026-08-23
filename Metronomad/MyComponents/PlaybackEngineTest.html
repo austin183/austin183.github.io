@@ -22,7 +22,7 @@
     <script>mocha.setup('bdd');</script>
 
     <script type="module">
-        import { createPlaybackEngine, ENGINE_STATES, SCHEDULER, PREVIEW_SECONDS } from '../MyESModules/Playback/playbackEngine.js';
+        import { createPlaybackEngine, ENGINE_STATES, ENGINE_EVENTS, SCHEDULER, PREVIEW_SECONDS } from '../MyESModules/Playback/playbackEngine.js';
         import { CLICK, renderClickBuffer, renderClickBuffers } from '../MyESModules/Audio/clickBuffers.js';
 
         const { expect } = chai;
@@ -208,7 +208,7 @@
         // P-01…P-14 — playbackEngine (fake context/clock/RAF/timers only)
         // ============================================================
         describe('playbackEngine (P-01…P-14)', () => {
-            it('exports — ENGINE_STATES / SCHEDULER / PREVIEW_SECONDS constants', () => {
+            it('exports — ENGINE_STATES / ENGINE_EVENTS / SCHEDULER / PREVIEW_SECONDS constants (R-N7.1)', () => {
                 expect(ENGINE_STATES).to.deep.equal({
                     STOPPED: 'stopped', COUNTING_IN: 'countingIn',
                     PLAYING: 'playing', PREVIEW: 'preview'
@@ -218,6 +218,9 @@
                 expect(SCHEDULER.WATCH_MS).to.equal(250);
                 expect(SCHEDULER.RESUME_TIMEOUT_MS).to.equal(750);
                 expect(PREVIEW_SECONDS).to.equal(3);
+                // R-N7.1: the terminal event names are exported — the app
+                // switches on the constants, not magic strings (N-7).
+                expect(ENGINE_EVENTS).to.deep.equal({ ENDED: 'ended', PREVIEW_ENDED: 'previewEnded' });
             });
 
             it('P-01 — startSequence schedules clicks at t_p+k·b (accent first) and song at t_p+(N+1)·b; state countingIn → playing once each', () => {
@@ -253,6 +256,52 @@
                 at(102.51);
                 expect(engine.state).to.equal(ENGINE_STATES.PLAYING);
                 expect(events).to.deep.equal(['countingIn', 'playing']); // once per transition
+            });
+
+            it('R-N1.1 — scheduler interval cleared at the PLAYING flip (N-1): only the watch remains', () => {
+                const { engine, tickScheduler, context, clock, timers, events } = makeEngine({ clock: createFakeClock(100.0) });
+                engine.startSequence({ buffer: fakeBuffer(30.0), bpm: 120, countInBeats: 4, offset: 0 });
+                expect(timers.count()).to.equal(2); // scheduler + watch
+
+                // Schedule every click before the flip (all are < songStart 102.5).
+                clock.set(102.45); tickScheduler(); // horizon 102.55 → all 4 clicks
+                expect(clickSources(context).length).to.equal(4);
+                expect(engine.state).to.equal(ENGINE_STATES.COUNTING_IN);
+                expect(timers.count()).to.equal(2); // flip not reached — scheduler still live
+
+                // Cross the flip: the scheduler has nothing left to schedule.
+                clock.set(102.51); tickScheduler();
+                expect(engine.state).to.equal(ENGINE_STATES.PLAYING);
+                expect(timers.count()).to.equal(1); // watch only — scheduler cleared (N-1)
+                expect(timers.tickWithMs(SCHEDULER.TICK_MS)).to.equal(0); // no 25 ms tick can fire
+
+                // A long song must not run no-op ticks: no sources, no events.
+                const sourcesBefore = context.sources.length;
+                for (let i = 0; i < 200; i++) { clock.advance(0.025); timers.tickAll(); }
+                expect(context.sources.length).to.equal(sourcesBefore);
+                expect(events).to.deep.equal(['countingIn', 'playing']);
+                engine.stop();
+                expect(timers.count()).to.equal(0);
+            });
+
+            it('R-N4.1 — startSequence returns a frozen schedule view, not the live _seq (N-4)', () => {
+                const { engine, tickScheduler, context, clock } = makeEngine({ clock: createFakeClock(100.0) });
+                const result = engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 0 });
+
+                // The view is a snapshot — frozen at every level tests could touch.
+                expect(Object.isFrozen(result.schedule)).to.equal(true);
+                expect(Object.isFrozen(result.schedule.clicks[0])).to.equal(true);
+
+                // Mutating the view must not disturb the engine's own sequence:
+                // writes are rejected (strict mode), and the scheduler still
+                // schedules click 0 from its internal _seq.
+                expect(() => { result.schedule.clicks[0].scheduled = true; }).to.throw(TypeError);
+                clock.set(100.45); tickScheduler();
+                expect(clickSources(context).map(s => s.startedWith.when)).to.deep.equal([100.5]);
+
+                // Shape for existing consumers (P-01) is preserved.
+                expect(result.schedule.songStart).to.deep.equal({ time: 102.5, offset: 0 });
+                engine.stop();
             });
 
             it('P-02 — stop() during count-in cancels everything; idempotent; no sources can appear afterwards', () => {

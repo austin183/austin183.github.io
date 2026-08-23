@@ -15,7 +15,7 @@ export { initHowler } from './Audio/howlerSetup.js';
 export { isSupportedCodec } from './Audio/codecSupport.js';
 export { CLICK, renderClickBuffer, renderClickBuffers } from './Audio/clickBuffers.js';
 export {
-    ENGINE_STATES, SCHEDULER, PREVIEW_SECONDS, createPlaybackEngine
+    ENGINE_STATES, ENGINE_EVENTS, SCHEDULER, PREVIEW_SECONDS, createPlaybackEngine
 } from './Playback/playbackEngine.js';
 export { createFileLoader } from './File/fileLoader.js';
 export { beatInterval, buildSchedule, beatPhaseFromGrid, BEATS_PER_BAR } from './Utils/beatGrid.js';

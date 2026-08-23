@@ -1,7 +1,7 @@
 import { APP_STATES } from './createMetronomadData.js';
 import { clampBpm, clampCountIn, clampOffset, BPM_DEFAULT, COUNT_IN_DEFAULT } from '../Utils/paramClamps.js';
 import { formatTime, parseOffsetInput } from '../Utils/timeFormat.js';
-import { ENGINE_STATES, SCHEDULER } from '../Playback/playbackEngine.js';
+import { ENGINE_STATES, ENGINE_EVENTS, SCHEDULER } from '../Playback/playbackEngine.js';
 
 /**
  * createMetronomadMethods — Vue instance-method factory for Metronomad.
@@ -337,11 +337,12 @@ export function createMetronomadMethods() {
                 // the engine emits exactly one of them per finished run. Both
                 // settle into the same resting state (KB-4), so they share
                 // _returnToReady (preview cannot leave appState non-ready).
-                case 'ended':
+                // N-7: constants, not magic strings (R-N7.1).
+                case ENGINE_EVENTS.ENDED:
                     this._stopBeatDots();
                     this._returnToReady('Song ended');
                     break;
-                case 'previewEnded':
+                case ENGINE_EVENTS.PREVIEW_ENDED:
                     this._stopBeatDots();
                     this._returnToReady('Preview stopped');
                     break;

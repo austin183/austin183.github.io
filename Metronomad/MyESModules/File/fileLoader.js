@@ -9,26 +9,23 @@
  *   onStateChange  (state, detail) → void       — 'decoding' { fileName }
  *                   before the first await, 'idle' after (try/finally shape)
  *
- * Contract (F-01…F-09):
+ * Contract (F-01…F-09, F-05 rev — N-3):
  *   loadFile(file) resolves — it never throws:
- *     { ok: true,  buffer, duration, fileName, objectUrl }
+ *     { ok: true,  buffer, duration, fileName }
  *     { ok: false, code: 'noFile' | 'codec' | 'decode' | 'tooLong', message }
- *   Exactly one object URL is live at a time; every exit path (success,
- *   codec, decode, tooLong, release) leaves no live orphan URL (F-05/KB-7).
- *   The previous buffer reference is dropped when a new file loads.
+ *   Exactly ONE DECODED BUFFER is live at a time (F-05/KB-7): a new
+ *   loadFile replaces it, release() drops it. There is no object-URL
+ *   lifecycle — decode reads file.arrayBuffer(), and the URL the v1 code
+ *   created/tracked/revoked was never consumed by any consumer (deleted
+ *   in N-3, grep-verified at review time).
  */
 
 const MAX_DURATION_SEC_DEFAULT = 1800; // 30 minutes (D3)
 
 export function createFileLoader({ codecs, context, maxDurationSec = MAX_DURATION_SEC_DEFAULT, onStateChange }) {
     let currentBuffer = null;
-    let currentUrl = null;
 
     function releaseCurrent() {
-        if (currentUrl) {
-            URL.revokeObjectURL(currentUrl);
-            currentUrl = null;
-        }
         currentBuffer = null;
     }
 
@@ -52,29 +49,27 @@ export function createFileLoader({ codecs, context, maxDurationSec = MAX_DURATIO
 
         if (onStateChange) onStateChange('decoding', { fileName: file.name });
 
-        const objectUrl = URL.createObjectURL(file);
         try {
             const bytes = await file.arrayBuffer();
             const buffer = await context.decodeAudioData(bytes);
 
             if (buffer.duration > maxDurationSec) {
+                // N-5: the limit is interpolated — the default (1800 s)
+                // still renders the U-20/KB-7 "30 minutes" string.
                 return {
                     ok: false,
                     code: 'tooLong',
-                    message: 'Song too long — maximum length is 30 minutes'
+                    message: `Song too long — maximum length is ${Math.round(maxDurationSec / 60)} minutes`
                 };
             }
 
-            releaseCurrent(); // drop the previous song (F-05)
-            currentBuffer = buffer;
-            currentUrl = objectUrl;
+            currentBuffer = buffer; // replace — exactly one decoded buffer live (F-05)
 
             return {
                 ok: true,
                 buffer,
                 duration: buffer.duration,
-                fileName: file.name,
-                objectUrl
+                fileName: file.name
             };
         } catch (err) {
             return {
@@ -83,11 +78,6 @@ export function createFileLoader({ codecs, context, maxDurationSec = MAX_DURATIO
                 message: `Couldn't decode ${file.name} — the file may be corrupted`
             };
         } finally {
-            // If this URL did not become the live one (decode/tooLong
-            // failure), revoke the attempt — no orphan URL on any path.
-            if (currentUrl !== objectUrl) {
-                URL.revokeObjectURL(objectUrl);
-            }
             if (onStateChange) onStateChange('idle');
         }
     }
@@ -96,12 +86,14 @@ export function createFileLoader({ codecs, context, maxDurationSec = MAX_DURATIO
         releaseCurrent();
     }
 
-    function extractExt(name) {
-        const fileName = String(name == null ? '' : name);
-        const dot = fileName.lastIndexOf('.');
-        if (dot <= 0 || dot === fileName.length - 1) return '';
-        return fileName.slice(dot + 1).toLowerCase();
-    }
+    return { loadFile, release };
+}
 
-    return { loadFile, release, extractExt };
+// N-3: private — no production caller outside the loader (its behavior is
+// pinned through the codec error message, R-N3.2).
+function extractExt(name) {
+    const fileName = String(name == null ? '' : name);
+    const dot = fileName.lastIndexOf('.');
+    if (dot <= 0 || dot === fileName.length - 1) return '';
+    return fileName.slice(dot + 1).toLowerCase();
 }

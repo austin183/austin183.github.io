@@ -57,7 +57,7 @@
         }
 
         // Fake decode context (DIP: fileLoader receives its context as a factory param).
-        function createFakeContext({ rejectDecode = false } = {}) {
+        function createFakeContext({ rejectDecode = false, duration = 3.0 } = {}) {
             return {
                 decodeCalls: 0,
                 async decodeAudioData() {
@@ -69,7 +69,7 @@
                     }
                     // A stand-in AudioBuffer-shaped object is enough for
                     // tooLong/decode-failure paths (duration is the contract).
-                    return { duration: 3.0, channels: 1, sampleRate: 44100 };
+                    return { duration, channels: 1, sampleRate: 44100 };
                 }
             };
         }
@@ -220,7 +220,7 @@
                 expect(createUrlCalls).to.have.length(0); // no URL is ever created
             });
 
-            it('F-03 — valid MP3 (real File + real AudioContext) resolves { ok, buffer, duration, fileName, objectUrl } with exactly one createObjectURL', async () => {
+            it('F-03/R-N3.1 — valid MP3 (real File + real AudioContext) resolves { ok, buffer, duration, fileName } and never creates an object URL (N-3)', async () => {
                 const realCtx = new (window.AudioContext || window.webkitAudioContext)();
                 try {
                     const loader = createFileLoader({ codecs: alwaysSupport, context: realCtx });
@@ -232,26 +232,26 @@
                     expect(result.buffer.duration).to.be.closeTo(3.0, 0.05);
                     expect(result.duration).to.be.closeTo(3.0, 0.05);
                     expect(result.fileName).to.equal('song.mp3');
-                    expect(result.objectUrl).to.match(/^blob:/);
-                    expect(createUrlCalls).to.have.length(1);
+                    expect(result.objectUrl).to.equal(undefined); // N-3: dead URL surface deleted
+                    expect(createUrlCalls).to.have.length(0); // R-N3.1: zero createObjectURL on every path
                     expect(revokeUrlCalls).to.have.length(0);
                 } finally {
                     realCtx.close();
                 }
             });
 
-            it('F-04 — decode rejection resolves { ok: false, code: "decode" } and revokes the attempt URL', async () => {
+            it('F-04 — decode rejection resolves { ok: false, code: "decode" }, no URL touched (N-3)', async () => {
                 const loader = createFileLoader({ codecs: alwaysSupport, context: createFakeContext({ rejectDecode: true }) });
                 const result = await loader.loadFile(createMp3File('broken.mp3'));
 
                 expect(result.ok).to.equal(false);
                 expect(result.code).to.equal('decode');
                 expect(result.message).to.equal('Couldn\'t decode broken.mp3 — the file may be corrupted'); // U-15
-                expect(createUrlCalls).to.have.length(1);
-                expect(revokeUrlCalls).to.deep.equal(createUrlCalls); // F-05: no live orphan URL
+                expect(createUrlCalls).to.have.length(0); // R-N3.1
+                expect(revokeUrlCalls).to.have.length(0);
             });
 
-            it('F-05 — loading a second file revokes the first file\'s URL; only the latest is live', async () => {
+            it('F-05 (rev) — loading a second file replaces the first buffer; exactly one decoded buffer live (N-3)', async () => {
                 const realCtx = new (window.AudioContext || window.webkitAudioContext)();
                 try {
                     const loader = createFileLoader({ codecs: alwaysSupport, context: realCtx });
@@ -260,26 +260,34 @@
 
                     expect(a.ok).to.equal(true);
                     expect(b.ok).to.equal(true);
-                    expect(createUrlCalls).to.have.length(2);
-                    expect(revokeUrlCalls).to.deep.equal([createUrlCalls[0]]); // a revoked
-                    expect(revokeUrlCalls).to.not.include(createUrlCalls[1]);  // b live
-                    expect(b.objectUrl).to.equal(createUrlCalls[1]);
+                    expect(b.buffer).to.not.equal(a.buffer); // replacement — the old reference is dropped
+                    expect(createUrlCalls).to.have.length(0); // R-N3.1: no URL lifecycle at all
                 } finally {
                     realCtx.close();
                 }
             });
 
-            it('F-06 — buffer longer than maxDurationSec resolves { ok: false, code: "tooLong" }, URL revoked (D3)', async () => {
-                const ctx = createFakeContext(); // decodes to a 3.0 s buffer
-                const loader = createFileLoader({ codecs: alwaysSupport, context: ctx, maxDurationSec: 0.001 });
+            it('F-06 — buffer longer than the DEFAULT maxDurationSec (1800 s) resolves { ok: false, code: "tooLong" } (D3)', async () => {
+                const ctx = createFakeContext({ duration: 1900 }); // longer than the 30-min default
+                const loader = createFileLoader({ codecs: alwaysSupport, context: ctx });
                 const result = await loader.loadFile(createMp3File('long.mp3'));
 
                 expect(result.ok).to.equal(false);
                 expect(result.code).to.equal('tooLong');
-                expect(result.message).to.equal('Song too long — maximum length is 30 minutes'); // U-20
+                expect(result.message).to.equal('Song too long — maximum length is 30 minutes'); // U-20 — default string unchanged (N-5)
                 expect(result.buffer).to.not.be.ok;
-                expect(createUrlCalls).to.have.length(1);
-                expect(revokeUrlCalls).to.deep.equal(createUrlCalls);
+                expect(createUrlCalls).to.have.length(0); // R-N3.1
+                expect(revokeUrlCalls).to.have.length(0);
+            });
+
+            it('R-N5.1 — tooLong message interpolates the INJECTED maxDurationSec (N-5)', async () => {
+                const ctx = createFakeContext({ duration: 7200 });
+                const loader = createFileLoader({ codecs: alwaysSupport, context: ctx, maxDurationSec: 3600 });
+                const result = await loader.loadFile(createMp3File('long.mp3'));
+
+                expect(result.ok).to.equal(false);
+                expect(result.code).to.equal('tooLong');
+                expect(result.message).to.equal('Song too long — maximum length is 60 minutes');
             });
 
             it('F-07 — file with no extension resolves { ok: false, code: "codec" } with a readable message', async () => {
@@ -324,27 +332,35 @@
                 expect(events).to.deep.equal([['decoding', 'bad.mp3'], ['idle', null]]);
             });
 
-            it('F-09 — extractExt: last extension, case-insensitive, no-extension → ""', () => {
-                const loader = createFileLoader({ codecs: alwaysSupport, context: createFakeContext() });
-                expect(loader.extractExt('Song (final).mp3')).to.equal('mp3');
-                expect(loader.extractExt('archive.tar.gz')).to.equal('gz');
-                expect(loader.extractExt('noext')).to.equal('');
-                expect(loader.extractExt('UPPER.WAV')).to.equal('wav');
+            it('R-N3.2 — extractExt is not public; extension behavior pinned via the codec message (N-3)', async () => {
+                const loader = createFileLoader({ codecs: neverSupport, context: createFakeContext() });
+                expect(loader.extractExt).to.equal(undefined); // removed from the API
+
+                // The observable contract extractExt served — last extension,
+                // case-insensitive, via the codec error message.
+                const gz = await loader.loadFile(createSpyFile('archive.tar.gz'));
+                expect(gz.message).to.equal("This browser can't play .gz files");
+                const wav = await loader.loadFile(createSpyFile('UPPER.WAV'));
+                expect(wav.message).to.equal("This browser can't play .wav files");
+                const noext = await loader.loadFile(createSpyFile('noext'));
+                expect(noext.message).to.equal('This browser can\'t play files with an unrecognized type');
             });
 
-            it('F-05 (release) — release() revokes the live URL and drops the buffer', async () => {
+            it('F-05 (release) — release() drops the live buffer and is idempotent (N-3)', async () => {
                 const ctx = createFakeContext();
                 const loader = createFileLoader({ codecs: alwaysSupport, context: ctx });
                 const a = await loader.loadFile(createMp3File('a.mp3'));
                 expect(a.ok).to.equal(true);
-                expect(revokeUrlCalls).to.have.length(0);
+                expect(revokeUrlCalls).to.have.length(0); // no URL surface exists anymore
 
                 loader.release();
-                expect(revokeUrlCalls).to.deep.equal([a.objectUrl]);
+                loader.release(); // idempotent — no throw
 
-                // release() is idempotent — no double revoke.
-                loader.release();
-                expect(revokeUrlCalls).to.deep.equal([a.objectUrl]);
+                // The loader still functions after release (buffer ref was
+                // the only live resource it owned).
+                const b = await loader.loadFile(createMp3File('b.mp3'));
+                expect(b.ok).to.equal(true);
+                expect(b.buffer).to.not.equal(a.buffer);
             });
         });
 
