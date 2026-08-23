@@ -9,6 +9,7 @@
 - [Pure functions for math](#pure-functions-for-math)
 - [Pure function numeric guards](#pure-function-numeric-guards)
 - [Barrel export verification](#barrel-export-verification)
+- [Moving a function to a new module](#moving-a-function-to-a-new-module)
 - [Gotchas](#gotchas)
 
 ## Named Exports Only
@@ -116,6 +117,16 @@ export { exportToJpeg } from './Export/formats/jpegExporter.js';
 
 **Verify by checking the source file** for `export function exportToJpeg` or `export const exportToJpeg`. If the source exports a namespace object (like `ExportManager`), you cannot re-export its methods via `export { method } from './source.js'`.
 
+## Moving a Function to a New Module
+
+Moving a function to a new module is the classic case where barrel re-exports go stale. The source module that the barrel's `from` clause points to no longer exports the name, so the barrel silently exports `undefined` — and nothing fails at load time. Checklist after every move:
+
+1. **Update every import site** to the new module (or the barrel, per project convention).
+2. **Update the barrel's `from` clause** in `MyESModules/index.js` to point to the new module (and the name, if the move was a rename).
+3. **Verify the barrel directly** — grep the barrel for the moved name and confirm its `from` clause resolves to a module that actually exports it.
+
+**The barrel check is vacuous if consumers bypass the barrel.** In projects where every consumer imports directly from source modules, a stale barrel passes every consumer and every test — the breakage only surfaces when someone later imports the name *through* the barrel. "All consumers work" is not evidence the barrel is correct; check the barrel explicitly.
+
 ## Gotchas
 
 1. **`.js` extension required** — ES modules in browsers require explicit file extensions in imports
@@ -123,7 +134,8 @@ export { exportToJpeg } from './Export/formats/jpegExporter.js';
 3. **`type="module"` required** — Script tags must have `type="module"` to use import/export
 4. **Top-level await not needed** — All async initialization happens in Vue lifecycle hooks
 5. **Barrel re-exports of missing names** — `export { foo } from './bar.js'` where `bar.js` doesn't export `foo` silently yields `undefined`. Always verify the source module exports the name.
-6. **Destructured parameter scoping** — When a function destructures its parameter object, the original variable name is not accessible inside the function body. Destructure all needed properties explicitly:
+6. **Direct import of a missing name fails at link time — with a hang-shaped symptom** — `import { foo } from './bar.js'` where `bar.js` doesn't export `foo` is a `SyntaxError` at module-link time: the whole module graph (test script → imports → modules under test) never instantiates, so in the in-browser Mocha runner the file reports `mocha.run() was never reached within the timeout — test page error or hung suite` with **no per-test error**. This is the loud counterpart of gotcha 5 (barrel = silent `undefined`, direct import = broken page). Two consequences: (a) a TDD RED that adds a not-yet-existing name to an import list is a broken-page RED, not a failing-test RED — prefer asserting the behavior without touching the import list; (b) when a test file fails with the timeout message, check the page console (or `node --check` an extracted module script) before suspecting the harness — the link error names the missing export. A broken-page RED also *masks* the per-test REDs behind it in the same file: after the first fix, re-run and confirm the remaining failures are the ones you expect.
+7. **Destructured parameter scoping** — When a function destructures its parameter object, the original variable name is not accessible inside the function body. Destructure all needed properties explicitly:
 ```javascript
 // WRONG — `options` is not defined inside the function
 render(ctx, { panels, images, titleStyle }) {
