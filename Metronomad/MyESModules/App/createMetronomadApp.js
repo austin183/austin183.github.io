@@ -58,13 +58,10 @@ export function createMetronomadApp({ createApp, dataConfig, methodsConfig, life
                 if (!Number.isFinite(this.duration) || this.duration <= 0) return 0;
                 const clamped = Math.min(Math.max(this.offset, 0), this.duration);
                 return (clamped / this.duration) * 100;
-            },
-
-            // B-04 contract.
-            progressAriaLabel() {
-                if (!this.fileName) return 'Song progress';
-                return `Song position ${this.formattedPosition} of ${this.formattedDuration}, entry at ${formatTime(this.offset)}`;
             }
+            // N-10: the per-position progressAriaLabel computed is deleted —
+            // the template carries a STATIC aria-label, and aria-valuetext
+            // reads the already-quantized formattedPosition (B-04 rev).
         },
 
         watch: {

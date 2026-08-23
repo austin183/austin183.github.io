@@ -89,9 +89,11 @@ test.describe('Phase 8 — keyboard pass (U-23, U-12, V-07)', () => {
     // Song starts on the downbeat → announced
     await expect.poll(() => liveRegion(page).textContent(), { timeout: 10000 }).toBe('Song started');
 
-    // Restart by keyboard → new count-in, focus returns to Play/Stop (V-02)
+    // Restart by keyboard → new count-in, focus returns to Play/Stop (V-02).
+    // N-12: the restart is announced as its own event — "Count-in restarted"
+    // (supersedes the engine's "Count-in started" for the new count-in).
     await page.locator('#restartBtn').press('Enter');
-    await expect.poll(() => liveRegion(page).textContent()).toBe('Count-in started');
+    await expect.poll(() => liveRegion(page).textContent()).toBe('Count-in restarted');
     await expect.poll(() => activeId(page)).toBe('playStopBtn');
 
     // Stop by keyboard → ready + announced

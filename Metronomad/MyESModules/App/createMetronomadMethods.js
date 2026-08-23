@@ -23,7 +23,17 @@ export function createMetronomadMethods() {
         onDragOver() {
             this.isDragOver = true;
         },
-        onDragLeave() {
+        onDragLeave(event) {
+            // N-13: the drop zone contains the Browse button and file
+            // input — the cursor crossing onto a CHILD fires dragleave
+            // too, and clearing there caused the highlight to flicker
+            // (and drop to fail, since the zone was no longer "armed").
+            // A leave whose relatedTarget is still inside the zone is not
+            // a leave. (pointer-events:none would have disabled the
+            // children — rejected at scoping.)
+            const related = event && event.relatedTarget;
+            const zone = event && event.currentTarget;
+            if (related && zone && zone.contains(related)) return;
             this.isDragOver = false;
         },
         onDrop(event) {
@@ -181,7 +191,7 @@ export function createMetronomadMethods() {
                 // Invalid entry: keep the offset, revert the field, hint.
                 this.offsetText = formatTime(this.offset);
                 this.offsetClamped = true;
-                this.offsetHint = 'Enter the time as mm:ss.t';
+                this.offsetHint = 'Enter the time as m:ss.t'; // N-19: matches formatTime's canonical shape
                 return;
             }
             const value = clampOffset(parsed, this.duration);
@@ -204,6 +214,10 @@ export function createMetronomadMethods() {
         async onPlayToggle() {
             if (this.isParamLocked) {
                 this._engine.stop();
+                // N-8: the drop lock is gone now — clear the message whose
+                // condition it was (a stale lock message outlived the stop;
+                // an UNRELATED error, e.g. decode, is still relevant). R-N8.1.
+                if (this.errorMessage === 'Drop a new song after stopping') this.errorMessage = '';
                 this._refocusPlayStopButton(); // U-04: focus returns to the toggle
                 return;
             }
@@ -222,11 +236,18 @@ export function createMetronomadMethods() {
                 }
             }
 
+            // N-14: unmount (beforeUnmount → engine dispose) can land
+            // BETWEEN the await and here — the post-await guard owns this
+            // path (R-N14.1): no engine call, no write to an unmounted VM.
+            if (!this._engine) return;
+
             const result = this._engine.startSequence(this._sequenceParams());
             if (!result || !result.ok) {
                 // P-13 defense-in-depth — the UI already clamps, so this is a
                 // last-resort guard, not a reachable error path.
                 this.errorMessage = "Couldn't start playback";
+            } else {
+                this.errorMessage = ''; // N-8: the tap unblocked audio — the "blocked" message is stale (R-N8.2)
             }
         },
 
@@ -239,6 +260,8 @@ export function createMetronomadMethods() {
                 this.errorMessage = "Couldn't restart playback";
                 return;
             }
+            this.announcement = 'Count-in restarted'; // N-12: V-07 inventory gains the restart event (R-N12.1)
+            this.errorMessage = ''; // N-8: a successful restart supersedes a stale error (R-N8.3)
             this._refocusPlayStopButton(); // V-02: refocus after Stop/Restart
         },
 
@@ -283,6 +306,8 @@ export function createMetronomadMethods() {
             });
             if (!result || !result.ok) {
                 this.errorMessage = "Can't preview from that position";
+            } else {
+                this.errorMessage = ''; // N-8: a successful preview supersedes a stale error (R-N8.3)
             }
         },
 

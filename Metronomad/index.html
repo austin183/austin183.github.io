@@ -72,11 +72,13 @@
 
                 <div class="control-group control-group--offset">
                     <label for="offsetInput">Offset</label>
+                    <!-- N-15: no :tabindex — a disabled range is already out
+                         of the tab order; the dynamic -1/0 binding was dead. -->
                     <input type="range" id="offsetScrubber" min="0" :max="duration" step="0.1"
-                           :value="offset" :disabled="!isReady" :tabindex="isReady ? 0 : -1"
+                           :value="offset" :disabled="!isReady"
                            aria-label="Start offset" @input="onOffsetScrub($event.target.value)">
                     <input type="text" id="offsetInput" v-model="offsetText" :disabled="!isReady"
-                           placeholder="mm:ss.t" autocomplete="off"
+                           placeholder="m:ss.t" autocomplete="off"
                            @keyup.enter="onOffsetCommit" @blur="onOffsetCommit">
                     <p v-if="offsetClamped" class="clamp-hint" role="status">{{ offsetHint }}</p>
                 </div>
@@ -119,9 +121,12 @@
                       :class="{ 'beat-dot--downbeat': dot === 1 }"></span>
             </div>
 
-            <!-- Progress with offset marker (B-04 aria-label) -->
-            <div class="progress" role="progressbar" :aria-label="progressAriaLabel"
-                 aria-valuemin="0" :aria-valuemax="duration" :aria-valuenow="songPosition">
+            <!-- Progress with offset marker. N-10: the label is STATIC —
+                 the old per-position label churned ~10×/s and duplicated the
+                 position already in aria-valuetext (the quantized string). -->
+            <div class="progress" role="progressbar" aria-label="Song progress"
+                 aria-valuemin="0" :aria-valuemax="duration" :aria-valuenow="songPosition"
+                 :aria-valuetext="formattedPosition">
                 <div class="progress-track">
                     <div class="progress-fill" :style="{ width: progressPercent + '%' }"></div>
                     <div v-if="fileName" class="progress-offset-marker"

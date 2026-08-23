@@ -48,6 +48,7 @@ export function createBeatDots(vm, base, callbacks = {}) {
     const _isPageHidden = base.isPageHidden || (() => document.hidden);
     let _rafId = null;
     let _lastPositionText = null;
+    let _lastBeatInterval = null; // N-9: the --beat-interval value last applied (R-N9.1)
     let _hiddenPaused = false; // loop was running when the tab went hidden
     let _stopped = false;      // stopAll ran — everything is torn down
     let _activeDot = -1;       // lit dot index (post modulo), -1 = none
@@ -123,9 +124,17 @@ export function createBeatDots(vm, base, callbacks = {}) {
         _applyMotionClass(dots);
 
         // Pulse duration follows the tempo (CSS --beat-interval).
-        if (grid) {
+        // N-9: set only when the interval value CHANGES — the old code
+        // wrote the same value ~60×/s per frame, and getComputedStyle on
+        // the dots reads this variable every frame (layout pressure).
+        // Reset in _clearDots so a new sequence always re-applies, even
+        // with the same value (BPM is editable between sequences).
+        if (grid && grid.interval !== _lastBeatInterval) {
             const rowEl = base.getDom(DOTS_ROW_ID);
-            if (rowEl) rowEl.style.setProperty('--beat-interval', grid.interval + 's');
+            if (rowEl) {
+                rowEl.style.setProperty('--beat-interval', grid.interval + 's');
+                _lastBeatInterval = grid.interval;
+            }
         }
 
         if (_vm) {
@@ -175,6 +184,7 @@ export function createBeatDots(vm, base, callbacks = {}) {
             el.classList.remove('beat-dot--active', 'beat-dot--pulse', 'beat-dot--static');
         });
         _lastPositionText = null;
+        _lastBeatInterval = null; // N-9: a new sequence re-applies the interval
         if (_vm) _vm.activeBeatIndex = -1;
     }
 

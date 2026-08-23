@@ -173,7 +173,14 @@ test.describe('Phase 7 — playback (E2E-1.x)', () => {
     const timeline = await readTimeline(page);
     const actionT = await readActionT(page);
     expect(actionT, 'stop click recorded').toBeTruthy();
-    expect(actionT).toBeLessThan(450); // still in the count-in window
+    // N-26: the count-in stop window ends at the grid-law flip —
+    // t0 + (countIn + 1) · beat = t0 + 1500 ms (count-in 2 @ 120 BPM).
+    // The old self-imposed 450 ms bound was flake-able under saturated
+    // CI (the in-page 250 ms timeout can slip past 450 while still a
+    // valid count-in stop). A count-in stop never reaches `playing`, so
+    // the grid-law time is the exact proxy (R-N26.1).
+    const flipAt = (2 + 1) * 500; // (countIn + 1) beats × 500 ms @ 120 BPM
+    expect(actionT, `stop at ${actionT.toFixed(0)} ms`).toBeLessThan(flipAt); // before the song would have started
 
     const ready = transitionsTo(timeline, 'ready').pop();
     expect(ready, 'ready entry').toBeTruthy();

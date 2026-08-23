@@ -24,6 +24,7 @@
         import { createMetronomadData } from '../MyESModules/App/createMetronomadData.js';
         import { createMetronomadMethods } from '../MyESModules/App/createMetronomadMethods.js';
         import { createMetronomadApp } from '../MyESModules/App/createMetronomadApp.js';
+        import { SCHEDULER } from '../MyESModules/Playback/playbackEngine.js'; // N-25: the real-timer bound is the constant, not a magic 700
 
         const { expect } = chai;
 
@@ -621,11 +622,11 @@
                 expect(vm.offset).to.equal(1.2);
                 expect(vm.offsetText).to.equal('0:01.2'); // reverted to the last valid value
                 expect(vm.offsetClamped).to.equal(true);
-                expect(vm.offsetHint).to.equal('Enter the time as mm:ss.t');
+                expect(vm.offsetHint).to.equal('Enter the time as m:ss.t'); // N-19: matches formatTime's canonical shape
 
                 vm.commitOffsetEntry('-1');
                 expect(vm.offset).to.equal(1.2);
-                expect(vm.offsetHint).to.equal('Enter the time as mm:ss.t');
+                expect(vm.offsetHint).to.equal('Enter the time as m:ss.t');
             });
 
             it('commitOffsetEntry: in-range value commits cleanly and clears the hint', () => {
@@ -963,7 +964,7 @@
                 expect(vm.appState).to.equal('ready'); // button is not dead
             });
 
-            it('resume that never settles: ~750 ms timeout → friendly error (SCHEDULER.RESUME_TIMEOUT_MS)', async () => {
+            it('resume that never settles: RESUME_TIMEOUT_MS timeout → friendly error (N-25: bound is the constant)', async () => {
                 const vm = buildVm();
                 vm.appState = 'ready';
                 vm._buffer = fakeBuffer;
@@ -973,9 +974,153 @@
                 const t0 = Date.now();
                 await vm.onPlayToggle();
 
-                expect(Date.now() - t0).to.be.greaterThan(700);
+                // R-N25.1: asserted against the imported constant (−50 ms keeps
+                // the real-timer test flake-safe while pinning the value).
+                expect(Date.now() - t0).to.be.greaterThan(SCHEDULER.RESUME_TIMEOUT_MS - 50);
                 expect(vm.errorMessage).to.equal('Audio is blocked by the browser — tap again to enable sound');
                 expect(vm._engine.calls).to.deep.equal([]);
+            });
+
+            it('R-N14.1 — unmount during the resume await: no engine call, no error, no throw (N-14)', async () => {
+                const vm = buildVm();
+                vm.appState = 'ready';
+                vm._buffer = fakeBuffer;
+                let settleResume = null;
+                vm._clock = { state: 'suspended', resume() { return new Promise((r) => { settleResume = r; }); } };
+                vm._engine = makeFakeEngine();
+
+                const p = vm.onPlayToggle();
+                expect(vm._engine.calls).to.deep.equal([]); // still awaiting resume
+                vm._engine = null; // unmount while the resume await is in flight
+                settleResume();
+                await p;
+
+                expect(vm.errorMessage).to.equal(''); // unmounted VM not written to
+                // no throw, no startSequence — the post-await guard owns this path
+            });
+        });
+
+        // ============================================================
+        // N-8 — errorMessage clears where its condition resolves
+        // (clearing, not a dismiss control — no new strings)
+        // ============================================================
+        describe('N-8 errorMessage clearing', () => {
+            it('R-N8.1 — Stop clears the drop-lock message (the lock is gone)', () => {
+                const vm = buildVm();
+                vm.appState = 'playing';
+                vm.errorMessage = 'Drop a new song after stopping';
+                vm._engine = makeFakeEngine();
+
+                vm.onPlayToggle();
+
+                expect(vm._engine.calls).to.deep.equal([['stop']]);
+                expect(vm.errorMessage).to.equal('');
+            });
+
+            it('R-N8.1b — Stop does NOT clear an unrelated (decode) error', () => {
+                const vm = buildVm();
+                vm.appState = 'playing';
+                vm.errorMessage = "Couldn't decode broken.mp3 — the file may be corrupted";
+                vm._engine = makeFakeEngine();
+
+                vm.onPlayToggle();
+
+                expect(vm.errorMessage).to.contain('broken.mp3'); // still relevant — a Stop doesn't resolve it
+            });
+
+            it('R-N8.2 — a successful Play clears the "Audio is blocked" message (the tap worked)', async () => {
+                const vm = buildVm();
+                vm.appState = 'ready';
+                vm._buffer = fakeBuffer;
+                vm.errorMessage = 'Audio is blocked by the browser — tap again to enable sound';
+                vm._clock = { state: 'running', resume() { return Promise.resolve(); } };
+                vm._engine = makeFakeEngine();
+
+                await vm.onPlayToggle();
+
+                expect(vm._engine.calls).to.have.length(1); // started
+                expect(vm.errorMessage).to.equal('');
+            });
+
+            it('R-N8.3 — successful Restart / Preview clear a stale error', () => {
+                const vmR = buildVm();
+                vmR.appState = 'playing';
+                vmR._buffer = fakeBuffer;
+                vmR.errorMessage = "Couldn't restart playback";
+                vmR._engine = makeFakeEngine();
+                vmR.onRestart();
+                expect(vmR.errorMessage).to.equal('');
+
+                const vmP = buildVm();
+                vmP.appState = 'ready';
+                vmP._buffer = fakeBuffer;
+                vmP.errorMessage = "Can't preview from that position";
+                vmP._engine = makeFakeEngine();
+                vmP.onPreview();
+                expect(vmP.errorMessage).to.equal('');
+            });
+        });
+
+        // ============================================================
+        // N-12 — Restart announces "Count-in restarted" (V-07 inventory +1)
+        // ============================================================
+        describe('N-12 restart announcement', () => {
+            it('R-N12.1 — restart ok announces "Count-in restarted" (countingIn AND playing)', () => {
+                for (const state of ['countingIn', 'playing']) {
+                    const vm = buildVm();
+                    vm.appState = state;
+                    vm._buffer = fakeBuffer;
+                    vm._engine = makeFakeEngine();
+
+                    vm.onRestart();
+
+                    expect(vm.announcement, `state ${state}`).to.equal('Count-in restarted');
+                }
+            });
+        });
+
+        // ============================================================
+        // N-13 — drop-zone dragover flicker: dragleave to a CHILD of the
+        // zone is not a leave (the review's pointer-events:none option would
+        // disable the Browse button, which is a child of the zone)
+        // ============================================================
+        describe('N-13 dragleave child guard', () => {
+            it('R-N13.1 — relatedTarget inside the zone keeps isDragOver; outside/absent clears it', () => {
+                const zone = document.createElement('section');
+                const child = document.createElement('button');
+                zone.appendChild(child);
+                const outside = document.createElement('div');
+                const vm = buildVm();
+
+                const leaveTo = (relatedTarget) => {
+                    vm.isDragOver = true;
+                    vm.onDragLeave({ currentTarget: zone, relatedTarget });
+                };
+
+                leaveTo(child); // cursor crossed onto a child — still inside
+                expect(vm.isDragOver).to.equal(true);
+                leaveTo(outside); // really left the zone
+                expect(vm.isDragOver).to.equal(false);
+                leaveTo(null); // e.g. leaving the window
+                expect(vm.isDragOver).to.equal(false);
+            });
+        });
+
+        // ============================================================
+        // N-27 — _refocusPlayStopButton: the "never focus a disabled
+        // button" branch (previously untested — the mock was never disabled)
+        // ============================================================
+        describe('N-27 refocus disabled-branch', () => {
+            it('R-N27.1 — locked + disabled toggle: stop happens, focus does not', () => {
+                const vm = buildVm();
+                vm.appState = 'playing';
+                vm.$refs.playStopBtn = { focused: false, disabled: true, focus() { this.focused = true; } };
+                vm._engine = makeFakeEngine();
+
+                vm.onPlayToggle();
+
+                expect(vm._engine.calls).to.deep.equal([['stop']]);
+                expect(vm.$refs.playStopBtn.focused).to.equal(false); // disabled button never focused
             });
         });
 

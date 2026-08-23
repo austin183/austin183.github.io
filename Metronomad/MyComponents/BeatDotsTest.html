@@ -401,6 +401,43 @@
                 env.fakeRAF.flush();
                 expect(row.style.getPropertyValue('--beat-interval')).to.equal('0.24s');
             });
+
+            it('R-N9.1 — --beat-interval is set once per distinct interval value, not per frame (N-9)', () => {
+                const env = makeEnv({ matches: false });
+                const clock = makeFakeClock(101.75);
+                const grid = { firstBeatTime: 100.5, interval: 0.5, state: 'playing' };
+                const engine = makeFakeEngine({ grid, position: 2.5 });
+                const vm = { activeBeatIndex: -1, songPosition: 0 };
+                const dots = env.makeDots(vm, engine, clock);
+
+                // Count setProperty calls on the row (save/restore, local).
+                let setCalls = 0;
+                const origSet = row.style.setProperty;
+                row.style.setProperty = (k, v) => { setCalls++; return origSet.call(row.style, k, v); };
+
+                try {
+                    dots.startVisualClock();
+                    for (let i = 0; i < 5; i++) { env.fakeRAF.flush(); } // 5 frames, constant interval
+                    expect(setCalls, 'one set for the first interval value').to.equal(1);
+
+                    // Tempo change → the next set (and only the next set).
+                    grid.interval = 0.24;
+                    env.fakeRAF.flush();
+                    expect(setCalls).to.equal(2);
+                    expect(row.style.getPropertyValue('--beat-interval')).to.equal('0.24s');
+
+                    // The cache resets on stop — a new run re-applies even
+                    // though the value is unchanged (BPM is editable between
+                    // sequences, so "same value" must never skip the first set).
+                    dots.stopVisualClock();
+                    dots.startVisualClock();
+                    env.fakeRAF.flush();
+                    expect(setCalls).to.equal(3);
+                } finally {
+                    row.style.setProperty = origSet;
+                    dots.stopAll();
+                }
+            });
         });
 
         // ============================================================
@@ -408,7 +445,7 @@
         // binds these computeds: width, left, aria-label). Characterization
         // of the Phase 5 computeds via the app factory options.
         // ============================================================
-        describe('B-04 — progress bar render values', () => {
+        describe('B-04 (rev) — progress bar render values (N-10: static label + aria-valuetext)', () => {
             let appOptions = null;
             createMetronomadApp({
                 createApp: (options) => { appOptions = options; return { mount() {} }; },
@@ -431,7 +468,7 @@
                 return vm;
             }
 
-            it('songPosition 1.5, duration 3.0, offset 1.0 → fill 50%, marker 33.333%, aria-label', () => {
+            it('songPosition 1.5, duration 3.0, offset 1.0 → fill 50%, marker 33.333%; formattedPosition is the aria-valuetext source', () => {
                 const vm = buildProgressVm({
                     fileName: 'song.mp3',
                     duration: 3.0,
@@ -443,17 +480,30 @@
                 expect(vm.progressPercent).to.equal(50);
                 // :style="{ left: offsetMarkerPercent + '%' }"
                 expect(vm.offsetMarkerPercent).to.be.closeTo(33.333, 0.001);
-                // :aria-label="progressAriaLabel"
-                expect(vm.progressAriaLabel).to.equal(
-                    'Song position 0:01.5 of 0:03.0, entry at 0:01.0'
-                );
+                // :aria-valuetext="formattedPosition" — the quantized
+                // tenth-second string, never the raw float (N-10/B-04 rev)
+                expect(vm.formattedPosition).to.equal('0:01.5');
             });
 
-            it('no file → 0% fill/marker and the plain label (no NaN in the DOM)', () => {
+            it('no file → 0% fill/marker and no NaN in the DOM', () => {
                 const vm = buildProgressVm();
                 expect(vm.progressPercent).to.equal(0);
                 expect(vm.offsetMarkerPercent).to.equal(0);
-                expect(vm.progressAriaLabel).to.equal('Song progress');
+                expect(vm.formattedPosition).to.equal('0:00.0');
+            });
+
+            it('B-04 (rev) — template: static aria-label + aria-valuetext binding, no churning label (N-10)', async () => {
+                // Template pin: the progressbar label is static (the old
+                // per-position label churned ~10×/s and duplicated the
+                // position already in valuetext). DOMParser: Vue binding
+                // attributes parse literally with the colon prefix.
+                const res = await fetch('../index.html');
+                const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+                const bar = doc.querySelector('.progress[role="progressbar"]');
+                expect(bar, 'progress region in the template').to.not.equal(null);
+                expect(bar.getAttribute('aria-label')).to.equal('Song progress'); // static
+                expect(bar.getAttribute(':aria-valuetext')).to.equal('formattedPosition');
+                expect(bar.getAttribute(':aria-label')).to.equal(null); // the churning computed label is gone
             });
         });
 
