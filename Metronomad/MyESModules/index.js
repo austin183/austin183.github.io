@@ -18,7 +18,7 @@ export {
     ENGINE_STATES, SCHEDULER, PREVIEW_SECONDS, createPlaybackEngine
 } from './Playback/playbackEngine.js';
 export { createFileLoader } from './File/fileLoader.js';
-export { beatInterval, buildSchedule, beatPhaseFromGrid } from './Utils/beatGrid.js';
+export { beatInterval, buildSchedule, beatPhaseFromGrid, BEATS_PER_BAR } from './Utils/beatGrid.js';
 export { formatTime, parseOffsetInput } from './Utils/timeFormat.js';
 export {
     clampBpm, clampCountIn, clampOffset,

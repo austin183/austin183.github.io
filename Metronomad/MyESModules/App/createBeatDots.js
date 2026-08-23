@@ -7,31 +7,46 @@
  * accumulated — so hidden-tab RAF pausing can never drift or stutter the
  * dots.
  *
- * Dependencies are injected per the skill factory convention (DIP):
- *   base       = { getEngine, getClock, getDom(id) }
+ * The factory captures the Vue instance (`vm`) ONCE (N-17 — it is built in
+ * mounted(), where the instance exists): the returned methods carry no vm
+ * argument and sync `vm.activeBeatIndex` (data-beat hook, KB-6) and
+ * `vm.songPosition` (progress readout — only rewritten when the
+ * tenth-second changes, per the per-frame performance note).
+ *
+ * Dependencies are injected per the skill factory convention (DIP) — the
+ * browser globals mirror the engine's parameter style, with the
+ * window/document globals as defaults (I-7/RD-6):
+ *   base       = { getEngine, getClock, getDom(id), raf, cancelRaf,
+ *                  matchMedia, isPageHidden }
  *   callbacks  = {} reserved for future per-frame hooks
  *
- * The returned methods take the Vue instance (`vm`) whose reactive state
- * they sync: `activeBeatIndex` (data-beat hook, KB-6) and `songPosition`
- * (progress readout — only rewritten when the tenth-second changes, per
- * the per-frame performance note).
+ * Teardown ownership (I-6/RD-6): stopAll tears down ONLY this module's
+ * resources (pending RAF, matchMedia listener, dot classes, _stopped flag).
+ * It NEVER touches the engine — engine.dispose() is owned by the lifecycle
+ * (createMetronomadLifecycle.beforeUnmount, R-I6.2/B-06).
  *
  * Dot classes (`beat-dot--active`, pulse/static variants) are managed
  * imperatively here — the template renders only the static downbeat
  * modifier, so Vue re-renders never clobber the per-frame classes.
  */
 
-import { beatPhaseFromGrid } from '../Utils/beatGrid.js';
+import { beatPhaseFromGrid, BEATS_PER_BAR } from '../Utils/beatGrid.js';
 import { formatTime } from '../Utils/timeFormat.js';
 
-const DOT_COUNT = 4;
+const DOT_COUNT = BEATS_PER_BAR; // I-8: one home for "4 beats per bar"
 const DOT_ID = 'beatDot-';
 const DOTS_ROW_ID = 'beatDots';
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 
-export function createBeatDots(base, callbacks = {}) {
+export function createBeatDots(vm, base, callbacks = {}) {
+    const _vm = vm;
+    // I-7: browser globals injected with defaults — tests supply fakes and
+    // touch no window state (R-I7.1).
+    const _raf = base.raf || ((cb) => window.requestAnimationFrame(cb));
+    const _cancelRaf = base.cancelRaf || ((id) => window.cancelAnimationFrame(id));
+    const _matchMedia = base.matchMedia || ((query) => window.matchMedia(query));
+    const _isPageHidden = base.isPageHidden || (() => document.hidden);
     let _rafId = null;
-    let _vm = null;
     let _lastPositionText = null;
     let _hiddenPaused = false; // loop was running when the tab went hidden
     let _stopped = false;      // stopAll ran — everything is torn down
@@ -55,7 +70,7 @@ export function createBeatDots(base, callbacks = {}) {
     // change applies live — no new frame required.
     function _initMotionPreference() {
         if (_mql) return;
-        _mql = window.matchMedia(REDUCED_MOTION_QUERY);
+        _mql = _matchMedia(REDUCED_MOTION_QUERY);
         _reducedMotion = _mql.matches;
         _onMediaChange = () => {
             _reducedMotion = _mql.matches;
@@ -69,7 +84,7 @@ export function createBeatDots(base, callbacks = {}) {
     // `_hiddenPaused`: the hidden path sets it AFTER deciding to cancel.
     function _cancelLoop() {
         if (_rafId !== null) {
-            window.cancelAnimationFrame(_rafId);
+            _cancelRaf(_rafId);
             _rafId = null;
         }
     }
@@ -136,7 +151,7 @@ export function createBeatDots(base, callbacks = {}) {
         const engine = base.getEngine();
         if (!engine) return;
         // No grid = sequence over → the loop ends with the cleared frame.
-        if (_render(engine)) _rafId = window.requestAnimationFrame(_tick);
+        if (_render(engine)) _rafId = _raf(_tick);
     }
 
     // Render one frame NOW without consuming a queued RAF — the U-17 snap
@@ -147,11 +162,10 @@ export function createBeatDots(base, callbacks = {}) {
         return Boolean(_render(engine));
     }
 
-    function startVisualClock(vm) {
+    function startVisualClock() {
         if (_rafId !== null) return;
-        _vm = vm;
         _initMotionPreference();
-        _rafId = window.requestAnimationFrame(_tick);
+        _rafId = _raf(_tick);
     }
 
     // Clear every dot class this module owns and reset the vm sync state.
@@ -164,8 +178,7 @@ export function createBeatDots(base, callbacks = {}) {
         if (_vm) _vm.activeBeatIndex = -1;
     }
 
-    function stopVisualClock(vm) {
-        if (vm) _vm = vm;
+    function stopVisualClock() {
         _hiddenPaused = false;
         _cancelLoop();
         _clearDots();
@@ -175,9 +188,8 @@ export function createBeatDots(base, callbacks = {}) {
     // the audio clock, D9, so pausing can never drift it); visible → one
     // immediate re-render (snap) + resume, but only if the sequence is
     // still running.
-    function onVisibilityChange(vm) {
-        if (vm) _vm = vm;
-        if (document.hidden) {
+    function onVisibilityChange() {
+        if (_isPageHidden()) {
             // Remember that the loop was running so the visible branch can
             // resume it — a hidden tab while idle must start nothing.
             if (_rafId !== null) _hiddenPaused = true;
@@ -186,24 +198,22 @@ export function createBeatDots(base, callbacks = {}) {
             _hiddenPaused = false;
             // Snap to the current beat first, then resume only while the
             // sequence is still running.
-            if (_renderNow()) _rafId = window.requestAnimationFrame(_tick);
+            if (_renderNow()) _rafId = _raf(_tick);
         }
     }
 
-    // B-05: final teardown (called from beforeUnmount). Cancels the
-    // pending RAF, removes the matchMedia listener, clears the dots, and
-    // disposes the engine (its D10 watch interval, scheduler, and sources).
-    // Idempotent — a double unmount must not dispose twice.
-    function stopAll(vm) {
+    // B-05 (rev) / R-I6.1: final teardown (called from beforeUnmount).
+    // Cancels the pending RAF, removes the matchMedia listener, and clears
+    // the dot state. Visualizer resources ONLY — no engine access of any
+    // kind (engine dispose is the lifecycle's job). Idempotent — a double
+    // unmount must not tear down twice.
+    function stopAll() {
         if (_stopped) return;
         _stopped = true;
-        if (vm) _vm = vm;
         _hiddenPaused = false;
         _cancelLoop();
         _teardownMotionPreference();
         _clearDots();
-        const engine = base.getEngine();
-        if (engine && engine.dispose) engine.dispose();
     }
 
     return { startVisualClock, stopVisualClock, onVisibilityChange, stopAll };

@@ -7,7 +7,13 @@
  * Grid law (spec §5): press at t_p → click k (1-based) at
  * t_p + k·beatInterval; song starts at t_p + (countInBeats+1)·beatInterval
  * (no lead-time floor — D1/KB-1).
+ *
+ * I-8: BEATS_PER_BAR is the single home for "4 beats per bar" — the accent
+ * rule here, the dot count in createBeatDots, and the template's v-for all
+ * derive from it, so dots and accents can never silently disagree.
  */
+
+export const BEATS_PER_BAR = 4;
 
 /**
  * Seconds per beat for a BPM value.
@@ -38,8 +44,8 @@ export function buildSchedule({ tP, bpm, countInBeats, offset = 0 }) {
     for (let k = 1; k <= countInBeats; k++) {
         clicks.push({
             time: tP + k * interval,
-            // 4/4 fixed: accent on every 4th beat (beat 1 of each bar).
-            isAccent: k % 4 === 1
+            // 4/4 fixed: accent on beat 1 of each bar (I-8: binds to the constant).
+            isAccent: k % BEATS_PER_BAR === 1
         });
     }
 

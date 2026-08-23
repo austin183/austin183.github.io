@@ -9,6 +9,8 @@
  * is a flag, preview is an engine state surfaced via `isPreviewing`).
  */
 
+import { BEATS_PER_BAR } from '../Utils/beatGrid.js';
+
 // App states (D8).
 export const APP_STATES = {
     NO_FILE: 'noFile',
@@ -55,6 +57,7 @@ export function createMetronomadData() {
 
             // Visual state (Phase 6)
             isDragOver: false,
+            beatsPerBar: BEATS_PER_BAR, // I-8: template v-for + downbeat class bind to this
             activeBeatIndex: -1, // 0–3 lit dot; -1 = none (data-beat hook, KB-6)
             songPosition: 0
         };

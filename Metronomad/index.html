@@ -113,7 +113,7 @@
                  The active/pulse/static classes are managed imperatively by
                  createBeatDots (Phase 6) — do not re-bind them here. -->
             <div id="beatDots" class="beat-dots" aria-hidden="true" :data-beat="activeBeatIndex">
-                <span v-for="dot in 4" :key="dot"
+                <span v-for="dot in beatsPerBar" :key="dot"
                       :id="'beatDot-' + (dot - 1)"
                       class="beat-dot"
                       :class="{ 'beat-dot--downbeat': dot === 1 }"></span>

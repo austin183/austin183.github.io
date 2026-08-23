@@ -21,7 +21,7 @@
     <script>mocha.setup('bdd');</script>
 
     <script type="module">
-        import { beatInterval, buildSchedule, beatPhaseFromGrid } from '../MyESModules/Utils/beatGrid.js';
+        import { beatInterval, buildSchedule, beatPhaseFromGrid, BEATS_PER_BAR } from '../MyESModules/Utils/beatGrid.js';
         import { formatTime, parseOffsetInput } from '../MyESModules/Utils/timeFormat.js';
         import { clampBpm, clampCountIn, clampOffset } from '../MyESModules/Utils/paramClamps.js';
 
@@ -58,6 +58,15 @@
                     { time: 102.0, isAccent: false }
                 ]);
                 expect(schedule.songStart).to.deep.equal({ time: 102.5, offset: 90.0 });
+            });
+
+            it('R-I8.1 — BEATS_PER_BAR is the single home for "4 beats per bar"; the accent rule binds to it', () => {
+                expect(BEATS_PER_BAR).to.equal(4);
+                // An 8-beat count-in spans two bars: accents fall on k = 1 and
+                // k = 5 (k % BEATS_PER_BAR === 1 — beat 1 of each bar).
+                const schedule = buildSchedule({ tP: 0, bpm: 120, countInBeats: 8, offset: 0 });
+                expect(schedule.clicks.map(c => c.isAccent))
+                    .to.deep.equal([true, false, false, false, true, false, false, false]);
             });
 
             it('T-05 — 30 BPM, 16-beat count-in: accents every 4th click', () => {

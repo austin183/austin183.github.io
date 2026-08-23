@@ -14,15 +14,16 @@
  *       the N click sources.
  *   D6  Hand-rolled "A Tale of Two Clocks" scheduler — 25 ms tick, 100 ms
  *       horizon — no Tone.js.
- *   D9  Beat grid exposed for the RAF dot loop; phase is a pure function of
- *       the audio clock (never accumulated).
+ *   D9  Beat grid + position exposed for the app-level RAF dot loop
+ *       (createBeatDots owns the visual clock — the engine never schedules
+ *       animation frames; I-5/RD-6).
  *   D10 Context-state watch (250 ms): suspended/interrupted → self-stop +
  *       onInterrupted() once.
  *
  * State: stopped / countingIn / playing / preview.
  */
 
-import { beatInterval, buildSchedule, beatPhaseFromGrid } from '../Utils/beatGrid.js';
+import { beatInterval, buildSchedule } from '../Utils/beatGrid.js';
 import { BPM_MIN, BPM_MAX, COUNT_IN_MIN, COUNT_IN_MAX } from '../Utils/paramClamps.js';
 
 export const ENGINE_STATES = {
@@ -56,11 +57,9 @@ function createSource(context, buffer) {
  *   clickBuffers   { accent, regular } AudioBuffers
  *   onStateChange  (state) → void   — engine state + terminal events
  *   onInterrupted  () → void        — D10 self-stop notice
- *   onFrame        (phase) → void   — visual-clock callback (D9)
  *   clock          { currentTime }  — defaults to context
  *   schedulerMs    lookahead tick ms — defaults SCHEDULER.TICK_MS
  *   lookaheadSec   scheduling horizon — defaults SCHEDULER.LOOKAHEAD_SEC
- *   raf/cancelRaf  animation-frame fns — defaults window.*
  *   setInterval/clearInterval — timer fns (DIP) — defaults window.*
  */
 export function createPlaybackEngine({
@@ -69,18 +68,13 @@ export function createPlaybackEngine({
     clickBuffers,
     onStateChange,
     onInterrupted,
-    onFrame,
     clock,
     schedulerMs = SCHEDULER.TICK_MS,
     lookaheadSec = SCHEDULER.LOOKAHEAD_SEC,
-    raf,
-    cancelRaf,
     setInterval: setIntervalFn,
     clearInterval: clearIntervalFn
 }) {
     const _clock = clock || context;
-    const _raf = raf || ((cb) => window.requestAnimationFrame(cb));
-    const _cancelRaf = cancelRaf || ((id) => window.cancelAnimationFrame(id));
     const _setInterval = setIntervalFn || ((fn, ms) => window.setInterval(fn, ms));
     const _clearInterval = clearIntervalFn || ((id) => window.clearInterval(id));
 
@@ -99,7 +93,6 @@ export function createPlaybackEngine({
 
     let _schedulerId = null;
     let _watchId = null;
-    let _rafId = null;
 
     function _emit(state) {
         if (onStateChange) onStateChange(state);
@@ -142,7 +135,6 @@ export function createPlaybackEngine({
         _generation++;
         if (_schedulerId !== null) { _clearInterval(_schedulerId); _schedulerId = null; }
         if (_watchId !== null) { _clearInterval(_watchId); _watchId = null; }
-        stopVisualClock();
         _disconnectAll();
         _seq = null;
         _preview = null;
@@ -199,16 +191,6 @@ export function createPlaybackEngine({
     function _startScheduler() {
         if (_schedulerId !== null) return;
         _schedulerId = _setInterval(_schedulerTick, schedulerMs);
-    }
-
-    // ---- visual clock (D9) ---------------------------------------------
-    function _rafTick() {
-        _rafId = null;
-        const grid = getBeatGrid();
-        if (!grid) return; // stopped → stop the loop
-        const phase = beatPhaseFromGrid(_clock.currentTime, grid.firstBeatTime, grid.interval);
-        if (onFrame) onFrame(phase);
-        _rafId = _raf(_rafTick);
     }
 
     // ---- public API -----------------------------------------------------
@@ -333,20 +315,7 @@ export function createPlaybackEngine({
         return Math.min(Math.max(pos, lo), hi);
     }
 
-    function startVisualClock() {
-        if (_rafId !== null) return;
-        _rafId = _raf(_rafTick);
-    }
-
-    function stopVisualClock() {
-        if (_rafId !== null) {
-            _cancelRaf(_rafId);
-            _rafId = null;
-        }
-    }
-
     function dispose() {
-        stopVisualClock();
         if (_schedulerId !== null) { _clearInterval(_schedulerId); _schedulerId = null; }
         if (_watchId !== null) { _clearInterval(_watchId); _watchId = null; }
         _disconnectAll();
@@ -363,8 +332,6 @@ export function createPlaybackEngine({
         preview,
         getBeatGrid,
         songPosition,
-        startVisualClock,
-        stopVisualClock,
         dispose
     };
 }

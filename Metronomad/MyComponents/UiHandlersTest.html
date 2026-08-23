@@ -860,13 +860,13 @@
                 expect(vm.appState).to.equal('countingIn');
             });
 
-            it('onVisibilityChange delegates to _beatDots.onVisibilityChange(vm)', () => {
+            it('onVisibilityChange delegates to _beatDots.onVisibilityChange() — no vm arg (factory captures it, N-17)', () => {
                 const calls = [];
                 const vm = buildVm();
                 vm._beatDots = {
                     startVisualClock: () => calls.push('start'),
                     stopVisualClock: () => calls.push('stop'),
-                    onVisibilityChange: (v) => calls.push(['visibility', v === vm])
+                    onVisibilityChange: (v) => calls.push(['visibility', v === undefined])
                 };
 
                 vm.onVisibilityChange();

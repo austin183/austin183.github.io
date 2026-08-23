@@ -13,7 +13,7 @@
 </head>
 <body>
     <h1>Metronomad — PlaybackEngine Unit Tests</h1>
-    <p class="test-plan-ref">Covers: Plan §3.2 P-01…P-14 (Playback/playbackEngine.js), H-03 (Audio/clickBuffers.js).
+    <p class="test-plan-ref">Covers: Plan §3.2 P-01…P-11, P-13…P-14 (Playback/playbackEngine.js — P-12 retired, I-5/RD-6, see R-I5.1), H-03 (Audio/clickBuffers.js).
     Engine tests instantiate ZERO real AudioContext — fake context/clock/RAF/timers only (Phase 4 success criteria).</p>
     <div id="mocha"></div>
 
@@ -39,24 +39,6 @@
             clock.set = (v) => { clock._t = v; };
             clock.advance = (dt) => { clock._t += dt; };
             return clock;
-        }
-
-        // Fake RAF — callback collector (skill testing-unit.md pattern).
-        function createFakeRAF() {
-            let nextId = 1;
-            const pending = new Map();
-            const canceled = [];
-            return {
-                canceled,
-                raf(cb) { const id = nextId++; pending.set(id, cb); return id; },
-                cancelRaf(id) { if (pending.delete(id)) canceled.push(id); },
-                flush() {
-                    const entries = [...pending.entries()];
-                    pending.clear();
-                    for (const [, cb] of entries) cb();
-                },
-                pendingCount() { return pending.size; }
-            };
         }
 
         // Fake timers — setInterval/clearInterval spies with manual ticks.
@@ -135,9 +117,7 @@
             const clickBuffers = overrides.clickBuffers || { accent: { name: 'accent' }, regular: { name: 'regular' } };
             const clock = overrides.clock || createFakeClock(0);
             const timers = overrides.timers || createFakeTimers();
-            const fakeRAF = overrides.raf || createFakeRAF();
             const events = [];
-            const frames = [];
             const interrupted = [];
 
             const engine = createPlaybackEngine({
@@ -147,19 +127,16 @@
                 clock,
                 schedulerMs: SCHEDULER.TICK_MS,
                 lookaheadSec: SCHEDULER.LOOKAHEAD_SEC,
-                raf: fakeRAF.raf,
-                cancelRaf: fakeRAF.cancelRaf,
                 setInterval: timers.setInterval,
                 clearInterval: timers.clearInterval,
                 onStateChange: (state) => events.push(state),
                 onInterrupted: () => interrupted.push(1),
-                onFrame: (phase) => frames.push(phase),
                 ...overrides.engine
             });
 
             return {
-                engine, context, masterGain, clickBuffers, clock, timers, fakeRAF,
-                events, frames, interrupted,
+                engine, context, masterGain, clickBuffers, clock, timers,
+                events, interrupted,
                 // The engine's own scheduler interval (25 ms tick).
                 tickScheduler() { return timers.tickWithMs(SCHEDULER.TICK_MS); },
                 tickWatch() { return timers.tickWithMs(SCHEDULER.WATCH_MS); }
@@ -525,28 +502,39 @@
                 expect(events.filter(e => e === 'stopped').length).to.equal(2);
             });
 
-            it('P-12 — visual clock: onFrame gets beatPhaseFromGrid(now, grid) each RAF; stop cancels the last pending id', () => {
-                const { engine, tickScheduler, tickWatch, clock, frames, fakeRAF } = makeEngine({ clock: createFakeClock(100.0) });
-                engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 0 });
+            // P-12 — RETIRED (2026-08-22, review fix I-5 / RD-6): the engine's
+            // visual clock (startVisualClock/stopVisualClock/onFrame) had zero
+            // production callers and was removed. Its observable content (phase
+            // law per frame, RAF cancel on stop) lives in B-01/B-02 in
+            // BeatDotsTest.html, which test the app's real loop.
+            // See _agent_docs/plans/2026-08-22-address-v1-review/behavior-specs.md §6.
 
-                engine.startVisualClock();
-                expect(fakeRAF.pendingCount()).to.equal(1);
-                fakeRAF.flush(); // before first beat → lead-in phase
-                expect(frames).to.deep.equal([{ beatIndex: -1, inBeat: 0 }]);
+            it('R-I5.1 — no visual-clock surface: no startVisualClock/stopVisualClock, zero RAF calls, getBeatGrid/songPosition intact', () => {
+                // Collector over window RAF (save/restore, local to this test):
+                // the engine must never touch animation frames at all.
+                const rafCalls = [];
+                const origRAF = window.requestAnimationFrame;
+                const origCancelRAF = window.cancelAnimationFrame;
+                window.requestAnimationFrame = (cb) => { rafCalls.push('raf'); return 1; };
+                window.cancelAnimationFrame = (id) => { rafCalls.push('cancel'); };
+                try {
+                    const { engine, clock } = makeEngine({ clock: createFakeClock(100.0) });
+                    expect(engine.startVisualClock).to.equal(undefined);
+                    expect(engine.stopVisualClock).to.equal(undefined);
+                    expect(engine.getBeatGrid).to.be.a('function');
+                    expect(engine.songPosition).to.be.a('function');
 
-                clock.set(101.75); // (101.75−100.5)/0.5 = 2.5 → beat 2 (T-08 corrected input)
-                fakeRAF.flush();
-                expect(frames[1]).to.deep.equal({ beatIndex: 2, inBeat: 0.5 });
-
-                const pendingBeforeStop = fakeRAF.pendingCount();
-                expect(pendingBeforeStop).to.equal(1);
-                engine.stopVisualClock();
-                expect(fakeRAF.canceled).to.have.length(1);
-
-                const frameCount = frames.length;
-                fakeRAF.flush(); // nothing pending → no further frames
-                expect(frames).to.have.length(frameCount);
-                engine.stop();
+                    expect(engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 0 }))
+                        .to.deep.include({ ok: true });
+                    expect(engine.getBeatGrid()).to.not.equal(null);
+                    engine.stop();
+                    expect(engine.getBeatGrid()).to.equal(null);
+                    engine.dispose();
+                    expect(rafCalls).to.deep.equal([]); // no RAF calls across start/stop/dispose
+                } finally {
+                    window.requestAnimationFrame = origRAF;
+                    window.cancelAnimationFrame = origCancelRAF;
+                }
             });
 
             it('P-13 (rev) — invalid params (incl. offset ≥ duration) → { ok: false }, no sources, state unchanged', () => {
@@ -625,18 +613,15 @@
                 expect(engine.songPosition()).to.equal(null);
             });
 
-            it('dispose() — clears scheduler + watch + RAF, stops sources, no callbacks', () => {
+            it('dispose() — clears scheduler + watch, stops sources, no callbacks', () => {
                 const h = makeEngine({ clock: createFakeClock(0) });
-                const { engine, tickScheduler, tickWatch, timers, fakeRAF, events } = h;
+                const { engine, tickScheduler, tickWatch, timers, events } = h;
                 engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 0 });
-                engine.startVisualClock();
-                expect(timers.count()).to.equal(2);
-                expect(fakeRAF.pendingCount()).to.equal(1);
+                expect(timers.count()).to.equal(2); // scheduler + watch
 
                 const eventsBefore = events.length;
                 engine.dispose();
                 expect(timers.count()).to.equal(0);
-                expect(fakeRAF.pendingCount()).to.equal(0);
                 expect(h.context.sources.every(s => !s.startedWith || s.stopped)).to.equal(true);
                 expect(events).to.have.length(eventsBefore); // dispose emits nothing — app is unmounting
             });

@@ -291,17 +291,17 @@ export function createMetronomadMethods() {
         // starts on countingIn, keeps running through the playing flip
         // (one sequence, one loop), and stops on every terminal state.
         _startBeatDots() {
-            if (this._beatDots) this._beatDots.startVisualClock(this);
+            if (this._beatDots) this._beatDots.startVisualClock();
         },
 
         _stopBeatDots() {
-            if (this._beatDots) this._beatDots.stopVisualClock(this);
+            if (this._beatDots) this._beatDots.stopVisualClock();
         },
 
         // document visibilitychange (listener wired in mounted): the RAF
         // loop pauses while hidden and snaps back on return (U-17, B-02).
         onVisibilityChange() {
-            if (this._beatDots) this._beatDots.onVisibilityChange(this);
+            if (this._beatDots) this._beatDots.onVisibilityChange();
         },
 
         // --- Engine callbacks (injected in mounted) ---

@@ -13,8 +13,10 @@
 </head>
 <body>
     <h1>Metronomad — BeatDots Unit Tests</h1>
-    <p class="test-plan-ref">Covers: Plan §3.2 B-01…B-05 (App/createBeatDots.js, createMetronomadApp.js computed) —
-    RAF callback-collector mock + matchMedia stub (Phase 6).</p>
+    <p class="test-plan-ref">Covers: Plan §3.2 B-01…B-05 (App/createBeatDots.js, createMetronomadApp.js computed),
+    review-fix R-I6.1/R-I6.2/B-06 (App/createMetronomadLifecycle.js teardown ordering),
+    R-I7.1 (DI: raf/cancelRaf/matchMedia/isPageHidden injected — this suite
+    contains NO window.*/document.* monkey-patching).</p>
     <div id="mocha"></div>
 
     <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
@@ -25,54 +27,86 @@
         import { createBeatDots } from '../MyESModules/App/createBeatDots.js';
         import { createMetronomadApp } from '../MyESModules/App/createMetronomadApp.js';
         import { createMetronomadData } from '../MyESModules/App/createMetronomadData.js';
+        import { createMetronomadLifecycle } from '../MyESModules/App/createMetronomadLifecycle.js';
 
         const { expect } = chai;
 
         // ============================================================
-        // RAF callback collector (skill testing-unit.md pattern).
-        // Always bind the originals; restore in afterEach.
+        // Fakes — everything the module could reach a browser global for
+        // is injected per test through `base` (R-I7.1). No global state
+        // is touched: no save/restore patching, nothing to leak on throw.
         // ============================================================
+
+        // Fake RAF — callback collector (skill testing-unit.md pattern).
         // Browser-faithful: pending frames keyed by id; cancel REMOVES the
         // callback (recording the id for assertions).
-        let rafPending = new Map();
-        let rafNextId = 1;
-        const originalRAF = window.requestAnimationFrame.bind(window);
-        const originalCancelRAF = window.cancelAnimationFrame.bind(window);
-
-        function mockRAF() {
-            rafPending = new Map();
-            rafNextId = 1;
-            window._canceledRafIds = [];
-            window.requestAnimationFrame = (cb) => {
-                const id = rafNextId++;
-                rafPending.set(id, cb);
-                return id; // 1-based ids, like the browser
+        function makeFakeRAF() {
+            let nextId = 1;
+            const pending = new Map();
+            const canceled = [];
+            return {
+                canceled,
+                raf(cb) { const id = nextId++; pending.set(id, cb); return id; },
+                cancelRaf(id) { if (pending.delete(id)) canceled.push(id); },
+                // One simulated frame: run every queued callback exactly once.
+                flush() {
+                    const entries = [...pending.entries()];
+                    pending.clear();
+                    for (const [, cb] of entries) cb();
+                },
+                pendingCount() { return pending.size; }
             };
-            window.cancelAnimationFrame = (id) => {
-                if (rafPending.delete(id)) window._canceledRafIds.push(id);
+        }
+
+        // Fake prefers-reduced-motion MediaQueryList — add/removeEventListener
+        // tracked so stopAll's listener removal is assertable (B-03/B-05).
+        function makeFakeMediaQuery(initialMatches = false) {
+            let matches = initialMatches;
+            const listeners = [];
+            const mql = {
+                media: '(prefers-reduced-motion: reduce)',
+                get matches() { return matches; },
+                addEventListener: (type, fn) => { listeners.push(fn); },
+                removeEventListener: (type, fn) => {
+                    const i = listeners.indexOf(fn);
+                    if (i >= 0) listeners.splice(i, 1);
+                }
+            };
+            return {
+                mql,
+                matchMedia: () => mql,
+                setMatches(value) {
+                    matches = value;
+                    listeners.slice().forEach((fn) => fn({ matches: value }));
+                },
+                listenerCount: () => listeners.length
             };
         }
 
-        function restoreRAF() {
-            window.requestAnimationFrame = originalRAF;
-            window.cancelAnimationFrame = originalCancelRAF;
-            window._canceledRafIds = [];
+        // One test environment: fresh RAF + media fakes + hidden flag, and
+        // the factory wired to them. `hidden.value` stands in for the
+        // page-hidden state — flipped by tests, read via isPageHidden().
+        function makeEnv({ matches = false } = {}) {
+            const fakeRAF = makeFakeRAF();
+            const media = makeFakeMediaQuery(matches);
+            const hidden = { value: false };
+
+            // N-17: the factory captures `vm` once — the methods carry no vm arg.
+            function makeDots(vm, engine, clock) {
+                return createBeatDots(vm, {
+                    getEngine: () => engine,
+                    getClock: () => clock,
+                    getDom: (id) => document.getElementById(id),
+                    raf: fakeRAF.raf,
+                    cancelRaf: fakeRAF.cancelRaf,
+                    matchMedia: media.matchMedia,
+                    isPageHidden: () => hidden.value
+                });
+            }
+
+            return { fakeRAF, media, hidden, makeDots };
         }
 
-        // One simulated frame: run every queued callback exactly once.
-        function flushRAF() {
-            const entries = [...rafPending.entries()];
-            rafPending.clear();
-            for (const [, cb] of entries) cb();
-        }
-
-        function pendingFrames() {
-            return rafPending.size;
-        }
-
-        // ============================================================
-        // Fakes: clock, engine, VM
-        // ============================================================
         function makeFakeClock(t = 0) {
             return { currentTime: t };
         }
@@ -112,16 +146,7 @@
 
         afterEach(() => {
             row.remove();
-            restoreRAF();
         });
-
-        function makeDots(engine, clock) {
-            return createBeatDots({
-                getEngine: () => engine,
-                getClock: () => clock,
-                getDom: (id) => document.getElementById(id)
-            });
-        }
 
         // ============================================================
         // B-01 — one RAF flush lights the dot for the current beat (D9:
@@ -129,7 +154,7 @@
         // ============================================================
         describe('B-01 — RAF frame renders the active dot', () => {
             it('flush with phase {beatIndex: 2, inBeat: 0.5} → dot 2 active, others not; vm synced', () => {
-                mockRAF();
+                const env = makeEnv();
                 // 120 BPM: interval 0.5, firstBeat 100.5 → clock 101.75 = beat 2.5 (T-08 corrected input)
                 const clock = makeFakeClock(101.75);
                 const engine = makeFakeEngine({
@@ -137,10 +162,10 @@
                     position: 2.5
                 });
                 const vm = { activeBeatIndex: -1, songPosition: 0 };
-                const dots = makeDots(engine, clock);
+                const dots = env.makeDots(vm, engine, clock);
 
-                dots.startVisualClock(vm);
-                flushRAF();
+                dots.startVisualClock();
+                env.fakeRAF.flush();
 
                 expect(dotEls[2].classList.contains('beat-dot--active')).to.equal(true);
                 expect(dotEls[0].classList.contains('beat-dot--active')).to.equal(false);
@@ -151,22 +176,22 @@
             });
 
             it('next frame with beatIndex 0 → dot 0 active, dot 2 cleared', () => {
-                mockRAF();
+                const env = makeEnv();
                 const clock = makeFakeClock(101.75);
                 const engine = makeFakeEngine({
                     grid: { firstBeatTime: 100.5, interval: 0.5, state: 'playing' },
                     position: 2.5
                 });
                 const vm = { activeBeatIndex: -1, songPosition: 0 };
-                const dots = makeDots(engine, clock);
+                const dots = env.makeDots(vm, engine, clock);
 
-                dots.startVisualClock(vm);
-                flushRAF();
+                dots.startVisualClock();
+                env.fakeRAF.flush();
                 expect(dotEls[2].classList.contains('beat-dot--active')).to.equal(true);
 
                 // Next sequence's first beat (e.g. after Restart): beatIndex 0
                 clock.currentTime = 100.75; // (100.75−100.5)/0.5 = 0.5 → beat 0
-                flushRAF();
+                env.fakeRAF.flush();
 
                 expect(dotEls[0].classList.contains('beat-dot--active')).to.equal(true);
                 expect(dotEls[2].classList.contains('beat-dot--active')).to.equal(false);
@@ -174,21 +199,21 @@
             });
 
             it('bar wrap: absolute beat 4 lights dot 0 (dots cycle every 4 beats)', () => {
-                mockRAF();
+                const env = makeEnv();
                 const clock = makeFakeClock(101.75);
                 const engine = makeFakeEngine({
                     grid: { firstBeatTime: 100.5, interval: 0.5, state: 'playing' },
                     position: 2.5
                 });
                 const vm = { activeBeatIndex: -1, songPosition: 0 };
-                const dots = makeDots(engine, clock);
+                const dots = env.makeDots(vm, engine, clock);
 
-                dots.startVisualClock(vm);
-                flushRAF();
+                dots.startVisualClock();
+                env.fakeRAF.flush();
                 expect(dotEls[2].classList.contains('beat-dot--active')).to.equal(true);
 
                 clock.currentTime = 102.55; // (102.55−100.5)/0.5 = 4.1 → beat 4 → dot 0
-                flushRAF();
+                env.fakeRAF.flush();
 
                 expect(dotEls[0].classList.contains('beat-dot--active')).to.equal(true);
                 expect(dotEls[2].classList.contains('beat-dot--active')).to.equal(false);
@@ -196,165 +221,119 @@
             });
 
             it('before the first beat (lead-in) → no dot lit, loop keeps running', () => {
-                mockRAF();
+                const env = makeEnv();
                 const clock = makeFakeClock(100.4); // T-09: before first beat
                 const engine = makeFakeEngine({
                     grid: { firstBeatTime: 100.5, interval: 0.5, state: 'countingIn' },
                     position: null
                 });
                 const vm = { activeBeatIndex: -1, songPosition: 0 };
-                const dots = makeDots(engine, clock);
+                const dots = env.makeDots(vm, engine, clock);
 
-                dots.startVisualClock(vm);
-                flushRAF();
+                dots.startVisualClock();
+                env.fakeRAF.flush();
 
                 for (const el of dotEls) {
                     expect(el.classList.contains('beat-dot--active')).to.equal(false);
                 }
                 expect(vm.activeBeatIndex).to.equal(-1);
                 expect(vm.songPosition).to.equal(0); // position null → untouched
-                expect(pendingFrames()).to.equal(1); // loop continues
+                expect(env.fakeRAF.pendingCount()).to.equal(1); // loop continues
             });
 
             it('engine stopped (grid null) → dots cleared and loop self-terminates', () => {
-                mockRAF();
+                const env = makeEnv();
                 const clock = makeFakeClock(101.75);
                 const engine = makeFakeEngine({ grid: { firstBeatTime: 100.5, interval: 0.5, state: 'playing' }, position: 2.5 });
                 const vm = { activeBeatIndex: -1, songPosition: 0 };
-                const dots = makeDots(engine, clock);
+                const dots = env.makeDots(vm, engine, clock);
 
-                dots.startVisualClock(vm);
-                flushRAF();
+                dots.startVisualClock();
+                env.fakeRAF.flush();
 
                 engine.grid = null; // stop() happened
-                flushRAF();
+                env.fakeRAF.flush();
 
                 for (const el of dotEls) {
                     expect(el.classList.contains('beat-dot--active')).to.equal(false);
                 }
                 expect(vm.activeBeatIndex).to.equal(-1);
-                expect(pendingFrames()).to.equal(0); // no further frames queued
+                expect(env.fakeRAF.pendingCount()).to.equal(0); // no further frames queued
             });
         });
 
         // ============================================================
         // B-02 — visibilitychange: hidden pauses the RAF loop; visible
         // re-renders immediately (U-17: dots snap to the correct beat).
-        // document.hidden is toggled with a restorable property override.
+        // Page hiddenness is injected (isPageHidden), never patched.
         // ============================================================
-        let hiddenGetter;
-
-        function setHidden(value) {
-            hiddenGetter = Object.getOwnPropertyDescriptor(Document.prototype, 'hidden');
-            Object.defineProperty(document, 'hidden', {
-                configurable: true,
-                get: () => value
-            });
-        }
-
-        function restoreHidden() {
-            Object.defineProperty(document, 'hidden', hiddenGetter);
-        }
-
         describe('B-02 — visibilitychange pauses and resumes the loop', () => {
-            beforeEach(() => { setHidden(false); });
-            afterEach(() => { restoreHidden(); });
-
             it('hidden → no further frames; visible → immediate re-render from the clock + loop resumes', () => {
-                mockRAF();
+                const env = makeEnv();
                 const clock = makeFakeClock(101.75); // beat 2.5
                 const engine = makeFakeEngine({
                     grid: { firstBeatTime: 100.5, interval: 0.5, state: 'playing' },
                     position: 2.5
                 });
                 const vm = { activeBeatIndex: -1, songPosition: 0 };
-                const dots = makeDots(engine, clock);
+                const dots = env.makeDots(vm, engine, clock);
 
-                dots.startVisualClock(vm);
-                flushRAF(); // rendered beat 2, one frame pending
+                dots.startVisualClock();
+                env.fakeRAF.flush(); // rendered beat 2, one frame pending
                 expect(dotEls[2].classList.contains('beat-dot--active')).to.equal(true);
-                expect(pendingFrames()).to.equal(1);
+                expect(env.fakeRAF.pendingCount()).to.equal(1);
 
-                // Tab hidden: the loop pauses — no further onFrame.
-                setHidden(true);
-                dots.onVisibilityChange(vm);
-                expect(pendingFrames()).to.equal(0); // pending frame canceled
-                expect(window._canceledRafIds).to.have.lengthOf(1);
+                // Tab hidden: the loop pauses — no further frames.
+                env.hidden.value = true;
+                dots.onVisibilityChange();
+                expect(env.fakeRAF.pendingCount()).to.equal(0); // pending frame canceled
+                expect(env.fakeRAF.canceled).to.have.lengthOf(1);
                 clock.currentTime = 102.25; // beat 3.5 elapses while hidden
-                flushRAF();
+                env.fakeRAF.flush();
                 expect(dotEls[3].classList.contains('beat-dot--active')).to.equal(false); // no render happened
 
                 // Tab visible: ONE immediate re-render — dots snap without a flush.
-                setHidden(false);
-                dots.onVisibilityChange(vm);
+                env.hidden.value = false;
+                dots.onVisibilityChange();
                 expect(dotEls[3].classList.contains('beat-dot--active')).to.equal(true); // snapped to beat 3
                 expect(dotEls[2].classList.contains('beat-dot--active')).to.equal(false);
-                expect(pendingFrames()).to.equal(1); // loop resumed
+                expect(env.fakeRAF.pendingCount()).to.equal(1); // loop resumed
             });
 
             it('visibilitychange while stopped is a no-op (no loop restart)', () => {
-                mockRAF();
+                const env = makeEnv();
                 const clock = makeFakeClock(0);
                 const engine = makeFakeEngine({ grid: null, position: null });
                 const vm = { activeBeatIndex: -1, songPosition: 0 };
-                const dots = makeDots(engine, clock);
+                const dots = env.makeDots(vm, engine, clock);
 
-                setHidden(true);
-                dots.onVisibilityChange(vm);
-                setHidden(false);
-                dots.onVisibilityChange(vm);
+                env.hidden.value = true;
+                dots.onVisibilityChange();
+                env.hidden.value = false;
+                dots.onVisibilityChange();
 
-                expect(pendingFrames()).to.equal(0); // nothing started
+                expect(env.fakeRAF.pendingCount()).to.equal(0); // nothing started
             });
         });
 
         // ============================================================
         // B-03 — prefers-reduced-motion: active dot is static (no pulse);
-        // media change applies live. matchMedia is stubbed + restored.
+        // media change applies live. matchMedia is injected, never stubbed
+        // on window.
         // ============================================================
-        const originalMatchMedia = window.matchMedia.bind(window);
-
-        function stubMatchMedia(initialMatches = false) {
-            let matches = initialMatches;
-            const listeners = [];
-            const mql = {
-                media: '(prefers-reduced-motion: reduce)',
-                get matches() { return matches; },
-                addEventListener: (type, fn) => { listeners.push(fn); },
-                removeEventListener: (type, fn) => {
-                    const i = listeners.indexOf(fn);
-                    if (i >= 0) listeners.splice(i, 1);
-                }
-            };
-            window.matchMedia = (query) => {
-                if (query === mql.media) return mql;
-                return originalMatchMedia(query);
-            };
-            return {
-                setMatches(value) {
-                    matches = value;
-                    listeners.slice().forEach((fn) => fn({ matches: value }));
-                },
-                listenerCount: () => listeners.length
-            };
-        }
-
-        afterEach(() => { window.matchMedia = originalMatchMedia; });
-
         describe('B-03 — reduced motion uses a static highlight', () => {
             it('default: the active dot pulses (beat-dot--pulse, no --static)', () => {
-                mockRAF();
-                stubMatchMedia(false);
+                const env = makeEnv({ matches: false });
                 const clock = makeFakeClock(101.75);
                 const engine = makeFakeEngine({
                     grid: { firstBeatTime: 100.5, interval: 0.5, state: 'playing' },
                     position: 2.5
                 });
                 const vm = { activeBeatIndex: -1, songPosition: 0 };
-                const dots = makeDots(engine, clock);
+                const dots = env.makeDots(vm, engine, clock);
 
-                dots.startVisualClock(vm);
-                flushRAF();
+                dots.startVisualClock();
+                env.fakeRAF.flush();
 
                 const el = dotEls[2];
                 expect(el.classList.contains('beat-dot--active')).to.equal(true);
@@ -363,18 +342,17 @@
             });
 
             it('reduced: the active dot is static (beat-dot--static, no --pulse)', () => {
-                mockRAF();
-                stubMatchMedia(true);
+                const env = makeEnv({ matches: true });
                 const clock = makeFakeClock(101.75);
                 const engine = makeFakeEngine({
                     grid: { firstBeatTime: 100.5, interval: 0.5, state: 'playing' },
                     position: 2.5
                 });
                 const vm = { activeBeatIndex: -1, songPosition: 0 };
-                const dots = makeDots(engine, clock);
+                const dots = env.makeDots(vm, engine, clock);
 
-                dots.startVisualClock(vm);
-                flushRAF();
+                dots.startVisualClock();
+                env.fakeRAF.flush();
 
                 const el = dotEls[2];
                 expect(el.classList.contains('beat-dot--active')).to.equal(true);
@@ -383,46 +361,44 @@
             });
 
             it('media change updates the active dot live (no new frame needed)', () => {
-                mockRAF();
-                const stub = stubMatchMedia(false);
+                const env = makeEnv({ matches: false });
                 const clock = makeFakeClock(101.75);
                 const engine = makeFakeEngine({
                     grid: { firstBeatTime: 100.5, interval: 0.5, state: 'playing' },
                     position: 2.5
                 });
                 const vm = { activeBeatIndex: -1, songPosition: 0 };
-                const dots = makeDots(engine, clock);
+                const dots = env.makeDots(vm, engine, clock);
 
-                dots.startVisualClock(vm);
-                flushRAF();
+                dots.startVisualClock();
+                env.fakeRAF.flush();
                 expect(dotEls[2].classList.contains('beat-dot--pulse')).to.equal(true);
 
-                stub.setMatches(true); // OS setting flips while playing
+                env.media.setMatches(true); // OS setting flips while playing
                 expect(dotEls[2].classList.contains('beat-dot--pulse')).to.equal(false);
                 expect(dotEls[2].classList.contains('beat-dot--static')).to.equal(true);
 
-                stub.setMatches(false); // and back
+                env.media.setMatches(false); // and back
                 expect(dotEls[2].classList.contains('beat-dot--pulse')).to.equal(true);
                 expect(dotEls[2].classList.contains('beat-dot--static')).to.equal(false);
             });
 
             it('pulse duration follows the tempo via --beat-interval on the dot row', () => {
-                mockRAF();
-                stubMatchMedia(false);
+                const env = makeEnv({ matches: false });
                 const clock = makeFakeClock(101.75);
                 const grid = { firstBeatTime: 100.5, interval: 0.5, state: 'playing' };
                 const engine = makeFakeEngine({ grid, position: 2.5 });
                 const vm = { activeBeatIndex: -1, songPosition: 0 };
-                const dots = makeDots(engine, clock);
+                const dots = env.makeDots(vm, engine, clock);
 
-                dots.startVisualClock(vm);
-                flushRAF();
+                dots.startVisualClock();
+                env.fakeRAF.flush();
                 expect(row.style.getPropertyValue('--beat-interval')).to.equal('0.5s');
 
                 // 250 BPM: interval 0.24 s (T-02)
                 grid.interval = 0.24;
                 clock.currentTime = 101.74;
-                flushRAF();
+                env.fakeRAF.flush();
                 expect(row.style.getPropertyValue('--beat-interval')).to.equal('0.24s');
             });
         });
@@ -482,42 +458,89 @@
         });
 
         // ============================================================
-        // B-05 — stopAll (called from beforeUnmount): cancels the pending
-        // RAF, disposes the engine (its D10 watch interval + scheduler),
-        // and removes the matchMedia listener. Idempotent.
+        // B-05 (rev) / R-I6.1 — stopAll (called from beforeUnmount):
+        // cancels the pending RAF, removes the matchMedia listener, and
+        // clears the dot state. NEVER touches the engine — engine dispose
+        // is owned by the lifecycle (R-I6.2/B-06). Idempotent.
         // ============================================================
-        describe('B-05 — stopAll tears down every visual timer', () => {
-            it('cancels RAF + engine.dispose (watch interval) + media listener; no leaks; idempotent', () => {
-                mockRAF();
-                const stub = stubMatchMedia(false);
+        describe('B-05 (rev) / R-I6.1 — stopAll tears down visualizer resources only', () => {
+            it('cancels RAF + media listener, clears dots, idempotent — engine.dispose NEVER called', () => {
+                const env = makeEnv({ matches: false });
                 const clock = makeFakeClock(101.75);
                 const engine = makeFakeEngine({
                     grid: { firstBeatTime: 100.5, interval: 0.5, state: 'playing' },
                     position: 2.5
                 });
                 const vm = { activeBeatIndex: -1, songPosition: 0 };
-                const dots = makeDots(engine, clock);
+                const dots = env.makeDots(vm, engine, clock);
 
-                dots.startVisualClock(vm);
-                flushRAF();
-                expect(pendingFrames()).to.equal(1); // RAF running
-                expect(stub.listenerCount()).to.equal(1); // media listener attached
+                dots.startVisualClock();
+                env.fakeRAF.flush();
+                expect(env.fakeRAF.pendingCount()).to.equal(1); // RAF running
+                expect(env.media.listenerCount()).to.equal(1); // media listener attached
 
-                dots.stopAll(vm);
+                dots.stopAll();
 
-                expect(pendingFrames()).to.equal(0); // RAF canceled
-                expect(window._canceledRafIds).to.have.lengthOf(1);
-                expect(engine.disposeCalls).to.equal(1); // watch interval cleared (spied)
-                expect(stub.listenerCount()).to.equal(0); // media listener removed
+                expect(env.fakeRAF.pendingCount()).to.equal(0); // RAF canceled
+                expect(env.fakeRAF.canceled).to.have.lengthOf(1);
+                expect(env.media.listenerCount()).to.equal(0); // media listener removed
                 for (const el of dotEls) {
                     expect(el.classList.contains('beat-dot--active')).to.equal(false);
                 }
                 expect(vm.activeBeatIndex).to.equal(-1);
+                expect(engine.disposeCalls).to.equal(0); // I-6: the visualizer never disposes the engine
 
-                // A second stopAll (e.g. double unmount) must be a no-op.
-                dots.stopAll(vm);
-                expect(engine.disposeCalls).to.equal(1);
-                expect(pendingFrames()).to.equal(0);
+                // A second stopAll (e.g. double unmount) must be a no-op (_stopped set).
+                dots.stopAll();
+                expect(engine.disposeCalls).to.equal(0);
+                expect(env.fakeRAF.pendingCount()).to.equal(0);
+            });
+        });
+
+        // ============================================================
+        // R-I6.2 / B-06 — teardown ownership: beforeUnmount owns the full
+        // ordering (listener removal → stopAll → engine.dispose →
+        // fileLoader.release); the visualizer never touches the engine.
+        // ============================================================
+        describe('R-I6.2 / B-06 — beforeUnmount owns the teardown ordering', () => {
+            const origRemoveEventListener = document.removeEventListener.bind(document);
+
+            function buildLifecycleVm({ withBeatDots = true } = {}) {
+                const order = [];
+                document.removeEventListener = (type, fn) => {
+                    order.push('removeListener');
+                    origRemoveEventListener(type, fn);
+                };
+                const vm = {
+                    ...createMetronomadLifecycle(),
+                    onVisibilityChange: () => {},
+                    _engine: { dispose: () => order.push('dispose') },
+                    _fileLoader: { release: () => order.push('release') }
+                };
+                if (withBeatDots) {
+                    vm._beatDots = { stopAll: () => order.push('stopAll') };
+                }
+                return { vm, order };
+            }
+
+            afterEach(() => {
+                document.removeEventListener = origRemoveEventListener;
+            });
+
+            it('R-I6.2 — order: listener removal → stopAll → engine.dispose() → fileLoader.release(), each once', () => {
+                const { vm, order } = buildLifecycleVm();
+
+                vm.beforeUnmount();
+
+                expect(order).to.deep.equal(['removeListener', 'stopAll', 'dispose', 'release']);
+            });
+
+            it('B-06 — _beatDots absent (audio init failed): dispose still called via the fallback', () => {
+                const { vm, order } = buildLifecycleVm({ withBeatDots: false });
+
+                vm.beforeUnmount();
+
+                expect(order).to.deep.equal(['removeListener', 'dispose', 'release']);
             });
         });
 
