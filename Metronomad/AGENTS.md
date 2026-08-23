@@ -68,7 +68,9 @@ Test conventions:
 - `_agent_docs/specifications/metronomad-v1-specification.md` — the spec
 - `_agent_docs/research/howlerjs-research.md` — Howler v2.2.3 research (pitfalls §5, codec matrix §6)
 - `_agent_docs/plans/2026-08-17-metronomad-v1/` — implementation plan (index.md phase map, context.md decisions D1–D11 + known behaviors KB-1…KB-10, behavior-specs.md scenario IDs)
+- `_agent_docs/plans/2026-08-22-address-v1-review/` — v1 review remediation plan (phase map; RD-1…RD-6 fix contracts; R-* scenario IDs)
 - `_agent_docs/sessions/` — per-phase TDD session summaries
+- `_agent_docs/project-timeline.md` — milestone history (v1 → review remediation)
 - `.pi/skills/building-web-apps/SKILL.md` — the project skill (symlinked) with verified patterns and gotchas
 
 ## Git Commit Convention
