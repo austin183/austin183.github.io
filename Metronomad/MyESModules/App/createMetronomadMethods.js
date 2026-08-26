@@ -2,6 +2,9 @@ import { APP_STATES } from './createMetronomadData.js';
 import { clampBpm, clampCountIn, clampOffset, BPM_DEFAULT, COUNT_IN_DEFAULT } from '../Utils/paramClamps.js';
 import { formatTime, parseOffsetInput } from '../Utils/timeFormat.js';
 import { ENGINE_STATES, ENGINE_EVENTS, SCHEDULER } from '../Playback/playbackEngine.js';
+import { extractPeaks } from '../Analysis/waveformPeaks.js';
+import { channelArrays } from '../Analysis/channelData.js';
+import { detectTempo } from '../Analysis/tempoDetection.js';
 
 /**
  * createMetronomadMethods — Vue instance-method factory for Metronomad.
@@ -11,6 +14,10 @@ import { ENGINE_STATES, ENGINE_EVENTS, SCHEDULER } from '../Playback/playbackEng
  *   _engine       — createPlaybackEngine instance (V-01/V-02)
  *   _fileLoader   — createFileLoader instance (V-05)
  *   _buffer       — decoded AudioBuffer of the loaded song (V-01 input)
+ *   _waveformView — createWaveformView instance (CR 001 Phase 4)
+ *   _peaks        — extractPeaks result for the live buffer (Phase 4)
+ *   _loadGeneration / _bpmTouchedThisFile / _disposed — D-E analysis
+ *   guards (generation + buffer identity + unmount; Phase 6 flag)
  *   _lastValidBpm / _lastValidCountIn — restored when an input is cleared
  *   (V-03; lazy-initialized from BPM_DEFAULT/COUNT_IN_DEFAULT)
  *
@@ -79,6 +86,14 @@ export function createMetronomadMethods() {
                     this.fileName = result.fileName;
                     this.duration = result.duration;
                     this._buffer = result.buffer; // non-reactive engine input (V-01)
+                    // D-E: UI-side generation + buffer-identity guards. The
+                    // failure paths below deliberately do NOT bump the
+                    // generation — the old buffer stays live (F-05), so an
+                    // in-flight analysis result for it remains valid (WF-I1.5).
+                    this._loadGeneration = (this._loadGeneration || 0) + 1;
+                    this._bpmTouchedThisFile = false; // CR §2.5 row 1: a re-drop re-suggests
+                    this.tempoSuggestion = null;      // the previous file's hint dies with it (silence is per-file, W-13)
+                    this.waveformReady = false;       // placeholder reappears (O-2/W-17)
                     // The new song may be shorter than the current offset —
                     // clamp so a later Play can never start past the end.
                     this.offset = clampOffset(this.offset, result.duration);
@@ -86,6 +101,10 @@ export function createMetronomadMethods() {
                     this.appState = APP_STATES.READY;
                     this.errorMessage = ''; // U-16: prior error cleared
                     this.announcement = `${result.fileName} loaded`;
+                    // The single post-load hook (CR §3): BOTH async analysis
+                    // tasks run after the READY paint, under the D4-style
+                    // generation guard. Never delays the flip (W-6).
+                    this._schedulePostLoadTasks(result.buffer, this._loadGeneration);
                 } else {
                     // U-14/U-15/U-20: friendly message, appState unchanged.
                     this.errorMessage = result.message || 'Couldn\'t load that file';
@@ -96,6 +115,70 @@ export function createMetronomadMethods() {
             } finally {
                 this.decoding = { active: false, fileName: '' };
             }
+        },
+
+        // --- Post-load analysis tasks (CR 001 Phase 4, D-E) ---
+        // The single shared hook point (CR §3). TWO-TASK SHAPE FROM DAY ONE
+        // (the D-M sequencing constraint): Phase 4 defined the hook calling
+        // BOTH tasks (the tempo body a guarded no-op); Phase 6 filled the
+        // tempo body in place and never refactored this hook.
+        _schedulePostLoadTasks(buffer, generation) {
+            this._runPeakExtraction(buffer, generation);
+            this._runTempoSuggestion(buffer, generation);
+        },
+
+        async _runPeakExtraction(buffer, generation) {
+            // The pinned yield (W-6): not requestIdleCallback (rejected,
+            // CR §6), not a second RAF (D9). After it, the READY paint is
+            // done — the waveform work is strictly post-Ready.
+            await new Promise((r) => setTimeout(r, 0));
+            if (!this._analysisValid(buffer, generation)) return;
+            const peaks = extractPeaks(buffer); // pure, never throws (WF-P1.6)
+            if (!this._analysisValid(buffer, generation)) return; // re-check before paint (N-14 shape)
+            // The caller keeps buffer identity for the guard; the view gets
+            // the same handle (it pools via poolPeaks and never walks
+            // raw samples).
+            this._peaks = { ...peaks };
+            this.waveformReady = true;
+            if (this._waveformView) this._waveformView.setPeaks(this._peaks);
+        },
+
+        // Tempo suggestion task (D-I, Phase 6): same yield + guard shape as
+        // the peaks task. Detection is pure math on the decoded samples
+        // (<50 ms budget, PERF-1) — the re-check before the write is the
+        // N-14/W-14 shape: a superseded file's result never touches state.
+        async _runTempoSuggestion(buffer, generation) {
+            await new Promise((r) => setTimeout(r, 0));
+            if (!this._analysisValid(buffer, generation)) return;
+            const { channels, sampleRate } = channelArrays(buffer);
+            const result = detectTempo(channels, sampleRate);
+            if (!this._analysisValid(buffer, generation)) return; // post-compute re-check (W-14)
+            this.applyTempoSuggestion(result);
+        },
+
+        // The prefill gate (W-16) — ALL clauses must hold, read AT WRITE
+        // TIME (R-10): never captured at kickoff, so a user touch or focus
+        // between the kickoff and the ~50 ms detection still wins.
+        applyTempoSuggestion(result) {
+            if (!result || !result.bpm) return; // null → no prefill, no hint (silence, W-13)
+            if (this._bpmTouchedThisFile) return; // the user touched BPM on this file
+            if (document.activeElement === document.getElementById('bpmInput')) return; // clause 3: not focused
+            if (this.bpmText !== String(this.bpm)) return; // clause 4: not mid-draft (W-16)
+            this.bpm = clampBpm(result.bpm);
+            this.bpmText = String(this.bpm);
+            this.tempoSuggestion = this.bpm; // drives the "Detected ~N BPM" hint (W-3)
+            this.announcement = `Detected tempo ${this.bpm} BPM`; // V-07 inventory +1
+            this.bpmClamped = false; // the write is in-range by clampBpm — a stale clamp hint from a prior commit cannot describe it (D-H: the two hints are mutually exclusive)
+            // The write does NOT set _bpmTouchedThisFile — a suggestion is
+            // not a touch: the user may still correct it, and a re-drop
+            // re-suggests (CR §2.5 row 1; TD-U1.7).
+        },
+
+        // W-14 (superseded file) + W-15 (unmount): one guard, three
+        // clauses. `_disposed` is the unmount half, set FIRST by
+        // beforeUnmount so in-flight tasks die on teardown.
+        _analysisValid(buffer, generation) {
+            return !this._disposed && generation === this._loadGeneration && buffer === this._buffer;
         },
 
         // --- Parameters (Phase 5) ---
@@ -135,6 +218,7 @@ export function createMetronomadMethods() {
         // the model moves here. A clamped commit reverts the draft to the
         // committed display and surfaces the hint (U-11 rev).
         commitBpmEntry() {
+            this._bpmTouchedThisFile = true; // CR §2.5 row 3: any commit is a touch — INCLUDING the _restoreLastValid garbage branch (typed garbage is a user touch). Set HERE, never inside _restoreLastValid (R-12: it is shared with count-in).
             const result = this._parseParamInput(this.bpmText, clampBpm);
             if (result === null) { this._restoreLastValid('bpm'); return; }
             this.bpm = result.value;
@@ -144,12 +228,23 @@ export function createMetronomadMethods() {
         },
 
         onBpmStep(delta) {
+            this._bpmTouchedThisFile = true; // CR §2.5: either stepper is a touch
             const raw = this.bpm + delta;
             const next = clampBpm(raw);
             this.bpm = next;
             this.bpmText = String(next); // sync the draft (R-C1.4)
             this.bpmClamped = next !== raw;
             this._lastValidBpm = next;
+        },
+
+        // CR §2.5 row 4 (R-6): any keystroke in the BPM field is a user
+        // touch. No-op EXCEPT the flag — v-model (the directive) owns the
+        // draft write to bpmText; this @input handler only sets the flag,
+        // and the two are order-independent (TD-U1.10 pins both orders).
+        // A programmatic write (the prefill) never fires a DOM input
+        // event, so the prefill cannot self-poison the flag.
+        onBpmTextInput() {
+            this._bpmTouchedThisFile = true;
         },
 
         // C-1 (RD-1): count-in commits only on Enter/blur; the draft
@@ -164,9 +259,11 @@ export function createMetronomadMethods() {
             this.countInClamped = result.clamped;
         },
 
-        // U-10: scrubber input → offset + offsetText (the field mirrors the
-        // slider; the scrubber's own range already keeps values in [0, max],
-        // so clamp only quantizes to the display precision).
+        // U-10/R-5: THE shared offset scrub law. The waveform canvas
+        // (pointer scrub + keyboard, CR 001 Phase 5) and the text field
+        // both funnel through here — clampOffset quantizes to the display
+        // precision and re-clamps to [0, duration] (T-35). No other code
+        // re-derives quantization.
         onOffsetScrub(rawValue) {
             const parsed = Number(rawValue);
             if (!Number.isFinite(parsed)) return;
@@ -175,6 +272,67 @@ export function createMetronomadMethods() {
             this.offsetText = formatTime(value);
             this.offsetClamped = false;
             this.offsetHint = '';
+        },
+
+        // --- Waveform scrub + keyboard (CR 001 Phase 5, D-G) ---
+        // The canvas replaces the old offset range scrubber (O-1). The
+        // pointer path's hygiene (capture try/catch, pointercancel first-
+        // class, global pointerup + window blur safety nets, touch-action
+        // pan-y) lives in createWaveformView; these handlers own the VM
+        // state. Every commit funnels through onOffsetScrub — one
+        // quantization law (T-35), never a second.
+
+        // pointerdown: the draft quantizes via the same clampOffset law;
+        // the committed offset does not move until scrubEnd(true).
+        onWaveformScrubStart(tenths) {
+            if (this.isParamLocked) return; // U-12 JS backstop (CSS: pointer-events none)
+            if (!Number.isFinite(this.duration) || this.duration <= 0) return; // WF-I2.10 backstop
+            this.offsetDraft = clampOffset(tenths, this.duration);
+            this._waveformView.setDraft(this.offsetDraft);
+        },
+
+        // pointermove: draft-only updates under the same law; a move
+        // before down (or after a cancel) has no draft to update.
+        onWaveformScrubMove(tenths) {
+            if (this.offsetDraft === null) return;
+            this.offsetDraft = clampOffset(tenths, this.duration);
+            this._waveformView.setDraft(this.offsetDraft);
+        },
+
+        // Every drag-exit funnels here. commit=true → commit through the
+        // shared law; commit=false (pointercancel / off-canvas release /
+        // window blur) → discard the draft, nothing committed (W-1).
+        onWaveformScrubEnd(commit) {
+            this._waveformView.setDraft(null);
+            if (commit && this.offsetDraft !== null) {
+                this.onOffsetScrub(this.offsetDraft);
+            }
+            this.offsetDraft = null;
+        },
+
+        // Full keyboard parity with the range the canvas replaces (W-9):
+        // ←/→ ±0.1 s (the old scrubber step), Shift+←/→ ±1 s, PageUp/Down
+        // ±10 % of duration (deliberately coarser than the native
+        // step×10 — plan-review UX-1), Home/End 0/duration. preventDefault
+        // only AFTER a handled commit (skill interaction.md ordering); an
+        // unhandled key leaves the browser default alone (WF-I2.9).
+        onWaveformKeydown(e) {
+            const key = e && e.key;
+            if (!key) return;
+            if (!Number.isFinite(this.duration) || this.duration <= 0) return; // WF-I2.10 backstop
+            const step = e.shiftKey ? 1 : 0.1;
+            let next = null;
+            switch (key) {
+                case 'ArrowLeft': next = this.offset - step; break;
+                case 'ArrowRight': next = this.offset + step; break;
+                case 'PageDown': next = this.offset - this.duration * 0.1; break;
+                case 'PageUp': next = this.offset + this.duration * 0.1; break;
+                case 'Home': next = 0; break;
+                case 'End': next = this.duration; break;
+                default: return;
+            }
+            this.onOffsetScrub(next);
+            e.preventDefault();
         },
 
         // Template-facing wrapper (Enter/blur) — the testable contract is

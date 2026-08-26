@@ -4,6 +4,7 @@ import { renderClickBuffers } from '../Audio/clickBuffers.js';
 import { createPlaybackEngine } from '../Playback/playbackEngine.js';
 import { createFileLoader } from '../File/fileLoader.js';
 import { createBeatDots } from './createBeatDots.js';
+import { createWaveformView } from './createWaveformView.js';
 
 /**
  * createMetronomadLifecycle — Vue lifecycle hooks for Metronomad.
@@ -80,6 +81,20 @@ export function createMetronomadLifecycle() {
                 getClock: () => this._clock,
                 getDom: (id) => document.getElementById(id)
             });
+
+            // CR 001 Phase 5 (D-G wiring): the three scrub callbacks turn
+            // the canvas into the offset slider. Arrow wrappers look the
+            // methods up at CALL time (never captured at factory time) —
+            // Vue binds `this` to the instance for every method. init does
+            // the container-measured DPR sizing (D-F delta 3) — the canvas
+            // is static DOM.
+            this._waveformView = createWaveformView(this, {}, {
+                onScrubStart: (t) => this.onWaveformScrubStart(t),
+                onScrubMove: (t) => this.onWaveformScrubMove(t),
+                onScrubEnd: (c) => this.onWaveformScrubEnd(c)
+            });
+            this._waveformView.init(document.getElementById('waveformCanvas'));
+
             document.addEventListener('visibilitychange', this.onVisibilityChange);
         },
 
@@ -90,6 +105,19 @@ export function createMetronomadLifecycle() {
             if (this._beatDots) {
                 this._beatDots.stopAll();
                 this._beatDots = null;
+            }
+            // D-E guard half (unmount): _disposed is set FIRST so any
+            // in-flight analysis task dies on its next guard check —
+            // nothing touches an unmounted VM (W-15). The waveform view
+            // disposes between stopAll() and engine.dispose() (listener
+            // removal before renderer disposal; RD-6 — it touches only its
+            // own resources, never the engine).
+            this._disposed = true;
+            this._peaks = null;
+            this._buffer = null;
+            if (this._waveformView) {
+                this._waveformView.dispose();
+                this._waveformView = null;
             }
             // The else-if fallback of the v1 code is now a plain defense:
             // stopAll no longer disposes, so the lifecycle always owns the

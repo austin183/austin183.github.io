@@ -63,20 +63,25 @@
                                 aria-label="Decrease BPM by 1" :disabled="!isReady" @click="onBpmStep(-1)">−</button>
                         <input type="number" id="bpmInput" min="30" max="250" step="1"
                                v-model="bpmText" :disabled="!isReady"
-                               @keyup.enter="commitBpmEntry" @blur="commitBpmEntry">
+                               @input="onBpmTextInput" @keyup.enter="commitBpmEntry" @blur="commitBpmEntry">
                         <button id="bpmPlusBtn" class="mn-btn stepper-btn" type="button"
                                 aria-label="Increase BPM by 1" :disabled="!isReady" @click="onBpmStep(1)">+</button>
                     </div>
                     <p v-if="bpmClamped" class="clamp-hint" role="status">BPM limited to 30–250</p>
+                    <!-- CR 001 Phase 6 (D-I): the tempo suggestion hint —
+                         string pinned (W-3, short for narrow viewports).
+                         Mutually exclusive with the clamp hint: a prefill
+                         is in-range by clampBpm, and the touched flag keeps
+                         user-edited (possibly clamped) state away from it. -->
+                    <p v-if="tempoSuggestion" class="clamp-hint" role="status">Detected ~{{ tempoSuggestion }} BPM</p>
                 </div>
 
                 <div class="control-group control-group--offset">
                     <label for="offsetInput">Offset</label>
-                    <!-- N-15: no :tabindex — a disabled range is already out
-                         of the tab order; the dynamic -1/0 binding was dead. -->
-                    <input type="range" id="offsetScrubber" min="0" :max="duration" step="0.1"
-                           :value="offset" :disabled="!isReady"
-                           aria-label="Start offset" @input="onOffsetScrub($event.target.value)">
+                    <!-- O-1 (CR 001 Phase 5): the old offset range
+                         scrubber is deleted — the waveform canvas below
+                         is the offset slider (pointer scrub + full
+                         keyboard parity). -->
                     <input type="text" id="offsetInput" v-model="offsetText" :disabled="!isReady"
                            placeholder="m:ss.t" autocomplete="off"
                            @keyup.enter="onOffsetCommit" @blur="onOffsetCommit">
@@ -121,19 +126,47 @@
                       :class="{ 'beat-dot--downbeat': dot === 1 }"></span>
             </div>
 
-            <!-- Progress with offset marker. N-10: the label is STATIC —
-                 the old per-position label churned ~10×/s and duplicated the
-                 position already in aria-valuetext (the quantized string). -->
-            <div class="progress" role="progressbar" aria-label="Song progress"
-                 aria-valuemin="0" :aria-valuemax="duration" :aria-valuenow="songPosition"
-                 :aria-valuetext="formattedPosition">
-                <div class="progress-track">
-                    <div class="progress-fill" :style="{ width: progressPercent + '%' }"></div>
-                    <div v-if="fileName" class="progress-offset-marker"
-                         :style="{ left: offsetMarkerPercent + '%' }"></div>
+            <!-- Waveform progress (replaces the 8px bar; CR 2026-08-23-001).
+                 W-10: the progressbar role MOVES to the readout (the visible
+                 value). Phase 5: the canvas IS the offset slider (role=
+                 "slider", tabindex 0 in ready, aria-disabled +
+                 pointer-events none while locked — a canvas can never be
+                 :disabled, R-1). The N-10 static-label rule still applies:
+                 the readout carries a STATIC aria-label, and aria-valuetext
+                 reads the quantized formattedDisplayPosition string. The
+                 KB-6 hook (data-loaded) carries no styling and no ARIA. -->
+            <div class="progress">
+                <div class="waveform" :class="{ 'waveform--locked': isParamLocked }">
+                    <!-- O-2 placeholder: the old thin track until peaks are
+                         painted (paint gate W-17: !decoding.active &&
+                         waveformReady) -->
+                    <div v-if="fileName && !waveformReady" class="progress-track">
+                        <div class="progress-offset-marker" :style="{ left: offsetMarkerPercent + '%' }"></div>
+                    </div>
+                    <canvas id="waveformCanvas"
+                            v-show="fileName && waveformReady"
+                            role="slider"
+                            :tabindex="isReady ? 0 : -1"
+                            aria-label="Start offset"
+                            :aria-valuemin="0"
+                            :aria-valuemax="duration"
+                            :aria-valuenow="offset"
+                            :aria-valuetext="offsetAriaText"
+                            :aria-disabled="isParamLocked || null"
+                            @keydown="onWaveformKeydown"
+                            :data-loaded="waveformReady ? 'true' : null"></canvas>
+                    <div v-if="fileName" class="waveform-dim" :style="{ width: markerPercent + '%' }"></div>
+                    <div v-if="fileName" class="waveform-offset-marker"
+                         :style="{ left: markerPercent + '%' }"></div>
+                    <div id="waveformPlayhead" v-if="fileName" class="waveform-playhead"
+                         :data-position-tenths="Math.round(displayPosition * 10)"
+                         :style="{ left: playheadPercent + '%' }"></div>
                 </div>
-                <div v-if="fileName" class="progress-readout">
-                    {{ formattedPosition }} / {{ formattedDuration }}
+                <div v-if="fileName" class="progress-readout" role="progressbar"
+                     aria-label="Song progress"
+                     aria-valuemin="0" :aria-valuemax="duration"
+                     :aria-valuenow="displayPosition" :aria-valuetext="formattedDisplayPosition">
+                    {{ formattedDisplayPosition }} / {{ formattedDuration }}
                 </div>
             </div>
 

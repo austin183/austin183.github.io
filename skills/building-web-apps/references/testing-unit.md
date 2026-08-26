@@ -13,7 +13,10 @@
 - Tolerance Precision in Positioning Tests
 - Testing Default Behavior Explicitly
 - Testing Input Handlers: Replay the Keystroke Sequence
+- Comparing Float32Array Outputs: Expectations Must Round-Trip
+- Transcribing Plan-Pinned Numeric Examples
 - Asserting Synchronous Side Effects of Async APIs
+- Driving Pinned `setTimeout(0)` Yields in Unit Tests
 - Testing Combined Edge Cases
 - Writing Robust Positioning Tests
 - Self-Calibrating Hit Test Coordinates
@@ -113,6 +116,7 @@ await page.waitForFunction(() => {
 Then read `window.__mochaRun.runner.stats` (final at `end`) for `passes`/`failures`/`pending`, and parse the `.fail` DOM for failure detail. A blocked CDN, a run that never starts, or a hung suite now resolves to a fast, named per-file error instead of a 30 s stall.
 
 - Keep the timeout fall-through but make it **diagnostic** — name the failure ("mocha.run() never reached", "Mocha unavailable (no runner)", "did not settle (N tests complete)") rather than a silent stall that happens to land on the right answer.
+- **"mocha.run() never reached" is a disjunction, not a verdict** — the broken-page signal fires for *any* page-level failure before `mocha.run()` settles, including a new test page that simply forgot its trailing `load → mocha.run()` listener. Telling symptom: after fixing the suspected cause (e.g., a missing barrel export), the signal **persists identically**. Disambiguate with one probe before touching production code: load the page with Playwright and check (a) `pageerror` (module link failures report there; a missing run listener does not) and (b) whether a manual `window.mocha.run()` executes the registered tests. Silent page + registered tests + manual run works = page scaffolding is incomplete, not the implementation.
 - **Exit non-zero on any per-file failure.** A v1 runner exited 0 even when individual tests failed (it only threw when *every* file failed) — "green" CI output did not mean "no failing tests." Collect per-file errors, including `N failing test(s)` with each failing title + first error line, and fail the process on any of them.
 
 ### Mocking Browser APIs
@@ -304,69 +308,60 @@ document.createElement = originalCreateElement;
 
 For testing rendering modules, use a Proxy-based wrapper around a real canvas context. This is more robust than `Object.defineProperty` because canvas context properties are host objects that may be non-configurable or read-only.
 
+**Two traps that each cost a full debugging round:**
+
+1. **An unwrapped host method called through the proxy throws a bare `TypeError: Illegal invocation`.** Canvas context methods type-check their `this`, so any method the `get` trap serves raw (`return target[prop]`) throws when production calls it — with no hint about which call site, and inside the production module's RAF callback, so the stack points at the module, not the mock. It reads as "implementation broken", not "mock missing a method".
+2. **The proxy's `get` trap returns the *wrapper function* for tracked methods.** Asserting through the proxy or fake canvas (`expect(ctx.moveTo).to.have.lengthOf(300)`) reads a function, not the recorded calls — the error (`expected [Function] to deeply equal …`) looks like an implementation bug. The record must be a **plain object exposed separately** from the proxy.
+
 ```javascript
-function createMockCtx(width = 1920, height = 1080) {
+function makeRecordingCtx(width = 1920, height = 1080) {
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
-    const realCtx = canvas.getContext('2d');
+    const real = canvas.getContext('2d');
 
-    const calls = {
-        fillStyle: [],
-        font: [],
-        fillRect: [],
-        fillText: [],
-        createLinearGradient: [],
-        addColorStop: []
+    // Audit the production render function's FULL call surface
+    // (setTransform, clearRect, beginPath, moveTo, lineTo, stroke, …)
+    // BEFORE the first GREEN run — not after the first red stack.
+    const METHODS = ['clearRect', 'beginPath', 'moveTo', 'lineTo', 'closePath',
+                     'stroke', 'fill', 'fillRect', 'fillText', 'setTransform'];
+    const rec = { strokeStyle: '#000000' };
+    for (const name of METHODS) rec[name] = [];
+
+    return {
+        rec,
+        proxy: new Proxy(real, {
+            set(target, prop, value) {
+                if (prop === 'strokeStyle') rec.strokeStyle = value;
+                target[prop] = value;   // properties are safe to set through
+                return true;
+            },
+            get(target, prop) {
+                if (Array.isArray(rec[prop])) {  // tracked method: record + re-apply with real ctx as this
+                    return (...args) => { rec[prop].push(args); return target[prop].apply(target, args); };
+                }
+                if (prop === 'strokeStyle') return rec.strokeStyle;
+                const value = target[prop];
+                // bind the real ctx as this — un-audited methods execute instead of throwing
+                return typeof value === 'function' ? value.bind(target) : value;
+            }
+        })
     };
-
-    return new Proxy(realCtx, {
-        set(target, prop, value) {
-            if (prop === 'fillStyle') calls.fillStyle.push(value);
-            else if (prop === 'font') calls.font.push(value);
-            // ... track other properties as needed
-            target[prop] = value;
-            return true;
-        },
-        get(target, prop) {
-            if (prop === 'fillStyle') return calls.fillStyle[calls.fillStyle.length - 1] || '#000000';
-            if (prop === 'font') return calls.font[calls.font.length - 1] || '36px Arial';
-            if (prop === 'fillRect') {
-                return function(x, y, w, h) {
-                    calls.fillRect.push({ x, y, w, h });
-                    return target.fillRect.call(target, x, y, w, h);
-                };
-            }
-            if (prop === 'fillText') {
-                return function(text, x, y) {
-                    calls.fillText.push({ text, x, y });
-                    return target.fillText.call(target, x, y);
-                };
-            }
-            if (prop === 'createLinearGradient') {
-                return function(x1, y1, x2, y2) {
-                    calls.createLinearGradient.push({ x1, y1, x2, y2 });
-                    const gradient = target.createLinearGradient.call(target, x1, y1, x2, y2);
-                    // Intercept addColorStop on returned gradients
-                    const origAddColorStop = gradient.addColorStop.bind(gradient);
-                    gradient.addColorStop = function(offset, color) {
-                        calls.addColorStop.push({ offset, color });
-                        return origAddColorStop(offset, color);
-                    };
-                    return gradient;
-                };
-            }
-            return target[prop];
-        }
-    });
 }
+
+const rctx = makeRecordingCtx();
+fakeCanvas.getContext = () => rctx.proxy;      // production gets the proxy
+expect(rctx.rec.moveTo).to.have.lengthOf(300); // assertions read rec — NEVER the proxy
 ```
 
 **Key patterns:**
 - **Use Proxy instead of `Object.defineProperty`** — works reliably across all browsers with host objects
 - Real canvas context preserves accurate metrics (`measureText`, `strokeText`) and rendering behavior
-- Intercept properties via `set`/`get` traps, methods via `get` trap returning wrapped functions
-- **Intercept methods on returned objects too** — e.g., `addColorStop` is on `CanvasGradient`
+- **Wrap every method the render path can call**, each re-applied with the real ctx as `this`; properties (`strokeStyle`, `lineWidth`) go through the `set` trap and are safe unwrapped
+- **Return `{ proxy, rec }` from the factory.** Production receives the proxy; assertions read `rec`. If a test is tempted to assert through the fake canvas (`canvas.ctx.moveTo`), that is the bug — the proxy serves functions there.
+- The `bind(target)` passthrough keeps un-audited methods from crashing, but unrecorded calls silently skip assertions — the audit is still on you
+- **Intercept methods on returned objects too** — e.g., `addColorStop` is on `CanvasGradient`; wrap it on the gradient the method returns
+- **Cumulative call logs must account for full repaints** — a renderer that clears-and-redraws every frame appends the *entire* scene per render (300 + 301 + 300 = 901, not 900); compute the running total render-by-render
 - Use offscreen `<canvas>` elements as image sources instead of `new Image()` (since `Image.complete` is read-only)
 
 ### Canvas Render Order Testing via Context Method Wrapping
@@ -477,12 +472,55 @@ expect(underline.y).to.equal(1080 - 40 + 2); // height - fontSize + margin
 
 **Guidelines:**
 - Use exact equality when the value derives from known constants (`height`, `width`, `MARGIN`, `fontSize`)
+- **Pick binary-exact (dyadic) inputs for strict-equality position assertions** — `(90/300)·3 === 0.9` is `false` in float64 (it is `0.8999999999999999`). Choose coordinates whose fraction of the width is dyadic (75 of 300 → `0.75`), and reserve `closeTo` for values that are genuinely computed — never for plan-pinned contract values (50 % → `1.5` *is* dyadic and must stay exact)
 - Use tolerance only when legitimate variation exists (e.g., font metric differences across platforms)
 - For positioning assertions where exact values are hard to compute, use relative relationships:
   ```javascript
   expect(bg.x).to.be.lessThanOrEqual(textX - 12);
   expect(bg.w).to.be.closeTo(textWidth + 24, 0.5);
   ```
+
+### Comparing Float32Array Outputs: Expectations Must Round-Trip
+
+Production DSP returns `Float32Array`. Reading an element back yields **float32 rounding widened to float64** — `new Float32Array([-0.8])[0] === -0.8` is `false` (it is `-0.800000011920929`). Chai's `equal`/`deep.equal` compare numbers strictly, so the obvious test
+
+```js
+expect(result.mins[0]).to.equal(-0.8); // FAILS — even though the module is correct
+```
+
+fails for every value not exactly representable in binary (0.1, 0.2, 0.7, 0.8, 0.9, 1.3, 1.7…). Only dyadic rationals (0.25, 0.5, 1.0, 0) survive a literal comparison. The failure looks like an implementation bug and sends you debugging a module whose math is right.
+
+**Build expectations through the same conversion the production code uses:**
+
+```js
+const f32 = (...values) => Float32Array.from(values);
+expect(result.mins).to.deep.equal(f32(-0.8, -0.8)); // exact, no tolerance
+```
+
+Array-level `deep.equal` between two `Float32Array`s compares element bits — both sides went through float32, so the comparison is *exact*.
+
+**Rules:**
+1. Expectations for float32-producing modules go through the `f32(...)` helper, never literals.
+2. **Reserve `closeTo` for genuine float variation** — a sum/reduction whose accumulation order the test cannot trivially reproduce, or a spec-level bound (e.g. an envelope magnitude `> 0.99`). When rule 1 achieves exact equality, settling for tolerance is strictly weaker: it lets a real off-by-a-bit regression (corrupted pool boundary, wrong bucket) pass silently.
+3. **`new Float32Array([x])[0]` is the oracle** for "what this module can represent." If unsure whether an expectation is float32-exact, assert against the oracle instead of the literal.
+4. **Don't mix conventions in one suite** — a file where some assertions compare against literals (happening to use only dyadic values) and others against `f32(...)` misleads the next author into thinking literals are fine. Pick the convention per suite and state it in a comment where the helper is defined.
+
+**Diagnostic:** when a DSP test "fails" with a difference of ~1e-7 on an otherwise-exact value, suspect the expectation's number type before the implementation. This is a test-authoring trap, not a runtime one — float32 storage is the spec, and the production code is unaffected.
+
+See `MyComponents/WaveformPeaksTest.html` (WF-P1.3/1.5/1.8) for the `f32` convention in use.
+
+### Transcribing Plan-Pinned Numeric Examples
+
+Plan documents pin numeric worked examples: bucket math, lag/offset ranges, scenario Given/Then rows. A planning-time "recompute" check verifies the arithmetic is internally consistent *as written* — it cannot catch (a) numbers with the **wrong units**, (b) Given values **out of range** for their containers, or (c) **two rows describing the same input with different expectations**. All three are invisible to per-row arithmetic and surface only when the test author materializes the Given into a real input.
+
+**Rules:**
+
+1. **Recompute dimensions.** Write the quantity's units out: samples ÷ rate = seconds; samples × rate ÷ hop = frames; samples ÷ buckets = samples/bucket. A plan formula can be arithmetically correct for the wrong quantity — e.g. `512 × 60 / 250 = 122.88` is a *sample* count, not a *frame* count, because the rate is missing where the units require it. When the plan's formula lacks (or includes) the rate where the units don't, that is a plan bug: implement the dimensionally-correct version and correct the plan in place with a note.
+2. **Bounds-check Given values against their containers** — spike index vs buffer length, sample count vs stride, onset count vs analysis window. A Given that looks plausible in isolation but exceeds its container fails the moment it is materialized.
+3. **Cross-check rows with identical Given.** When two scenario rows materialize to the same input, their Then must agree for any pure function. If they don't, the contradiction is a plan bug: pick the reading the higher-priority/more-specific pin supports, implement and assert that reading with a comment naming the contradiction, and correct both plan rows in place.
+4. **Never "fix" the test to match the plan's number — fix the plan.** A dimensionally-wrong pin that slips through produces a wrong *implementation* that passes a wrong *test*: the suite is green and the feature is subtly broken (e.g. a lag floor of "123 frames" where the true floor is 43 makes a 120 BPM onset train unfindable).
+
+The unit recompute costs seconds and is the only check that catches this class. It applies to E2E transcription as well — any test whose numbers come from a plan document rather than from the code.
 
 ### Testing Default Behavior Explicitly
 
@@ -521,6 +559,43 @@ expect(events).to.deep.equal([['decoding', 'ok.mp3'], ['idle', null]]);
 - **Complements the RAF callback collector** — that pattern covers *frame* ordering; this covers *first-await* ordering.
 - **When it does NOT work** — if the interesting work starts in a microtask (leading `await Promise.resolve()`, `queueMicrotask`), the pre-await window is empty and the assertion passes trivially with `[]`. Verify the test *fails* under a delayed implementation: move the callback after the first `await` by hand and watch it break.
 - For callbacks that legitimately fire after I/O, use plain `await` + ordered-log assertions instead.
+
+### Driving Pinned `setTimeout(0)` Yields in Unit Tests
+
+When a contract pins an analysis/parsing yield as `await new Promise((r) => setTimeout(r, 0))` and you must assert *what happens at each continuation* (e.g., a superseded task writes nothing; the live task writes), drive that exact mechanism — do not replace it with a microtask. A FIFO `setTimeout` queue plus manual flushes advances the fire-and-forget task one continuation at a time, making interleavings explicitly assertable:
+
+```js
+function withPinnedYields(run) {
+    const realSetTimeout = window.setTimeout;
+    const queue = [];
+    window.setTimeout = (cb) => { queue.push(cb); return queue.length; };
+    const flushYield = async () => {
+        const next = queue.shift();
+        if (next) next();
+        await Promise.resolve();  // let the resumed task run to completion
+        await Promise.resolve();
+    };
+    return Promise.resolve(run(flushYield)).finally(() => { window.setTimeout = realSetTimeout; });
+}
+
+it('superseded task writes nothing, live task applies', async () => {
+    await withPinnedYields(async (flush) => {
+        onFileDropped(fileA);   // fire-and-forget — ran synchronously to its first await
+        onFileDropped(fileB);   // B supersedes A before A's yield flushes
+        await flush();          // A's continuation runs → must be a no-op
+        await flush();          // B's continuation runs → applies
+        expect(applied).to.deep.equal([fileB.name]);
+    });
+});
+```
+
+**Why it works:** an `async` function runs **synchronously to its first await**, so by the time the outer call returns, the fire-and-forget task's yield callback is already queued in the FIFO.
+
+**Two gotchas, each of which will bite:**
+1. **Restore the real `setTimeout` in `.finally` of the returned promise** — the `run` body is async; restoring synchronously would break its `await`s.
+2. **Settle 1–2 extra microtasks after each flush** — the resumed task completes one hop after its yield promise resolves; flushing without the settle interleaves the next task before the previous one finished.
+
+This is the yield-flush sibling of the RAF callback collector and the fake-timer-with-manual-ticks patterns above — same discipline (own the global the production code actually calls, restore it), different mechanism (it serves `setTimeout` yields, not `setInterval` schedulers).
 
 ### Testing Combined Edge Cases
 

@@ -55,6 +55,18 @@ export function createMetronomadData() {
             // Engine-surfaced flag (Phase 5)
             isPreviewing: false,
 
+            // Waveform progress (CR 001 Phase 4, D-H)
+            // offsetDraft: transient scrub draft in tenths (null = no draft);
+            // the displayPosition computed rides it while scrubbing. Phase 5
+            // wires the scrub handlers; the field exists now (D-H).
+            offsetDraft: null,
+            // waveformReady: the peaks for the live file are extracted and
+            // painted (paint gate: !decoding.active && waveformReady, KB-16).
+            waveformReady: false,
+            // tempoSuggestion: Phase 6 placeholder — the prefilled BPM
+            // integer that drives the "Detected ~N BPM" hint (D-I).
+            tempoSuggestion: null,
+
             // Visual state (Phase 6)
             isDragOver: false,
             beatsPerBar: BEATS_PER_BAR, // I-8: template v-for + downbeat class bind to this

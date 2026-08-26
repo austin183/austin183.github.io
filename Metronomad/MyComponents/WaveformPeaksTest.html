@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waveform Peaks Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>Metronomad — Waveform Peaks Unit Tests</h1>
+    <p class="test-plan-ref">Covers: CR 001 Phase 1 WF-P1.1…WF-P1.9 — Analysis/channelData.js, Analysis/waveformPeaks.js</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        // Barrel import on purpose (risk R-11): a missing re-export fails
+        // ES-module linking — this page dies before mocha.run() — so the
+        // barrel is verified by this very import.
+        import {
+            channelArrays, mixDown, monoMixdown,
+            extractPeaks, poolPeaks,
+            PEAK_BUCKETS_DEFAULT, PEAK_STRIDE_MAX_SAMPLES
+        } from '../MyESModules/index.js';
+
+        const { expect } = chai;
+
+        /**
+         * Fake AudioBuffer — the plain-object surface the Analysis modules
+         * read (no real AudioContext): { numberOfChannels, length,
+         * sampleRate, getChannelData(c) }.
+         */
+        function makeBuffer(arrays, sampleRate = 44100) {
+            return {
+                numberOfChannels: arrays.length,
+                length: arrays[0].length,
+                sampleRate,
+                getChannelData: (c) => arrays[c]
+            };
+        }
+
+        // Production outputs are Float32Array; float64 literals like 0.8
+        // are NOT === the float32 rounding of 0.8 read back. Build expected
+        // values through the same float32 conversion so comparisons are
+        // exact, not tolerance-based.
+        const f32 = (...values) => Float32Array.from(values);
+
+        // ============================================================
+        // waveformPeaks.extractPeaks() — WF-P1.1…WF-P1.7
+        // ============================================================
+        describe('waveformPeaks.extractPeaks()', () => {
+            it('WF-P1.1 — mono zeros, 1024 samples, 32 buckets → all-zero peaks', () => {
+                const buffer = makeBuffer([new Float32Array(1024)]);
+                const result = extractPeaks(buffer, 32);
+                expect(result.bucketCount).to.equal(32);
+                for (let i = 0; i < 32; i++) {
+                    expect(result.mins[i]).to.equal(0);
+                    expect(result.maxs[i]).to.equal(0);
+                }
+            });
+
+            it('WF-P1.2 — sine with exactly 1 cycle per bucket → faithful per-bucket envelope', () => {
+                const N = 2048;
+                const samplesPerBucket = N / 16; // 128 → freq 44100/128 Hz
+                const ch = new Float32Array(N);
+                for (let i = 0; i < N; i++) {
+                    ch[i] = Math.sin(2 * Math.PI * i / samplesPerBucket);
+                }
+                const result = extractPeaks(makeBuffer([ch]), 16);
+                expect(result.bucketCount).to.equal(16);
+                for (let b = 0; b < 16; b++) {
+                    expect(result.maxs[b]).to.be.greaterThan(0.99);
+                    expect(result.mins[b]).to.be.lessThan(-0.99);
+                }
+            });
+
+            it('WF-P1.3 — stereo: min-of-mins / max-of-maxs (mono-side-only feature never reads quieter)', () => {
+                const ch0 = new Float32Array([0.2, -0.2, 0.2, -0.2]);
+                const ch1 = new Float32Array([0.9, -0.8, 0.9, -0.8]);
+                const result = extractPeaks(makeBuffer([ch0, ch1]), 2);
+                expect(result.bucketCount).to.equal(2);
+                expect(result.mins).to.deep.equal(f32(-0.8, -0.8));
+                expect(result.maxs).to.deep.equal(f32(0.9, 0.9));
+            });
+
+            it('WF-P1.4 — effective bucketCount = min(bucketCount, sampleCount)', () => {
+                expect(PEAK_BUCKETS_DEFAULT).to.equal(4096);
+                // (a) tiny buffer: 50 samples → 50 buckets (one sample per bucket)
+                const tiny = extractPeaks(makeBuffer([new Float32Array(50)]));
+                expect(tiny.bucketCount).to.equal(50);
+                // (b) sine3s shape: 132 300 samples → 4096 buckets of ≈32 samples
+                //     (NOT "≈32 buckets" — the CR/memo arithmetic error corrected in index.md)
+                const sine3s = extractPeaks(makeBuffer([new Float32Array(132300)]));
+                expect(sine3s.bucketCount).to.equal(4096);
+            });
+
+            it('WF-P1.5 — single sample → 1 bucket, min = max = that sample', () => {
+                const result = extractPeaks(makeBuffer([new Float32Array([0.7])]), 4096);
+                expect(result.bucketCount).to.equal(1);
+                expect(result.mins).to.deep.equal(f32(0.7));
+                expect(result.maxs).to.deep.equal(f32(0.7));
+            });
+
+            it('WF-P1.6 — NaN/Inf samples → 0; non-finite bucketCount → default; degenerate buffer → empty, never throws', () => {
+                // (a) NaN/±Inf channel samples treated as 0 — peaks stay finite
+                const ch = new Float32Array([NaN, 0.5, Infinity, -Infinity, 0.25]);
+                const noisy = extractPeaks(makeBuffer([ch]), 1);
+                expect(Number.isFinite(noisy.mins[0])).to.equal(true);
+                expect(Number.isFinite(noisy.maxs[0])).to.equal(true);
+                expect(noisy.mins[0]).to.equal(0);   // NaN → 0, -Inf → 0
+                expect(noisy.maxs[0]).to.equal(0.5); // +Inf → 0
+
+                // (b) non-finite bucketCount → default 4096
+                const wide = extractPeaks(makeBuffer([new Float32Array(8192)]), NaN);
+                expect(wide.bucketCount).to.equal(4096);
+
+                // (c) degenerate buffer (numberOfChannels: 0) — never throws
+                const degenerate = {
+                    numberOfChannels: 0, length: 0, sampleRate: 44100,
+                    getChannelData: () => new Float32Array(0)
+                };
+                const arrays = channelArrays(degenerate);
+                expect(arrays.channels).to.deep.equal([]);
+                expect(arrays.sampleRate).to.equal(0);
+                expect(arrays.duration).to.equal(0);
+                const peaks = extractPeaks(degenerate);
+                expect(peaks.bucketCount).to.equal(0);
+                expect(peaks.mins).to.have.length(0);
+                expect(peaks.maxs).to.have.length(0);
+
+                // (d) zero-length buffer (length: 0) is degenerate too (D-B)
+                const zeroLength = {
+                    numberOfChannels: 1, length: 0, sampleRate: 44100,
+                    getChannelData: () => new Float32Array(0)
+                };
+                expect(channelArrays(zeroLength).channels).to.deep.equal([]);
+            });
+
+            it('WF-P1.7 — stride 4 above PEAK_STRIDE_MAX_SAMPLES: deterministic; on-stride spikes visible, off-stride dropped', () => {
+                expect(PEAK_STRIDE_MAX_SAMPLES).to.equal(20000000);
+
+                // 20 000 001 samples — crosses the stride threshold (stride 4).
+                const big = new Float32Array(20000001);
+                big[4000000] = 1.0;  // a stride-4 multiple → must survive
+                big[4010001] = 1.0;  // not a stride-4 multiple, different bucket
+                                     //   → dropped (the accepted CR §1.2 trade)
+                const buffer = makeBuffer([big]);
+
+                const a = extractPeaks(buffer);
+                const b = extractPeaks(buffer);
+                // Deterministic: two calls produce byte-identical arrays
+                expect(a.bucketCount).to.equal(b.bucketCount);
+                expect(a.mins.length).to.equal(b.mins.length);
+                expect(a.maxs.length).to.equal(b.maxs.length);
+                for (let i = 0; i < a.mins.length; i++) {
+                    expect(a.mins[i]).to.equal(b.mins[i]);
+                    expect(a.maxs[i]).to.equal(b.maxs[i]);
+                }
+                // Exactly one bucket carries a spike: the on-stride one.
+                let spikes = 0;
+                for (let i = 0; i < a.maxs.length; i++) if (a.maxs[i] === 1.0) spikes++;
+                expect(spikes).to.equal(1);
+
+                // 19 999 999 samples — under the threshold → stride 1: the
+                // same off-stride position is now visible.
+                const small = new Float32Array(19999999);
+                small[4010001] = 1.0;
+                const s = extractPeaks(makeBuffer([small]));
+                let visible = 0;
+                for (let i = 0; i < s.maxs.length; i++) if (s.maxs[i] === 1.0) visible++;
+                expect(visible).to.equal(1);
+            });
+        });
+
+        // ============================================================
+        // waveformPeaks.poolPeaks() — WF-P1.8
+        // ============================================================
+        describe('waveformPeaks.poolPeaks()', () => {
+            it('WF-P1.8 — min-of-mins / max-of-maxs pooling; target ≥ source → copy', () => {
+                const mins = f32(0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7);
+                const maxs = f32(1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7);
+                const source = { mins, maxs, bucketCount: 8 };
+
+                const two = poolPeaks(source, 2);
+                expect(two.bucketCount).to.equal(2);
+                expect(two.mins).to.deep.equal(f32(0, 0.4));
+                expect(two.maxs).to.deep.equal(f32(1.3, 1.7));
+
+                const one = poolPeaks(source, 1);
+                expect(one.bucketCount).to.equal(1);
+                expect(one.mins).to.deep.equal(f32(0));
+                expect(one.maxs).to.deep.equal(f32(1.7));
+
+                // target ≥ source → no-op pool: a fresh copy of the source
+                for (const target of [8, 16]) {
+                    const copy = poolPeaks(source, target);
+                    expect(copy.bucketCount).to.equal(8);
+                    expect(copy.mins).to.deep.equal(mins);
+                    expect(copy.maxs).to.deep.equal(maxs);
+                    expect(copy.mins).to.not.equal(mins); // fresh allocation
+                    expect(copy.maxs).to.not.equal(maxs);
+                }
+            });
+        });
+
+        // ============================================================
+        // channelData — WF-P1.9
+        // ============================================================
+        describe('channelData', () => {
+            it('WF-P1.9 — channelArrays (no copy) / mixDown (one mean) / monoMixdown (facade)', () => {
+                // mono: channels[0] is the same reference as getChannelData(0)
+                const monoCh = new Float32Array([0.1, 0.2, 0.3]);
+                const monoBuffer = makeBuffer([monoCh]);
+                const mono = channelArrays(monoBuffer);
+                expect(mono.channels).to.have.length(1);
+                expect(mono.channels[0]).to.equal(monoCh); // no copy
+                expect(mono.sampleRate).to.equal(44100);
+                expect(mono.duration).to.equal(3 / 44100);
+
+                // stereo: 2 arrays, correct lengths
+                const stL = new Float32Array(64);
+                const stR = new Float32Array(64);
+                const stereo = channelArrays(makeBuffer([stL, stR]));
+                expect(stereo.channels).to.have.length(2);
+                expect(stereo.channels[0]).to.equal(stL);
+                expect(stereo.channels[1]).to.equal(stR);
+                expect(stereo.channels[0].length).to.equal(64);
+                expect(stereo.channels[1].length).to.equal(64);
+
+                // mixDown = element-wise mean
+                const a = new Float32Array([1, 0, 1, 0]);
+                const b = new Float32Array([0, 1, 0, 1]);
+                expect(mixDown([a, b])).to.deep.equal(f32(0.5, 0.5, 0.5, 0.5));
+
+                // mixDown: single channel returned as-is (no copy); empty → zero-length
+                expect(mixDown([a])).to.equal(a);
+                expect(mixDown([])).to.deep.equal(new Float32Array(0));
+
+                // monoMixdown = the buffer-facing facade over mixDown(channelArrays(…))
+                expect(monoMixdown(monoBuffer)).to.equal(monoCh);
+                expect(monoMixdown(makeBuffer([stL, stR]))).to.have.length(64);
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

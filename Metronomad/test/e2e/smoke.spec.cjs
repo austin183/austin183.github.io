@@ -27,10 +27,19 @@ const CONTROLS = [
   '#bpmMinusBtn',
   '#bpmInput',
   '#bpmPlusBtn',
-  '#offsetScrubber',
+  // O-1 (CR 001 Phase 5): the old offset range scrubber is deleted —
+  // the waveform canvas is the offset slider (presence-only list below).
   '#offsetInput',
   '#countInInput'
 ];
+
+/**
+ * R-1: a canvas can never be `:disabled` — the lock contract is
+ * aria-disabled + pointer-events (Phase 5). The canvas is in the DOM in the
+ * no-file state via v-show (display:none), so assert PRESENCE ONLY — no
+ * disabled or visibility claim.
+ */
+const PRESENCE_ONLY = ['#waveformCanvas'];
 
 /** Wait until the Vue app has mounted (data-state hook is written by the appState watch). */
 async function waitForAppMount(page) {
@@ -75,6 +84,10 @@ test.describe('Phase 1 — Metronomad scaffold smoke', () => {
     for (const selector of CONTROLS) {
       await expect(page.locator(selector)).toHaveCount(1);
       await expect(page.locator(selector)).toBeDisabled();
+    }
+
+    for (const selector of PRESENCE_ONLY) {
+      await expect(page.locator(selector)).toHaveCount(1);
     }
   });
 });

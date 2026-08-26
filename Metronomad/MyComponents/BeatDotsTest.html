@@ -492,18 +492,21 @@
                 expect(vm.formattedPosition).to.equal('0:00.0');
             });
 
-            it('B-04 (rev) — template: static aria-label + aria-valuetext binding, no churning label (N-10)', async () => {
+            it('B-04 (rev) — template: static aria-label + aria-valuetext binding, no churning label (N-10; W-10 moved the role to the readout)', async () => {
                 // Template pin: the progressbar label is static (the old
                 // per-position label churned ~10×/s and duplicated the
-                // position already in valuetext). DOMParser: Vue binding
-                // attributes parse literally with the colon prefix.
+                // position already in valuetext). W-10 (CR 001, settled): the
+                // progressbar role moved from .progress to .progress-readout
+                // (the visible value); the N-10 rule travels with it. DOMParser:
+                // Vue binding attributes parse literally with the colon prefix.
                 const res = await fetch('../index.html');
                 const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
-                const bar = doc.querySelector('.progress[role="progressbar"]');
-                expect(bar, 'progress region in the template').to.not.equal(null);
-                expect(bar.getAttribute('aria-label')).to.equal('Song progress'); // static
-                expect(bar.getAttribute(':aria-valuetext')).to.equal('formattedPosition');
-                expect(bar.getAttribute(':aria-label')).to.equal(null); // the churning computed label is gone
+                const readout = doc.querySelector('.progress-readout[role="progressbar"]');
+                expect(readout, 'readout carries the progressbar role (W-10)').to.not.equal(null);
+                expect(doc.querySelector('.progress[role="progressbar"]')).to.equal(null); // the container no longer does
+                expect(readout.getAttribute('aria-label')).to.equal('Song progress'); // static
+                expect(readout.getAttribute(':aria-valuetext')).to.equal('formattedDisplayPosition');
+                expect(readout.getAttribute(':aria-label')).to.equal(null); // the churning computed label is gone
             });
         });
 

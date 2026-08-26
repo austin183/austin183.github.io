@@ -9,6 +9,15 @@
 import { APP_STATES } from './createMetronomadData.js';
 import { formatTime } from '../Utils/timeFormat.js';
 
+// Shared percent-of-duration law (review F-4): guard → clamp to
+// [0, duration] → percent. 0 for non-positive/non-finite duration — the
+// pre-existing contract of progressPercent/offsetMarkerPercent.
+function percentOfDuration(duration, value) {
+    if (!Number.isFinite(duration) || duration <= 0) return 0;
+    const clamped = Math.min(Math.max(value, 0), duration);
+    return (clamped / duration) * 100;
+}
+
 export function createMetronomadApp({ createApp, dataConfig, methodsConfig, lifecycleConfig }) {
     // Explicit merge — never spread lifecycleConfig after `methods:`
     // (a `methods:` key there would silently clobber the template methods).
@@ -48,16 +57,50 @@ export function createMetronomadApp({ createApp, dataConfig, methodsConfig, life
                 return formatTime(this.songPosition);
             },
 
+            // Canvas slider aria-valuetext (Phase 5): the committed offset
+            // in the canonical "Offset m:ss.t" shape. A computed keeps the
+            // pure util off the instance-method surface (review F-3) and
+            // still satisfies the template-scope rule — computeds are
+            // instance properties, module imports are not.
+            offsetAriaText() {
+                return 'Offset ' + formatTime(this.offset);
+            },
+
             progressPercent() {
-                if (!Number.isFinite(this.duration) || this.duration <= 0) return 0;
-                const clamped = Math.min(Math.max(this.songPosition, 0), this.duration);
-                return (clamped / this.duration) * 100;
+                return percentOfDuration(this.duration, this.songPosition);
             },
 
             offsetMarkerPercent() {
-                if (!Number.isFinite(this.duration) || this.duration <= 0) return 0;
-                const clamped = Math.min(Math.max(this.offset, 0), this.duration);
-                return (clamped / this.duration) * 100;
+                return percentOfDuration(this.duration, this.offset);
+            },
+
+            // --- Waveform progress computeds (CR 001 Phase 4, D-H). All
+            // four percent computeds delegate to percentOfDuration (review
+            // F-4): the guard→clamp→percent law exists once. Phase 4
+            // originally left the pre-existing pair untouched (risk R-4);
+            // F-4 extracted the shared law without changing any math. ---
+            // The position the readout + playhead display: the scrub draft
+            // while one is active, the song position otherwise.
+            displayPosition() {
+                return this.offsetDraft !== null ? this.offsetDraft : this.songPosition;
+            },
+
+            formattedDisplayPosition() {
+                return formatTime(this.displayPosition);
+            },
+
+            // progressPercent's math on displayPosition (guarded → 0).
+            playheadPercent() {
+                return percentOfDuration(this.duration, this.displayPosition);
+            },
+
+            // Draft percent while dragging (Phase 5), else the committed
+            // offset marker — the DOM overlays track one value or the other.
+            markerPercent() {
+                if (this.offsetDraft !== null) {
+                    return percentOfDuration(this.duration, this.offsetDraft);
+                }
+                return this.offsetMarkerPercent;
             }
             // N-10: the per-position progressAriaLabel computed is deleted —
             // the template carries a STATIC aria-label, and aria-valuetext

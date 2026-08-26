@@ -289,7 +289,11 @@
     }
 }
 
-/* Progress bar with offset marker */
+/* Waveform progress (CR 2026-08-23-001 Phase 4 — replaces the 8px bar).
+   The old 8px fill rule is deleted: its only consumer (the template's
+   fill div) was removed; the progressPercent computed survives (R-4).
+   .progress-track / .progress-offset-marker remain as the O-2 placeholder
+   shown until the peaks are painted. */
 .progress {
     margin: var(--space-4) 0;
 }
@@ -301,19 +305,77 @@
     border-radius: 4px;
 }
 
-.progress-fill {
-    height: 100%;
-    width: 0;
-    background-color: var(--color-primary);
-    border-radius: 4px 0 0 4px;
-}
-
 .progress-offset-marker {
     position: absolute;
     top: -3px;
     width: 2px;
     height: 14px;
     background-color: var(--color-accent);
+}
+
+/* The waveform container. pan-y, not none: horizontal scrub → JS (Phase 5),
+   vertical swipe still scrolls (W-2, skill interaction.md). */
+.waveform {
+    position: relative;
+    height: 64px;
+    touch-action: pan-y;
+}
+
+/* W-4: the file's first width breakpoint — narrow phones get 48 px
+   (pinned by E2E-3.4). */
+@media (max-width: 375px) {
+    .waveform {
+        height: 48px;
+    }
+}
+
+#waveformCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: crosshair;
+}
+
+/* Param lock (U-12 CSS line; the isParamLocked JS guard is the backstop):
+   a canvas can never be :disabled (R-1) — pointer-events is the lock. */
+.waveform--locked #waveformCanvas {
+    pointer-events: none;
+}
+
+/* Overlays: all pointer-events:none — the canvas (Phase 5 slider) and the
+   placeholder track stay the only interactive surfaces. The KB-6 hooks
+   (data-loaded, data-position-tenths) carry NO styling (do not style them). */
+.waveform-offset-marker {
+    position: absolute;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    background-color: var(--color-accent);
+    pointer-events: none;
+}
+
+/* The playhead: a DOM overlay, not a canvas repaint (PERF-2) — it moves in
+   the existing 10 Hz tenths steps and STAYS under prefers-reduced-motion
+   (KB-14: functional position indicator, no CSS animation). */
+.waveform-playhead {
+    position: absolute;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    background-color: var(--color-primary);
+    pointer-events: none;
+}
+
+/* O-4: one cheap pre-offset dim overlay. */
+.waveform-dim {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.25);
+    pointer-events: none;
 }
 
 .progress-readout {

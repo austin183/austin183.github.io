@@ -43,16 +43,20 @@ test.describe('Phase 8 — keyboard pass (U-23, U-12, V-07)', () => {
     await expect(page.locator('body')).toHaveAttribute('data-state', 'ready');
     await page.locator('#browseBtn').focus();
     // restartBtn is disabled in ready (isSequenceRunning false) → skipped.
+    // O-1 (CR 001 Phase 5): the canvas slider lands at the END of the
+    // app's tab order — tab order is DOM order and the canvas lives in
+    // the progress block below the playback buttons (it cannot take the
+    // deleted scrubber's slot without moving the whole layout).
     const seq = await tabSequence(page, 8);
     expect(seq).toEqual([
       'bpmMinusBtn',
       'bpmInput',
       'bpmPlusBtn',
-      'offsetScrubber',
       'offsetInput',
       'countInInput',
       'playStopBtn',
       'previewBtn',
+      'waveformCanvas',
     ]);
   });
 
@@ -65,10 +69,10 @@ test.describe('Phase 8 — keyboard pass (U-23, U-12, V-07)', () => {
     const seq = await tabSequence(page, 4);
     // Only Restart sits between Play/Stop and the end of the focusable list
     // (preview disabled in countingIn; all parameter controls disabled +
-    // scrubber tabindex=-1). The rest lands back on body (no wrap in headless).
+    // canvas tabindex=-1). The rest lands back on body (no wrap in headless).
     expect(seq[0]).toBe('restartBtn');
     for (const id of seq) {
-      expect(['bpmMinusBtn', 'bpmInput', 'bpmPlusBtn', 'offsetScrubber', 'offsetInput', 'countInInput', 'previewBtn'])
+      expect(['bpmMinusBtn', 'bpmInput', 'bpmPlusBtn', 'waveformCanvas', 'offsetInput', 'countInInput', 'previewBtn'])
         .not.toContain(id);
     }
 
@@ -106,8 +110,9 @@ test.describe('Phase 8 — keyboard pass (U-23, U-12, V-07)', () => {
     await page.locator('#bpmPlusBtn').press('Enter');
     await expect(page.locator('#bpmInput')).toHaveValue('121');
 
-    // Offset by keyboard scrub: arrows move the range (step 0.1), readout follows (item 2)
-    await page.locator('#offsetScrubber').focus();
+    // Offset by keyboard scrub: arrows move the canvas slider (step 0.1),
+    // readout follows (item 2; O-1 — the old range is gone)
+    await page.locator('#waveformCanvas').focus();
     for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowRight');
     await expect(page.locator('.progress-readout')).toHaveText('0:00.5 / 0:03.0');
 

@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waveform View Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>Metronomad — Waveform View Unit Tests</h1>
+    <p class="test-plan-ref">Covers: CR 001 Phase 3 WF-V1.1…WF-V1.11 — App/createWaveformView.js.
+    DI-pure per the createBeatDots convention (R-I7.1): raf/cancelRaf/devicePixelRatio/getDom/
+    getHeightCss/getWindow injected, fake canvas + fake window — this suite contains NO
+    window.*/document.* monkey-patching (the only document use is creating offscreen canvases
+    for the real 2D ctx that the recording Proxy wraps, skill testing-unit.md).</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        // Barrel import on purpose (risk R-11): a missing re-export fails
+        // ES-module linking — this page dies before mocha.run() — so the
+        // barrel is verified by this very import.
+        import { createWaveformView, poolPeaks } from '../MyESModules/index.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // Fakes — every browser global the view could reach is injected
+        // through `base` (DI convention). No global state is touched.
+        // ============================================================
+
+        // Fake RAF — callback collector (skill testing-unit.md pattern).
+        // pendingCount() exposes the W-5 coalescing invariant; flush() runs
+        // one simulated frame; queued() is the total RAFs ever requested
+        // (the "no internal clock" pin, WF-V1.5).
+        function makeFakeRAF() {
+            let nextId = 1;
+            let queuedCount = 0;
+            const pending = new Map();
+            const canceled = [];
+            return {
+                canceled,
+                queued: () => queuedCount,
+                raf(cb) { queuedCount++; const id = nextId++; pending.set(id, cb); return id; },
+                cancelRaf(id) { if (pending.delete(id)) canceled.push(id); },
+                pendingCount() { return pending.size; },
+                flush() {
+                    const cbs = [...pending.values()];
+                    pending.clear();
+                    for (const cb of cbs) cb();
+                }
+            };
+        }
+
+        // Recording 2D ctx: a real offscreen-canvas context (accurate host
+        // object) wrapped in a Proxy (skill testing-unit.md). `rec` (the
+        // plain record — accessed directly, never through the proxy) holds
+        // the path-building calls the renderer is pinned to, plus the
+        // strokeStyle/lineWidth active at each stroke() — the
+        // stroke-distinguishing-properties pattern. EVERY method the view
+        // calls is wrapped and re-applied with the real ctx as `this`
+        // (an unwrapped host method called through the proxy throws
+        // Illegal invocation).
+        function makeRecordingCtx() {
+            const off = document.createElement('canvas');
+            off.width = 10;
+            off.height = 10;
+            const real = off.getContext('2d');
+            const rec = { setTransform: [], clearRect: [], beginPath: 0, moveTo: [], lineTo: [], strokes: [] };
+            const wrap = (name) => (...args) => { rec[name].push(args); return real[name].apply(real, args); };
+            const proxy = new Proxy(real, {
+                get(target, prop) {
+                    if (prop === 'setTransform') return wrap('setTransform');
+                    if (prop === 'clearRect') return wrap('clearRect');
+                    if (prop === 'beginPath') return () => { rec.beginPath++; return real.beginPath(); };
+                    if (prop === 'moveTo') return wrap('moveTo');
+                    if (prop === 'lineTo') return wrap('lineTo');
+                    if (prop === 'stroke') return () => {
+                        rec.strokes.push({ strokeStyle: target.strokeStyle, lineWidth: target.lineWidth });
+                        return real.stroke();
+                    };
+                    return target[prop];
+                },
+                set(target, prop, value) { target[prop] = value; return true; }
+            });
+            return { proxy, rec };
+        }
+
+        // Fake canvas element — the exact surface the view touches:
+        // width/height (backing store), getContext, add/removeEventListener,
+        // set/releasePointerCapture, focus, getBoundingClientRect, parentElement.
+        function makeFakeCanvas() {
+            const canvas = {
+                width: 0,
+                height: 0,
+                style: {},
+                parentElement: null,
+                captured: [],
+                released: [],
+                focused: 0,
+                ctx: null,
+                listeners: new Map(), // type -> [fn, ...]
+                captureThrows: false,
+                rect: { left: 0, top: 0, width: 0, height: 0 },
+                getContext: () => canvas.ctx,
+                addEventListener: (t, fn) => {
+                    if (!canvas.listeners.has(t)) canvas.listeners.set(t, []);
+                    canvas.listeners.get(t).push(fn);
+                },
+                removeEventListener: (t, fn) => {
+                    const list = canvas.listeners.get(t) || [];
+                    const i = list.indexOf(fn);
+                    if (i >= 0) list.splice(i, 1);
+                },
+                setPointerCapture: (id) => {
+                    if (canvas.captureThrows) throw new Error('InvalidPointerId (Safari stale pointerId, W-1)');
+                    canvas.captured.push(id);
+                },
+                releasePointerCapture: (id) => { canvas.released.push(id); },
+                focus: () => { canvas.focused++; },
+                getBoundingClientRect: () => canvas.rect
+            };
+            return canvas;
+        }
+
+        // Fire a synthetic pointer event straight at the canvas listeners —
+        // dispatches only the events the view registered, so "no listener
+        // fires" is assertable without real DOM bubbling.
+        function fireCanvas(canvas, type, { clientX = 0, clientY = 0, pointerId = 1 } = {}) {
+            const ev = { type, clientX, clientY, pointerId };
+            (canvas.listeners.get(type) || []).slice().forEach((fn) => fn(ev));
+        }
+
+        // Fake window — listener map + the global pointerup/blur
+        // safety-net targets. The resized container is reached through
+        // canvas.parentElement (the `.waveform` div), not a made-up id.
+        function makeFakeWindow() {
+            const listeners = new Map();
+            return {
+                listeners,
+                addEventListener: (t, fn) => {
+                    if (!listeners.has(t)) listeners.set(t, []);
+                    listeners.get(t).push(fn);
+                },
+                removeEventListener: (t, fn) => {
+                    const list = listeners.get(t) || [];
+                    const i = list.indexOf(fn);
+                    if (i >= 0) list.splice(i, 1);
+                },
+                fire(type) {
+                    (this.listeners.get(type) || []).slice().forEach((fn) => fn({ type }));
+                }
+            };
+        }
+
+        // One test environment: fresh fakes + the factory wired to them.
+        // `vm` is a plain mock — the view only reads vm.duration for the
+        // x→tenths conversion.
+        // `noDefaultHeight` omits the injected provider so the factory's
+        // OWN default is under test (WF-V1.11 — production injects none).
+        function makeEnv({ dpr = 1, duration = 3, callbacks = {}, noDefaultHeight = false } = {}) {
+            const fakeRAF = makeFakeRAF();
+            const canvas = makeFakeCanvas();
+            const win = makeFakeWindow();
+            const container = { clientWidth: 300, clientHeight: 64 };
+            canvas.parentElement = container;
+            const vm = { duration, offsetDraft: null };
+            const base = {
+                raf: fakeRAF.raf,
+                cancelRaf: fakeRAF.cancelRaf,
+                devicePixelRatio: () => dpr,
+                getDom: (id) => (id === 'waveformCanvas' ? canvas : null),
+                getWindow: () => win
+            };
+            if (!noDefaultHeight) base.getHeightCss = () => 64;
+            const view = createWaveformView(vm, base, callbacks);
+            return { fakeRAF, canvas, win, container, vm, view, callbacks };
+        }
+
+        // 4096-bucket peaks of a decaying sine — the shape extractPeaks
+        // produces ({ mins, maxs, bucketCount, sampleRate }).
+        function makePeaks(bucketCount = 4096) {
+            const mins = new Float32Array(bucketCount);
+            const maxs = new Float32Array(bucketCount);
+            for (let i = 0; i < bucketCount; i++) {
+                const amp = Math.sin((Math.PI * i) / bucketCount) * (1 - i / (bucketCount * 2));
+                mins[i] = -Math.abs(amp);
+                maxs[i] = Math.abs(amp);
+            }
+            return { mins, maxs, bucketCount, sampleRate: 44100 };
+        }
+
+        // ============================================================
+        // Rendering — WF-V1.1…WF-V1.7
+        // ============================================================
+        describe('createWaveformView — rendering', () => {
+            let env;
+
+            beforeEach(() => {
+                env = makeEnv();
+                const rctx = makeRecordingCtx();
+                env.canvas.ctx = rctx.proxy;
+                env.rec = rctx.rec;
+                env.view.init(env.canvas);
+                env.view.resize(300, 64);
+                env.fakeRAF.flush(); // settle any sizing-only render
+            });
+
+            it('WF-V1.1 — setPeaks at 300×64 → one render of 300 mirrored columns; same peaks again → no render', () => {
+                const peaks = makePeaks(4096);
+                env.view.setPeaks(peaks);
+                expect(env.fakeRAF.pendingCount()).to.equal(1); // one pending RAF (W-5)
+
+                env.fakeRAF.flush();
+                // one vertical line per CSS column: 300 moveTo + 300 lineTo,
+                // faithful to poolPeaks(peaks, 300), mirrored about center 32 (O-3)
+                expect(env.rec.moveTo).to.have.lengthOf(300);
+                expect(env.rec.lineTo).to.have.lengthOf(300);
+                const pooled = poolPeaks(peaks, 300);
+                for (let k = 0; k < 300; k++) {
+                    const [mx, my] = env.rec.moveTo[k];
+                    const [lx, ly] = env.rec.lineTo[k];
+                    expect(mx).to.equal(k);
+                    expect(lx).to.equal(k);
+                    expect(my).to.be.lessThanOrEqual(32); // y(max): at/above center
+                    expect(ly).to.be.greaterThanOrEqual(32); // y(min): at/below center
+                    expect(my).to.equal((1 - pooled.maxs[k]) * 32);
+                    expect(ly).to.equal((1 - pooled.mins[k]) * 32);
+                }
+
+                // a second setPeaks of the SAME peaks object at the same
+                // size → no further render
+                env.view.setPeaks(peaks);
+                expect(env.fakeRAF.pendingCount()).to.equal(0);
+                env.fakeRAF.flush();
+                expect(env.rec.moveTo).to.have.lengthOf(300);
+            });
+
+            it('WF-V1.2 — resize storm (600→500→400) coalesces to ONE render at the final size', () => {
+                env.view.setPeaks(makePeaks(4096));
+                env.fakeRAF.flush();
+                expect(env.rec.moveTo).to.have.lengthOf(300);
+
+                env.view.resize(600);
+                env.view.resize(500);
+                env.view.resize(400);
+                expect(env.fakeRAF.pendingCount()).to.be.at.most(1); // W-5
+
+                env.fakeRAF.flush();
+                // the last render drew 400 columns (x 0…399) — the final
+                // size won; 600/500 never painted
+                const moves = env.rec.moveTo;
+                expect(moves).to.have.lengthOf(700);
+                for (let k = 0; k < 400; k++) {
+                    expect(moves[300 + k][0]).to.equal(k);
+                }
+            });
+
+            it('WF-V1.3 — DPR 2: backing store 600×128, drawing in CSS space via ctx scale', () => {
+                const dprEnv = makeEnv({ dpr: 2 });
+                const rctx = makeRecordingCtx();
+                dprEnv.canvas.ctx = rctx.proxy;
+                dprEnv.view.init(dprEnv.canvas);
+                dprEnv.view.resize(300, 64);
+
+                expect(dprEnv.canvas.width).to.equal(600);
+                expect(dprEnv.canvas.height).to.equal(128);
+                // ctx scaled by 2 on every resize (init sizing + the
+                // explicit one) → drawing coordinates stay in CSS-column space
+                expect(rctx.rec.setTransform.length).to.be.greaterThan(0);
+                for (const t of rctx.rec.setTransform) expect(t).to.deep.equal([2, 0, 0, 2, 0, 0]);
+            });
+
+            it('WF-V1.4 — dispose twice: cancels pending RAF, removes ALL listeners, releases GPU, idempotent', () => {
+                const scrubEnv = makeEnv({ callbacks: { onScrubStart: () => {}, onScrubMove: () => {}, onScrubEnd: () => {} } });
+                const rctx = makeRecordingCtx();
+                scrubEnv.canvas.ctx = rctx.proxy;
+                scrubEnv.view.init(scrubEnv.canvas);
+                scrubEnv.view.resize(300, 64);
+                scrubEnv.view.setPeaks(makePeaks(4096)); // a pending render is queued
+                expect(scrubEnv.fakeRAF.pendingCount()).to.equal(1);
+
+                // listeners were attached (scrub wired: canvas pointer*,
+                // window pointerup + blur; window resize always)
+                for (const t of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) {
+                    expect(scrubEnv.canvas.listeners.get(t)).to.have.lengthOf(1);
+                }
+                expect(scrubEnv.win.listeners.get('pointerup')).to.have.lengthOf(1);
+                expect(scrubEnv.win.listeners.get('blur')).to.have.lengthOf(1);
+                expect(scrubEnv.win.listeners.get('resize')).to.have.lengthOf(1);
+
+                scrubEnv.view.dispose();
+                expect(scrubEnv.fakeRAF.pendingCount()).to.equal(0); // pending render cancelled
+                expect(scrubEnv.fakeRAF.canceled).to.have.lengthOf(1);
+                for (const t of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) {
+                    expect(scrubEnv.canvas.listeners.get(t) || []).to.have.lengthOf(0);
+                }
+                for (const t of ['pointerup', 'blur', 'resize']) {
+                    expect(scrubEnv.win.listeners.get(t) || []).to.have.lengthOf(0);
+                }
+                expect(scrubEnv.canvas.width).to.equal(0); // GPU release
+                expect(scrubEnv.canvas.height).to.equal(0);
+
+                expect(() => scrubEnv.view.dispose()).to.not.throw(); // second call: no throw, no double-removal
+                expect(scrubEnv.fakeRAF.canceled).to.have.lengthOf(1);
+            });
+
+            it('WF-V1.5 — steady state: the RAF collector is empty (no internal clock, KB-14)', () => {
+                env.view.setPeaks(makePeaks(4096));
+                env.fakeRAF.flush();
+
+                expect(env.rec.moveTo).to.have.lengthOf(300); // the render happened…
+                expect(env.fakeRAF.pendingCount()).to.equal(0); // …and queued no follow-up frame
+                // a render never re-queues itself (the beatDots loop does;
+                // the view must not — the playhead is DOM, not canvas)
+                env.fakeRAF.flush();
+                expect(env.rec.moveTo).to.have.lengthOf(300);
+            });
+
+            it('WF-V1.6 — mirrored bars about y=32; a silent column draws a zero-height line at center', () => {
+                // 120-column source: every column min −0.5 / max +0.5 except
+                // column 5, which is silent (min = max = 0).
+                const mins = new Float32Array(120).fill(-0.5);
+                const maxs = new Float32Array(120).fill(0.5);
+                mins[5] = 0;
+                maxs[5] = 0;
+                const peaks = { mins, maxs, bucketCount: 120, sampleRate: 44100 };
+
+                env.view.resize(120, 64);
+                env.view.setPeaks(peaks);
+                env.fakeRAF.flush();
+
+                // one draw op per CSS column, from y(max) to y(min)
+                const moves = env.rec.moveTo;
+                const lines = env.rec.lineTo;
+                expect(moves.slice(-120).length).to.equal(120);
+                for (let k = 0; k < 120; k++) {
+                    if (k === 5) continue; // silent column — asserted below
+                    const m = moves[moves.length - 120 + k];
+                    const l = lines[lines.length - 120 + k];
+                    expect(m).to.deep.equal([k, 16]); // y(+0.5) = 32 − 0.5·32
+                    expect(l).to.deep.equal([k, 48]); // y(−0.5) = 32 + 0.5·32
+                }
+                // the silent column: a zero-height line at the center
+                expect(moves[moves.length - 115]).to.deep.equal([5, 32]);
+                expect(lines[lines.length - 115]).to.deep.equal([5, 32]);
+            });
+
+            it('WF-V1.7 — setDraft(1.5) paints a draft marker line; setDraft(null) removes it; no DOM round-trip', () => {
+                env.view.setPeaks(makePeaks(4096));
+                env.fakeRAF.flush();
+                expect(env.rec.strokes).to.have.lengthOf(1); // waveform only
+
+                // 1.5 s into a 3 s file → 50 % of 300 px → x = 150
+                // (each render is a full repaint: waveform stroke + draft stroke)
+                env.view.setDraft(1.5);
+                env.fakeRAF.flush();
+                expect(env.rec.strokes).to.have.lengthOf(3); // 1 + waveform + draft
+                expect(env.rec.strokes[2].lineWidth).to.equal(2);
+                const moves = env.rec.moveTo;
+                const lines = env.rec.lineTo;
+                // the draft render = 300 columns + one marker line at x 150
+                expect(moves).to.have.lengthOf(601);
+                expect(moves[600]).to.deep.equal([150, moves[600][1]]);
+                expect(lines[600]).to.deep.equal([150, lines[600][1]]);
+
+                // clear → the next render has no marker line
+                env.view.setDraft(null);
+                env.fakeRAF.flush();
+                expect(env.rec.moveTo).to.have.lengthOf(901); // 300 + 301 + 300
+                expect(env.rec.strokes).to.have.lengthOf(4);  // + waveform only
+
+                // the view never round-trips the draft through the VM —
+                // the DOM overlay marker (VM-owned) is untouched
+                expect(env.vm.offsetDraft).to.equal(null);
+            });
+        });
+
+        // ============================================================
+        // Pointer scrub — WF-V1.8…WF-V1.10
+        // ============================================================
+        describe('createWaveformView — pointer scrub', () => {
+            function makeScrubEnv() {
+                const calls = { start: [], move: [], end: [] };
+                const env = makeEnv({
+                    duration: 3,
+                    callbacks: {
+                        onScrubStart: (t) => calls.start.push(t),
+                        onScrubMove: (t) => calls.move.push(t),
+                        onScrubEnd: (commit) => calls.end.push(commit)
+                    }
+                });
+                const rctx = makeRecordingCtx();
+                env.canvas.ctx = rctx.proxy;
+                env.view.init(env.canvas);
+                env.view.resize(300, 64);
+                env.canvas.rect = { left: 0, top: 0, width: 300, height: 64 };
+                env.calls = calls;
+                return env;
+            }
+
+            it('WF-V1.8 — setPointerCapture throwing (Safari stale pointerId) is caught; the drag continues', () => {
+                const env = makeScrubEnv();
+                env.canvas.captureThrows = true; // W-1
+
+                fireCanvas(env.canvas, 'pointerdown', { clientX: 150, pointerId: 7 });
+                expect(env.calls.start).to.deep.equal([1.5]);
+
+                fireCanvas(env.canvas, 'pointermove', { clientX: 75, pointerId: 7 });
+                expect(env.calls.move).to.deep.equal([0.75]); // 25 % of 3 s — the drag is NOT stuck (exact in binary)
+
+                fireCanvas(env.canvas, 'pointerup', { clientX: 90, pointerId: 7 });
+                expect(env.calls.end).to.deep.equal([true]); // clean exit
+            });
+
+            it('WF-V1.9(a) — pointerup on canvas: onScrubEnd(true) exactly once, capture released, focus taken', () => {
+                const env = makeScrubEnv();
+
+                fireCanvas(env.canvas, 'pointerdown', { clientX: 30, pointerId: 1 });
+                expect(env.canvas.captured).to.deep.equal([1]);
+                fireCanvas(env.canvas, 'pointerup', { clientX: 30, pointerId: 1 });
+
+                expect(env.calls.end).to.deep.equal([true]);
+                expect(env.canvas.released).to.deep.equal([1]);
+                expect(env.canvas.focused).to.equal(1); // committed end → focus (CR §1.5)
+                // a subsequent move fires nothing
+                fireCanvas(env.canvas, 'pointermove', { clientX: 30, pointerId: 1 });
+                expect(env.calls.move).to.deep.equal([]);
+                expect(env.calls.end).to.deep.equal([true]); // still exactly once
+            });
+
+            it('WF-V1.9(b) — release off-canvas: the global window pointerup path commits exactly once', () => {
+                const env = makeScrubEnv();
+
+                fireCanvas(env.canvas, 'pointerdown', { clientX: 30, pointerId: 1 });
+                env.win.fire('pointerup'); // pointer left the canvas — global safety net
+
+                expect(env.calls.end).to.deep.equal([true]);
+                expect(env.canvas.released).to.deep.equal([1]); // capture released
+                // the canvas-level up (fired after the global one) is a no-op
+                fireCanvas(env.canvas, 'pointerup', { clientX: 30, pointerId: 1 });
+                expect(env.calls.end).to.deep.equal([true]);
+                expect(env.calls.move).to.deep.equal([]);
+            });
+
+            it('WF-V1.9(c) — window blur mid-drag: onScrubEnd(false) discard, no focus', () => {
+                const env = makeScrubEnv();
+
+                fireCanvas(env.canvas, 'pointerdown', { clientX: 30, pointerId: 1 });
+                env.win.fire('blur');
+
+                expect(env.calls.end).to.deep.equal([false]);
+                expect(env.canvas.focused).to.equal(0); // discard → no focus
+                expect(env.canvas.released).to.deep.equal([1]);
+                fireCanvas(env.canvas, 'pointermove', { clientX: 30, pointerId: 1 });
+                expect(env.calls.move).to.deep.equal([]);
+                expect(env.calls.end).to.deep.equal([false]);
+            });
+
+            it('WF-V1.9(d) — pointercancel (iOS OS gesture): onScrubEnd(false) discard, capture released, no focus', () => {
+                const env = makeScrubEnv();
+
+                fireCanvas(env.canvas, 'pointerdown', { clientX: 30, pointerId: 1 });
+                fireCanvas(env.canvas, 'pointercancel', { clientX: 30, pointerId: 1 });
+
+                expect(env.calls.end).to.deep.equal([false]);
+                expect(env.canvas.focused).to.equal(0);
+                expect(env.canvas.released).to.deep.equal([1]);
+                fireCanvas(env.canvas, 'pointermove', { clientX: 30, pointerId: 1 });
+                expect(env.calls.move).to.deep.equal([]);
+                expect(env.calls.end).to.deep.equal([false]);
+            });
+
+            it('WF-V1.10 — move before down is ignored; x→tenths = (x/cssWidth)·duration', () => {
+                const env = makeScrubEnv();
+
+                // no drag active → nothing fires
+                fireCanvas(env.canvas, 'pointermove', { clientX: 150, pointerId: 1 });
+                expect(env.calls.start).to.deep.equal([]);
+                expect(env.calls.move).to.deep.equal([]);
+                expect(env.calls.end).to.deep.equal([]);
+
+                // x = 50 % of 300 px, 3 s file → 1.5
+                fireCanvas(env.canvas, 'pointerdown', { clientX: 150, pointerId: 1 });
+                expect(env.calls.start).to.deep.equal([1.5]);
+            });
+
+            it('pointer listeners attach ONLY when onScrubStart is provided (Phase 4 display-only)', () => {
+                const env = makeEnv(); // no callbacks
+                const rctx = makeRecordingCtx();
+                env.canvas.ctx = rctx.proxy;
+                env.view.init(env.canvas);
+                expect(env.canvas.listeners.has('pointerdown')).to.equal(false);
+                expect(env.canvas.listeners.has('pointermove')).to.equal(false);
+                expect(env.win.listeners.has('pointerup')).to.equal(false);
+                expect(env.win.listeners.has('blur')).to.equal(false);
+                // window resize is always attached
+                expect(env.win.listeners.has('resize')).to.equal(true);
+            });
+
+            it('window resize → measures container × getHeightCss → resize() (coalesced)', () => {
+                const env = makeEnv();
+                const rctx = makeRecordingCtx();
+                env.canvas.ctx = rctx.proxy;
+                env.view.init(env.canvas);
+                env.view.setPeaks(makePeaks(4096));
+
+                env.container.clientWidth = 320;
+                env.win.fire('resize');
+
+                expect(env.canvas.width).to.equal(320);
+                expect(env.canvas.height).to.equal(64);
+                env.fakeRAF.flush();
+                const moves = rctx.rec.moveTo;
+                expect(moves[moves.length - 1]).to.deep.equal([319, moves[moves.length - 1][1]]);
+                expect(moves[moves.length - 320][0]).to.equal(0);
+            });
+        });
+
+        // ============================================================
+        // Sizing — WF-V1.11 (W-4, review F-2)
+        // ============================================================
+        describe('createWaveformView — sizing (W-4)', () => {
+            it('WF-V1.11 — default height provider tracks the container box (no injected getHeightCss)', () => {
+                // The production wiring (createMetronomadLifecycle) injects
+                // NO height provider: the default must read the CSS box, or
+                // the ≤375 px clamp (48 px) leaves the backing store at
+                // 64 px and the waveform squishes 25 % (review F-2).
+                const env = makeEnv({ noDefaultHeight: true });
+                const rctx = makeRecordingCtx();
+                env.canvas.ctx = rctx.proxy;
+                env.container.clientHeight = 48;   // ≤375 px viewport box
+                env.view.init(env.canvas);
+                expect(env.canvas.width).to.equal(300);
+                expect(env.canvas.height).to.equal(48);
+
+                // The window-resize path re-measures the box too (clamp
+                // crossed back up past the breakpoint).
+                env.container.clientHeight = 64;
+                env.win.fire('resize');
+                expect(env.canvas.height).to.equal(64);
+                env.fakeRAF.flush();
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

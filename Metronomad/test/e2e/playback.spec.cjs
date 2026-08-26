@@ -188,12 +188,15 @@ test.describe('Phase 7 — playback (E2E-1.x)', () => {
       .toBeLessThanOrEqual(500);
 
     // position reset; BPM/offset preserved; controls re-enabled
+    // (O-1: the old scrubber is gone; the canvas lock is asserted
+    // separately — a canvas can never be :disabled, R-1)
     await expect(page.locator('.progress-readout')).toHaveText('0:00.0 / 0:03.0');
     await expect(page.locator('#bpmInput')).toHaveValue('120');
     await expect(page.locator('#countInInput')).toHaveValue('2');
-    for (const sel of ['#bpmInput', '#offsetScrubber', '#offsetInput', '#countInInput']) {
+    for (const sel of ['#bpmInput', '#offsetInput', '#countInInput']) {
       await expect(page.locator(sel)).toBeEnabled();
     }
+    await expect(page.locator('#waveformCanvas[aria-disabled]')).toHaveCount(0);
   });
 
   test('E2E-1.4 stop during playback: ready, progress reset to offset', async ({ page }) => {
@@ -252,7 +255,12 @@ test.describe('Phase 7 — playback (E2E-1.x)', () => {
     // Long count-in so node-side polls (slow under load) stay inside the window.
     await setCountIn(page, 8);
 
-    const lockedInputs = ['#bpmInput', '#offsetScrubber', '#offsetInput', '#countInInput'];
+    const lockedInputs = ['#bpmInput', '#offsetInput', '#countInInput'];
+    // O-1/R-1: the canvas slider's lock is aria-disabled + pointer-events
+    // none (a canvas can never be :disabled).
+    const canvas = page.locator('#waveformCanvas');
+    const canvasPointerEvents = () =>
+      page.$eval('#waveformCanvas', (el) => getComputedStyle(el).pointerEvents);
 
     await startRecordedSequence(page);
 
@@ -260,17 +268,22 @@ test.describe('Phase 7 — playback (E2E-1.x)', () => {
     for (const sel of lockedInputs) {
       await expect(page.locator(sel), `${sel} locked in countingIn`).toBeDisabled();
     }
+    await expect(canvas).toHaveAttribute('aria-disabled', 'true');
+    expect(await canvasPointerEvents(), 'canvas locked in countingIn').toBe('none');
 
     await expect.poll(() => appState(page), { timeout: 10000 }).toBe('playing');
     for (const sel of lockedInputs) {
       await expect(page.locator(sel), `${sel} locked in playing`).toBeDisabled();
     }
+    await expect(canvas).toHaveAttribute('aria-disabled', 'true');
+    expect(await canvasPointerEvents(), 'canvas locked in playing').toBe('none');
 
     await page.click('#playStopBtn');
     await expect.poll(() => appState(page), { timeout: 10000 }).toBe('ready');
     for (const sel of lockedInputs) {
       await expect(page.locator(sel), `${sel} unlocked after stop`).toBeEnabled();
     }
+    await expect(canvas).not.toHaveAttribute('aria-disabled');
     await readTimeline(page); // stop the in-page logger
   });
 
