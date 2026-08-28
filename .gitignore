@@ -1,4 +1,5 @@
 **/.DS_Store
+**/.playwright-cli/
 MidiSongBuilder/MyComponents/difficultySettingsCalculator.js
 node_modules/
 MidiSongBuilder/.claude/agents/hl-*
@@ -12,7 +13,7 @@ MidiSongBuilder/MyESModules/Libraries/*
 package-lock.json
 
 .DS_Store
-CollageMaker/_agent_docs/**
+**/_agent_docs/
 TaxBracketVisualizer/.opencode/**
 **/.claude/**
 CollageMaker/.opencode/skills/playwright-cli/**

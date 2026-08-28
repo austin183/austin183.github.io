@@ -11,6 +11,7 @@ Test URLs after server is running:
 # Required Practices
 
 1. **Read Before Write**: Always read the file before editing
+2. **Decomposed Plans**: When a project plan lives in a directory (`_agent_docs/plans/<slug>/`), work only from the current phase file plus its "Context to load" list — not the whole plan. When a phase's success criteria are met, mark it complete in the phase map in that directory's `index.md`.
 
 # Git Commit Convention
 Include `Co-Authored-By: LittleLight <noreply@traveler.dstny>` in commit messages

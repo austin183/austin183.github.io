@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timing Math Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>Metronomad — Timing Math Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Plan §3.3 T-01…T-34 — Utils/beatGrid.js, Utils/timeFormat.js, Utils/paramClamps.js</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { beatInterval, buildSchedule, beatPhaseFromGrid, BEATS_PER_BAR } from '../MyESModules/Utils/beatGrid.js';
+        import { formatTime, parseOffsetInput } from '../MyESModules/Utils/timeFormat.js';
+        import { clampBpm, clampCountIn, clampOffset } from '../MyESModules/Utils/paramClamps.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // beatGrid.js — T-01…T-11
+        // ============================================================
+        describe('beatGrid.beatInterval()', () => {
+            it('T-01 — beatInterval(120) = 0.5', () => {
+                expect(beatInterval(120)).to.equal(0.5);
+            });
+
+            it('T-02 — boundaries and common values', () => {
+                expect(beatInterval(60)).to.equal(1.0);
+                expect(beatInterval(30)).to.equal(2.0);
+                expect(beatInterval(250)).to.equal(0.24);
+            });
+
+            it('T-03 — non-finite / non-positive inputs return NaN (guarded)', () => {
+                expect(beatInterval(0)).to.be.NaN;
+                expect(beatInterval(NaN)).to.be.NaN;
+                expect(beatInterval(Infinity)).to.be.NaN;
+            });
+        });
+
+        describe('beatGrid.buildSchedule()', () => {
+            it('T-04 — 120 BPM, 4-beat count-in, tP=100, offset 90', () => {
+                const schedule = buildSchedule({ tP: 100.0, bpm: 120, countInBeats: 4, offset: 90.0 });
+                expect(schedule.clicks).to.deep.equal([
+                    { time: 100.5, isAccent: true },
+                    { time: 101.0, isAccent: false },
+                    { time: 101.5, isAccent: false },
+                    { time: 102.0, isAccent: false }
+                ]);
+                expect(schedule.songStart).to.deep.equal({ time: 102.5, offset: 90.0 });
+            });
+
+            it('R-I8.1 — BEATS_PER_BAR is the single home for "4 beats per bar"; the accent rule binds to it', () => {
+                expect(BEATS_PER_BAR).to.equal(4);
+                // An 8-beat count-in spans two bars: accents fall on k = 1 and
+                // k = 5 (k % BEATS_PER_BAR === 1 — beat 1 of each bar).
+                const schedule = buildSchedule({ tP: 0, bpm: 120, countInBeats: 8, offset: 0 });
+                expect(schedule.clicks.map(c => c.isAccent))
+                    .to.deep.equal([true, false, false, false, true, false, false, false]);
+            });
+
+            it('T-05 — 30 BPM, 16-beat count-in: accents every 4th click', () => {
+                const schedule = buildSchedule({ tP: 0, bpm: 30, countInBeats: 16 });
+                expect(schedule.clicks).to.have.length(16);
+                for (let i = 0; i < 16; i++) {
+                    expect(schedule.clicks[i].time).to.equal((i + 1) * 2.0);
+                    expect(schedule.clicks[i].isAccent).to.equal(i % 4 === 0);
+                }
+                expect(schedule.clicks.map(c => c.isAccent).join(','))
+                    .to.equal('true,false,false,false,true,false,false,false,true,false,false,false,true,false,false,false');
+                expect(schedule.songStart.time).to.equal(34.0);
+            });
+
+            it('T-06 — 250 BPM, 1-beat count-in: no lead-time floor (D1/KB-1)', () => {
+                const schedule = buildSchedule({ tP: 5, bpm: 250, countInBeats: 1 });
+                expect(schedule.clicks).to.have.length(1);
+                expect(schedule.clicks[0].time).to.equal(5.24);
+                expect(schedule.clicks[0].isAccent).to.equal(true);
+                expect(schedule.songStart.time).to.equal(5.48);
+            });
+
+            it('T-07 — countInBeats 0 throws RangeError', () => {
+                expect(() => buildSchedule({ tP: 1, bpm: 120, countInBeats: 0 })).to.throw(RangeError);
+            });
+        });
+
+        describe('beatGrid.beatPhaseFromGrid()', () => {
+            // NOTE (plan correction): T-08/T-10 `now` inputs in the plan were
+            // internally inconsistent with their own expected outputs —
+            // (102.75−100.5)/0.5 = 4.5 → floor 4, not 2; (104.999−100.5)/0.5
+            // = 8.998 → floor 8, not 3. The expected outputs, inBeat values,
+            // and the "floor, not round" note are all consistent with
+            // now = 101.75 and now = 102.499 respectively, so the `now` inputs
+            // are corrected here and the expected outputs kept as written.
+            it('T-08 — mid-beat phase', () => {
+                expect(beatPhaseFromGrid(101.75, 100.5, 0.5))
+                    .to.deep.equal({ beatIndex: 2, inBeat: 0.5 });
+            });
+
+            it('T-09 — before the first beat: no dot lit', () => {
+                expect(beatPhaseFromGrid(100.49, 100.5, 0.5))
+                    .to.deep.equal({ beatIndex: -1, inBeat: 0 });
+            });
+
+            it('T-10 — near the beat boundary: floor, no early wrap', () => {
+                const phase = beatPhaseFromGrid(102.499, 100.5, 0.5);
+                expect(phase.beatIndex).to.equal(3);
+                expect(phase.inBeat).to.be.closeTo(0.998, 1e-6);
+            });
+
+            it('T-11 — NaN now: guarded', () => {
+                expect(beatPhaseFromGrid(NaN, 100.5, 0.5))
+                    .to.deep.equal({ beatIndex: -1, inBeat: 0 });
+            });
+        });
+
+        // ============================================================
+        // timeFormat.js — T-12…T-25
+        // ============================================================
+        describe('timeFormat.formatTime()', () => {
+            it('T-12 — 75.3 → "1:15.3"', () => {
+                expect(formatTime(75.3)).to.equal('1:15.3');
+            });
+
+            it('T-13 — 0 → "0:00.0"', () => {
+                expect(formatTime(0)).to.equal('0:00.0');
+            });
+
+            it('T-14 — 65.25 → "1:05.3" (half-up to the tenth)', () => {
+                expect(formatTime(65.25)).to.equal('1:05.3');
+            });
+
+            it('T-15 — 3599.94 → "59:59.9"', () => {
+                expect(formatTime(3599.94)).to.equal('59:59.9');
+            });
+
+            it('T-16 — 600.0 → "10:00.0" (minutes ≥ 10)', () => {
+                expect(formatTime(600.0)).to.equal('10:00.0');
+            });
+
+            it('T-17 — negative / NaN → "0:00.0" (clamped/guarded)', () => {
+                expect(formatTime(-1)).to.equal('0:00.0');
+                expect(formatTime(NaN)).to.equal('0:00.0');
+            });
+        });
+
+        describe('timeFormat.parseOffsetInput()', () => {
+            it('T-18 — "1:05.2" → 65.2', () => {
+                expect(parseOffsetInput('1:05.2')).to.equal(65.2);
+            });
+
+            it('T-19 — bare seconds "90" → 90.0', () => {
+                expect(parseOffsetInput('90')).to.equal(90.0);
+            });
+
+            it('T-20 — "1:5" (seconds without tenths) → 65.0', () => {
+                expect(parseOffsetInput('1:5')).to.equal(65.0);
+            });
+
+            it('T-21 — "0:00.0" → 0.0', () => {
+                expect(parseOffsetInput('0:00.0')).to.equal(0.0);
+            });
+
+            it('T-22 — "1:75" (seconds ≥ 60) → null', () => {
+                expect(parseOffsetInput('1:75')).to.equal(null);
+            });
+
+            it('T-23 — "-5" → null', () => {
+                expect(parseOffsetInput('-5')).to.equal(null);
+            });
+
+            it('T-24 — "", "abc", "1:2:3" → null', () => {
+                expect(parseOffsetInput('')).to.equal(null);
+                expect(parseOffsetInput('abc')).to.equal(null);
+                expect(parseOffsetInput('1:2:3')).to.equal(null);
+            });
+
+            it('T-25 — number passthrough (90) → 90.0', () => {
+                expect(parseOffsetInput(90)).to.equal(90.0);
+            });
+        });
+
+        // ============================================================
+        // paramClamps.js — T-26…T-34
+        // ============================================================
+        describe('paramClamps.clampBpm()', () => {
+            it('T-26 — 119.6 → 120 (whole numbers, spec §4)', () => {
+                expect(clampBpm(119.6)).to.equal(120);
+            });
+
+            it('T-27 — out-of-range clamps: 251 → 250, 29 → 30', () => {
+                expect(clampBpm(251)).to.equal(250);
+                expect(clampBpm(29)).to.equal(30);
+            });
+
+            it('T-28 — NaN / undefined → 120 (default)', () => {
+                expect(clampBpm(NaN)).to.equal(120);
+                expect(clampBpm(undefined)).to.equal(120);
+            });
+        });
+
+        describe('paramClamps.clampCountIn()', () => {
+            it('T-29 — 0 → 1, 16.4 → 16, 99 → 16', () => {
+                expect(clampCountIn(0)).to.equal(1);
+                expect(clampCountIn(16.4)).to.equal(16);
+                expect(clampCountIn(99)).to.equal(16);
+            });
+
+            it('T-30 — NaN → 4 (default)', () => {
+                expect(clampCountIn(NaN)).to.equal(4);
+            });
+        });
+
+        describe('paramClamps.clampOffset()', () => {
+            it('T-31 — 90 in a 3.0 s song → 3.0', () => {
+                expect(clampOffset(90, 3.0)).to.equal(3.0);
+            });
+
+            it('T-32 — -5 → 0', () => {
+                expect(clampOffset(-5, 3.0)).to.equal(0);
+            });
+
+            it('T-33 — 1.2345 → 1.2 (quantized to tenths)', () => {
+                expect(clampOffset(1.2345, 3.0)).to.equal(1.2);
+            });
+
+            it('T-34 — invalid duration (NaN) → 0', () => {
+                expect(clampOffset(1, NaN)).to.equal(0);
+            });
+
+            it('T-35 — quantize-then-reclamp: never > duration (2.96 s song, I-3)', () => {
+                expect(clampOffset(2.96, 2.96)).to.equal(2.9);
+                expect(clampOffset(2.94, 2.96)).to.equal(2.9);
+                expect(clampOffset(3.0, 2.96)).to.equal(2.9);
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

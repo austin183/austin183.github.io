@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Playback Engine Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>Metronomad — PlaybackEngine Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Plan §3.2 P-01…P-11, P-13…P-14 (Playback/playbackEngine.js — P-12 retired, I-5/RD-6, see R-I5.1), H-03 (Audio/clickBuffers.js).
+    Engine tests instantiate ZERO real AudioContext — fake context/clock/RAF/timers only (Phase 4 success criteria).</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createPlaybackEngine, ENGINE_STATES, ENGINE_EVENTS, SCHEDULER, PREVIEW_SECONDS } from '../MyESModules/Playback/playbackEngine.js';
+        import { CLICK, renderClickBuffer, renderClickBuffers } from '../MyESModules/Audio/clickBuffers.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // Fake helpers (in-page per plan §Phase 4)
+        // ============================================================
+
+        // Fake clock — every time read in the engine goes through
+        // clock.currentTime, so tests advance it by hand.
+        function createFakeClock(t = 0) {
+            const clock = { get currentTime() { return clock._t; } };
+            clock._t = t;
+            clock.set = (v) => { clock._t = v; };
+            clock.advance = (dt) => { clock._t += dt; };
+            return clock;
+        }
+
+        // Fake timers — setInterval/clearInterval spies with manual ticks.
+        function createFakeTimers() {
+            let nextId = 1;
+            const intervals = new Map();
+            return {
+                intervals,
+                setInterval(fn, ms) { const id = nextId++; intervals.set(id, { fn, ms }); return id; },
+                clearInterval(id) { intervals.delete(id); },
+                count() { return intervals.size; },
+                tickAll() { for (const { fn } of [...intervals.values()]) fn(); },
+                tickWithMs(ms) {
+                    let ticks = 0;
+                    for (const { fn, ms: m } of [...intervals.values()]) {
+                        if (m === ms) { fn(); ticks++; }
+                    }
+                    return ticks;
+                }
+            };
+        }
+
+        // Fake AudioContext — createBufferSource/createGain recording spies.
+        // Sources record { startedWith: { when, offset, duration }, stopped,
+        // disconnected } + connect calls (P-14). `calls` is a shared ordered
+        // log of start/stop for ordering assertions (P-05).
+        function createFakeContext({ state = 'running' } = {}) {
+            const ctx = {
+                state,
+                sampleRate: 44100,
+                sources: [],
+                gains: [],
+                calls: [],
+                createBufferSource() {
+                    const source = {
+                        buffer: null,
+                        startedWith: null,
+                        stopped: false,
+                        disconnected: false,
+                        connectCalls: [],
+                        onended: null,
+                        start(when, offset, duration) {
+                            source.startedWith = { when, offset, duration };
+                            ctx.calls.push({ type: 'start', source });
+                        },
+                        stop() {
+                            source.stopped = true;
+                            ctx.calls.push({ type: 'stop', source });
+                        },
+                        connect(node) { source.connectCalls.push(node); return node; },
+                        disconnect() { source.disconnected = true; }
+                    };
+                    ctx.sources.push(source);
+                    return source;
+                },
+                createGain() {
+                    const gain = {
+                        value: 1,
+                        connectCalls: [],
+                        disconnected: false,
+                        connect(node) { gain.connectCalls.push(node); return node; },
+                        disconnect() { gain.disconnected = true; }
+                    };
+                    ctx.gains.push(gain);
+                    return gain;
+                },
+                resume() { return Promise.resolve(); }
+            };
+            return ctx;
+        }
+
+        // Everything a test needs, wired to one engine.
+        function makeEngine(overrides = {}) {
+            const context = overrides.context || createFakeContext();
+            const masterGain = overrides.masterGain || { value: 1, connectCalls: [] };
+            const clickBuffers = overrides.clickBuffers || { accent: { name: 'accent' }, regular: { name: 'regular' } };
+            const clock = overrides.clock || createFakeClock(0);
+            const timers = overrides.timers || createFakeTimers();
+            const events = [];
+            const interrupted = [];
+
+            const engine = createPlaybackEngine({
+                context,
+                masterGain,
+                clickBuffers,
+                clock,
+                schedulerMs: SCHEDULER.TICK_MS,
+                lookaheadSec: SCHEDULER.LOOKAHEAD_SEC,
+                setInterval: timers.setInterval,
+                clearInterval: timers.clearInterval,
+                onStateChange: (state) => events.push(state),
+                onInterrupted: () => interrupted.push(1),
+                ...overrides.engine
+            });
+
+            return {
+                engine, context, masterGain, clickBuffers, clock, timers,
+                events, interrupted,
+                // The engine's own scheduler interval (25 ms tick).
+                tickScheduler() { return timers.tickWithMs(SCHEDULER.TICK_MS); },
+                tickWatch() { return timers.tickWithMs(SCHEDULER.WATCH_MS); }
+            };
+        }
+
+        const fakeBuffer = (duration = 3.0) => ({ duration, channels: 1, sampleRate: 44100 });
+
+        // Song source = the one whose startedWith.offset matches the sequence offset
+        // (clicks have offset undefined).
+        const songSources = (ctx) => ctx.sources.filter(s => s.startedWith && s.startedWith.offset !== undefined);
+        const clickSources = (ctx) => ctx.sources.filter(s => s.startedWith && s.startedWith.offset === undefined);
+        const liveSources = (ctx) => ctx.sources.filter(s => s.startedWith && !s.stopped);
+
+        // ============================================================
+        // H-03 — clickBuffers (D7) — the ONLY block that uses a real
+        // AudioContext (createBuffer + sample render need the real API).
+        // ============================================================
+        describe('clickBuffers (H-03, D7)', () => {
+            let ctx;
+            before(function () {
+                ctx = new (window.AudioContext || window.webkitAudioContext)();
+            });
+            after(function () { ctx.close(); });
+
+            it('H-03 — CLICK constants pin the D7 spec (1568/1047 Hz, 60 ms, 5 ms attack)', () => {
+                expect(CLICK.ACCENT_FREQ).to.equal(1568);
+                expect(CLICK.REGULAR_FREQ).to.equal(1047);
+                expect(CLICK.DURATION_SEC).to.equal(0.06);
+                expect(CLICK.ATTACK_SEC).to.equal(0.005);
+            });
+
+            it('H-03 — renderClickBuffers(ctx) → { accent, regular }, both real AudioBuffers, 0.06 s, ctx sampleRate, distinct', () => {
+                const { accent, regular } = renderClickBuffers(ctx);
+
+                expect(accent).to.be.an.instanceof(AudioBuffer);
+                expect(regular).to.be.an.instanceof(AudioBuffer);
+                expect(accent).to.not.equal(regular); // non-identical buffers
+                expect(accent.duration).to.be.closeTo(0.06, 0.001);
+                expect(regular.duration).to.be.closeTo(0.06, 0.001);
+                expect(accent.sampleRate).to.equal(ctx.sampleRate);
+                expect(regular.sampleRate).to.equal(ctx.sampleRate);
+                expect(accent.numberOfChannels).to.equal(1);
+            });
+
+            it('H-03 — accent and regular encode different frequencies (zero-crossing count)', () => {
+                const { accent, regular } = renderClickBuffers(ctx);
+                const dominantFreq = (buf) => {
+                    const data = buf.getChannelData(0);
+                    let crossings = 0;
+                    for (let i = 1; i < data.length; i++) {
+                        if ((data[i - 1] < 0 && data[i] >= 0) || (data[i - 1] >= 0 && data[i] < 0)) crossings++;
+                    }
+                    return crossings / 2 / buf.duration; // full cycles per second
+                };
+                expect(dominantFreq(accent)).to.be.within(1400, 1700);   // ~1568 Hz
+                expect(dominantFreq(regular)).to.be.within(900, 1200);    // ~1047 Hz
+            });
+
+            it('H-03 — renderClickBuffer(ctx, freq) decays to ~0 by the end (no click-on at tail)', () => {
+                const buf = renderClickBuffer(ctx, 1047);
+                const data = buf.getChannelData(0);
+                const tail = Math.max(...[...data.slice(-32)].map(Math.abs));
+                expect(tail).to.be.lessThan(0.001);
+            });
+        });
+
+        // ============================================================
+        // P-01…P-14 — playbackEngine (fake context/clock/RAF/timers only)
+        // ============================================================
+        describe('playbackEngine (P-01…P-14)', () => {
+            it('exports — ENGINE_STATES / ENGINE_EVENTS / SCHEDULER / PREVIEW_SECONDS constants (R-N7.1)', () => {
+                expect(ENGINE_STATES).to.deep.equal({
+                    STOPPED: 'stopped', COUNTING_IN: 'countingIn',
+                    PLAYING: 'playing', PREVIEW: 'preview'
+                });
+                expect(SCHEDULER.TICK_MS).to.equal(25);
+                expect(SCHEDULER.LOOKAHEAD_SEC).to.equal(0.1);
+                expect(SCHEDULER.WATCH_MS).to.equal(250);
+                expect(SCHEDULER.RESUME_TIMEOUT_MS).to.equal(750);
+                expect(PREVIEW_SECONDS).to.equal(3);
+                // R-N7.1: the terminal event names are exported — the app
+                // switches on the constants, not magic strings (N-7).
+                expect(ENGINE_EVENTS).to.deep.equal({ ENDED: 'ended', PREVIEW_ENDED: 'previewEnded' });
+            });
+
+            it('P-01 — startSequence schedules clicks at t_p+k·b (accent first) and song at t_p+(N+1)·b; state countingIn → playing once each', () => {
+                const { engine, tickScheduler, tickWatch, context, clickBuffers, clock, events } = makeEngine({ clock: createFakeClock(100.0) });
+                // Buffer long enough for offset 90 (P-13 rev: offset < duration required).
+                const buffer = fakeBuffer(120.0);
+
+                const result = engine.startSequence({ buffer, bpm: 120, countInBeats: 4, offset: 90.0 });
+                expect(result).to.deep.include({ ok: true });
+                expect(result.schedule.songStart).to.deep.equal({ time: 102.5, offset: 90.0 });
+
+                // D5: song source is start(when, offset)-ed IMMEDIATELY.
+                expect(songSources(context)).to.have.length(1);
+                expect(songSources(context)[0].startedWith.when).to.equal(102.5);
+                expect(songSources(context)[0].startedWith.offset).to.equal(90.0);
+                expect(clickSources(context)).to.have.length(0); // clicks come from the lookahead
+
+                // Lookahead ticks: each click enters the 100 ms horizon one at a time.
+                const at = (t) => { clock.set(t); tickScheduler(); };
+                at(100.45); // horizon 100.55
+                expect(clickSources(context).map(s => s.startedWith.when)).to.deep.equal([100.5]);
+                at(100.95);
+                at(101.45);
+                at(101.95);
+                expect(clickSources(context).map(s => s.startedWith.when)).to.deep.equal([100.5, 101.0, 101.5, 102.0]);
+
+                // Accent pattern [T,F,F,F] via buffer choice.
+                expect(clickSources(context).map(s => s.buffer)).to.deep.equal(
+                    [clickBuffers.accent, clickBuffers.regular, clickBuffers.regular, clickBuffers.regular]);
+
+                // State flips when the clock passes song start (via a tick).
+                expect(engine.state).to.equal(ENGINE_STATES.COUNTING_IN);
+                at(102.51);
+                expect(engine.state).to.equal(ENGINE_STATES.PLAYING);
+                expect(events).to.deep.equal(['countingIn', 'playing']); // once per transition
+            });
+
+            it('R-N1.1 — scheduler interval cleared at the PLAYING flip (N-1): only the watch remains', () => {
+                const { engine, tickScheduler, context, clock, timers, events } = makeEngine({ clock: createFakeClock(100.0) });
+                engine.startSequence({ buffer: fakeBuffer(30.0), bpm: 120, countInBeats: 4, offset: 0 });
+                expect(timers.count()).to.equal(2); // scheduler + watch
+
+                // Schedule every click before the flip (all are < songStart 102.5).
+                clock.set(102.45); tickScheduler(); // horizon 102.55 → all 4 clicks
+                expect(clickSources(context).length).to.equal(4);
+                expect(engine.state).to.equal(ENGINE_STATES.COUNTING_IN);
+                expect(timers.count()).to.equal(2); // flip not reached — scheduler still live
+
+                // Cross the flip: the scheduler has nothing left to schedule.
+                clock.set(102.51); tickScheduler();
+                expect(engine.state).to.equal(ENGINE_STATES.PLAYING);
+                expect(timers.count()).to.equal(1); // watch only — scheduler cleared (N-1)
+                expect(timers.tickWithMs(SCHEDULER.TICK_MS)).to.equal(0); // no 25 ms tick can fire
+
+                // A long song must not run no-op ticks: no sources, no events.
+                const sourcesBefore = context.sources.length;
+                for (let i = 0; i < 200; i++) { clock.advance(0.025); timers.tickAll(); }
+                expect(context.sources.length).to.equal(sourcesBefore);
+                expect(events).to.deep.equal(['countingIn', 'playing']);
+                engine.stop();
+                expect(timers.count()).to.equal(0);
+            });
+
+            it('R-N4.1 — startSequence returns a frozen schedule view, not the live _seq (N-4)', () => {
+                const { engine, tickScheduler, context, clock } = makeEngine({ clock: createFakeClock(100.0) });
+                const result = engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 0 });
+
+                // The view is a snapshot — frozen at every level tests could touch.
+                expect(Object.isFrozen(result.schedule)).to.equal(true);
+                expect(Object.isFrozen(result.schedule.clicks[0])).to.equal(true);
+
+                // Mutating the view must not disturb the engine's own sequence:
+                // writes are rejected (strict mode), and the scheduler still
+                // schedules click 0 from its internal _seq.
+                expect(() => { result.schedule.clicks[0].scheduled = true; }).to.throw(TypeError);
+                clock.set(100.45); tickScheduler();
+                expect(clickSources(context).map(s => s.startedWith.when)).to.deep.equal([100.5]);
+
+                // Shape for existing consumers (P-01) is preserved.
+                expect(result.schedule.songStart).to.deep.equal({ time: 102.5, offset: 0 });
+                engine.stop();
+            });
+
+            it('P-02 — stop() during count-in cancels everything; idempotent; no sources can appear afterwards', () => {
+                const { engine, tickScheduler, tickWatch, context, clock, events, timers } = makeEngine({ clock: createFakeClock(100.0) });
+                engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 0 });
+                clock.set(100.75);
+                tickScheduler(); // click 1 (100.5) is now a live source
+
+                engine.stop();
+                expect(engine.state).to.equal(ENGINE_STATES.STOPPED);
+                expect(context.sources.every(s => !s.startedWith || s.stopped)).to.equal(true);
+                const song = songSources(context)[0];
+                expect(song.startedWith.when).to.equal(102.5);
+                expect(song.stopped).to.equal(true); // scheduled song source cancelled
+                expect(timers.count()).to.equal(0);  // scheduler + watch cleared
+
+                // The never-created clicks (101.0/101.5/102.0) can never sound:
+                // nothing is scheduled to create them anymore.
+                timers.tickAll();
+                expect(context.sources).to.have.length(2); // click 1 + song only
+
+                expect(events).to.deep.equal(['countingIn', 'stopped']);
+                engine.stop(); // second stop is a no-op
+                expect(events).to.deep.equal(['countingIn', 'stopped']);
+            });
+
+            it('P-03 — 20× startSequence/stop mash: no live sources, no timers, no stale callbacks after final stop (D4)', () => {
+                const { engine, tickScheduler, tickWatch, context, clock, timers, events } = makeEngine();
+                for (let i = 0; i < 20; i++) {
+                    engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 0 });
+                    clock.advance(0.01);
+                    tickScheduler(); // let some clicks be created
+                    engine.stop();
+                }
+                expect(liveSources(context).length).to.equal(0);
+                expect(timers.count()).to.equal(0);
+                expect(engine.state).to.equal(ENGINE_STATES.STOPPED);
+
+                // Zero callbacks referencing a dead generation: firing onended
+                // for every song source ever created must do nothing.
+                const stoppedEvents = events.filter(e => e === 'stopped').length;
+                const endedEvents = events.filter(e => e === 'ended').length;
+                for (const s of songSources(context)) if (s.onended) s.onended();
+                expect(events.filter(e => e === 'stopped').length).to.equal(stoppedEvents);
+                expect(endedEvents).to.equal(0);
+            });
+
+            it('P-04 — stale onended after stop is ignored; fresh sequence onended → "ended" exactly once', () => {
+                const { engine, tickScheduler, tickWatch, context, clock, events } = makeEngine({ clock: createFakeClock(0) });
+                engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 0 });
+                const songA = songSources(context)[0];
+                engine.stop();
+
+                if (songA.onended) songA.onended(); // A's end event fires after the stop
+                expect(engine.state).to.equal(ENGINE_STATES.STOPPED);
+                expect(events.filter(e => e === 'ended').length).to.equal(0);
+
+                engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 0 });
+                const songB = songSources(context)[1];
+                clock.set(2.6); tickScheduler(); // → playing
+                expect(engine.state).to.equal(ENGINE_STATES.PLAYING);
+                songB.onended();
+                expect(engine.state).to.equal(ENGINE_STATES.STOPPED);
+                expect(events.filter(e => e === 'ended').length).to.equal(1);
+                expect(liveSources(context).length).to.equal(0);
+            });
+
+            it('P-05 — restart(): old song source stopped BEFORE the new one starts; new t_p at the call', () => {
+                const { engine, tickScheduler, tickWatch, context, clock, events } = makeEngine({ clock: createFakeClock(0) });
+                engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 0 });
+                const songOld = songSources(context)[0];
+                clock.set(3.0);
+                tickScheduler(); // → playing at 2.5
+
+                const result = engine.restart({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 0 });
+                expect(result).to.deep.include({ ok: true });
+                expect(engine.state).to.equal(ENGINE_STATES.COUNTING_IN);
+
+                const songNew = songSources(context)[1];
+                expect(songNew.startedWith.when).to.equal(3.0 + 2.5); // t_p = 3.0 at the call
+                const stopIdx = context.calls.findIndex(c => c.type === 'stop' && c.source === songOld);
+                const startIdx = context.calls.findIndex(c => c.type === 'start' && c.source === songNew);
+                expect(stopIdx).to.not.equal(-1);
+                expect(startIdx).to.not.equal(-1);
+                expect(stopIdx).to.be.lessThan(startIdx); // ordering contract
+                expect(events).to.deep.equal(['countingIn', 'playing', 'countingIn']); // no "stopped" blip
+            });
+
+            it('P-06 — preview(): one song source start(now, offset, min(3, duration−offset)); no clicks; onended → previewEnded (D2)', () => {
+                const { engine, tickScheduler, tickWatch, context, clock, events } = makeEngine({ clock: createFakeClock(50.0) });
+
+                const r1 = engine.preview({ buffer: fakeBuffer(3.0), offset: 1.0 });
+                expect(r1).to.deep.include({ ok: true });
+                expect(engine.state).to.equal(ENGINE_STATES.PREVIEW);
+                expect(context.sources).to.have.length(1);
+                expect(context.sources[0].startedWith).to.deep.equal({ when: 50.0, offset: 1.0, duration: 2.0 });
+                expect(clickSources(context).length).to.equal(0);
+
+                context.sources[0].onended();
+                expect(engine.state).to.equal(ENGINE_STATES.STOPPED);
+                expect(events).to.deep.equal(['preview', 'previewEnded']);
+
+                // Clamp: 2.9 s offset in a 3.0 s song → 0.1 s preview, never 0/negative.
+                const r2 = engine.preview({ buffer: fakeBuffer(3.0), offset: 2.9 });
+                expect(r2).to.deep.include({ ok: true });
+                expect(context.sources[1].startedWith.duration).to.be.closeTo(0.1, 0.001);
+            });
+
+            it('R-I4.2 — user stop() during preview: events exactly [preview, stopped]; stale preview onended ignored (I-4)', () => {
+                const { engine, context, events, timers } = makeEngine({ clock: createFakeClock(50.0) });
+
+                expect(engine.preview({ buffer: fakeBuffer(3.0), offset: 1.0 })).to.deep.include({ ok: true });
+
+                engine.stop(); // user Stop — the toggle shows Stop during preview (KB-5)
+
+                expect(engine.state).to.equal(ENGINE_STATES.STOPPED);
+                expect(events).to.deep.equal(['preview', 'stopped']); // never 'previewEnded'
+                expect(context.sources.every(s => s.stopped)).to.equal(true);
+                expect(timers.count()).to.equal(0); // watch cleared
+
+                // The source was stopped before it could end naturally — its
+                // stale onended must be ignored (D4 generation guard).
+                context.sources[0].onended();
+                expect(engine.state).to.equal(ENGINE_STATES.STOPPED);
+                expect(events).to.deep.equal(['preview', 'stopped']); // no further events
+            });
+
+            it('P-07 (edge) — song ending before the countingIn→playing tick still terminates (no frozen state)', () => {
+                const { engine, context, clock, events } = makeEngine({ clock: createFakeClock(0) });
+                // 10 ms of song left at the offset; the 25 ms scheduler tick has
+                // not yet run when the (real) onended arrives.
+                engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 2.99 });
+                expect(engine.state).to.equal(ENGINE_STATES.COUNTING_IN);
+
+                clock.set(2.51); // past song start (2.5), end at 2.51
+                songSources(context)[0].onended(); // tick never flipped the state
+
+                expect(engine.state).to.equal(ENGINE_STATES.STOPPED);
+                expect(events).to.deep.equal(['countingIn', 'ended']);
+                expect(liveSources(context).length).to.equal(0);
+            });
+
+            it('P-07 — song ends naturally near the offset: onended → "ended", scheduler cleared', () => {
+                const { engine, tickScheduler, tickWatch, context, clock, events, timers } = makeEngine({ clock: createFakeClock(0) });
+                engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 2.5 });
+                clock.set(2.51); tickScheduler(); // → playing (song at 2.5, 0.5 s left)
+                expect(engine.state).to.equal(ENGINE_STATES.PLAYING);
+                expect(timers.count()).to.be.greaterThan(0);
+
+                clock.set(3.0); // song started 2.5 + 0.5 remaining = ends 3.0
+                songSources(context)[0].onended();
+                expect(engine.state).to.equal(ENGINE_STATES.STOPPED);
+                expect(events).to.deep.equal(['countingIn', 'playing', 'ended']);
+                expect(timers.count()).to.equal(0); // scheduler + watch cleared
+                expect(liveSources(context).length).to.equal(0);
+            });
+
+            it('P-08 — lookahead: sources enter when ∈ (now, now+0.1]; advancing never duplicates or skips', () => {
+                const { engine, tickScheduler, tickWatch, context, clock } = makeEngine({ clock: createFakeClock(100.0) });
+                engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 0 });
+
+                // At t_p nothing is due (first click +0.5 s ≫ 0.1 s horizon).
+                expect(clickSources(context).length).to.equal(0);
+
+                // Step the clock across every 25 ms tick boundary; every scheduled
+                // click time must lie in (now, now + 0.1] at scheduling time.
+                const seen = [];
+                for (let t = 100.0; t <= 102.1; t += 0.025) {
+                    clock.set(t);
+                    tickScheduler();
+                    for (const s of clickSources(context)) {
+                        if (!seen.includes(s)) {
+                            seen.push(s);
+                            const when = s.startedWith.when;
+                            expect(when).to.be.above(t - 1e-9);        // not in the past
+                            expect(when).to.be.at.most(t + 0.1 + 1e-9); // within the horizon
+                        }
+                    }
+                }
+                expect(seen.map(s => s.startedWith.when)).to.deep.equal([100.5, 101.0, 101.5, 102.0]);
+                expect(songSources(context)).to.have.length(1);
+            });
+
+            it('P-09 — accent buffer mapping: 8 beats → [A,R,R,R,A,R,R,R]; 1 beat → [A]; 16 beats → accents on 1/5/9/13', () => {
+                const expectPattern = (countInBeats, expected) => {
+                    const h = makeEngine({ clock: createFakeClock(0), engine: { lookaheadSec: 10 } });
+                    h.engine.startSequence({ buffer: fakeBuffer(30.0), bpm: 120, countInBeats, offset: 0 });
+                    h.clock.set(0.05);
+                    h.tickScheduler(); // one big-lookahead tick schedules every click
+                    const pattern = clickSources(h.context)
+                        .map(s => s.buffer === h.clickBuffers.accent ? 'A' : 'R')
+                        .join('');
+                    expect(pattern).to.equal(expected);
+                    h.engine.stop();
+                };
+                expectPattern(8, 'ARRRARRR');
+                expectPattern(1, 'A');
+                expectPattern(16, 'ARRRARRRARRRARRR');
+            });
+
+            it('P-10 — getBeatGrid(): countingIn grid; same grid through the song downbeat (D9); null when stopped', () => {
+                const { engine, tickScheduler, tickWatch, clock } = makeEngine({ clock: createFakeClock(100.0) });
+                expect(engine.getBeatGrid()).to.equal(null);
+
+                engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 0 });
+                let grid = engine.getBeatGrid();
+                expect(grid).to.deep.equal({ firstBeatTime: 100.5, interval: 0.5, state: 'countingIn' });
+
+                clock.set(102.6); tickScheduler(); // → playing; downbeat (102.5) is on this grid
+                grid = engine.getBeatGrid();
+                expect(grid).to.deep.equal({ firstBeatTime: 100.5, interval: 0.5, state: 'playing' });
+
+                engine.stop();
+                expect(engine.getBeatGrid()).to.equal(null);
+            });
+
+            it('P-11 — context watch: suspended → self-stop + onInterrupted once; watch cleared after any stop (D10)', () => {
+                const { engine, tickScheduler, tickWatch, context, clock, events, interrupted, timers } = makeEngine({ clock: createFakeClock(0) });
+                engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 0 });
+                expect(timers.count()).to.equal(2); // scheduler + watch
+
+                context.state = 'suspended';
+                tickWatch(); // one 250 ms tick
+                expect(engine.state).to.equal(ENGINE_STATES.STOPPED);
+                expect(context.sources.every(s => !s.startedWith || s.stopped)).to.equal(true);
+                expect(interrupted).to.have.length(1);
+                expect(events).to.deep.equal(['countingIn', 'stopped']);
+                expect(timers.count()).to.equal(0); // watch cleared → can never fire twice
+                tickWatch();
+                expect(interrupted).to.have.length(1);
+
+                // "interrupted" state also counts.
+                context.state = 'interrupted';
+                engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 0 });
+                expect(engine.state).to.equal(ENGINE_STATES.COUNTING_IN); // not yet ticked
+                tickWatch();
+                expect(engine.state).to.equal(ENGINE_STATES.STOPPED);
+                expect(interrupted).to.have.length(2);
+
+                // Healthy context: ticks do nothing.
+                context.state = 'running';
+                engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 0 });
+                tickWatch();
+                tickWatch();
+                expect(engine.state).to.equal(ENGINE_STATES.COUNTING_IN);
+                expect(interrupted).to.have.length(2);
+                expect(events.filter(e => e === 'stopped').length).to.equal(2);
+            });
+
+            // P-12 — RETIRED (2026-08-22, review fix I-5 / RD-6): the engine's
+            // visual clock (startVisualClock/stopVisualClock/onFrame) had zero
+            // production callers and was removed. Its observable content (phase
+            // law per frame, RAF cancel on stop) lives in B-01/B-02 in
+            // BeatDotsTest.html, which test the app's real loop.
+            // See _agent_docs/plans/2026-08-22-address-v1-review/behavior-specs.md §6.
+
+            it('R-I5.1 — no visual-clock surface: no startVisualClock/stopVisualClock, zero RAF calls, getBeatGrid/songPosition intact', () => {
+                // Collector over window RAF (save/restore, local to this test):
+                // the engine must never touch animation frames at all.
+                const rafCalls = [];
+                const origRAF = window.requestAnimationFrame;
+                const origCancelRAF = window.cancelAnimationFrame;
+                window.requestAnimationFrame = (cb) => { rafCalls.push('raf'); return 1; };
+                window.cancelAnimationFrame = (id) => { rafCalls.push('cancel'); };
+                try {
+                    const { engine, clock } = makeEngine({ clock: createFakeClock(100.0) });
+                    expect(engine.startVisualClock).to.equal(undefined);
+                    expect(engine.stopVisualClock).to.equal(undefined);
+                    expect(engine.getBeatGrid).to.be.a('function');
+                    expect(engine.songPosition).to.be.a('function');
+
+                    expect(engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 0 }))
+                        .to.deep.include({ ok: true });
+                    expect(engine.getBeatGrid()).to.not.equal(null);
+                    engine.stop();
+                    expect(engine.getBeatGrid()).to.equal(null);
+                    engine.dispose();
+                    expect(rafCalls).to.deep.equal([]); // no RAF calls across start/stop/dispose
+                } finally {
+                    window.requestAnimationFrame = origRAF;
+                    window.cancelAnimationFrame = origCancelRAF;
+                }
+            });
+
+            it('P-13 (rev) — invalid params (incl. offset ≥ duration) → { ok: false }, no sources, state unchanged', () => {
+                const h = makeEngine({ clock: createFakeClock(5.0) });
+                const { engine, tickScheduler, tickWatch, context, events } = h;
+
+                expect(engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 0, countInBeats: 4, offset: 0 }))
+                    .to.deep.include({ ok: false });
+                expect(engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 17, offset: 0 }))
+                    .to.deep.include({ ok: false });
+                expect(engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: -1 }))
+                    .to.deep.include({ ok: false });
+                // I-3/RD-4: end-of-song offsets must be rejected like preview's D2 guard —
+                // otherwise the count-in plays into silence (zero-sample source).
+                expect(engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 3.0 }))
+                    .to.deep.include({ ok: false });
+                expect(engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 3.0001 }))
+                    .to.deep.include({ ok: false });
+                // Preview's existing D2 guard, now asserted explicitly (P-13 rev).
+                expect(engine.preview({ buffer: fakeBuffer(3.0), offset: 3.0 }))
+                    .to.deep.include({ ok: false });
+                expect(context.sources).to.have.length(0);
+                expect(engine.state).to.equal(ENGINE_STATES.STOPPED);
+                expect(events).to.have.length(0);
+
+                // Invalid while running must not disturb the live sequence.
+                engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 0 });
+                const liveBefore = liveSources(context).length;
+                expect(engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 999, countInBeats: 4, offset: 0 }))
+                    .to.deep.include({ ok: false });
+                expect(engine.state).to.equal(ENGINE_STATES.COUNTING_IN);
+                expect(liveSources(context).length).to.equal(liveBefore);
+                engine.stop();
+            });
+
+            it('P-14 — every source wired source → GainNode → masterGain; all disconnected on stop/end', () => {
+                const h = makeEngine({ clock: createFakeClock(0) });
+                const { engine, tickScheduler, tickWatch, context, masterGain, clock } = h;
+                engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 0 });
+                clock.set(0.45); tickScheduler(); // click 1 due
+
+                const checkWiring = () => {
+                    for (const s of context.sources) {
+                        if (!s.startedWith) continue;
+                        expect(s.connectCalls).to.have.length(1);
+                        const gain = s.connectCalls[0];
+                        expect(context.gains).to.include(gain);      // a real GainNode from the ctx
+                        expect(gain.connectCalls).to.deep.equal([masterGain]);
+                    }
+                };
+                checkWiring();
+
+                clock.set(2.6); tickScheduler(); // → playing
+                songSources(context)[0].onended();      // end path
+                expect(engine.state).to.equal(ENGINE_STATES.STOPPED);
+                expect(context.sources.every(s => s.disconnected)).to.equal(true);
+                expect(context.gains.every(g => g.disconnected)).to.equal(true);
+
+                // Stop path too.
+                engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 0 });
+                engine.stop();
+                expect(context.sources.every(s => s.disconnected)).to.equal(true);
+                expect(context.gains.every(g => g.disconnected)).to.equal(true);
+            });
+
+            it('songPosition — null before start; offset at the flip; clamped to [offset, duration]', () => {
+                const { engine, tickScheduler, tickWatch, clock } = makeEngine({ clock: createFakeClock(100.0) });
+                engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 1.0 });
+                expect(engine.songPosition()).to.equal(null); // countingIn — song not started
+
+                clock.set(102.5); tickScheduler(); // playing (song started 102.5 at offset 1.0)
+                expect(engine.songPosition(102.5)).to.be.closeTo(1.0, 0.001);
+                expect(engine.songPosition(103.0)).to.be.closeTo(1.5, 0.001);
+                expect(engine.songPosition(9999)).to.equal(3.0);   // clamped to duration
+                engine.stop();
+                expect(engine.songPosition()).to.equal(null);
+            });
+
+            it('dispose() — clears scheduler + watch, stops sources, no callbacks', () => {
+                const h = makeEngine({ clock: createFakeClock(0) });
+                const { engine, tickScheduler, tickWatch, timers, events } = h;
+                engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 4, offset: 0 });
+                expect(timers.count()).to.equal(2); // scheduler + watch
+
+                const eventsBefore = events.length;
+                engine.dispose();
+                expect(timers.count()).to.equal(0);
+                expect(h.context.sources.every(s => !s.startedWith || s.stopped)).to.equal(true);
+                expect(events).to.have.length(eventsBefore); // dispose emits nothing — app is unmounting
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

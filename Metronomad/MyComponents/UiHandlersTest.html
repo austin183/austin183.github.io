@@ -1,0 +1,1840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI Handler Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>Metronomad — UI Handlers Unit Tests</h1>
+    <p class="test-plan-ref">Covers: Plan §3.2 V-01…V-07 (App/createMetronomadMethods.js, createMetronomadApp.js computed) — mock-VM pattern: factory methods spread first, then spies/overrides</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        import { createMetronomadData } from '../MyESModules/App/createMetronomadData.js';
+        import { createMetronomadMethods } from '../MyESModules/App/createMetronomadMethods.js';
+        import { createMetronomadApp } from '../MyESModules/App/createMetronomadApp.js';
+        import { SCHEDULER } from '../MyESModules/Playback/playbackEngine.js'; // N-25: the real-timer bound is the constant, not a magic 700
+        // Barrel import on purpose (risk R-11): CLICK is Phase-1 territory
+        // re-verified here through the barrel, so a broken re-export dies
+        // the page instead of silently yielding undefined.
+        import { CLICK } from '../MyESModules/index.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // Mock-VM construction (skill convention): spread the factory
+        // methods FIRST, then override with spies. Computeds from the app
+        // factory are attached as live getters so `this.isReady` etc.
+        // always reflect current state, like Vue.
+        // ============================================================
+
+        let appOptions = null;
+        createMetronomadApp({
+            createApp: (options) => { appOptions = options; return { mount() {} }; },
+            dataConfig: createMetronomadData(),
+            methodsConfig: createMetronomadMethods(),
+            lifecycleConfig: {}
+        });
+
+        function makeFakeButton() {
+            return {
+                focused: false,
+                disabled: false,
+                focus() { this.focused = true; }
+            };
+        }
+
+        function buildVm(overrides = {}) {
+            // Data first, then factory methods, then test overrides (spies win).
+            const vm = {
+                ...createMetronomadData()(),
+                ...createMetronomadMethods(),
+                ...overrides
+            };
+            for (const [name, fn] of Object.entries(appOptions.computed)) {
+                Object.defineProperty(vm, name, {
+                    get: () => fn.call(vm),
+                    configurable: true
+                });
+            }
+            vm.$nextTick = (fn) => fn(); // synchronous flush in tests
+            vm.$refs = { playStopBtn: makeFakeButton() };
+            return vm;
+        }
+
+        function makeFakeEngine() {
+            const engine = {
+                calls: [],
+                startSequence(params) { this.calls.push(['startSequence', params]); return { ok: true }; },
+                stop() { this.calls.push(['stop']); },
+                restart(params) { this.calls.push(['restart', params]); return { ok: true }; },
+                preview(params) { this.calls.push(['preview', params]); return { ok: true }; }
+            };
+            return engine;
+        }
+
+        const fakeBuffer = { duration: 3.0 };
+
+        // ============================================================
+        // V-01 — onPlayToggle (single Play↔Stop toggle, spec §14.5)
+        // ============================================================
+        describe('V-01 onPlayToggle', () => {
+            it('ready: starts the sequence with the current controls', () => {
+                const vm = buildVm();
+                vm.appState = 'ready';
+                vm._buffer = fakeBuffer;
+                vm.bpm = 140;
+                vm.countInBeats = 6;
+                vm.offset = 1.5;
+                vm._engine = makeFakeEngine();
+
+                vm.onPlayToggle();
+
+                expect(vm._engine.calls).to.deep.equal([
+                    ['startSequence', { buffer: fakeBuffer, bpm: 140, countInBeats: 6, offset: 1.5 }]
+                ]);
+            });
+
+            it('countingIn / playing / preview: the toggle stops the running audio', () => {
+                for (const setup of [
+                    (target) => { target.appState = 'countingIn'; },
+                    (target) => { target.appState = 'playing'; },
+                    (target) => { target.isPreviewing = true; } // appState stays 'ready' during preview
+                ]) {
+                    const vm = buildVm();
+                    setup(vm);
+                    vm._engine = makeFakeEngine();
+
+                    vm.onPlayToggle();
+
+                    expect(vm._engine.calls).to.deep.equal([['stop']]);
+                }
+            });
+
+            it('stop: focus returns to the Play/Stop button (U-04)', () => {
+                const vm = buildVm();
+                vm.appState = 'playing';
+                vm._engine = makeFakeEngine();
+
+                vm.onPlayToggle();
+
+                expect(vm.$refs.playStopBtn.focused).to.equal(true);
+            });
+
+            it('noFile and decoding: no engine call at all', () => {
+                for (const state of ['noFile', 'ready']) {
+                    const vm = buildVm();
+                    vm.appState = state;
+                    if (state === 'ready') vm.decoding = { active: true, fileName: 'x.mp3' };
+                    vm._engine = makeFakeEngine();
+
+                    vm.onPlayToggle();
+
+                    expect(vm._engine.calls).to.deep.equal([]);
+                }
+            });
+
+            it('startSequence { ok: false }: friendly error, no state change', () => {
+                const vm = buildVm();
+                vm.appState = 'ready';
+                vm._buffer = fakeBuffer;
+                vm._engine = {
+                    calls: [],
+                    startSequence(params) { this.calls.push(['startSequence', params]); return { ok: false }; },
+                    stop() { this.calls.push(['stop']); }
+                };
+
+                vm.onPlayToggle();
+
+                expect(vm._engine.calls).to.have.length(1);
+                expect(vm.errorMessage).to.not.equal('');
+                expect(vm.appState).to.equal('ready');
+            });
+        });
+
+        // ============================================================
+        // V-05 — onFileDropped (decoding false on ALL paths; D8 non-blocking)
+        // ============================================================
+        describe('V-05 onFileDropped', () => {
+            it('success: ready + _buffer stored + live-region announcement + decoding off', async () => {
+                const vm = buildVm();
+                vm._fileLoader = {
+                    loadFile: async (file) => ({ ok: true, fileName: file.name, duration: 3.0, buffer: fakeBuffer })
+                };
+
+                await vm.onFileDropped({ name: 'song.mp3' });
+
+                expect(vm.appState).to.equal('ready');
+                expect(vm.fileName).to.equal('song.mp3');
+                expect(vm._buffer).to.equal(fakeBuffer);
+                expect(vm.announcement).to.equal('song.mp3 loaded');
+                expect(vm.decoding.active).to.equal(false);
+            });
+
+            it('failure: errorMessage set, appState unchanged, decoding off (U-15/U-16)', async () => {
+                const vm = buildVm();
+                vm.appState = 'ready';
+                vm._fileLoader = {
+                    loadFile: async () => ({ ok: false, code: 'decode', message: "Couldn't decode broken.mp3 — the file may be corrupted" })
+                };
+
+                await vm.onFileDropped({ name: 'broken.mp3' });
+
+                expect(vm.appState).to.equal('ready'); // last valid state kept
+                expect(vm.errorMessage).to.contain('broken.mp3');
+                expect(vm.decoding.active).to.equal(false);
+            });
+
+            it('loader throw: caught, friendly message, decoding off', async () => {
+                const vm = buildVm();
+                vm._fileLoader = { loadFile: async () => { throw new Error('boom'); } };
+
+                await vm.onFileDropped({ name: 'x.mp3' });
+
+                expect(vm.errorMessage).to.not.equal('');
+                expect(vm.decoding.active).to.equal(false);
+            });
+        });
+
+        // ============================================================
+        // R-I1 — file-acceptance choke point (I-1): the lock check lives in
+        // onFileDropped so BOTH drop and browse are covered (RD-2)
+        // ============================================================
+        describe('R-I1 file-acceptance choke point', () => {
+            it('R-I1.1 — playing: onFileDropped rejects before any load (drop AND browse)', async () => {
+                const loadCalls = [];
+                const vm = buildVm();
+                vm.appState = 'playing';
+                vm.fileName = 'song.mp3';
+                vm._fileLoader = {
+                    loadFile: (file) => {
+                        loadCalls.push(file.name);
+                        return Promise.resolve({ ok: true, fileName: file.name, duration: 3.0, buffer: fakeBuffer });
+                    }
+                };
+
+                await vm.onFileDropped({ name: 'other.mp3' });
+
+                expect(loadCalls).to.deep.equal([]); // loader never called
+                expect(vm.errorMessage).to.equal('Drop a new song after stopping');
+                expect(vm.appState).to.equal('playing'); // unchanged
+                expect(vm.fileName).to.equal('song.mp3'); // UI never references the new file
+            });
+
+            it('R-I1.1b — playing: onDrop resets isDragOver and rejects via the same choke point', async () => {
+                const loadCalls = [];
+                const vm = buildVm();
+                vm.appState = 'playing';
+                vm.isDragOver = true;
+                vm._fileLoader = {
+                    loadFile: (file) => { loadCalls.push(file.name); return Promise.resolve({ ok: false }); }
+                };
+
+                vm.onDrop({ dataTransfer: { files: [{ name: 'other.mp3' }] } });
+
+                expect(vm.isDragOver).to.equal(false);
+                expect(loadCalls).to.deep.equal([]);
+                expect(vm.errorMessage).to.equal('Drop a new song after stopping');
+                expect(vm.appState).to.equal('playing');
+            });
+        });
+
+        // ============================================================
+        // R-I2 — single-flight decode (I-2): a drop while decoding.active
+        // is rejected; the first load's continuation wins. The spies mirror
+        // the real loader: they set decoding synchronously before awaiting
+        // (RD-3 — 'decoding' is emitted before the first await).
+        // ============================================================
+        describe('R-I2 single-flight decode', () => {
+            // A controllable loader: records calls, flips decoding on (sync),
+            // and only settles when the test resolves it.
+            function makeControllableLoader(vm) {
+                const calls = [];
+                let settle = null;
+                vm._fileLoader = {
+                    loadFile(file) {
+                        calls.push(file.name);
+                        vm.decoding = { active: true, fileName: file.name };
+                        return new Promise((resolve) => { if (settle === null) settle = resolve; }); // keep A's
+                    }
+                };
+                const okResult = () => ({ ok: true, fileName: calls[0], duration: 3.0, buffer: fakeBuffer });
+                return { calls, resolveFirst: () => settle(okResult()) };
+            }
+
+            it('R-I2.1 — second drop while decoding is rejected; first load wins on resolve', async () => {
+                const vm = buildVm();
+                const loader = makeControllableLoader(vm);
+
+                const first = vm.onFileDropped({ name: 'a.mp3' });
+                expect(loader.calls).to.deep.equal(['a.mp3']);
+
+                await vm.onFileDropped({ name: 'b.mp3' }); // rejected — silent no-op
+                expect(loader.calls).to.deep.equal(['a.mp3']); // second loadFile never called
+
+                loader.resolveFirst();
+                await first;
+
+                expect(vm.appState).to.equal('ready'); // first continuation wins
+                expect(vm.fileName).to.equal('a.mp3');
+                expect(vm._buffer).to.equal(fakeBuffer);
+                expect(vm.decoding.active).to.equal(false); // cleared exactly once, by the first finally
+            });
+
+            it('R-I2.2 — decoding stays true (Play stays disabled) until the first load settles', async () => {
+                const vm = buildVm();
+                const loader = makeControllableLoader(vm);
+
+                const first = vm.onFileDropped({ name: 'a.mp3' });
+                await vm.onFileDropped({ name: 'b.mp3' }); // rejected while pending
+
+                expect(vm.decoding.active).to.equal(true); // the flag-lie the review names
+                expect(vm.isReady).to.equal(false); // Play never enabled mid-decode
+
+                loader.resolveFirst();
+                await first;
+
+                expect(vm.decoding.active).to.equal(false);
+            });
+
+            it('R-I2.3 — exactly one decoded buffer live: b\'s decode never starts', async () => {
+                const vm = buildVm();
+                const calls = [];
+                let settleA = null;
+                vm._fileLoader = {
+                    loadFile(file) {
+                        calls.push(file.name);
+                        vm.decoding = { active: true, fileName: file.name };
+                        return new Promise((resolve) => { if (settleA === null) settleA = resolve; }); // keep A's
+                    }
+                };
+
+                const a = vm.onFileDropped({ name: 'a.mp3' });
+                await vm.onFileDropped({ name: 'b.mp3' });
+
+                settleA({ ok: true, fileName: 'a.mp3', duration: 3.0, buffer: { tag: 'a', duration: 3.0 } });
+                await a;
+
+                expect(calls).to.deep.equal(['a.mp3']); // b's decode never started (F-05 invariant)
+                expect(vm._buffer.tag).to.equal('a'); // a's buffer is the one live
+            });
+
+            it('N-23 — shorter file after Stop: offset/offsetText re-clamped to the new duration', async () => {
+                const vm = buildVm();
+                vm.appState = 'ready';
+                vm.fileName = 'long.mp3';
+                vm.duration = 10.0;
+                vm.offset = 8.0;
+                vm.offsetText = '0:08.0';
+                vm._fileLoader = {
+                    loadFile: async (file) => ({ ok: true, fileName: file.name, duration: 3.0, buffer: fakeBuffer })
+                };
+
+                await vm.onFileDropped({ name: 'short.mp3' });
+
+                expect(vm.appState).to.equal('ready');
+                expect(vm.fileName).to.equal('short.mp3');
+                expect(vm.duration).to.equal(3.0);
+                expect(vm.offset).to.equal(3.0); // re-clamped on the ok-path
+                expect(vm.offsetText).to.equal('0:03.0');
+            });
+        });
+
+        // ============================================================
+        // V-02 — onRestart (count-in/song sequence only; KB-5)
+        // ============================================================
+        describe('V-02 onRestart', () => {
+            it('playing: restarts with the current controls and refocuses the toggle', () => {
+                const vm = buildVm();
+                vm.appState = 'playing';
+                vm._buffer = fakeBuffer;
+                vm.bpm = 100;
+                vm.countInBeats = 2;
+                vm.offset = 0.5;
+                vm._engine = makeFakeEngine();
+
+                vm.onRestart();
+
+                expect(vm._engine.calls).to.deep.equal([
+                    ['restart', { buffer: fakeBuffer, bpm: 100, countInBeats: 2, offset: 0.5 }]
+                ]);
+                expect(vm.$refs.playStopBtn.focused).to.equal(true);
+            });
+
+            it('countingIn: restarts (re-counts from the press)', () => {
+                const vm = buildVm();
+                vm.appState = 'countingIn';
+                vm._buffer = fakeBuffer;
+                vm._engine = makeFakeEngine();
+
+                vm.onRestart();
+
+                expect(vm._engine.calls).to.have.length(1);
+                expect(vm._engine.calls[0][0]).to.equal('restart');
+            });
+
+            it('ready / noFile / preview: no-op (Restart is for the sequence — KB-5)', () => {
+                for (const setup of [
+                    (target) => { target.appState = 'ready'; },
+                    (target) => { target.appState = 'noFile'; },
+                    (target) => { target.isPreviewing = true; }
+                ]) {
+                    const vm = buildVm();
+                    setup(vm);
+                    vm._buffer = fakeBuffer;
+                    vm._engine = makeFakeEngine();
+
+                    vm.onRestart();
+
+                    expect(vm._engine.calls).to.deep.equal([]);
+                    expect(vm.$refs.playStopBtn.focused).to.equal(false);
+                }
+            });
+
+            it('restart { ok: false }: friendly error, no crash', () => {
+                const vm = buildVm();
+                vm.appState = 'playing';
+                vm._engine = { calls: [], restart: () => ({ ok: false }), stop() {} };
+
+                vm.onRestart();
+
+                expect(vm.errorMessage).to.not.equal('');
+            });
+        });
+
+        // ============================================================
+        // V-03 — BPM / count-in commit (U-11 rev) + steppers
+        // C-1 (RD-1): the field is a v-model draft (bpmText/countInText);
+        // the model moves ONLY on Enter/blur commit or via the stepper.
+        // The per-keystroke @input clamp is gone — the flagship regression
+        // that C-1 let slip is R-C1.1 below.
+        // ============================================================
+        describe('V-03 BPM and count-in commit (U-11 rev)', () => {
+            it('commitBpmEntry clamps to 30–250 with the hint and re-syncs the field (U-11 rev)', () => {
+                const vm = buildVm();
+                vm.bpmText = '999';
+                vm.commitBpmEntry();
+                expect(vm.bpm).to.equal(250);
+                expect(vm.bpmText).to.equal('250');
+                expect(vm.bpmClamped).to.equal(true);
+
+                vm.bpmText = '10';
+                vm.commitBpmEntry();
+                expect(vm.bpm).to.equal(30);
+                expect(vm.bpmClamped).to.equal(true);
+
+                vm.bpmText = '180';
+                vm.commitBpmEntry();
+                expect(vm.bpm).to.equal(180);
+                expect(vm.bpmText).to.equal('180');
+                expect(vm.bpmClamped).to.equal(false);
+            });
+
+            it('commitBpmEntry: empty / non-numeric restores the previous valid value (field + model)', () => {
+                const vm = buildVm();
+                vm.bpmText = '180';
+                vm.commitBpmEntry();
+                expect(vm.bpm).to.equal(180);
+
+                vm.bpmText = '';
+                vm.commitBpmEntry();
+                expect(vm.bpm).to.equal(180);
+                expect(vm.bpmText).to.equal('180');
+                expect(vm.bpmClamped).to.equal(false);
+
+                vm.bpmText = 'abc';
+                vm.commitBpmEntry();
+                expect(vm.bpm).to.equal(180);
+                expect(vm.bpmText).to.equal('180');
+            });
+
+            it('commitBpmEntry: empty on a fresh field (no previous value) → default 120', () => {
+                const vm = buildVm();
+                vm.bpmText = '';
+                vm.commitBpmEntry();
+                expect(vm.bpm).to.equal(120);
+                expect(vm.bpmText).to.equal('120');
+            });
+
+            it('onBpmStep: ±1 with clamp at the boundaries, and it syncs the draft', () => {
+                const vm = buildVm();
+                vm.bpm = 120;
+                vm.bpmText = '120';
+                vm.onBpmStep(1);
+                expect(vm.bpm).to.equal(121);
+                expect(vm.bpmText).to.equal('121');
+                expect(vm.bpmClamped).to.equal(false);
+
+                vm.bpm = 250;
+                vm.bpmText = '250';
+                vm.onBpmStep(1); // press + at the boundary
+                expect(vm.bpm).to.equal(250);
+                expect(vm.bpmClamped).to.equal(true);
+
+                vm.bpm = 30;
+                vm.bpmText = '30';
+                vm.onBpmStep(-1);
+                expect(vm.bpm).to.equal(30);
+                expect(vm.bpmClamped).to.equal(true);
+            });
+
+            it('commitCountInEntry clamps to 1–16 with the hint (N-20) and re-syncs the field', () => {
+                const vm = buildVm();
+                vm.countInText = '0';
+                vm.commitCountInEntry();
+                expect(vm.countInBeats).to.equal(1);
+                expect(vm.countInText).to.equal('1');
+
+                vm.countInText = '99';
+                vm.commitCountInEntry();
+                expect(vm.countInBeats).to.equal(16);
+                expect(vm.countInText).to.equal('16');
+                expect(vm.countInClamped).to.equal(true);
+
+                vm.countInText = '7';
+                vm.commitCountInEntry();
+                expect(vm.countInBeats).to.equal(7);
+                expect(vm.countInClamped).to.equal(false);
+            });
+
+            it('commitCountInEntry: non-numeric / empty restores the previous valid value; fresh → default 4 (T-30)', () => {
+                const vm = buildVm();
+                vm.countInText = '7';
+                vm.commitCountInEntry();
+                expect(vm.countInBeats).to.equal(7);
+
+                vm.countInText = 'abc';
+                vm.commitCountInEntry();
+                expect(vm.countInBeats).to.equal(7); // last valid restored
+                expect(vm.countInText).to.equal('7');
+
+                const fresh = buildVm();
+                fresh.countInText = '';
+                fresh.commitCountInEntry();
+                expect(fresh.countInBeats).to.equal(4);
+                expect(fresh.countInText).to.equal('4');
+            });
+        });
+
+        // ============================================================
+        // R-C1 — per-keystroke typing (the regression class C-1 let slip):
+        // the draft absorbs every keystroke; the model moves only on
+        // commit (or via the stepper). Field and model never diverge.
+        // ============================================================
+        describe('R-C1 per-keystroke typing (C-1)', () => {
+            it('R-C1.1 — BPM: draft absorbs keystrokes; model stays until commit', () => {
+                const vm = buildVm();
+                expect(vm.bpm).to.equal(120);
+                expect(vm.bpmText).to.equal('120');
+
+                for (const draft of ['9', '90', '190']) {
+                    vm.bpmText = draft; // simulated keystroke — no commit
+                    expect(vm.bpm, `bpm unchanged after typing "${draft}"`).to.equal(120);
+                    expect(vm.bpmClamped, `no hint after typing "${draft}"`).to.equal(false);
+                }
+
+                vm.commitBpmEntry();
+                expect(vm.bpm).to.equal(190); // in range — no clamp
+                expect(vm.bpmText).to.equal('190');
+                expect(vm.bpmClamped).to.equal(false);
+            });
+
+            it('R-C1.2 — count-in: model stays until commit; no accidental restore of the prior value', () => {
+                const vm = buildVm();
+                expect(vm.countInBeats).to.equal(4);
+
+                vm.countInText = '1'; // "1" typed over "4" — draft only
+                expect(vm.countInBeats).to.equal(4); // model unchanged
+                vm.commitCountInEntry(); // blur/Enter commits 1 (valid)
+                expect(vm.countInBeats).to.equal(1); // not a restore of 4
+                expect(vm.countInText).to.equal('1');
+
+                const vm2 = buildVm();
+                vm2.countInText = '16';
+                expect(vm2.countInBeats).to.equal(4);
+                vm2.commitCountInEntry();
+                expect(vm2.countInBeats).to.equal(16);
+            });
+
+            it('R-C1.3 — commit with an empty field restores the last valid value, no hint', () => {
+                const vm = buildVm();
+                vm.bpmText = '150';
+                vm.commitBpmEntry();
+                expect(vm.bpm).to.equal(150);
+
+                vm.bpmText = ''; // cleared mid-entry, then blur/Enter
+                vm.commitBpmEntry();
+                expect(vm.bpm).to.equal(150);
+                expect(vm.bpmText).to.equal('150');
+                expect(vm.bpmClamped).to.equal(false);
+            });
+
+            it('R-C1.4 — the stepper syncs the draft (no divergence in either direction)', () => {
+                const vm = buildVm();
+                vm.bpm = 249;
+                vm.bpmText = '249';
+                vm.onBpmStep(1);
+                expect(vm.bpm).to.equal(250);
+                expect(vm.bpmText).to.equal('250'); // field follows the model
+            });
+
+            it('R-C1.5 — commit count-in "99" → clamps to 16, field "16", hint (N-20)', () => {
+                const vm = buildVm();
+                vm.countInText = '99';
+                vm.commitCountInEntry();
+                expect(vm.countInBeats).to.equal(16);
+                expect(vm.countInText).to.equal('16');
+                expect(vm.countInClamped).to.equal(true);
+            });
+        });
+
+        // ============================================================
+        // V-04 — offset direct entry + scrubber (U-10)
+        // ============================================================
+        describe('V-04 offset entry and scrubber', () => {
+            it('commitOffsetEntry: value beyond duration clamps to the end with the limit hint', () => {
+                const vm = buildVm();
+                vm.duration = 3.0;
+
+                vm.commitOffsetEntry('1:05.2');
+
+                expect(vm.offset).to.equal(3.0);
+                expect(vm.offsetText).to.equal('0:03.0');
+                expect(vm.offsetClamped).to.equal(true);
+                expect(vm.offsetHint).to.equal('Offset limited to song length');
+            });
+
+            it('commitOffsetEntry: negative/unparseable input keeps the offset, shows the format hint', () => {
+                const vm = buildVm();
+                vm.duration = 3.0;
+                vm.offset = 1.2;
+                vm.offsetText = '0:01.2';
+
+                vm.commitOffsetEntry('abc');
+
+                expect(vm.offset).to.equal(1.2);
+                expect(vm.offsetText).to.equal('0:01.2'); // reverted to the last valid value
+                expect(vm.offsetClamped).to.equal(true);
+                expect(vm.offsetHint).to.equal('Enter the time as m:ss.t'); // N-19: matches formatTime's canonical shape
+
+                vm.commitOffsetEntry('-1');
+                expect(vm.offset).to.equal(1.2);
+                expect(vm.offsetHint).to.equal('Enter the time as m:ss.t');
+            });
+
+            it('commitOffsetEntry: in-range value commits cleanly and clears the hint', () => {
+                const vm = buildVm();
+                vm.duration = 3.0;
+
+                vm.commitOffsetEntry('1:05.2'); // leave the hint on
+                expect(vm.offsetClamped).to.equal(true);
+
+                vm.commitOffsetEntry('0:01.2');
+
+                expect(vm.offset).to.equal(1.2);
+                expect(vm.offsetText).to.equal('0:01.2');
+                expect(vm.offsetClamped).to.equal(false);
+                expect(vm.offsetHint).to.equal('');
+            });
+
+            it('onOffsetScrub: scrubber value syncs offset + offsetText (U-10)', () => {
+                const vm = buildVm();
+                vm.duration = 3.0;
+
+                vm.onOffsetScrub('1.5');
+
+                expect(vm.offset).to.equal(1.5);
+                expect(vm.offsetText).to.equal('0:01.5');
+                expect(vm.offsetClamped).to.equal(false);
+
+                vm.onOffsetScrub('not-a-number'); // defensive: ignore garbage
+                expect(vm.offset).to.equal(1.5);
+            });
+        });
+
+        // ============================================================
+        // U-08 — onPreview (3 s preview clamped to the song end, D2)
+        // ============================================================
+        describe('U-08 onPreview', () => {
+            it('ready: previews from the current offset', () => {
+                const vm = buildVm();
+                vm.appState = 'ready';
+                vm._buffer = fakeBuffer;
+                vm.offset = 1.0;
+                vm._engine = makeFakeEngine();
+
+                vm.onPreview();
+
+                expect(vm._engine.calls).to.deep.equal([
+                    ['preview', { buffer: fakeBuffer, offset: 1.0 }]
+                ]);
+            });
+
+            it('not ready (noFile / decoding / sequence running / preview): no-op', () => {
+                for (const setup of [
+                    (target) => { target.appState = 'noFile'; },
+                    (target) => { target.appState = 'ready'; target.decoding.active = true; },
+                    (target) => { target.appState = 'countingIn'; },
+                    (target) => { target.isPreviewing = true; }
+                ]) {
+                    const vm = buildVm();
+                    setup(vm);
+                    vm._buffer = fakeBuffer;
+                    vm._engine = makeFakeEngine();
+
+                    vm.onPreview();
+
+                    expect(vm._engine.calls).to.deep.equal([]);
+                }
+            });
+
+            it('preview { ok: false }: friendly error (e.g. offset at the song end)', () => {
+                const vm = buildVm();
+                vm.appState = 'ready';
+                vm._buffer = fakeBuffer;
+                vm._engine = { calls: [], preview: () => ({ ok: false }), stop() {} };
+
+                vm.onPreview();
+
+                expect(vm.errorMessage).to.not.equal('');
+            });
+        });
+
+        // ============================================================
+        // V-07 — engine state → appState + live-region announcements
+        // (event names are the engine's onStateChange contract, Phase 4)
+        // ============================================================
+        describe('V-07 engine state mapping', () => {
+            it('V-07 announcement inventory gains "Detected tempo N BPM" (CR 001 Phase 6)', () => {
+                withBpmFocus(false, () => {
+                    const vm = buildVm();
+                    vm.applyTempoSuggestion({ bpm: 120, confidence: 0.85 });
+                    expect(vm.announcement).to.equal('Detected tempo 120 BPM');
+
+                    const vm2 = buildVm();
+                    vm2.bpm = 97;
+                    vm2.bpmText = '97';
+                    vm2.applyTempoSuggestion({ bpm: 97, confidence: 0.7 });
+                    expect(vm2.announcement).to.equal('Detected tempo 97 BPM'); // N = the prefilled integer
+                });
+            });
+            it("'countingIn' → appState countingIn + 'Count-in started'", () => {
+                const vm = buildVm();
+                vm.onEngineStateChange('countingIn');
+                expect(vm.appState).to.equal('countingIn');
+                expect(vm.announcement).to.equal('Count-in started');
+            });
+
+            it("'playing' → appState playing + 'Song started'", () => {
+                const vm = buildVm();
+                vm.appState = 'countingIn';
+                vm.onEngineStateChange('playing');
+                expect(vm.appState).to.equal('playing');
+                expect(vm.announcement).to.equal('Song started');
+            });
+
+            it("'preview' → isPreviewing true (appState stays ready) + 'Preview started'", () => {
+                const vm = buildVm();
+                vm.appState = 'ready';
+                vm.onEngineStateChange('preview');
+                expect(vm.appState).to.equal('ready');
+                expect(vm.isPreviewing).to.equal(true);
+                expect(vm.announcement).to.equal('Preview started');
+            });
+
+            it("'stopped' → ready + 'Stopped' + position reset to the offset (U-04)", () => {
+                const vm = buildVm();
+                vm.appState = 'countingIn';
+                vm.fileName = 'song.mp3';
+                vm.offset = 1.0;
+                vm.songPosition = 1.7;
+                vm.onEngineStateChange('stopped');
+                expect(vm.appState).to.equal('ready');
+                expect(vm.isPreviewing).to.equal(false);
+                expect(vm.songPosition).to.equal(1.0);
+                expect(vm.announcement).to.equal('Stopped');
+            });
+
+            it("'ended' → ready + 'Song ended' + position reset to the offset (KB-4)", () => {
+                const vm = buildVm();
+                vm.appState = 'playing';
+                vm.fileName = 'song.mp3';
+                vm.offset = 0.0;
+                vm.songPosition = 2.9;
+                vm.onEngineStateChange('ended');
+                expect(vm.appState).to.equal('ready');
+                expect(vm.songPosition).to.equal(0.0);
+                expect(vm.announcement).to.equal('Song ended');
+            });
+
+            it("'previewEnded' → isPreviewing false + 'Preview stopped' + position reset (U-09)", () => {
+                const vm = buildVm();
+                vm.appState = 'ready';
+                vm.isPreviewing = true;
+                vm.offset = 1.0;
+                vm.songPosition = 2.5;
+                vm.onEngineStateChange('previewEnded');
+                expect(vm.isPreviewing).to.equal(false);
+                expect(vm.songPosition).to.equal(1.0);
+                expect(vm.announcement).to.equal('Preview stopped');
+            });
+
+            it('onAudioInterrupted → the interruption announcement (U-18/D10)', () => {
+                const vm = buildVm();
+                vm.onAudioInterrupted();
+                expect(vm.announcement).to.equal('Audio was interrupted — press Play to try again');
+            });
+        });
+
+        // ============================================================
+        // R-I4 — user Stop during preview announces "Preview stopped"
+        // (I-4, U-09 rev): isPreviewing is read BEFORE _returnToReady clears it
+        // ============================================================
+        describe('R-I4 preview stop announcement (I-4, U-09 rev)', () => {
+            it('R-I4.1 — "stopped" while previewing → "Preview stopped" + ready + position reset', () => {
+                const vm = buildVm();
+                vm.appState = 'ready';
+                vm.isPreviewing = true;
+                vm.fileName = 'song.mp3';
+                vm.offset = 1.0;
+                vm.songPosition = 2.2;
+
+                vm.onEngineStateChange('stopped');
+
+                expect(vm.announcement).to.equal('Preview stopped');
+                expect(vm.isPreviewing).to.equal(false);
+                expect(vm.appState).to.equal('ready');
+                expect(vm.songPosition).to.equal(1.0); // reset to the offset marker
+            });
+
+            it('R-I4.3 — "stopped" outside preview → "Stopped" (non-preview path untouched)', () => {
+                const vm = buildVm();
+                vm.appState = 'countingIn';
+                vm.isPreviewing = false;
+                vm.fileName = 'song.mp3';
+                vm.offset = 0.5;
+
+                vm.onEngineStateChange('stopped');
+
+                expect(vm.announcement).to.equal('Stopped');
+                expect(vm.appState).to.equal('ready');
+            });
+        });
+
+        // ============================================================
+        // Phase 6 wiring — the engine state machine drives the beat-dot
+        // visual clock, and visibilitychange delegates to _beatDots.
+        // ============================================================
+        describe('beat dots wiring (Phase 6)', () => {
+            it('countingIn starts the visual clock exactly once; the playing flip does not restart it', () => {
+                const calls = [];
+                const vm = buildVm();
+                vm._engine = makeFakeEngine();
+                vm._beatDots = {
+                    startVisualClock: () => calls.push('start'),
+                    stopVisualClock: () => calls.push('stop')
+                };
+
+                vm.onEngineStateChange('countingIn');
+                vm.onEngineStateChange('playing'); // same sequence — loop continues
+
+                expect(calls).to.deep.equal(['start']);
+            });
+
+            it('stopped / ended / previewEnded stop the visual clock', () => {
+                for (const terminal of ['stopped', 'ended', 'previewEnded']) {
+                    const calls = [];
+                    const vm = buildVm();
+                    vm.fileName = 'song.mp3';
+                    vm.appState = 'playing';
+                    vm.offset = 1.0;
+                    vm._engine = makeFakeEngine();
+                    vm._beatDots = {
+                        startVisualClock: () => calls.push('start'),
+                        stopVisualClock: () => calls.push('stop')
+                    };
+
+                    vm.onEngineStateChange(terminal);
+
+                    expect(calls).to.deep.equal(['stop']);
+                }
+            });
+
+            it('without _beatDots (audio init failed) the state handler is safe', () => {
+                const vm = buildVm();
+                vm._engine = makeFakeEngine();
+                vm.onEngineStateChange('countingIn'); // no throw
+                expect(vm.appState).to.equal('countingIn');
+            });
+
+            it('onVisibilityChange delegates to _beatDots.onVisibilityChange() — no vm arg (factory captures it, N-17)', () => {
+                const calls = [];
+                const vm = buildVm();
+                vm._beatDots = {
+                    startVisualClock: () => calls.push('start'),
+                    stopVisualClock: () => calls.push('stop'),
+                    onVisibilityChange: (v) => calls.push(['visibility', v === undefined])
+                };
+
+                vm.onVisibilityChange();
+
+                expect(calls).to.deep.equal([['visibility', true]]);
+            });
+        });
+
+        // ============================================================
+        // V-06 — computed: isParamLocked / isSequenceRunning / isReady
+        // ============================================================
+        describe('V-06 computed', () => {
+            it('isParamLocked: true in countingIn / playing / preview, false in ready (U-12)', () => {
+                const cases = [
+                    ['countingIn', false, true],
+                    ['playing', false, true],
+                    ['ready', true, true],   // preview: appState stays 'ready'
+                    ['ready', false, false]
+                ];
+                for (const [state, previewing, expected] of cases) {
+                    const vm = buildVm();
+                    vm.appState = state;
+                    vm.isPreviewing = previewing;
+                    expect(vm.isParamLocked).to.equal(expected), `state=${state} previewing=${previewing}`;
+                }
+            });
+
+            it('isSequenceRunning: countingIn/playing only — preview excluded (KB-5)', () => {
+                const cases = [
+                    ['countingIn', true],
+                    ['playing', true],
+                    ['ready', false],
+                    ['noFile', false]
+                ];
+                for (const [state, expected] of cases) {
+                    const vm = buildVm();
+                    vm.appState = state;
+                    expect(vm.isSequenceRunning).to.equal(expected), `state=${state}`;
+                }
+            });
+
+            it('isReady: ready without an in-flight decode; false while decoding', () => {
+                const vm = buildVm();
+                vm.appState = 'ready';
+                expect(vm.isReady).to.equal(true);
+
+                vm.decoding = { active: true, fileName: 'x.mp3' };
+                expect(vm.isReady).to.equal(false);
+            });
+        });
+
+        // ============================================================
+        // U-19 — suspended/blocked AudioContext on Play (D10)
+        // ============================================================
+        describe('U-19 context resume on Play', () => {
+            it('running context: no resume call, sequence starts (V-01 path)', () => {
+                const vm = buildVm();
+                vm.appState = 'ready';
+                vm._buffer = fakeBuffer;
+                vm._clock = { state: 'running', resumeCalls: 0, resume() { this.resumeCalls++; return Promise.resolve(); } };
+                vm._engine = makeFakeEngine();
+
+                vm.onPlayToggle();
+
+                expect(vm._clock.resumeCalls).to.equal(0);
+                expect(vm._engine.calls).to.have.length(1);
+            });
+
+            it('suspended context that resumes: sequence starts after resume', async () => {
+                const vm = buildVm();
+                vm.appState = 'ready';
+                vm._buffer = fakeBuffer;
+                vm._clock = { state: 'suspended', resumeCalls: 0, resume() { this.resumeCalls++; return Promise.resolve(); } };
+                vm._engine = makeFakeEngine();
+
+                await vm.onPlayToggle();
+
+                expect(vm._clock.resumeCalls).to.equal(1);
+                expect(vm._engine.calls).to.have.length(1);
+                expect(vm.errorMessage).to.equal('');
+            });
+
+            it('resume rejected: friendly error, no sequence (U-19)', async () => {
+                const vm = buildVm();
+                vm.appState = 'ready';
+                vm._buffer = fakeBuffer;
+                vm._clock = { state: 'suspended', resume() { return Promise.reject(new Error('NotAllowedError')); } };
+                vm._engine = makeFakeEngine();
+
+                await vm.onPlayToggle();
+
+                expect(vm.errorMessage).to.equal('Audio is blocked by the browser — tap again to enable sound');
+                expect(vm._engine.calls).to.deep.equal([]);
+                expect(vm.appState).to.equal('ready'); // button is not dead
+            });
+
+            it('resume that never settles: RESUME_TIMEOUT_MS timeout → friendly error (N-25: bound is the constant)', async () => {
+                const vm = buildVm();
+                vm.appState = 'ready';
+                vm._buffer = fakeBuffer;
+                vm._clock = { state: 'suspended', resume() { return new Promise(() => {}); } };
+                vm._engine = makeFakeEngine();
+
+                const t0 = Date.now();
+                await vm.onPlayToggle();
+
+                // R-N25.1: asserted against the imported constant (−50 ms keeps
+                // the real-timer test flake-safe while pinning the value).
+                expect(Date.now() - t0).to.be.greaterThan(SCHEDULER.RESUME_TIMEOUT_MS - 50);
+                expect(vm.errorMessage).to.equal('Audio is blocked by the browser — tap again to enable sound');
+                expect(vm._engine.calls).to.deep.equal([]);
+            });
+
+            it('R-N14.1 — unmount during the resume await: no engine call, no error, no throw (N-14)', async () => {
+                const vm = buildVm();
+                vm.appState = 'ready';
+                vm._buffer = fakeBuffer;
+                let settleResume = null;
+                vm._clock = { state: 'suspended', resume() { return new Promise((r) => { settleResume = r; }); } };
+                vm._engine = makeFakeEngine();
+
+                const p = vm.onPlayToggle();
+                expect(vm._engine.calls).to.deep.equal([]); // still awaiting resume
+                vm._engine = null; // unmount while the resume await is in flight
+                settleResume();
+                await p;
+
+                expect(vm.errorMessage).to.equal(''); // unmounted VM not written to
+                // no throw, no startSequence — the post-await guard owns this path
+            });
+        });
+
+        // ============================================================
+        // N-8 — errorMessage clears where its condition resolves
+        // (clearing, not a dismiss control — no new strings)
+        // ============================================================
+        describe('N-8 errorMessage clearing', () => {
+            it('R-N8.1 — Stop clears the drop-lock message (the lock is gone)', () => {
+                const vm = buildVm();
+                vm.appState = 'playing';
+                vm.errorMessage = 'Drop a new song after stopping';
+                vm._engine = makeFakeEngine();
+
+                vm.onPlayToggle();
+
+                expect(vm._engine.calls).to.deep.equal([['stop']]);
+                expect(vm.errorMessage).to.equal('');
+            });
+
+            it('R-N8.1b — Stop does NOT clear an unrelated (decode) error', () => {
+                const vm = buildVm();
+                vm.appState = 'playing';
+                vm.errorMessage = "Couldn't decode broken.mp3 — the file may be corrupted";
+                vm._engine = makeFakeEngine();
+
+                vm.onPlayToggle();
+
+                expect(vm.errorMessage).to.contain('broken.mp3'); // still relevant — a Stop doesn't resolve it
+            });
+
+            it('R-N8.2 — a successful Play clears the "Audio is blocked" message (the tap worked)', async () => {
+                const vm = buildVm();
+                vm.appState = 'ready';
+                vm._buffer = fakeBuffer;
+                vm.errorMessage = 'Audio is blocked by the browser — tap again to enable sound';
+                vm._clock = { state: 'running', resume() { return Promise.resolve(); } };
+                vm._engine = makeFakeEngine();
+
+                await vm.onPlayToggle();
+
+                expect(vm._engine.calls).to.have.length(1); // started
+                expect(vm.errorMessage).to.equal('');
+            });
+
+            it('R-N8.3 — successful Restart / Preview clear a stale error', () => {
+                const vmR = buildVm();
+                vmR.appState = 'playing';
+                vmR._buffer = fakeBuffer;
+                vmR.errorMessage = "Couldn't restart playback";
+                vmR._engine = makeFakeEngine();
+                vmR.onRestart();
+                expect(vmR.errorMessage).to.equal('');
+
+                const vmP = buildVm();
+                vmP.appState = 'ready';
+                vmP._buffer = fakeBuffer;
+                vmP.errorMessage = "Can't preview from that position";
+                vmP._engine = makeFakeEngine();
+                vmP.onPreview();
+                expect(vmP.errorMessage).to.equal('');
+            });
+        });
+
+        // ============================================================
+        // N-12 — Restart announces "Count-in restarted" (V-07 inventory +1)
+        // ============================================================
+        describe('N-12 restart announcement', () => {
+            it('R-N12.1 — restart ok announces "Count-in restarted" (countingIn AND playing)', () => {
+                for (const state of ['countingIn', 'playing']) {
+                    const vm = buildVm();
+                    vm.appState = state;
+                    vm._buffer = fakeBuffer;
+                    vm._engine = makeFakeEngine();
+
+                    vm.onRestart();
+
+                    expect(vm.announcement, `state ${state}`).to.equal('Count-in restarted');
+                }
+            });
+        });
+
+        // ============================================================
+        // N-13 — drop-zone dragover flicker: dragleave to a CHILD of the
+        // zone is not a leave (the review's pointer-events:none option would
+        // disable the Browse button, which is a child of the zone)
+        // ============================================================
+        describe('N-13 dragleave child guard', () => {
+            it('R-N13.1 — relatedTarget inside the zone keeps isDragOver; outside/absent clears it', () => {
+                const zone = document.createElement('section');
+                const child = document.createElement('button');
+                zone.appendChild(child);
+                const outside = document.createElement('div');
+                const vm = buildVm();
+
+                const leaveTo = (relatedTarget) => {
+                    vm.isDragOver = true;
+                    vm.onDragLeave({ currentTarget: zone, relatedTarget });
+                };
+
+                leaveTo(child); // cursor crossed onto a child — still inside
+                expect(vm.isDragOver).to.equal(true);
+                leaveTo(outside); // really left the zone
+                expect(vm.isDragOver).to.equal(false);
+                leaveTo(null); // e.g. leaving the window
+                expect(vm.isDragOver).to.equal(false);
+            });
+        });
+
+        // ============================================================
+        // N-27 — _refocusPlayStopButton: the "never focus a disabled
+        // button" branch (previously untested — the mock was never disabled)
+        // ============================================================
+        describe('N-27 refocus disabled-branch', () => {
+            it('R-N27.1 — locked + disabled toggle: stop happens, focus does not', () => {
+                const vm = buildVm();
+                vm.appState = 'playing';
+                vm.$refs.playStopBtn = { focused: false, disabled: true, focus() { this.focused = true; } };
+                vm._engine = makeFakeEngine();
+
+                vm.onPlayToggle();
+
+                expect(vm._engine.calls).to.deep.equal([['stop']]);
+                expect(vm.$refs.playStopBtn.focused).to.equal(false); // disabled button never focused
+            });
+        });
+
+        // ============================================================
+        // WF-I1 / TD-U1 shared: the pinned setTimeout(0) analysis yield,
+        // driven deterministically. D-E pins setTimeout(0) as the yield, so
+        // window.setTimeout is swapped for a FIFO of yields for the duration
+        // of the test (restored in finally), and each continuation is
+        // flushed explicitly. Module-level: both the WF-I1 and TD-U1 rows
+        // flush the same two-task queue (peaks + tempo per load).
+        // ============================================================
+
+        // Swap the pinned setTimeout(0) yield for an explicit queue.
+        // run(flushYield) receives a fn that advances ONE queued yield
+        // (then settles microtasks so the resumed task completes);
+        // the real setTimeout is restored when the returned promise settles.
+        function withPinnedYields(run) {
+            const realSetTimeout = window.setTimeout;
+            const queue = [];
+            window.setTimeout = (cb) => { queue.push(cb); return queue.length; };
+            const flushYield = async () => {
+                const next = queue.shift();
+                if (next) next();
+                await Promise.resolve();
+                await Promise.resolve(); // let the resumed task run to completion
+            };
+            return Promise.resolve(run(flushYield)).finally(() => { window.setTimeout = realSetTimeout; });
+        }
+
+        describe('WF-I1 post-load hook + analysis guard (D-E)', () => {
+            // An AudioBuffer-shaped object with constant-amplitude content —
+            // trivially extractable, distinguishable per buffer.
+            function makePeakBuffer(tag, value) {
+                const length = 1024;
+                const data = new Float32Array(length).fill(value);
+                return { tag, numberOfChannels: 1, length, sampleRate: 44100, getChannelData: () => data };
+            }
+
+            it('WF-I1.1 — READY precedes the peaks work; the guarded write lands after the yield (W-6)', async () => {
+                await withPinnedYields(async (flushYield) => {
+                    const bufferA = makePeakBuffer('a', 0.25);
+                    const vm = buildVm();
+                    vm._fileLoader = {
+                        loadFile: async (file) => ({ ok: true, fileName: file.name, duration: 3.0, buffer: bufferA })
+                    };
+
+                    await vm.onFileDropped({ name: 'a' });
+
+                    // ok-branch state: generation bumped, flag reset,
+                    // placeholder back — READY already flipped, peaks not yet (W-6).
+                    expect(vm.appState).to.equal('ready');
+                    expect(vm._loadGeneration).to.equal(1);
+                    expect(vm._bpmTouchedThisFile).to.equal(false);
+                    expect(vm.waveformReady).to.equal(false);
+                    expect(vm._peaks).to.equal(undefined);
+
+                    await flushYield();
+
+                    expect(vm.waveformReady).to.equal(true);
+                    expect(vm._peaks).to.not.equal(undefined);
+                    expect(vm._peaks.bucketCount).to.equal(1024);
+                    expect(vm._peaks.maxs[0]).to.equal(0.25); // computed from A
+                });
+            });
+
+            it('WF-I1.2 — a superseded file\'s continuation writes nothing (W-14)', async () => {
+                await withPinnedYields(async (flushYield) => {
+                    const bufferA = makePeakBuffer('a', 0.25);
+                    const bufferB = makePeakBuffer('b', 0.75);
+                    let call = 0;
+                    const vm = buildVm();
+                    vm._fileLoader = {
+                        loadFile: async (file) => ({
+                            ok: true, fileName: file.name, duration: 3.0,
+                            buffer: call++ === 0 ? bufferA : bufferB
+                        })
+                    };
+
+                    await vm.onFileDropped({ name: 'a' }); // A's task pending at its yield
+                    await vm.onFileDropped({ name: 'b' }); // ok-branch: generation 2, buffer B, placeholder back
+
+                    expect(vm._loadGeneration).to.equal(2);
+                    expect(vm.waveformReady).to.equal(false);
+
+                    // Two-task queue (D-M): each load enqueues peaks THEN
+                    // tempo — [A-peaks, A-tempo, B-peaks, B-tempo].
+                    await flushYield(); // A-peaks — the guard must kill it
+                    await flushYield(); // A-tempo — the guard kills it too
+                    expect(vm.waveformReady).to.equal(false);
+                    expect(vm._peaks).to.equal(undefined);
+
+                    await flushYield(); // B-peaks — applies
+                    expect(vm.waveformReady).to.equal(true);
+                    expect(vm._peaks.maxs[0]).to.equal(0.75); // from B, not A
+                    // (B-tempo stays queued and is discarded with the stub —
+                    // the tempo side of this guard is pinned by TD-U1.8.)
+                });
+            });
+
+            it('WF-I1.3 — unmount before the yield: nothing touches the VM (W-15)', async () => {
+                await withPinnedYields(async (flushYield) => {
+                    const bufferA = makePeakBuffer('a', 0.25);
+                    const vm = buildVm();
+                    vm._fileLoader = {
+                        loadFile: async (file) => ({ ok: true, fileName: file.name, duration: 3.0, buffer: bufferA })
+                    };
+
+                    await vm.onFileDropped({ name: 'a' });
+                    vm._disposed = true; // beforeUnmount ran (its guard half)
+
+                    await flushYield();
+
+                    expect(vm.waveformReady).to.equal(false);
+                    expect(vm._peaks).to.equal(undefined);
+                });
+            });
+
+            it('WF-I1.4 — a re-decode keeps the old waveform; the ok-branch blanks it (KB-16/O-2)', async () => {
+                await withPinnedYields(async (flushYield) => {
+                    const bufferA = makePeakBuffer('a', 0.25);
+                    const bufferB = makePeakBuffer('b', 0.75);
+                    let settleB = null;
+                    let call = 0;
+                    const vm = buildVm();
+                    vm._fileLoader = {
+                        loadFile(file) {
+                            call++;
+                            if (call === 1) {
+                                return Promise.resolve({ ok: true, fileName: file.name, duration: 3.0, buffer: bufferA });
+                            }
+                            // Mirror the real loader: 'decoding' emits synchronously (RD-3).
+                            vm.decoding = { active: true, fileName: file.name };
+                            return new Promise((resolve) => { settleB = resolve; });
+                        }
+                    };
+
+                    await vm.onFileDropped({ name: 'a' });
+                    await flushYield(); // A-peaks (A-tempo stays queued behind it)
+                    expect(vm.waveformReady).to.equal(true); // A painted
+
+                    const second = vm.onFileDropped({ name: 'b' }); // decoding
+                    expect(vm.decoding.active).to.equal(true);
+                    expect(vm.waveformReady).to.equal(true); // old waveform stays visible (KB-16)
+
+                    settleB({ ok: true, fileName: 'b', duration: 3.0, buffer: bufferB });
+                    await second;
+
+                    expect(vm.waveformReady).to.equal(false); // placeholder reappears before B's peaks
+                    expect(vm._peaks.maxs[0]).to.equal(0.25); // A's peaks survive until B's write
+
+                    // Queue now: [A-tempo, B-peaks, B-tempo] (two-task shape,
+                    // D-M) — the stale A-tempo is killed by the guard first.
+                    await flushYield();
+                    expect(vm.waveformReady).to.equal(false); // A's tempo result never writes
+                    await flushYield(); // B-peaks — applies
+                    expect(vm.waveformReady).to.equal(true);
+                    expect(vm._peaks.maxs[0]).to.equal(0.75);
+                });
+            });
+
+            it('WF-I1.5 — a failed load does not bump the generation; the live file\'s task completes (F-05)', async () => {
+                await withPinnedYields(async (flushYield) => {
+                    const bufferA = makePeakBuffer('a', 0.25);
+                    let call = 0;
+                    const vm = buildVm();
+                    vm._fileLoader = {
+                        loadFile: async (file) => {
+                            call++;
+                            if (call === 1) return { ok: true, fileName: file.name, duration: 3.0, buffer: bufferA };
+                            return { ok: false, code: 'codec', message: 'This browser can\'t play that format' };
+                        }
+                    };
+
+                    await vm.onFileDropped({ name: 'a' }); // A's task pending at its yield
+                    await vm.onFileDropped({ name: 'bad' }); // failure
+
+                    expect(vm._loadGeneration).to.equal(1); // unchanged
+                    expect(vm._buffer).to.equal(bufferA);   // old buffer stays live
+                    expect(vm.errorMessage).to.contain('format');
+                    expect(vm.appState).to.equal('ready');   // unchanged
+
+                    await flushYield();
+                    expect(vm.waveformReady).to.equal(true);
+                    expect(vm._peaks.maxs[0]).to.equal(0.25);
+                });
+            });
+        });
+
+        // ============================================================
+        // Phase 4 waveform computeds (D-H): displayPosition /
+        // formattedDisplayPosition / playheadPercent / markerPercent.
+        // progressPercent and offsetMarkerPercent stay untouched (R-4).
+        // ============================================================
+        describe('Phase 4 waveform computeds (D-H)', () => {
+            it('displayPosition: the draft while scrubbing, songPosition otherwise', () => {
+                const vm = buildVm();
+                vm.songPosition = 1.2;
+                vm.offsetDraft = null;
+                expect(vm.displayPosition).to.equal(1.2);
+                vm.offsetDraft = 2.5;
+                expect(vm.displayPosition).to.equal(2.5);
+            });
+
+            it('formattedDisplayPosition: the draft formats through formatTime too', () => {
+                const vm = buildVm();
+                vm.songPosition = 1.2;
+                vm.offsetDraft = 1.234;
+                expect(vm.formattedDisplayPosition).to.equal('0:01.2'); // half-up to the tenth
+                vm.offsetDraft = null;
+                expect(vm.formattedDisplayPosition).to.equal('0:01.2');
+            });
+
+            it('playheadPercent: progressPercent\'s math on displayPosition; guarded (R-4)', () => {
+                const vm = buildVm();
+                vm.duration = 0;
+                vm.songPosition = 0;
+                vm.offsetDraft = null;
+                expect(vm.playheadPercent).to.equal(0);
+
+                vm.duration = 3.0;
+                vm.songPosition = 1.5;
+                expect(vm.playheadPercent).to.equal(50);
+
+                vm.offsetDraft = 0.75; // draft rides the playhead
+                expect(vm.playheadPercent).to.equal(25);
+
+                vm.offsetDraft = null;
+                vm.songPosition = 9.0; // out of range clamps to the end
+                expect(vm.playheadPercent).to.equal(100);
+            });
+
+            it('markerPercent: draft percent while dragging, offsetMarkerPercent otherwise', () => {
+                const vm = buildVm();
+                vm.duration = 3.0;
+                vm.offset = 0.6;
+                vm.offsetDraft = null;
+                expect(vm.offsetMarkerPercent).to.equal(20);
+                expect(vm.markerPercent).to.equal(20);
+                vm.offsetDraft = 1.5;
+                expect(vm.markerPercent).to.equal(50);
+            });
+        });
+
+        // ============================================================
+        // WF-I2 — waveform scrub + keyboard handlers (CR 001 Phase 5, D-G)
+        // The canvas replaces the old offset range scrubber (O-1). The
+        // view's pointer path supplies the start/move/end calls; full
+        // keyboard parity, all funneling through onOffsetScrub — one
+        // quantization law (T-35). Mock _waveformView spy records the
+        // setDraft calls; keydown events are plain objects with a
+        // preventDefault spy (skill testing-unit.md convention).
+        // ============================================================
+        describe('WF-I2 waveform scrub + keyboard (Phase 5)', () => {
+            function makeWaveformViewSpy() {
+                return { drafts: [], setDraft(v) { this.drafts.push(v); } };
+            }
+
+            function makeKeyEvent(key, shiftKey = false) {
+                const e = { key, shiftKey, preventDefaultCalls: 0 };
+                e.preventDefault = () => { e.preventDefaultCalls++; };
+                return e;
+            }
+
+            function makeReadyVm(overrides = {}) {
+                const view = makeWaveformViewSpy();
+                const vm = buildVm({
+                    appState: 'ready',
+                    duration: 3.0,
+                    offset: 0,
+                    offsetText: '0:00.0',
+                    _waveformView: view,
+                    ...overrides
+                });
+                return { vm, view };
+            }
+
+            it('WF-I2.1 — scrubStart quantizes the draft via clampOffset; the committed offset is untouched', () => {
+                const { vm, view } = makeReadyVm();
+
+                vm.onWaveformScrubStart(1.5);
+
+                expect(vm.offsetDraft).to.equal(1.5);
+                expect(view.drafts).to.deep.equal([1.5]);
+                expect(vm.offset).to.equal(0); // draft, not commit
+            });
+
+            it('WF-I2.2 — scrubMove: the same quantize-then-reclamp law, clamped to duration', () => {
+                const { vm } = makeReadyVm();
+
+                vm.onWaveformScrubStart(1.5);
+                vm.onWaveformScrubMove(2.73);
+                expect(vm.offsetDraft).to.equal(2.7); // quantized — never a second rule
+
+                vm.onWaveformScrubMove(999);
+                expect(vm.offsetDraft).to.equal(3.0); // end-clamped to duration (T-35)
+            });
+
+            it('WF-I2.3 — scrubEnd(true) commits through the onOffsetScrub law', () => {
+                const { vm, view } = makeReadyVm();
+
+                vm.onWaveformScrubStart(2.7);
+                vm.onWaveformScrubEnd(true);
+
+                expect(vm.offset).to.equal(2.7);
+                expect(vm.offsetText).to.equal('0:02.7');
+                expect(vm.offsetHint).to.equal('');
+                expect(vm.offsetDraft).to.equal(null);
+                expect(view.drafts).to.deep.equal([2.7, null]);
+            });
+
+            it('WF-I2.4 — scrubEnd(false) discards the draft (pointercancel path, W-1)', () => {
+                const { vm } = makeReadyVm({ offset: 1.0, offsetText: '0:01.0' });
+
+                vm.onWaveformScrubStart(2.7);
+                vm.onWaveformScrubEnd(false);
+
+                expect(vm.offset).to.equal(1.0);
+                expect(vm.offsetText).to.equal('0:01.0');
+                expect(vm.offsetDraft).to.equal(null);
+            });
+
+            it('WF-I2.5 — param lock: scrubStart is a JS-backstop no-op (U-12)', () => {
+                const { vm, view } = makeReadyVm({ appState: 'playing' });
+
+                vm.onWaveformScrubStart(1.5);
+
+                expect(vm.offsetDraft).to.equal(null);
+                expect(view.drafts).to.deep.equal([]);
+            });
+
+            it('WF-I2.6 — arrows: ±0.1 s per press (the old scrubber step, W-9); clamped at 0', () => {
+                const { vm } = makeReadyVm();
+
+                for (let i = 0; i < 5; i++) vm.onWaveformKeydown(makeKeyEvent('ArrowRight'));
+                expect(vm.offset).to.equal(0.5);
+                expect(vm.offsetText).to.equal('0:00.5');
+
+                vm.onWaveformKeydown(makeKeyEvent('ArrowLeft'));
+                expect(vm.offset).to.equal(0.4);
+
+                for (let i = 0; i < 5; i++) vm.onWaveformKeydown(makeKeyEvent('ArrowLeft'));
+                expect(vm.offset).to.equal(0); // at 0, ArrowLeft stays 0
+            });
+
+            it('WF-I2.7 — Shift+arrows: ±1 s, with the clampOffset end-clamp (T-35)', () => {
+                const { vm } = makeReadyVm({ duration: 2.96, offset: 0.4 });
+
+                vm.onWaveformKeydown(makeKeyEvent('ArrowRight', true));
+                expect(vm.offset).to.equal(1.4);
+
+                vm.offset = 2.5;
+                vm.onWaveformKeydown(makeKeyEvent('ArrowRight', true));
+                expect(vm.offset).to.equal(2.9); // never 3.0 > duration
+            });
+
+            it('WF-I2.8 — PageUp/Down = 10 % of duration; Home/End = 0 / duration', () => {
+                const { vm } = makeReadyVm({ duration: 30.0, offset: 5.0 });
+
+                vm.onWaveformKeydown(makeKeyEvent('PageDown'));
+                expect(vm.offset).to.equal(2.0); // −3.0 (10 % of 30)
+                vm.onWaveformKeydown(makeKeyEvent('PageUp'));
+                expect(vm.offset).to.equal(5.0);
+                vm.onWaveformKeydown(makeKeyEvent('Home'));
+                expect(vm.offset).to.equal(0);
+                vm.onWaveformKeydown(makeKeyEvent('End'));
+                expect(vm.offset).to.equal(30.0);
+            });
+
+            it('WF-I2.9 — preventDefault exactly for the handled set; KeyA changes nothing', () => {
+                const { vm } = makeReadyVm();
+
+                for (const key of ['ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End']) {
+                    const e = makeKeyEvent(key);
+                    vm.onWaveformKeydown(e);
+                    expect(e.preventDefaultCalls, key).to.equal(1);
+                }
+
+                vm.offset = 1.2;
+                vm.offsetText = '0:01.2';
+                const other = makeKeyEvent('KeyA');
+                vm.onWaveformKeydown(other);
+                expect(other.preventDefaultCalls).to.equal(0);
+                expect(vm.offset).to.equal(1.2);
+                expect(vm.offsetText).to.equal('0:01.2');
+            });
+
+            it('WF-I2.10 — noFile (zero duration): keydown and scrubStart are no-ops (JS backstop)', () => {
+                const view = makeWaveformViewSpy();
+                const vm = buildVm({ appState: 'noFile', fileName: '', duration: 0, _waveformView: view });
+
+                const e = makeKeyEvent('ArrowRight');
+                vm.onWaveformKeydown(e);
+                expect(e.preventDefaultCalls).to.equal(0);
+                expect(vm.offset).to.equal(0);
+                expect(vm.offsetText).to.equal('0:00.0');
+
+                vm.onWaveformScrubStart(1);
+                expect(vm.offsetDraft).to.equal(null);
+                expect(view.drafts).to.deep.equal([]);
+            });
+        });
+
+        // ============================================================
+        // TD-U1 — tempo suggestion prefill gate + touched flag
+        // (CR 001 Phase 6, D-I). The gate reads document.activeElement /
+        // getElementById('bpmInput') AT WRITE TIME (R-10), so these rows
+        // stub both on the real document (DOM-stub pattern: own property
+        // shadows, restored in finally) with a controllable activeElement.
+        // ============================================================
+
+        // Swap #bpmInput identity + focus state for the duration of run():
+        // document.getElementById('bpmInput') returns a fake element, and
+        // document.activeElement is that element iff `focused`.
+        function withBpmFocus(focused, run) {
+            const bpmEl = { id: 'bpmInput' };
+            const realGetById = document.getElementById;
+            const hadOwnActive = Object.prototype.hasOwnProperty.call(document, 'activeElement');
+            const savedActiveDesc = hadOwnActive ? Object.getOwnPropertyDescriptor(document, 'activeElement') : null;
+            document.getElementById = (id) => (id === 'bpmInput' ? bpmEl : realGetById.call(document, id));
+            Object.defineProperty(document, 'activeElement', {
+                get: () => (focused ? bpmEl : document.body),
+                configurable: true
+            });
+            try {
+                return run();
+            } finally {
+                document.getElementById = realGetById;
+                if (savedActiveDesc) Object.defineProperty(document, 'activeElement', savedActiveDesc);
+                else delete document.activeElement;
+            }
+        }
+
+        // A 20 s click train as a plain AudioBuffer-shaped object (zero
+        // real AudioContext — the engine-test convention): the TD-1.15
+        // shape (accent every 4th), clickBuffers.js recipe constants.
+        // 90/120/180 BPM are the pinned-positive train values (TD-1.4/
+        // TD-1.1/TD-1.5), so detectTempo returns a real result the gate
+        // can act on — never a null that would vacuously pass.
+        function makeClickTrainBuffer(bpm) {
+            const sampleRate = 44100;
+            const durationSec = 20;
+            const ch = new Float32Array(sampleRate * durationSec);
+            const clickLength = Math.round(CLICK.DURATION_SEC * sampleRate);
+            const attackSamples = Math.max(1, Math.round(CLICK.ATTACK_SEC * sampleRate));
+            const decaySamples = clickLength - attackSamples;
+            const logFloor = Math.log(1e-5); // clickBuffers.js decay floor
+            const spacingSec = 60 / bpm;
+            const count = Math.floor(durationSec / spacingSec);
+            for (let c = 0; c < count; c++) {
+                const start = Math.round(c * spacingSec * sampleRate);
+                const freq = c % 4 === 0 ? CLICK.ACCENT_FREQ : CLICK.REGULAR_FREQ;
+                for (let i = 0; i < clickLength && start + i < ch.length; i++) {
+                    // (i+1)/(n+1) keeps the endpoints strictly inside (0,1)
+                    // — same convention as renderClickBuffer.
+                    const amp = i < attackSamples
+                        ? (i + 1) / (attackSamples + 1)
+                        : Math.exp(logFloor * ((i - attackSamples) / decaySamples));
+                    ch[start + i] += Math.sin(2 * Math.PI * freq * (i / sampleRate)) * amp;
+                }
+            }
+            return { numberOfChannels: 1, length: ch.length, sampleRate, getChannelData: () => ch };
+        }
+
+        describe('TD-U1 tempo prefill gate + touched flag (Phase 6, D-I)', () => {
+            it('TD-U1.1 — all gate clauses hold → prefill + hint state + announcement; the flag stays false', () => {
+                withBpmFocus(false, () => {
+                    const vm = buildVm();
+                    vm.bpm = 120;
+                    vm.bpmText = '120';
+                    vm._bpmTouchedThisFile = false;
+                    // Stale clamp hint from a prior clamped commit that a
+                    // re-drop's flag reset outlived (D-H: the two hints are
+                    // structurally mutually exclusive — the prefill writes an
+                    // in-range value, so the clamp hint cannot describe it).
+                    vm.bpmClamped = true;
+
+                    vm.applyTempoSuggestion({ bpm: 120, confidence: 0.85 });
+
+                    expect(vm.bpm).to.equal(120);
+                    expect(vm.bpmText).to.equal('120');
+                    expect(vm.tempoSuggestion).to.equal(120); // hint state written
+                    expect(vm.announcement).to.equal('Detected tempo 120 BPM'); // V-07 inventory +1
+                    expect(vm.bpmClamped).to.equal(false); // the stale clamp hint dies with the prefill (D-H mutual exclusion)
+                    expect(vm._bpmTouchedThisFile).to.equal(false); // a suggestion is not a touch
+                });
+            });
+
+            it('TD-U1.2 — onBpmStep ran first (flag true) → no write at all', () => {
+                withBpmFocus(false, () => {
+                    const vm = buildVm();
+                    vm.onBpmStep(1); // user touch: bpm 121, flag true
+                    expect(vm._bpmTouchedThisFile).to.equal(true);
+
+                    vm.applyTempoSuggestion({ bpm: 120, confidence: 0.85 });
+
+                    expect(vm.bpm).to.equal(121); // unchanged
+                    expect(vm.bpmText).to.equal('121');
+                    expect(vm.tempoSuggestion).to.equal(null); // no hint
+                    expect(vm.announcement).to.equal(''); // no announcement
+                });
+            });
+
+            it('TD-U1.3 — commitBpmEntry sets the flag: clean path AND the garbage-restore path (CR §2.5 row 3)', () => {
+                // Clean path: type "140", Enter.
+                withBpmFocus(false, () => {
+                    const vm = buildVm();
+                    vm.bpmText = '140';
+                    vm.commitBpmEntry();
+                    expect(vm._bpmTouchedThisFile).to.equal(true);
+
+                    vm.applyTempoSuggestion({ bpm: 120, confidence: 0.85 });
+
+                    expect(vm.bpm).to.equal(140); // no prefill over the user's 140
+                    expect(vm.tempoSuggestion).to.equal(null);
+                    expect(vm.announcement).to.equal('');
+                });
+                // Garbage path: "abc" → _restoreLastValid (typing garbage IS a touch);
+                // the restore itself still restores the last valid value.
+                withBpmFocus(false, () => {
+                    const vm = buildVm();
+                    vm.bpmText = '180';
+                    vm.commitBpmEntry(); // last valid = 180
+                    vm.bpmText = 'abc';
+                    vm.commitBpmEntry(); // restore branch
+                    expect(vm._bpmTouchedThisFile).to.equal(true);
+                    expect(vm.bpm).to.equal(180); // restored
+                    expect(vm.bpmText).to.equal('180');
+
+                    vm.applyTempoSuggestion({ bpm: 120, confidence: 0.85 });
+
+                    expect(vm.bpm).to.equal(180); // no prefill
+                    expect(vm.tempoSuggestion).to.equal(null);
+                    expect(vm.announcement).to.equal('');
+                });
+            });
+
+            it('TD-U1.4 — mid-draft (bpmText divergent from the model) → no prefill, either flag state (W-16)', () => {
+                for (const flag of [false, true]) {
+                    withBpmFocus(false, () => {
+                        const vm = buildVm();
+                        vm.bpm = 120;
+                        vm.bpmText = '90'; // in-progress entry
+                        vm._bpmTouchedThisFile = flag;
+
+                        vm.applyTempoSuggestion({ bpm: 120, confidence: 0.9 });
+
+                        expect(vm.bpmText, `flag=${flag}`).to.equal('90'); // the draft is never clobbered
+                        expect(vm.tempoSuggestion, `flag=${flag}`).to.equal(null); // silently dropped for this file
+                        expect(vm.announcement, `flag=${flag}`).to.equal('');
+                    });
+                }
+            });
+
+            it('TD-U1.5 — #bpmInput focused (activeElement === #bpmInput) → no prefill (clause 3)', () => {
+                withBpmFocus(true, () => {
+                    const vm = buildVm();
+                    vm.bpm = 120;
+                    vm.bpmText = '120';
+                    vm._bpmTouchedThisFile = false;
+
+                    vm.applyTempoSuggestion({ bpm: 120, confidence: 0.85 });
+
+                    expect(vm.bpmText).to.equal('120'); // the user is typing — never interrupt
+                    expect(vm.tempoSuggestion).to.equal(null);
+                    expect(vm.announcement).to.equal('');
+                });
+            });
+
+            it('TD-U1.6 — null result → silence in every gate state (W-13)', () => {
+                for (const flag of [false, true]) {
+                    for (const focused of [false, true]) {
+                        withBpmFocus(focused, () => {
+                            const vm = buildVm();
+                            vm._bpmTouchedThisFile = flag;
+
+                            vm.applyTempoSuggestion(null);
+
+                            expect(vm.tempoSuggestion, `flag=${flag} focused=${focused}`).to.equal(null);
+                            expect(vm.announcement, `flag=${flag} focused=${focused}`).to.equal('');
+                        });
+                    }
+                }
+            });
+
+            it('TD-U1.7 — the prefill write never self-poisons the flag; a second suggestion prefills again', () => {
+                withBpmFocus(false, () => {
+                    const vm = buildVm();
+                    // The load's ok-branch resets the flag to false (WF-I1.1);
+                    // mirror that — a fresh VM never loaded has it undefined.
+                    vm._bpmTouchedThisFile = false;
+                    vm.applyTempoSuggestion({ bpm: 120, confidence: 0.85 });
+                    expect(vm._bpmTouchedThisFile).to.equal(false); // by construction
+
+                    // Re-drop path: the flag was reset on load (WF-I1.1) and
+                    // the prefill itself did not set it — the second
+                    // suggestion for the live file lands.
+                    vm.applyTempoSuggestion({ bpm: 132, confidence: 0.7 });
+
+                    expect(vm.bpm).to.equal(132); // a real second write
+                    expect(vm.bpmText).to.equal('132');
+                    expect(vm.tempoSuggestion).to.equal(132);
+                    expect(vm.announcement).to.equal('Detected tempo 132 BPM');
+                    expect(vm._bpmTouchedThisFile).to.equal(false);
+                });
+            });
+
+            it('TD-U1.8 — a superseded file\'s tempo task writes nothing (W-14); the live file\'s result applies', async () => {
+                await withPinnedYields(async (flushYield) => {
+                    const bufferA = makeClickTrainBuffer(90);   // detects ≈90  (TD-1.4 shape, extended)
+                    const bufferB = makeClickTrainBuffer(180);  // detects ≈180 (TD-1.5 shape)
+                    let call = 0;
+                    const vm = buildVm();
+                    vm._fileLoader = {
+                        loadFile: async (file) => ({
+                            ok: true, fileName: file.name, duration: 20.0,
+                            buffer: call++ === 0 ? bufferA : bufferB
+                        })
+                    };
+
+                    await vm.onFileDropped({ name: 'a' }); // A's two tasks pending at their yields
+                    await vm.onFileDropped({ name: 'b' }); // ok-branch: generation 2, buffer B
+
+                    expect(vm._loadGeneration).to.equal(2);
+                    expect(vm._bpmTouchedThisFile).to.equal(false); // reset by B's load
+
+                    // Yield queue: [A-peaks, A-tempo, B-peaks, B-tempo].
+                    await flushYield(); // A-peaks — the guard kills it
+                    await flushYield(); // A-tempo — the guard kills it too
+                    expect(vm.tempoSuggestion).to.equal(null); // A's ≈90 result never wrote
+                    expect(vm.announcement).to.equal('b loaded'); // still B's LOAD announcement — no tempo prefill
+                    expect(vm.bpm).to.equal(120); // the default — no 90 prefill leaked through
+
+                    await flushYield(); // B-peaks — applies
+                    await flushYield(); // B-tempo — detection ≈180, gate passes → prefill
+                    expect(vm.bpm).to.be.within(179, 181); // B's result, not A's
+                    expect(vm.bpmText).to.equal(String(vm.bpm));
+                    expect(vm.tempoSuggestion).to.equal(vm.bpm);
+                    expect(vm.announcement).to.equal('Detected tempo ' + vm.bpm + ' BPM');
+                });
+            });
+
+            it('TD-U1.9 — unmount before the tempo yield: nothing touches the VM (W-15)', async () => {
+                await withPinnedYields(async (flushYield) => {
+                    const bufferA = makeClickTrainBuffer(120);
+                    const vm = buildVm();
+                    vm._fileLoader = {
+                        loadFile: async (file) => ({ ok: true, fileName: file.name, duration: 20.0, buffer: bufferA })
+                    };
+
+                    await vm.onFileDropped({ name: 'a' });
+                    vm._disposed = true; // beforeUnmount ran (its guard half)
+
+                    await flushYield(); // A-peaks — killed
+                    await flushYield(); // A-tempo — killed
+
+                    expect(vm.tempoSuggestion).to.equal(null);
+                    expect(vm.announcement).to.equal('a loaded'); // still the LOAD announcement — nothing wrote
+                    expect(vm.bpm).to.equal(120);
+                    expect(vm.waveformReady).to.equal(false);
+                });
+            });
+
+            it('TD-U1.10 — @input flag handler: no-op except the flag; v-model keeps the draft write; order-independent (R-6)', () => {
+                const vm = buildVm();
+                expect(vm.bpm).to.equal(120);
+
+                // Simulated keystrokes: the @input handler sets ONLY the
+                // flag; v-model owns the draft. Both listener orders must
+                // leave the same state (R-6: order-independent).
+                for (const [draft, order] of [['1', 'handler-first'], ['12', 'draft-first'], ['120', 'handler-first']]) {
+                    if (order === 'handler-first') {
+                        vm.onBpmTextInput();
+                        vm.bpmText = draft;
+                    } else {
+                        vm.bpmText = draft;
+                        vm.onBpmTextInput();
+                    }
+                    expect(vm.bpmText, draft).to.equal(draft); // the draft holds the typed text
+                    expect(vm.bpm, draft).to.equal(120); // model untouched until commit
+                    expect(vm._bpmTouchedThisFile, draft).to.equal(true);
+                }
+
+                // Enter still commits via commitBpmEntry (clamps as U-11 rev).
+                vm.bpmText = '300';
+                vm.onBpmTextInput();
+                vm.commitBpmEntry();
+                expect(vm.bpm).to.equal(250); // clamped
+                expect(vm.bpmText).to.equal('250');
+                expect(vm.bpmClamped).to.equal(true);
+                expect(vm._bpmTouchedThisFile).to.equal(true);
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>

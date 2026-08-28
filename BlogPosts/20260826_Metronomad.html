@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>08-26-2026 - Metronomad: A Sample-Accurate Metronome Built with Agents</title>
+    <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
+    <link rel="stylesheet" href="../src/css/variables.css">
+    <link rel="stylesheet" href="../src/css/Style.css"><link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+        <span id="theme-icon" class="material-icons">sunny</span>
+    </button>
+    <script src="../src/js/themeSwitcher.js"></script>
+    <h1>Metronomad: Building a Sample-Accurate Metronome with Agents</h1>
+
+    <div>
+        <p>
+            Metronomad is a small website with one job: count into a selected song at the selected time using the selected tempo.  This will help musicians practice a song without stumbling into alignment while the song plays.  A friend asked me to write this many years ago when I did not have the time or deployment strategy to go with it, but now it makes sense to build it.  I expected this project to be very simple and straightforward, and from my perspective as the requester, it was.  However, the code behind the page was more complex than I thought it would be in order to synchronize the beat count into the actual song.  Luckily the complexity was handled by <a href="https://huggingface.co/Qwen/Qwen3.8-27B">Qwen 3.8 27b</a>, paired with the <a href="https://pi.dev/">Pi agent harness</a>, with a helping of web app building skills and a <a href="https://github.com/austin183/agent-ollama-projects/tree/main/Experiments/pi-development-kit">starter development kit</a> I had Pi port from our <a href="https://github.com/austin183/agent-ollama-projects/tree/main/Experiments/opencode-development-kit">OpenCode development kit</a> built during work on the <a href="../CollageMaker/index.html">CollageMaker project.</a>  
+        </p>
+
+        <h2>The Big Idea</h2>
+        <p>
+            A musician wants to practice joining a song on beat — starting their part at a specific verse or section — without a bandmate or a DAW. The workflow is tiny: drop a file, scrub to find the entry point, type a BPM, press Play. The site counts in with woodblock clicks (accent on beat one of every bar), and the song starts at the beat boundary immediately after the last click. 
+        </p>
+        
+        <h2>Preparing for the Project</h2>
+        <h3>The Research and Design Phase</h3>
+        <p>
+            The project started with a day of porting the opencode-dev-kit to the pi-dev-kit as a starting point for how we developed the project, using BDD (Behavior Driven Development) for planning and TDD (Test Driven Development) for implementation.  
+        </p>
+        <p>
+            I chose <a href="https://github.com/goldfire/howler.js#documentation">Howler.js</a> as a starting point for mp3 playback and pointed Pi / Qwen 3.8 at it.  I cloned out the library's GitHub repo and let the agent research it based on the Initial Thoughts for the website.  Then I asked it to expand on the initial request and use plan-bdd to write the initial plan.  
+        </p>
+        <h3>Qwen 3.8 and Pi Thinking Levels</h3>
+        <p>
+            I didn't know about Thinking Levels or how to set them at the time, so the agent thought on xhigh for a very long time.  The agent truncated its output several times.  I had to set some extra settings to try to alleviate those pitfalls after switching from Qwen 3.6 with OpenCode from the CollageMaker project.
+        </p>
+
+        <h3>Pi models.json excerpt</h3>
+        <p>
+            The default maxTokens for pi is 16k, which was getting saturated regularly during planning and implementation, so I doubled that to 32k.  The contextWindow defaulted to 128k, so I increased it to 200k.  Finally, I added a thinkingLevelMap so I could use Shift + Tab to switch from xhigh to medium and curb the propensity of the agent to reason excessively.  After these adjustments, and some adjustments to the pi-dev-kit, we were able to make meaningful progress on the project.
+        </p>
+        <pre>
+{
+  "providers": {
+    "lmstudio": {
+      "baseUrl": "http://localhost:1234/v1",
+      "api": "openai-completions",
+      "apiKey": "lmstudio",
+      "models": [
+        { 
+          "id": "qwen/qwen3.8-27b", 
+          "contextWindow": 200000,
+          "maxTokens": 32000,
+          "reasoning": true,
+          "thinkingLevelMap": {
+            "off": null,
+            "minimal": null,
+            "low": "low",
+            "medium": "medium",
+            "high": null,
+            "xhigh": "xhigh",
+            "max": null
+          }
+        },
+        { "id": "qwen-agentworld-35b-a3b", "contextWindow": 195000 }
+      ]
+    }
+  }
+}
+        </pre>
+
+        <h2>v1: The Red-Green Implementation</h2>
+        <p>
+            The implementation ran August 17–21 as eight TDD phases, each a separate <code>build-tdd</code> session with a fresh context: scaffold → pure timing functions → file loading → playback engine → UI integration → beat dots → E2E suite → docs and acceptance. Every phase wrote the failing test first, observed the RED, and only then wrote the minimal code.
+        </p>
+        <p>
+            When we got to the end of a Phase, and the agent presented a set of manual tests to run, I first asked it to automate as much as possible for the tests with Playwright.  It had already written some tests this way.  It just needed some encouragement to close the gaps it thought I would need to fill in.  I did walk through the website to make sure the agent's tests aligned with a web page that actually works.  Luckily, I spent very little time asking for bug fixes and instead asked for learnings, skill refinements, and new features, and refined the pi-dev-kit with instructions to keep the plan aligned as deviations surfaced through phases.  The dev kit helped build the project, and the work on the project helped refine the dev kit.  Everything grows in support of the next project.
+        </p>
+
+        <h2>The Review That Found a Real UI Bug</h2>
+        <p>
+            After completing the first plan, I used the pi-dev-kits review scaffolding to perform a full review on the project, which surfaced a bug in how the Beats Per Minute handled its number validation and prefill.  The website would start with BPM of "120".  If a user wanted to change it, it would fight them to keep the number between "30" and "250".  So if a user blanked out the value to start typing in "90", it would go "120" -> (user blanks the value) -> "30" -> (User types "9", so "309") -> "250".  Once the reviewer agent described the issue, the main agent was able to write tests showing the issue and implement a fix for it.
+        </p>
+
+        <h2>CR 001: Waveform and Tempo Detection</h2>
+        <p>
+            The first change request after v1 asked for the two features: a waveform view to find the right starting position in the song, and automatic BPM detection as a suggestion.  Three things happened while working on the change request that I think show the benefits of using an evolving dev kit, built on proven disciplines.
+        </p>
+        <p>
+            <strong>The plan contained bugs, and they got caught before any code shipped.</strong> A worked-example pinned a spike at "sample 40,000,000" in a 20,000,001-sample buffer — out of range. Two scenarios pinned <em>byte-identical inputs</em> with contradictory expected outputs (a pure function cannot satisfy both). A lag range in the design memo was missing a <code>sampleRate</code> dimension. Each was found by recomputing the worked examples against the pinned constants, and each was corrected <em>in place in the plan document</em> with the reasoning recorded, so the next phase didn't inherit the error.
+        </p>
+        <p>
+            <strong>A benchmark refuted a "critical" review finding.</strong> World-review flagged main-thread cost of peak extraction for 30-minute files as critical. The response wasn't an argument — it was a 59 ms benchmark of the actual worst case (30-minute stereo at 48 kHz), which the plan's stride design already covered. Measured worst case for tempo detection: 14 ms for a full minute of audio at 48 kHz. When a review and the design disagree, measure.
+        </p>
+        <p>
+            <strong>The test methodology had to evolve mid-CR.</strong> One E2E wanted to assert that the waveform painted immediately after a file loaded — but the gap is ~1.5–4 ms, <em>sub-poll-period</em> for a 5 ms logger, so a poll would miss the ordering 30–80% of the time. The fix: in-page <code>MutationObserver</code>s that record each transition at its exact timestamp. Both this and the earlier in-page-logger convention became written learnings that the next session loads as context.
+        </p>
+        <p>
+            228 unit + 37 E2E, all seven phases green, final whole-change-set world-review with zero action items.
+        </p>
+
+        <div class="llm-quote">
+            <h2>The Timing Architecture in One Paragraph</h2>
+            <p>
+                One <code>AudioContext</code>, two kinds of sound, one clock. The song is a single <code>AudioBufferSourceNode.start(when, offset)</code> call issued immediately — sample-accurate, no seeking, no drift possible. The count-in clicks are pre-rendered 60 ms sine bursts (1568 Hz accent, 1047 Hz beat) scheduled by a 25 ms lookahead loop that only ever looks ~100 ms ahead. The beat dots derive their phase from the audio clock as a pure function each frame, so a paused tab resumes exactly on the right beat. A generation counter invalidates every scheduled-but-unfired click the instant Stop is pressed. And when the file is decoded, everything downstream — peaks, tempo, waveform, playhead — hangs off that one <code>AudioBuffer</code> with generation guards so a re-drop mid-analysis kills the stale work.
+            </p>
+            <span class="llm-attribution">— Generated by LittleLight</span>
+        </div>
+
+        <h2>The Learnings Flywheel</h2>
+        <p>
+            After each phase, a short structured debrief asked: what did this session learn that the next one will need? The project now has 25 learning documents, each one a one-page rule with its failure mode spelled out. Some favorites:
+        </p>
+        <ul>
+            <li><strong>ES module barrel link failures are silent.</strong> A re-export of a missing name yields <code>undefined</code> with no error — the "test page is broken" signal and a missing <code>load → mocha.run()</code> listener are indistinguishable from the same symptom. The whole CR 001 plan pinned the exact RED shape this produces so build sessions could distinguish "my module is missing" from "my test page is broken."</li>
+            <li><strong>Documented gates can contradict documented prose.</strong> In the docs phase, the plan told AGENTS.md to name the deleted <code>#offsetScrubber</code> token while the success criterion required <code>rg "offsetScrubber"</code> → zero hits. The gate won; the note survived in token-free form. The lesson: dry-run every mechanical gate against the planned wording <em>before</em> writing.</li>
+            <li><strong>One event, two announcement surfaces, one double-read.</strong> The tempo prefill both inserts a visible <code>role="status"</code> hint and sets the polite live region — a screen reader reads both. No per-phase test could see the combination; only the cross-surface review did. It's routed to the manual dual-screen-reader acceptance pass with a pre-decided remedy path, because discovering it post-ship would cost all the trust the app just built.</li>
+        </ul>
+        <p>
+            The <code>building-web-apps</code> skill that started life in CollageMaker grew through every phase of this project and now lives at the repo root, shared by both apps by symlink. Skills and learnings are the compounding asset — the code is the artifact, but the next project starts cheaper because this one paid for these lessons.
+        </p>
+
+        <h2>The Numbers</h2>
+        
+        <p>
+            <a href="references/Metronomad-LLM-Report.html">The full LLM Usage &amp; Value Report</a> breaks token usage down — by model, by role, by day, by subagent run, with the per-session commit attribution and the 23 curated session summaries joined in.
+        </p>
+
+        <h2>What Changed for Me</h2>
+        <p>
+            The big changes for me this project were learning how to tweak the Pi agent to better use my local resources and how to better structure plans so the agent is exposed to the right context when it is needed instead of a lot of bloated context.  If there is a 7-phase plan, the agent does not need to know about all 7 phases during phase 1.  Plans for the project can be found <a href="https://github.com/austin183/agent-ollama-projects/tree/main/Experiments/WebProjects/metronomad_docs/plans">here.</a>
+        </p>
+
+        <h2>What's Next</h2>
+        <p>
+            There are still a few features I could work on for the Metronomad website.  I could add localStorage to keep track of songs and count-in settings to make it easier to work on a set of songs and avoid having to find the mp3 file and tweak the settings each time the page is visited.  This I think is the main new feature I want to implement before saying this website is done.
+        </p>
+        
+        <h2>Links</h2>
+        <ul>
+            <li><a href="../Metronomad/index.html">Try Metronomad in your browser</a></li>
+            <li><a href="https://github.com/austin183/austin183.github.io/tree/main/Metronomad">Source code</a></li>
+            <li><a href="references/Metronomad-LLM-Report.html">LLM Usage &amp; Value Report</a> — consolidated analytics report with token breakdowns, role efficiency, subagent attribution, and commit attribution</li>
+            <li><a href="20260716_CollageMakerWebApp.html">Building a Collage Maker with Agents</a> — the previous post, where the analytics pipeline and the role split started</li>
+            <li><a href="20260319_AgentAssistedRefactoring.html">Creating 3D Version with Agents</a> — the earlier agent-assisted refactoring journey</li>
+        </ul>
+    </div>
+</body>
+
+</html>
