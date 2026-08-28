@@ -4,6 +4,7 @@
 
 - [Lifecycle pattern](#lifecycle-pattern)
 - [DPR scaling](#dpr-scaling)
+- [Backing store assignment clears the bitmap](#backing-store-assignment-clears-the-bitmap)
 - [Rendering pipeline](#rendering-pipeline)
 - [Same-panel overlap guard](#same-panel-overlap-guard)
 - [CoreGraphics → Canvas 2D mapping](#coregraphics--canvas-2d-mapping)
@@ -40,6 +41,37 @@ ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 ```
 
 Without DPR scaling, canvas content appears blurry on Retina displays.
+
+## Backing Store Assignment Clears the Bitmap
+
+Per the HTML spec, assigning `canvas.width`/`canvas.height` resets and **clears the bitmap — even when the assigned value equals the current one**. Two consequences for the `resize()` + `scheduleRender()` lifecycle:
+
+1. **Size-guard the reassignment.** Same-size `resize` events are routine on mobile (omnibar collapse/expand, file-picker transitions, and IME show/hide all fire `resize` with no layout change — see `mobile-ui-patterns.md`). A guarded assignment makes them zero-cost:
+
+```javascript
+function resize(widthCss, heightCss) {
+    const dpr = window.devicePixelRatio || 1;
+    const wPx = Math.round(widthCss * dpr);
+    const hPx = Math.round(heightCss * dpr);
+    if (canvas.width !== wPx || canvas.height !== hPx) {
+        canvas.width = wPx;    // clears the bitmap
+        canvas.height = hPx;
+        renderedSnapshot = EMPTY;  // a clear just happened — the repaint must not be skippable
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    scheduleRender();
+}
+```
+
+2. **Invalidate any render-skip / no-op cache whenever a clear actually happens.** The skip check compares logical state (what to draw, at what CSS size) — but a DPR-only change (window moved across monitors, some Android zoom states) changes the device-pixel size at *unchanged* CSS size, invisible to a CSS-size comparison, while the reassignment still cleared the canvas. The invariant to pin in tests: **a cleared backing store is always followed by a render that cannot be skipped.**
+
+**Field signature:** the canvas is visible, interactive, and its DOM flags say "painted" — but it is blank; any user tap (a state change that forces a repaint) "fixes" it. The hardest kind of report to reproduce from a desk.
+
+The one intentional clear-without-redraw is `dispose()`'s `width = 0; height = 0` GPU release — fine precisely because nothing renders after it.
+
+### File Reference
+
+- `Metronomad/MyESModules/App/createWaveformView.js` — guarded reassignment + snapshot invalidation (CR 2026-08-27-002)
 
 ## Rendering Pipeline
 
@@ -167,6 +199,7 @@ drawHoverBorder(ctx, panel) {
 3. **`drawImage` 9-parameter form** — `drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh)` for cropped rendering
 4. **Shadow requires 4 properties** — `shadowColor`, `shadowBlur`, `shadowOffsetX`, `shadowOffsetY`
 5. **`globalAlpha` blends against canvas, not isolated** — pre-fill background before drawing semi-transparent images (see "Semi-Transparent Image Compositing" above)
+6. **`canvas.width/height` assignment clears the bitmap even at the same size** — size-guard the reassignment and invalidate render-skip caches on every real clear (see "Backing Store Assignment Clears the Bitmap")
 
 ## Backward-Compatible Renderer Extensions
 

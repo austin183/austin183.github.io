@@ -13,7 +13,7 @@
 </head>
 <body>
     <h1>Metronomad — Waveform View Unit Tests</h1>
-    <p class="test-plan-ref">Covers: CR 001 Phase 3 WF-V1.1…WF-V1.11 — App/createWaveformView.js.
+    <p class="test-plan-ref">Covers: CR 001 Phase 3 WF-V1.1…WF-V1.11 + CR 2026-08-27-002 WF-V2.1…WF-V2.3 — App/createWaveformView.js.
     DI-pure per the createBeatDots convention (R-I7.1): raf/cancelRaf/devicePixelRatio/getDom/
     getHeightCss/getWindow injected, fake canvas + fake window — this suite contains NO
     window.*/document.* monkey-patching (the only document use is creating offscreen canvases
@@ -99,8 +99,18 @@
         // set/releasePointerCapture, focus, getBoundingClientRect, parentElement.
         function makeFakeCanvas() {
             const canvas = {
-                width: 0,
-                height: 0,
+                _width: 0,
+                _height: 0,
+                // CR 2026-08-27-002: record EVERY backing-store assignment
+                // as [prop, value]. The old plain properties had no
+                // clear-on-assign semantics, so the same-size-resize wipe
+                // (assigning canvas.width clears the bitmap, HTML spec) was
+                // unexpressible here — WF-V2.1 pins the guard.
+                assignments: [],
+                get width() { return this._width; },
+                set width(v) { this._width = v; this.assignments.push(['width', v]); },
+                get height() { return this._height; },
+                set height(v) { this._height = v; this.assignments.push(['height', v]); },
                 style: {},
                 parentElement: null,
                 captured: [],
@@ -173,16 +183,19 @@
             const container = { clientWidth: 300, clientHeight: 64 };
             canvas.parentElement = container;
             const vm = { duration, offsetDraft: null };
+            // Mutable so a DPR-only change (window moved across monitors,
+            // some Android zoom states) is expressible — WF-V2.3.
+            let currentDpr = dpr;
             const base = {
                 raf: fakeRAF.raf,
                 cancelRaf: fakeRAF.cancelRaf,
-                devicePixelRatio: () => dpr,
+                devicePixelRatio: () => currentDpr,
                 getDom: (id) => (id === 'waveformCanvas' ? canvas : null),
                 getWindow: () => win
             };
             if (!noDefaultHeight) base.getHeightCss = () => 64;
             const view = createWaveformView(vm, base, callbacks);
-            return { fakeRAF, canvas, win, container, vm, view, callbacks };
+            return { fakeRAF, canvas, win, container, vm, view, callbacks, setDpr: (v) => { currentDpr = v; } };
         }
 
         // 4096-bucket peaks of a decaying sine — the shape extractPeaks
@@ -522,6 +535,85 @@
                 const moves = rctx.rec.moveTo;
                 expect(moves[moves.length - 1]).to.deep.equal([319, moves[moves.length - 1][1]]);
                 expect(moves[moves.length - 320][0]).to.equal(0);
+            });
+        });
+
+        // ============================================================
+        // Resize — CR 2026-08-27-002 WF-V2.1…WF-V2.3
+        // (same-size wipe, post-paint storm, DPR-only change)
+        // ============================================================
+        describe('createWaveformView — resize (CR 2026-08-27-002)', () => {
+            let env;
+
+            // env is at 300×64, dpr 1, peaks painted, render settled.
+            function paintSettled() {
+                env.view.setPeaks(makePeaks(4096));
+                env.fakeRAF.flush();
+                expect(env.rec.moveTo).to.have.lengthOf(300);
+            }
+
+            beforeEach(() => {
+                env = makeEnv();
+                const rctx = makeRecordingCtx();
+                env.canvas.ctx = rctx.proxy;
+                env.rec = rctx.rec;
+                env.view.init(env.canvas);
+                env.view.resize(300, 64);
+                env.fakeRAF.flush(); // settle any sizing-only render
+                paintSettled();
+            });
+
+            it('WF-V2.1 — same-size resize after paint: NO backing-store assignment, NO render', () => {
+                // The field report: an Android omnibar/IME resize that
+                // changes no layout dimension. Assigning canvas.width
+                // clears the bitmap (HTML spec) — the guard must make
+                // this resize do zero work.
+                const before = env.canvas.assignments.length;
+                const queuedBefore = env.fakeRAF.queued();
+
+                env.view.resize(300, 64);
+
+                expect(env.canvas.assignments.length, 'no backing-store assignment')
+                    .to.equal(before);
+                expect(env.fakeRAF.queued(), 'no RAF queued').to.equal(queuedBefore);
+                expect(env.fakeRAF.pendingCount()).to.equal(0);
+                env.fakeRAF.flush();
+                expect(env.rec.moveTo, 'no new render').to.have.lengthOf(300);
+            });
+
+            it('WF-V2.2 — differing-size storm after paint: assigned, ONE coalesced render at the final size', () => {
+                // Post-paint extension of WF-V1.2: the backing store is
+                // reassigned (the clear is real) and exactly one render
+                // lands at the final size.
+                env.view.resize(400);
+                env.view.resize(350);
+                env.view.resize(400);
+
+                expect(env.fakeRAF.pendingCount(), 'W-5 coalescing').to.be.at.most(1);
+                env.fakeRAF.flush();
+                expect(env.canvas.width).to.equal(400);
+                expect(env.canvas.height).to.equal(64);
+                // last render drew 400 columns (x 0…399)
+                const moves = env.rec.moveTo;
+                expect(moves[moves.length - 1]).to.deep.equal([399, moves[moves.length - 1][1]]);
+                expect(moves[moves.length - 400][0]).to.equal(0);
+            });
+
+            it('WF-V2.3 — DPR-only change (1→2, same CSS size): backing store reassigned AND a render forced (F-2)', () => {
+                // CSS size unchanged; the pixel size differs, so F-1
+                // reassigns (clears) — the skip-snapshot invalidation
+                // (F-2) must force the one repaint scheduleRender's
+                // (peaks, draft, widthCss, heightCss) check would swallow.
+                env.setDpr(2);
+                env.view.resize(300, 64);
+
+                expect(env.canvas.width).to.equal(600);
+                expect(env.canvas.height).to.equal(128);
+                expect(env.fakeRAF.pendingCount(), 'a render is queued despite the unchanged CSS snapshot').to.equal(1);
+                env.fakeRAF.flush();
+                expect(env.rec.moveTo, 'the cleared canvas was repainted').to.have.lengthOf(600);
+                // ctx transform tracks the new DPR on the resize that cleared
+                expect(env.rec.setTransform[env.rec.setTransform.length - 1]).to.deep.equal([2, 0, 0, 2, 0, 0]);
             });
         });
 

@@ -200,9 +200,28 @@ export function createWaveformView(vm, base = {}, callbacks = {}) {
         _heightCss = heightCss;
         // DPR backing store; assigning width/height resets ctx state, so
         // the transform is (re)applied here — drawing stays in CSS space.
+        // CR 2026-08-27-002 F-1: per the HTML spec, assigning
+        // canvas.width/height CLEARS the bitmap even when the assigned
+        // value is unchanged — so assign only when the device-pixel size
+        // actually differs. A same-size resize (Android omnibar/IME/
+        // picker events fire `resize` with no layout change) then does
+        // zero GPU work and can't wipe the paint (WF-V2.1); it also keeps
+        // resize storms (W-5) off the backing-store reallocation path.
         const dpr = _devicePixelRatio();
-        _canvas.width = Math.round(widthCss * dpr);
-        _canvas.height = Math.round(heightCss * dpr);
+        const wPx = Math.round(widthCss * dpr);
+        const hPx = Math.round(heightCss * dpr);
+        if (_canvas.width !== wPx || _canvas.height !== hPx) {
+            _canvas.width = wPx;   // clears the bitmap
+            _canvas.height = hPx;
+            // F-2: a clear just happened — invalidate the render-skip
+            // snapshot so the post-clear paint can never be swallowed by
+            // scheduleRender()'s no-op check. The skip compares CSS size,
+            // which a DPR-only change (cross-monitor move, some Android
+            // zoom states) leaves untouched (WF-V2.3). Pinned invariant:
+            // a cleared backing store is always followed by a render that
+            // cannot be skipped.
+            _rendered = { peaks: null, draft: null, width: 0, height: 0 };
+        }
         if (_ctx) _ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         scheduleRender();
     }

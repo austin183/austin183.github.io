@@ -98,6 +98,7 @@ Pure math functions accepting numeric parameters from runtime sources (touch coo
 - DPR scaling for sharp rendering on Retina displays
 - `requestAnimationFrame` for debounced renders
 - In `dispose()`, set `canvas.width = 0; canvas.height = 0` to force GPU memory release
+- **Backing-store assignment clears the bitmap even at the same size** — size-guard the `resize()` reassignment (mobile fires same-size `resize` constantly: omnibar, picker, IME) and invalidate render-skip caches on every real clear. See `references/canvas-2d.md`
 - **Pre-fill background before `globalAlpha`** — Canvas blends against existing pixels, not isolated layers. Always `fillRect` with background color before drawing semi-transparent images. Isolate alpha with `save()`/`restore()`.
 - **Config-based rendering helpers** — When multiple methods share the same save/restore + property-setting pattern, extract a shared helper accepting a style config object. Guard optional config properties with `!== undefined` (not truthy checks) because `0` and `''` are valid canvas values.
 - **Shared offscreen canvas for measurement** — Create a single 1x1 offscreen canvas at factory init for `measureText()` in hot paths. See `references/canvas-2d.md`

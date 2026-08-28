@@ -3,6 +3,7 @@
 ## Contents
 
 - Dual-State Toggle Pattern
+- Same-Size `resize` Events on Mobile
 - CSS `!important` Cascade in Media Queries
 - Scoped CSS Selectors for Shared Classes
 - Vue `.window` Modifier for Global Escape Key
@@ -72,6 +73,23 @@ toggleRightSidebar() {
 - `MyESModules/App/createCollageData.js` — Dual-state reactive properties
 - `MyESModules/App/createCollageMethods.js` — Dual-state toggle method
 - `index.html` — Template bindings
+
+---
+
+## Same-Size `resize` Events on Mobile
+
+Mobile browsers fire `resize` for events that change **no** layout dimension: address-bar (omnibar) collapse/expand on scroll or focus, file-picker activity transitions, IME show/hide, pinch-zoom reset. Desktop browsers essentially never do — which is exactly how a same-size-resize wipe shipped to phones with a green desktop E2E board (Metronomad CR 2026-08-27-002: the waveform canvas was cleared on every same-size `resize` because `canvas.width` was reassigned and the repaint skipped).
+
+**Treat same-size `resize` as a first-class input:**
+
+- Canvas backing-store logic must not clear or reallocate when the container box is unchanged (see `canvas-2d.md`, "Backing Store Assignment Clears the Bitmap")
+- Measure-the-container resize handlers should no-op early when the measured box is identical
+- E2E regressions for resize-sensitive rendering are deterministic on desktop: `window.dispatchEvent(new Event('resize'))` after the first paint, then assert pixel state (a latched "painted" DOM flag cannot detect a later wipe)
+
+### File References
+
+- `Metronomad/test/e2e/waveform.spec.cjs` — same-size resize wipe regression (CR 2026-08-27-002)
+- `Metronomad/MyESModules/App/createWaveformView.js` — size-guarded backing-store reassignment
 
 ---
 

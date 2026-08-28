@@ -362,6 +362,20 @@ expect(rctx.rec.moveTo).to.have.lengthOf(300); // assertions read rec — NEVER 
 - The `bind(target)` passthrough keeps un-audited methods from crashing, but unrecorded calls silently skip assertions — the audit is still on you
 - **Intercept methods on returned objects too** — e.g., `addColorStop` is on `CanvasGradient`; wrap it on the gradient the method returns
 - **Cumulative call logs must account for full repaints** — a renderer that clears-and-redraws every frame appends the *entire* scene per render (300 + 301 + 300 = 901, not 900); compute the running total render-by-render
+- **A fake canvas's backing store must model clear-on-assign.** Per the HTML spec, assigning `canvas.width/height` clears the bitmap even at the same value — but plain numeric `width`/`height` properties on a fake canvas have no such semantics, so resize behavior (no assignment on same-size resize; assignment + forced repaint on a DPR-only change) is *unexpressible*: the suite goes green on exactly the code that ships a blank-canvas bug (see `canvas-2d.md`, "Backing Store Assignment Clears the Bitmap"). Use getter/setter pairs over hidden fields that record every assignment:
+
+```javascript
+const canvas = {
+    _width: 0, _height: 0,
+    assignments: [],
+    get width() { return this._width; },
+    set width(v) { this._width = v; this.assignments.push(['width', v]); },
+    get height() { return this._height; },
+    set height(v) { this._height = v; this.assignments.push(['height', v]); },
+};
+```
+
+Then pin: same-size `resize()` after a settled render → no new assignment, no new RAF; DPR-only change → assignment recorded AND a render queued despite the unchanged CSS snapshot.
 - Use offscreen `<canvas>` elements as image sources instead of `new Image()` (since `Image.complete` is read-only)
 
 ### Canvas Render Order Testing via Context Method Wrapping

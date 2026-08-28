@@ -429,3 +429,54 @@ test.describe('CR 001 Phase 5 — scrub + keyboard (E2E-3.5…E2E-3.10)', () => 
     await expect(page.locator('#app input[type="range"]')).toHaveCount(0);
   });
 });
+
+/**
+ * CR 2026-08-27-002 — waveform blank after same-size window resize
+ * (Android field report). Deterministic wipe regression: state-only
+ * (in-page pixel counts), no audio, no waitForTimeout for assertions.
+ * page.evaluate bodies are standalone programs (every helper local).
+ */
+test.describe('CR 2026-08-27-002 — same-size resize wipe', () => {
+  test('waveform stays painted across a same-size resize and a differing resize', async ({ page }) => {
+    await loadFixture(page);
+    await expect(page.locator('#waveformCanvas')).toHaveAttribute('data-loaded', 'true');
+
+    // Painted = non-zero alpha pixel count on the real canvas.
+    await expect.poll(() => page.evaluate(() => {
+      const canvas = document.getElementById('waveformCanvas');
+      const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+      let n = 0;
+      for (let i = 3; i < data.length; i += 4) if (data[i] !== 0) n++;
+      return n;
+    }), { timeout: 5000 }).toBeGreaterThan(0);
+
+    // A same-size window resize (the Android omnibar/IME shape — no layout
+    // dimension changes). With the bug this cleared the bitmap (canvas.width
+    // assignment) and the repaint was swallowed by the render-skip check,
+    // so the count stays 0 and the wait below times out.
+    await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+    await page.waitForFunction(() => {
+      const canvas = document.getElementById('waveformCanvas');
+      const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+      for (let i = 3; i < data.length; i += 4) if (data[i] !== 0) return true;
+      return false;
+    }, null, { timeout: 5000 });
+
+    // A differing viewport resize (narrower than #app's 640 px max-width
+    // so the container — and the backing store — actually changes size):
+    // still painted, at the final size.
+    const wBefore = await page.$eval('#waveformCanvas', (c) => c.width);
+    await page.setViewportSize({ width: 500, height: 800 });
+    // The window resize handler runs on a later task than the viewport
+    // commit — poll until the backing store has reached the NEW container
+    // width (wBefore pin), matches the CSS box, and is painted.
+    await page.waitForFunction((before) => {
+      const canvas = document.getElementById('waveformCanvas');
+      if (canvas.width === before) return false; // not the new size yet
+      if (Math.round(canvas.width / window.devicePixelRatio) !== canvas.parentElement.clientWidth) return false;
+      const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+      for (let i = 3; i < data.length; i += 4) if (data[i] !== 0) return true;
+      return false; // not painted yet
+    }, wBefore, { timeout: 5000 });
+  });
+});
