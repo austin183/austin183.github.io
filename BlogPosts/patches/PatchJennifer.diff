@@ -1,0 +1,510 @@
+diff --git a/BlogPosts/20241023_theBeginning.html b/BlogPosts/20241023_theBeginning.html
+index d3fb1a3..94a2741 100644
+--- a/BlogPosts/20241023_theBeginning.html
++++ b/BlogPosts/20241023_theBeginning.html
+@@ -1,30 +1,45 @@
+ <!DOCTYPE html>
+ <html lang="en">
++
+ <head>
+     <meta charset="UTF-8">
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>10-23-2024 - The Beginning</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <link rel="stylesheet" href="Style.css">
+ </head>
++
+ <body>
+-    <h1>The Beginning</h1>
++    <!-- Added after opening body tag -->
++    <button class="theme-toggle-btn">Toggle Theme</button>
++
++    <!-- Added before closing body tag -->
++    <script src="theme-toggle.js"></script>
++    <div class="content-container">
++        <h1>The Beginning</h1>
+ 
+-    <div>
+-        <h2>Why a rhythm typing game?</h2>
+-        <p>
+-            I have been watching <a href="https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://www.youtube.com/%40CainOnGames&ved=2ahUKEwigseDojLyJAxW05ckDHZeINx0QFnoECAoQAQ&usg=AOvVaw2ptLLwLLg2FsHu1wGHYHMY">Tim Cain on Youtube</a> , the creator of Fallout.  And one of his videos discussed an approach to starting off in game development at <a href="https://www.youtube.com/watch?v=mHMFG8uvOb0">Coding Toys (Insomnia Edition)</a> .  It inspired me to build a toy, and that lead to the idea of a video game.  First, I had to take an inventory of myself, my skills, and my perseverance.  Thanks for the inspiration, Tim!  I am glad you couldn't sleep that night.  I always appreciate your insights.
+-        </p>
+-        <p>
+-            There are a few things I like to do:
++        <div>
++            <h2>Why a rhythm typing game?</h2>
++            <p>
++                I have been watching <a
++                    href="https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://www.youtube.com/%40CainOnGames&ved=2ahUKEwigseDojLyJAxW05ckDHZeINx0QFnoECAoQAQ&usg=AOvVaw2ptLLwLLg2FsHu1wGHYHMY">Tim
++                    Cain on Youtube</a> , the creator of Fallout. And one of his videos discussed an approach to
++                starting off in game development at <a href="https://www.youtube.com/watch?v=mHMFG8uvOb0">Coding Toys
++                    (Insomnia Edition)</a> . It inspired me to build a toy, and that lead to the idea of a video game.
++                First, I had to take an inventory of myself, my skills, and my perseverance. Thanks for the inspiration,
++                Tim! I am glad you couldn't sleep that night. I always appreciate your insights.
++            </p>
++            <p>
++                There are a few things I like to do:
+             <ul>
+                 <li>Learn</li>
+                 <li>Code</li>
+                 <li>Play Games</li>
+                 <li>Share Knowledge</li>
+             </ul>
+-        </p>
+-        <p>
+-            And there are a few things I am bad at:
++            </p>
++            <p>
++                And there are a few things I am bad at:
+             <ul>
+                 <li>Storytelling</li>
+                 <li>Music</li>
+@@ -32,49 +47,106 @@
+                 <li>Complex Game Design</li>
+                 <li>Original Ideas</li>
+             </ul>
+-        </p>
+-        <p>
+-            I first wanted to figure out how to use my keyboard as a piano, because that seemed like a good Learning and Coding activity to get familiar with my new <a href="../AboutThisDevelopmentEnvironment.html">Development Environment</a> .  I also wanted the result to be usable as broadly as possible, so it had to run in a plain old modern day web browser.  I used <a href="https://tonejs.github.io/">ToneJS</a> for the music synthesis because I didn't want to reinvent the sound engineering wheel.  I would be terrible at that. I also used <a href="https://vuejs.org/">VueJS</a> to make the UI easier to work with. I used it previously on a couple of other pages already, and a new framework was not the focus of this project.
+-        </p>
+-        <p>
+-            Once I built <a href="../MidiSongBuilder/Keybiano.html">the Keybiano page</a> , I needed to figure out how I could play it since I don't have any musical background.  At first I transcribed notes into json files by hand using sites like <a href="https://noobnotes.net/super-mario-bros-theme-nintendo/?solfege=false">Super Mario on NoobNotes</a>. I had to play the songs using my memory of the note timings.  It worked great, but adding new songs was a pain, and playing them on a static page was not much fun.  It was time to try new things.  Then I recalled the fun I had with games like Guitar Hero, Rock Band, Dance Dance Revolution, Just Dance, etc... and I wanted to take my keyboard based piano to that experience.
+-        </p>
+-        <p>
+-            My task was to figure out a way to get json with all the data I would need for a song, and that proved to be too much for my tiny attention span.  So I searched for ways to make use of existing midi files instead.  That led me to <a href="https://github.com/Tonejs/Midi">ToneJS/Midi</a> , which can take midi files and turn them into json objects usable with ToneJS.  I started with <a href="https://tonejs.github.io/Midi/">the ToneJS Midi Demo Page</a> , and I worked on incorporating the game elements on top of that.  This <a href="https://github.com/austin183/austin183.github.io/commit/b1c1aa4fda9ae3d7e0d76e751a6c58949e7466b3">Github Commit</a> is the first result of that work.  All it did at this point was accept a midi file, and when you clicked on play, all the notes for the first track would fall down the canvas and play the provided song.  It was enough to convince me I was on a good path to building out a whole game.
+-        </p>
+-        <h3>Main Page</h3>
+-        <p>
+-            By this point, the main <a href="https://github.com/austin183/austin183.github.io/blob/b1c1aa4fda9ae3d7e0d76e751a6c58949e7466b3/MidiSongBuilder/Midiestro.html">Midiestro page</a> is a mess of Keybiano and the ToneJS Midi demo page along with my first iteration of the <a href="https://github.com/austin183/austin183.github.io/blob/b1c1aa4fda9ae3d7e0d76e751a6c58949e7466b3/MidiSongBuilder/SongNoteRenderer.js">SongNoteRenderer</a>.  The options were very bare bones at this point because just getting the page to move the notes was an huge accomplishment.  None of the notes were filtered out of the songs, but the player could only select a subset of notes from a single track anyway.  I knew there was a long way to go, but I felt confident that between me and my trusty Llama3.1 8b helper and a hand full of alternative models to query, I could figure out how to make a responsive rhythm game that could keep me entertained for minutes at a time.
+-        </p>
+-        <h3>SongNoteRenderer</h3>
+-        <p>
+-            The SongNoteRenderer was my first experience with the HTML canvas API.  I chose not to use any additional libraries at this point because I felt the page overhead was already pretty big with VueJS and the ToneJS libraries for Midi and WebAudio.  I figured my use case was simple enough, and I would benefit from understanding the canvas API if I ever did decide to make use of a game or animation library in the future.
+-        </p>
+-        <p>
+-            I used Llama to get me started, trying to describe what I wanted to do and see what it could figure out.  I already had some idea of how it should go because I started with a simple text scroller in <a href="https://github.com/austin183/austin183.github.io/blob/b1c1aa4fda9ae3d7e0d76e751a6c58949e7466b3/MidiSongBuilder/SongNoteRenderer.js#L88">renderNotesPlaying</a> to get an idea of how the notes moved with the ToneJS now() value.  Then I used input from Llama to guide me to some good examples of canvas drawing on Google.  From there I decided to build <a href="https://github.com/austin183/austin183.github.io/blob/b1c1aa4fda9ae3d7e0d76e751a6c58949e7466b3/MidiSongBuilder/SongNoteRenderer.js#L114">renderNotesPlayingForCanvas</a> , which contained three concerns:
++            </p>
++            <p>
++                I first wanted to figure out how to use my keyboard as a piano, because that seemed like a good Learning
++                and Coding activity to get familiar with my new <a
++                    href="../AboutThisDevelopmentEnvironment.html">Development Environment</a> . I also wanted the
++                result to be usable as broadly as possible, so it had to run in a plain old modern day web browser. I
++                used <a href="https://tonejs.github.io/">ToneJS</a> for the music synthesis because I didn't want to
++                reinvent the sound engineering wheel. I would be terrible at that. I also used <a
++                    href="https://vuejs.org/">VueJS</a> to make the UI easier to work with. I used it previously on a
++                couple of other pages already, and a new framework was not the focus of this project.
++            </p>
++            <p>
++                Once I built <a href="../MidiSongBuilder/Keybiano.html">the Keybiano page</a> , I needed to figure out
++                how I could play it since I don't have any musical background. At first I transcribed notes into json
++                files by hand using sites like <a
++                    href="https://noobnotes.net/super-mario-bros-theme-nintendo/?solfege=false">Super Mario on
++                    NoobNotes</a>. I had to play the songs using my memory of the note timings. It worked great, but
++                adding new songs was a pain, and playing them on a static page was not much fun. It was time to try new
++                things. Then I recalled the fun I had with games like Guitar Hero, Rock Band, Dance Dance Revolution,
++                Just Dance, etc... and I wanted to take my keyboard based piano to that experience.
++            </p>
++            <p>
++                My task was to figure out a way to get json with all the data I would need for a song, and that proved
++                to be too much for my tiny attention span. So I searched for ways to make use of existing midi files
++                instead. That led me to <a href="https://github.com/Tonejs/Midi">ToneJS/Midi</a> , which can take midi
++                files and turn them into json objects usable with ToneJS. I started with <a
++                    href="https://tonejs.github.io/Midi/">the ToneJS Midi Demo Page</a> , and I worked on incorporating
++                the game elements on top of that. This <a
++                    href="https://github.com/austin183/austin183.github.io/commit/b1c1aa4fda9ae3d7e0d76e751a6c58949e7466b3">Github
++                    Commit</a> is the first result of that work. All it did at this point was accept a midi file, and
++                when you clicked on play, all the notes for the first track would fall down the canvas and play the
++                provided song. It was enough to convince me I was on a good path to building out a whole game.
++            </p>
++            <h3>Main Page</h3>
++            <p>
++                By this point, the main <a
++                    href="https://github.com/austin183/austin183.github.io/blob/b1c1aa4fda9ae3d7e0d76e751a6c58949e7466b3/MidiSongBuilder/Midiestro.html">Midiestro
++                    page</a> is a mess of Keybiano and the ToneJS Midi demo page along with my first iteration of the <a
++                    href="https://github.com/austin183/austin183.github.io/blob/b1c1aa4fda9ae3d7e0d76e751a6c58949e7466b3/MidiSongBuilder/SongNoteRenderer.js">SongNoteRenderer</a>.
++                The options were very bare bones at this point because just getting the page to move the notes was an
++                huge accomplishment. None of the notes were filtered out of the songs, but the player could only select
++                a subset of notes from a single track anyway. I knew there was a long way to go, but I felt confident
++                that between me and my trusty Llama3.1 8b helper and a hand full of alternative models to query, I could
++                figure out how to make a responsive rhythm game that could keep me entertained for minutes at a time.
++            </p>
++            <h3>SongNoteRenderer</h3>
++            <p>
++                The SongNoteRenderer was my first experience with the HTML canvas API. I chose not to use any additional
++                libraries at this point because I felt the page overhead was already pretty big with VueJS and the
++                ToneJS libraries for Midi and WebAudio. I figured my use case was simple enough, and I would benefit
++                from understanding the canvas API if I ever did decide to make use of a game or animation library in the
++                future.
++            </p>
++            <p>
++                I used Llama to get me started, trying to describe what I wanted to do and see what it could figure out.
++                I already had some idea of how it should go because I started with a simple text scroller in <a
++                    href="https://github.com/austin183/austin183.github.io/blob/b1c1aa4fda9ae3d7e0d76e751a6c58949e7466b3/MidiSongBuilder/SongNoteRenderer.js#L88">renderNotesPlaying</a>
++                to get an idea of how the notes moved with the ToneJS now() value. Then I used input from Llama to guide
++                me to some good examples of canvas drawing on Google. From there I decided to build <a
++                    href="https://github.com/austin183/austin183.github.io/blob/b1c1aa4fda9ae3d7e0d76e751a6c58949e7466b3/MidiSongBuilder/SongNoteRenderer.js#L114">renderNotesPlayingForCanvas</a>
++                , which contained three concerns:
+             <ul>
+                 <li>Calculating the Visible Field over the next 10 seconds</li>
+-                <li>Generating instructions for each note in the Visible Field, like which note, position, and length of the box around the note</li>
++                <li>Generating instructions for each note in the Visible Field, like which note, position, and length of
++                    the box around the note</li>
+                 <li>Rendering the provided notes according to the provided instructions</li>
+             </ul>
+-        </p>
+-        <p>
+-            This process happened <a href="https://github.com/austin183/austin183.github.io/blob/b1c1aa4fda9ae3d7e0d76e751a6c58949e7466b3/MidiSongBuilder/Midiestro.html#L274-L279">on this interval in the main page</a> every 20 milliseconds, which meant the game would play at about 50 frames per second.
+-        </p>
+-        <h3>Performance and Playability</h3>
+-        <p>
+-            At this point, the page needed all 20 milliseconds to process each frame of the game.  I tested the site on several machines, some of which had different performance profiles when plugged in or unplugged.  The lowest spec machine I tested with was an Asus ROG i7 4700HQ laptop.  It has an NVIDIA 850m graphics chip, but I ran the laptop on battery, with Linux Mint 22 with the GPU disabled.  When I played Nightmare Before Christmas, the page stuttered noticeably, but overall the effect was smooth enough for a first try.  The music stayed aligned with the notes on the canvas thanks to the use of Tone.now() to set the value of now in the song renderer method.  I knew I would need to make some changes to try to improve performance, because this game should be able to run on a potato.
+-        </p>
+-        <p>
+-            The game was not really a game yet.  It was just disparate systems running at the same time.  I preciently had thoughts on what I should tackle and included them in <a href="https://github.com/austin183/austin183.github.io/commit/498287b5488bcb2cccf515f5abccc647bed13ac8">an update to the Disclaimer</a>, knowing that a future me would want to remember what I was thinking at the time.
+-        </p>
+-        <p>
+-            And now that future me is you!
+-        </p>
+-        <p>
+-            <img src="images/spiderman.jpg" />
+-        </p>
++            </p>
++            <p>
++                This process happened <a
++                    href="https://github.com/austin183/austin183.github.io/blob/b1c1aa4fda9ae3d7e0d76e751a6c58949e7466b3/MidiSongBuilder/Midiestro.html#L274-L279">on
++                    this interval in the main page</a> every 20 milliseconds, which meant the game would play at about
++                50 frames per second.
++            </p>
++            <h3>Performance and Playability</h3>
++            <p>
++                At this point, the page needed all 20 milliseconds to process each frame of the game. I tested the site
++                on several machines, some of which had different performance profiles when plugged in or unplugged. The
++                lowest spec machine I tested with was an Asus ROG i7 4700HQ laptop. It has an NVIDIA 850m graphics chip,
++                but I ran the laptop on battery, with Linux Mint 22 with the GPU disabled. When I played Nightmare
++                Before Christmas, the page stuttered noticeably, but overall the effect was smooth enough for a first
++                try. The music stayed aligned with the notes on the canvas thanks to the use of Tone.now() to set the
++                value of now in the song renderer method. I knew I would need to make some changes to try to improve
++                performance, because this game should be able to run on a potato.
++            </p>
++            <p>
++                The game was not really a game yet. It was just disparate systems running at the same time. I preciently
++                had thoughts on what I should tackle and included them in <a
++                    href="https://github.com/austin183/austin183.github.io/commit/498287b5488bcb2cccf515f5abccc647bed13ac8">an
++                    update to the Disclaimer</a>, knowing that a future me would want to remember what I was thinking at
++                the time.
++            </p>
++            <p>
++                And now that future me is you!
++            </p>
++            <p>
++                <img src="images/spiderman.jpg" />
++            </p>
++        </div>
+     </div>
+ </body>
+-</html>
+ 
++</html>
+\ No newline at end of file
+diff --git a/BlogPosts/20241024_IteratingTowardsPlayability.html b/BlogPosts/20241024_IteratingTowardsPlayability.html
+index 5260bbd..351023e 100644
+--- a/BlogPosts/20241024_IteratingTowardsPlayability.html
++++ b/BlogPosts/20241024_IteratingTowardsPlayability.html
+@@ -5,8 +5,15 @@
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>10-24-2024 - Iterating Towards Playability</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <link rel="stylesheet" href="Style.css">
+ </head>
++
+ <body>
++    <!-- Added after opening body tag -->
++    <button class="theme-toggle-btn">Toggle Theme</button>
++
++    <!-- Added before closing body tag -->
++    <script src="theme-toggle.js"></script>
+     <h1>Developing the Player Experience</h1>
+ 
+     <div>
+diff --git a/BlogPosts/20241025_AddingInteractivity.html b/BlogPosts/20241025_AddingInteractivity.html
+index 430e4bf..4d52f66 100644
+--- a/BlogPosts/20241025_AddingInteractivity.html
++++ b/BlogPosts/20241025_AddingInteractivity.html
+@@ -5,8 +5,15 @@
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>10-25-2024 - Adding Interactivity</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <link rel="stylesheet" href="Style.css">
+ </head>
++
+ <body>
++    <!-- Added after opening body tag -->
++    <button class="theme-toggle-btn">Toggle Theme</button>
++
++    <!-- Added before closing body tag -->
++    <script src="theme-toggle.js"></script>
+     <h1>Improving the Player Experience</h1>
+ 
+     <div>
+diff --git a/BlogPosts/20241026_GettingFeatureComplete.html b/BlogPosts/20241026_GettingFeatureComplete.html
+index b36b65a..1b2847e 100644
+--- a/BlogPosts/20241026_GettingFeatureComplete.html
++++ b/BlogPosts/20241026_GettingFeatureComplete.html
+@@ -5,8 +5,15 @@
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>10-26-2024 - Getting to Feature Complete</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <link rel="stylesheet" href="Style.css">
+ </head>
++
+ <body>
++    <!-- Added after opening body tag -->
++    <button class="theme-toggle-btn">Toggle Theme</button>
++
++    <!-- Added before closing body tag -->
++    <script src="theme-toggle.js"></script>
+     <h1>Getting to Feature Complete</h1>
+ 
+     <div>
+diff --git a/BlogPosts/20241028_modestOptimizations.html b/BlogPosts/20241028_modestOptimizations.html
+index 4586436..3dc9d2f 100644
+--- a/BlogPosts/20241028_modestOptimizations.html
++++ b/BlogPosts/20241028_modestOptimizations.html
+@@ -5,8 +5,15 @@
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>10-28-2024 - Modest Optimizations</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <link rel="stylesheet" href="Style.css">
+ </head>
++
+ <body>
++    <!-- Added after opening body tag -->
++    <button class="theme-toggle-btn">Toggle Theme</button>
++
++    <!-- Added before closing body tag -->
++    <script src="theme-toggle.js"></script>
+     <h1>Optimizing at Random</h1>
+     <p>
+         At this point, I didn't know what was slowing down the interval processing, so I tried using Firefox and Chromium to find bottlenecks in the system.  I ignored things that didn't look like they were coming from my code.  I felt like the libraries and the canvas api call itself were probably already optimized by the browser developers.  Nothing really jumped out at me this way, so I started looking for things in my code that were unnecessary or could be written in a faster way.  I also asked the AI's what they thought, but since I didn't have anything in particular, they gave me vagure or hallucinatory answers.  Nothing I felt worth pursuing.
+diff --git a/BlogPosts/20241029_effectiveOptimizations.html b/BlogPosts/20241029_effectiveOptimizations.html
+index 0faaeee..572815e 100644
+--- a/BlogPosts/20241029_effectiveOptimizations.html
++++ b/BlogPosts/20241029_effectiveOptimizations.html
+@@ -5,8 +5,15 @@
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>10-29-2024 - Effective Optimizations</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <link rel="stylesheet" href="Style.css">
+ </head>
++
+ <body>
++    <!-- Added after opening body tag -->
++    <button class="theme-toggle-btn">Toggle Theme</button>
++
++    <!-- Added before closing body tag -->
++    <script src="theme-toggle.js"></script>
+     <h1>Digging into the Canvas API</h1>
+     <div>
+         <h2>Revisiting the Browser Performance Profilers</h2>
+diff --git a/BlogPosts/20241123_llama_exercise.html b/BlogPosts/20241123_llama_exercise.html
+index 418a044..55a14b1 100644
+--- a/BlogPosts/20241123_llama_exercise.html
++++ b/BlogPosts/20241123_llama_exercise.html
+@@ -5,8 +5,15 @@
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>11-23-2024 - Fixing the Filterer with Llama 3.3 70b</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <link rel="stylesheet" href="Style.css">
+ </head>
++
+ <body>
++    <!-- Added after opening body tag -->
++    <button class="theme-toggle-btn">Toggle Theme</button>
++
++    <!-- Added before closing body tag -->
++    <script src="theme-toggle.js"></script>
+     <h1>Writing Unit Tests to Keep from Making New Bugs</h1>
+     <div>
+         <h2>What was my Problem?</h2>
+diff --git a/BlogPosts/PrettifyPrompt.md b/BlogPosts/PrettifyPrompt.md
+new file mode 100644
+index 0000000..7350786
+--- /dev/null
++++ b/BlogPosts/PrettifyPrompt.md
+@@ -0,0 +1,8 @@
++# Creating a Style.css for BlogPosts
++We want a central Style.css sheet to apply to all the html files in the BlogPosts folder, 1 level deep.  
++
++# Adding a Dark and Light Theme Button to all Blog Post Pages
++We want the option to change the text from white on black to black on white to help with readability.
++
++# Adding Visual Pleasantries
++It would be nice if the page remained readable on a phone and on a computer, but a bit of visual distinction between sections would be nice.
+\ No newline at end of file
+diff --git a/BlogPosts/Style.css b/BlogPosts/Style.css
+new file mode 100644
+index 0000000..0979c6b
+--- /dev/null
++++ b/BlogPosts/Style.css
+@@ -0,0 +1,54 @@
++/* Style.css */
++:root {
++    --bg-color: #ffffff;
++    --text-color: #333333;
++    --button-bg: #007bff;
++    --button-text: white;
++}
++
++[data-theme="dark"] {
++    --bg-color: #1a1a1a;
++    --text-color: #ffffff;
++    --button-bg: #0d6efd;
++    --button-text: white;
++}
++
++body {
++    background-color: var(--bg-color);
++    color: var(--text-color);
++    transition: all 0.3s ease;
++    margin: 0;
++    padding: 20px;
++    font-family: Arial, sans-serif;
++}
++
++.theme-toggle-btn {
++    position: fixed;
++    top: 20px;
++    right: 20px;
++    padding: 10px 20px;
++    border: none;
++    border-radius: 5px;
++    background-color: var(--button-bg);
++    color: var(--button-text);
++    cursor: pointer;
++    transition: all 0.3s ease;
++}
++
++.theme-toggle-btn:hover {
++    opacity: 0.9;
++}
++
++/* Add these styles to your CSS */
++.content-container {
++    max-width: 800px;
++    margin: 0 auto;
++    padding: 0 20px;
++}
++
++img {
++    width: 100%;
++    max-width: 600px; /* Adjust based on your needs */
++    display: block;
++    margin: 0 auto;
++}
+\ No newline at end of file
+diff --git a/BlogPosts/index.html b/BlogPosts/index.html
+index 6696334..3a89961 100644
+--- a/BlogPosts/index.html
++++ b/BlogPosts/index.html
+@@ -1,42 +1,61 @@
+ <!DOCTYPE html>
+ <html lang="en">
++
+ <head>
+     <meta charset="UTF-8">
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>Austin183's Blog Posts</title>
+     <link rel="stylesheet" href="https://unpkg.com/purecss@2.0.3/build/pure-min.css" />
++    <link rel="stylesheet" href="Style.css">
+ </head>
++
+ <body>
++    <!-- Added after opening body tag -->
++    <button class="theme-toggle-btn">Toggle Theme</button>
++
++    <!-- Added before closing body tag -->
++    <script src="theme-toggle.js"></script>
+     <h1>Midiestro Posts</h1>
+ 
+     <div>
+         <p>
+-            These posts go into more detail about particular commits to the Midestro project.  Mainly why I thought I needed to make them and how I came to the implementation.
++            These posts go into more detail about particular commits to the Midestro project. Mainly why I thought I
++            needed to make them and how I came to the implementation.
+         </p>
+         <ul>
+             <li>
+-                <a href="20241023_theBeginning.html">The Beginning (October 23, 2024)</a> - TL;DR - Made a page that wasn't very good at being a game yet.  Took notes about what to do better for the next several iterations.
++                <a href="20241023_theBeginning.html">The Beginning (October 23, 2024)</a> - TL;DR - Made a page that
++                wasn't very good at being a game yet. Took notes about what to do better for the next several
++                iterations.
+             </li>
+             <li>
+-                <a href="20241024_IteratingTowardsPlayability.html">Iterating Towards Playability (October 24, 2024)</a> - TL;DR - Added more debugging and worked on UI / UX concerns with selecting notes to play and seeing them at the right places on the canvas.
++                <a href="20241024_IteratingTowardsPlayability.html">Iterating Towards Playability (October 24, 2024)</a>
++                - TL;DR - Added more debugging and worked on UI / UX concerns with selecting notes to play and seeing
++                them at the right places on the canvas.
+             </li>
+             <li>
+-                <a href="20241025_AddingInteractivity.html">Adding Interactivity (October 25, 2024)</a> - TL;DR - Added some game options and better visual feedback for scoring points during the game.
++                <a href="20241025_AddingInteractivity.html">Adding Interactivity (October 25, 2024)</a> - TL;DR - Added
++                some game options and better visual feedback for scoring points during the game.
+             </li>
+             <li>
+-                <a href="20241026_GettingFeatureComplete.html">Getting to Feature Complete (October 26, 2024)</a> - TL;DR - Added a scoreboard, fixed bugs, and got to Feature Complete!
++                <a href="20241026_GettingFeatureComplete.html">Getting to Feature Complete (October 26, 2024)</a> -
++                TL;DR - Added a scoreboard, fixed bugs, and got to Feature Complete!
+             </li>
+             <li>
+-                <a href="20241028_modestOptimizations.html">Modest Optimizations (October 28, 2024)</a> - TL;DR - Trimmed down on loops and iterations in loops while the game interval ran.
++                <a href="20241028_modestOptimizations.html">Modest Optimizations (October 28, 2024)</a> - TL;DR -
++                Trimmed down on loops and iterations in loops while the game interval ran.
+             </li>
+             <li>
+-                <a href="20241029_effectiveOptimizations.html">Effective Optimizations (October 29, 2024)</a> - TL;DR - Added Precached rendered notes and measured performance with browser developer tools.
++                <a href="20241029_effectiveOptimizations.html">Effective Optimizations (October 29, 2024)</a> - TL;DR -
++                Added Precached rendered notes and measured performance with browser developer tools.
+             </li>
+             <li>
+-                <a href="20241123_llama_exercise.html">Unit Testing and Software Development with Llama 3.3 70b (November 23, 2024)</a> - TL;DR - Wrote Unit Tests and rewrote complex method that had bugs in it.
++                <a href="20241123_llama_exercise.html">Unit Testing and Software Development with Llama 3.3 70b
++                    (November 23, 2024)</a> - TL;DR - Wrote Unit Tests and rewrote complex method that had bugs in it.
+             </li>
+         </ul>
+ 
+     </div>
+ </body>
+-</html>
++
++</html>
+\ No newline at end of file
+diff --git a/BlogPosts/theme-toggle.js b/BlogPosts/theme-toggle.js
+new file mode 100644
+index 0000000..ecc2ab3
+--- /dev/null
++++ b/BlogPosts/theme-toggle.js
+@@ -0,0 +1,23 @@
++// theme-toggle.js
++const toggleBtn = document.querySelector('.theme-toggle-btn');
++const html = document.documentElement;
++
++toggleBtn.addEventListener('click', function() {
++    const isDarkMode = html.getAttribute('data-theme') === 'dark';
++    if (isDarkMode) {
++        html.setAttribute('data-theme', 'light');
++        localStorage.setItem('theme', 'light');
++    } else {
++        html.setAttribute('data-theme', 'dark');
++        localStorage.setItem('theme', 'dark');
++    }
++});
++
++function setTheme() {
++    const theme = localStorage.getItem('theme');
++    if (theme) {
++        document.documentElement.setAttribute('data-theme', theme);
++    }
++}
++
++window.addEventListener('pageshow', setTheme);
+\ No newline at end of file
