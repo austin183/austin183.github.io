@@ -24,9 +24,10 @@ export { createFileLoader } from './File/fileLoader.js';
 export { beatInterval, buildSchedule, beatPhaseFromGrid, BEATS_PER_BAR } from './Utils/beatGrid.js';
 export { formatTime, parseOffsetInput } from './Utils/timeFormat.js';
 export {
-    clampBpm, clampCountIn, clampOffset,
+    clampBpm, clampCountIn, clampOffset, clampEnd,
     BPM_MIN, BPM_MAX, BPM_DEFAULT,
-    COUNT_IN_MIN, COUNT_IN_MAX, COUNT_IN_DEFAULT
+    COUNT_IN_MIN, COUNT_IN_MAX, COUNT_IN_DEFAULT,
+    MIN_SECTION_SEC
 } from './Utils/paramClamps.js';
 export { APP_STATES, createMetronomadData } from './App/createMetronomadData.js';
 export { createBeatDots } from './App/createBeatDots.js';

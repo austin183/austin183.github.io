@@ -23,7 +23,7 @@
     <script type="module">
         import { beatInterval, buildSchedule, beatPhaseFromGrid, BEATS_PER_BAR } from '../MyESModules/Utils/beatGrid.js';
         import { formatTime, parseOffsetInput } from '../MyESModules/Utils/timeFormat.js';
-        import { clampBpm, clampCountIn, clampOffset } from '../MyESModules/Utils/paramClamps.js';
+        import { clampBpm, clampCountIn, clampOffset, clampEnd, MIN_SECTION_SEC } from '../MyESModules/Utils/paramClamps.js';
 
         const { expect } = chai;
 
@@ -242,6 +242,79 @@
                 expect(clampOffset(2.96, 2.96)).to.equal(2.9);
                 expect(clampOffset(2.94, 2.96)).to.equal(2.9);
                 expect(clampOffset(3.0, 2.96)).to.equal(2.9);
+            });
+        });
+
+        // paramClamps.js — clampEnd + clampOffset bound (CR 003, EN-C1.1…16)
+        describe('clampEnd + clampOffset bound (CR-003, EN-C1)', () => {
+            it('EN-C1.1 — in-range tenths are fixed points', () => {
+                expect(clampEnd(1.5, 0.0, 3.0)).to.equal(1.5);
+            });
+
+            it('EN-C1.2 — 1.234 → 1.2 (tenth quantization — same law as T-33)', () => {
+                expect(clampEnd(1.234, 0.0, 3.0)).to.equal(1.2);
+            });
+
+            it('EN-C1.3 — 9.9 with offset 1.0 in a 3.0 s song → 3.0 (upper clamp)', () => {
+                expect(clampEnd(9.9, 1.0, 3.0)).to.equal(3.0);
+            });
+
+            it('EN-C1.4 — quantize-then-reclamp at duration (2.96 s song, T-35 mirrored)', () => {
+                expect(clampEnd(2.96, 1.0, 2.96)).to.equal(2.9);
+            });
+
+            it('EN-C1.5 — 0.05 → 0.1 (min-gap: end ≥ offset + MIN_SECTION_SEC)', () => {
+                expect(MIN_SECTION_SEC).to.equal(0.1);
+                expect(clampEnd(0.05, 0.0, 3.0)).to.equal(0.1);
+            });
+
+            it('EN-C1.6 — 1.25 with offset 1.2 → 1.3 (snaps up to offset + 0.1)', () => {
+                expect(clampEnd(1.25, 1.2, 3.0)).to.equal(1.3);
+            });
+
+            it('EN-C1.7 — 1.19 with offset 1.2 → 1.3 (below the gap snaps up, never down)', () => {
+                expect(clampEnd(1.19, 1.2, 3.0)).to.equal(1.3);
+            });
+
+            it('EN-C1.8 — NaN → 3.0 (invalid value → "play to the end", EN-D2)', () => {
+                expect(clampEnd(NaN, 0.5, 3.0)).to.equal(3.0);
+            });
+
+            it('EN-C1.9 — -2 → 0.1 (finite-but-low → min-gap floor, not the invalid fallback)', () => {
+                expect(clampEnd(-2, 0.0, 3.0)).to.equal(0.1);
+            });
+
+            it('EN-C1.10 — offset 2.9 in a 3.0 s song: range collapses to {3.0}', () => {
+                expect(clampEnd(1.5, 2.9, 3.0)).to.equal(3.0);
+            });
+
+            it('EN-C1.11 — NaN offset treated as 0 (clampOffset guard shape)', () => {
+                expect(clampEnd(1.5, NaN, 3.0)).to.equal(1.5);
+            });
+
+            it('EN-C1.12 — zero/NaN duration → 0 (defensive; unreachable behind the UI backstop)', () => {
+                expect(clampEnd(1.5, 0.0, 0)).to.equal(0);
+                expect(clampEnd(1.5, 0.0, NaN)).to.equal(0);
+            });
+
+            it('EN-C1.13 — clampOffset bound 1.9 wins over duration 3.0', () => {
+                expect(clampOffset(2.5, 3.0, 1.9)).to.equal(1.9);
+            });
+
+            it('EN-C1.14 — 1.95 with bound 1.9 → 1.9 (quantize-then-reclamp to the bound)', () => {
+                expect(clampOffset(1.95, 3.0, 1.9)).to.equal(1.9);
+            });
+
+            it('EN-C1.15 — non-round bound 2.96: T-35 law at the bound, not at duration', () => {
+                expect(clampOffset(2.96, 3.0, 2.96)).to.equal(2.9);
+                expect(clampOffset(3.0, 3.0, 2.96)).to.equal(2.9);
+                expect(clampOffset(2.5, 3.0, 2.96)).to.equal(2.5);   // in-range values are fixed points
+            });
+
+            it('EN-C1.16 — omitted/invalid bound = duration (T-26…T-35 regression pin)', () => {
+                expect(clampOffset(9.9, 3.0, undefined)).to.equal(3.0);
+                expect(clampOffset(9.9, 3.0, -1)).to.equal(3.0);
+                expect(clampOffset(2.5, 3.0, 3.0)).to.equal(2.5);   // explicit bound === duration: identity (world-review 2026-08-29)
             });
         });
 
