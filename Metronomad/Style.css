@@ -356,6 +356,40 @@
     pointer-events: none;
 }
 
+/* CR 003 (EN-D11): the end marker + drag handle. Dashed --color-accent:
+   TEXTURE distinguishes it from the solid offset marker (a11y: not color
+   alone — the downbeat-dot precedent, applied to a 2 px line). The 2 px
+   core is widened to a 24 px transparent hit zone (padding +
+   background-clip: content-box; margin-left centers the zone). The only
+   INTERACTIVE waveform overlay — it stacks above the canvas, so in the
+   overlap sliver it wins pointerdown (EN-D10). */
+.waveform-end-handle {
+    position: absolute;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    margin-left: -12px;
+    padding: 0 11px;
+    background: repeating-linear-gradient(180deg,
+        var(--color-accent) 0 4px, transparent 4px 8px);
+    background-clip: content-box;
+    touch-action: pan-y;   /* horizontal → JS drag, vertical → page scroll (mirrors the canvas) */
+    cursor: ew-resize;
+}
+
+/* U-12 lock — mirrors the canvas contract (EN-D11; world-review). */
+.waveform--locked .waveform-end-handle {
+    pointer-events: none;
+}
+
+/* EN-D12: post-end dim — end marker → song end (inline `left` + `right: 0`
+   pin the span; `width: auto` overrides the pre-offset dim's inline-width
+   usage). Purely static: no transition, no animation (KB-14 shape). */
+.waveform-dim--end {
+    right: 0;
+    width: auto;
+}
+
 /* The playhead: a DOM overlay, not a canvas repaint (PERF-2) — it moves in
    the existing 10 Hz tenths steps and STAYS under prefers-reduced-motion
    (KB-14: functional position indicator, no CSS animation). */

@@ -47,12 +47,16 @@ test.describe('Phase 8 — keyboard pass (U-23, U-12, V-07)', () => {
     // app's tab order — tab order is DOM order and the canvas lives in
     // the progress block below the playback buttons (it cannot take the
     // deleted scrubber's slot without moving the whole layout).
-    const seq = await tabSequence(page, 8);
+    // CR 003 (EN-D17): the End field sits between Offset and Count-in
+    // (DOM order = tab order) — the one focusable addition; the end
+    // handle itself is aria-hidden pointer-only (no second slider, KB-18).
+    const seq = await tabSequence(page, 9);
     expect(seq).toEqual([
       'bpmMinusBtn',
       'bpmInput',
       'bpmPlusBtn',
       'offsetInput',
+      'endInput',
       'countInInput',
       'playStopBtn',
       'previewBtn',
@@ -72,7 +76,7 @@ test.describe('Phase 8 — keyboard pass (U-23, U-12, V-07)', () => {
     // canvas tabindex=-1). The rest lands back on body (no wrap in headless).
     expect(seq[0]).toBe('restartBtn');
     for (const id of seq) {
-      expect(['bpmMinusBtn', 'bpmInput', 'bpmPlusBtn', 'waveformCanvas', 'offsetInput', 'countInInput', 'previewBtn'])
+      expect(['bpmMinusBtn', 'bpmInput', 'bpmPlusBtn', 'waveformCanvas', 'offsetInput', 'endInput', 'countInInput', 'previewBtn'])
         .not.toContain(id);
     }
 

@@ -30,6 +30,8 @@ const CONTROLS = [
   // O-1 (CR 001 Phase 5): the old offset range scrubber is deleted —
   // the waveform canvas is the offset slider (presence-only list below).
   '#offsetInput',
+  // CR 003 (EN-D17): the End field — empty = play to the song end (null).
+  '#endInput',
   '#countInInput'
 ];
 

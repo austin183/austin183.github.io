@@ -88,6 +88,18 @@
                     <p v-if="offsetClamped" class="clamp-hint" role="status">{{ offsetHint }}</p>
                 </div>
 
+                <div class="control-group control-group--end">
+                    <label for="endInput">End</label>
+                    <!-- CR 003: empty = play to the song end (null) — a
+                         LEGITIMATE state, unlike the offset (V-03 restore).
+                         Placeholder pins the meaning. No new group CSS
+                         needed (base .control-group rules suffice). -->
+                    <input type="text" id="endInput" v-model="endText" :disabled="!isReady"
+                           placeholder="song end" autocomplete="off"
+                           @keyup.enter="onEndCommit" @blur="onEndCommit">
+                    <p v-if="endClamped" class="clamp-hint" role="status">{{ endHint }}</p>
+                </div>
+
                 <div class="control-group">
                     <label for="countInInput">Count-in (beats)</label>
                     <input type="number" id="countInInput" min="1" max="16" step="1"
@@ -158,6 +170,25 @@
                     <div v-if="fileName" class="waveform-dim" :style="{ width: markerPercent + '%' }"></div>
                     <div v-if="fileName" class="waveform-offset-marker"
                          :style="{ left: markerPercent + '%' }"></div>
+                    <!-- CR 003 (EN-D12): post-end dim — the O-4 pre-offset
+                         dim mirrored past the end point. Purely static (no
+                         transition/animation, KB-14 shape). Gated on
+                         waveformReady (EN-D13: the pre-peak placeholder
+                         track shows only the offset marker). -->
+                    <div v-show="waveformReady && end !== null" class="waveform-dim waveform-dim--end"
+                         :style="{ left: endMarkerPercent + '%' }"></div>
+                    <!-- CR 003 (EN-D9): the end marker IS the drag handle.
+                         STATIC DOM — v-show, NEVER v-if: Vue must not
+                         recreate the element (file swap / waveformReady
+                         flip) or createWaveformView's listeners are
+                         orphaned. aria-hidden: pointer-only convenience —
+                         #endInput is the keyboard/SR path and the canvas
+                         stays the single offset slider (W-10 intact,
+                         KB-18). Stacks above the canvas → in the overlap
+                         sliver the handle wins pointerdown (EN-D10). -->
+                    <div id="waveformEndHandle" class="waveform-end-handle" aria-hidden="true"
+                         v-show="waveformReady && end !== null"
+                         :style="{ left: endMarkerPercent + '%' }"></div>
                     <div id="waveformPlayhead" v-if="fileName" class="waveform-playhead"
                          :data-position-tenths="Math.round(displayPosition * 10)"
                          :style="{ left: playheadPercent + '%' }"></div>
