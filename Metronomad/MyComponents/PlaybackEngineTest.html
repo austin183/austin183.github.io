@@ -13,7 +13,7 @@
 </head>
 <body>
     <h1>Metronomad — PlaybackEngine Unit Tests</h1>
-    <p class="test-plan-ref">Covers: Plan §3.2 P-01…P-11, P-13…P-14 (Playback/playbackEngine.js — P-12 retired, I-5/RD-6, see R-I5.1), H-03 (Audio/clickBuffers.js).
+    <p class="test-plan-ref">Covers: Plan §3.2 P-01…P-11, P-13…P-14 (Playback/playbackEngine.js — P-12 retired, I-5/RD-6, see R-I5.1), P-15…P-22 (CR 2026-08-29-003 bounded playback), H-03 (Audio/clickBuffers.js).
     Engine tests instantiate ZERO real AudioContext — fake context/clock/RAF/timers only (Phase 4 success criteria).</p>
     <div id="mocha"></div>
 
@@ -673,6 +673,145 @@
                 expect(timers.count()).to.equal(0);
                 expect(h.context.sources.every(s => !s.startedWith || s.stopped)).to.equal(true);
                 expect(events).to.have.length(eventsBefore); // dispose emits nothing — app is unmounting
+            });
+        });
+
+        // ============================================================
+        // CR-003 bounded playback — P-15…P-22 (the optional `length` param,
+        // EN-D4/EN-D5). Same fake context/clock/timers — zero real
+        // AudioContext. The fake source's start(when, offset, duration)
+        // records the arity: a 2-arg start leaves startedWith.duration ===
+        // undefined, which is what P-16 pins against a 3-arg
+        // start(when, offset, undefined).
+        // ============================================================
+        describe('CR-003 bounded playback (P-15…P-22)', () => {
+            const boundedParams = (buffer = fakeBuffer(3.0)) => ({
+                buffer, bpm: 120, countInBeats: 2, offset: 0.5, length: 1.0
+            }); // t_p 0 + (N+1)·b = songStart 1.5; bound ends 2.5
+
+            it('P-15 — bounded startSequence: 3-arg start(when, offset, length); schedule.length carries it (D5, EN-D4)', () => {
+                const { engine, context, clock } = makeEngine({ clock: createFakeClock(0) });
+                const result = engine.startSequence(boundedParams());
+                expect(result).to.deep.include({ ok: true });
+
+                const song = songSources(context)[0];
+                expect(song.startedWith.when).to.equal(1.5);   // grid law: t_p + 3·0.5
+                expect(song.startedWith.offset).to.equal(0.5);
+                expect(song.startedWith.duration).to.equal(1.0); // the bound — 3-arg
+
+                expect(result.schedule.length).to.equal(1.0);   // frozen snapshot gains length
+                engine.stop();
+            });
+
+            it('P-16 — unbounded startSequence: 2-arg start (duration === undefined), schedule.length === null (byte-for-byte v1)', () => {
+                const { engine, context } = makeEngine({ clock: createFakeClock(0) });
+                const result = engine.startSequence({ buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 2, offset: 0.5 });
+                expect(result).to.deep.include({ ok: true });
+
+                const song = songSources(context)[0];
+                expect(song.startedWith.when).to.equal(1.5);
+                expect(song.startedWith.offset).to.equal(0.5);
+                expect(song.startedWith.duration).to.equal(undefined); // 2-arg call — the v1 shape
+                expect(result.schedule.length).to.equal(null);
+                engine.stop();
+            });
+
+            it('P-17 — bounded run: onended at the bound → exactly one "ended", stopped, position null (N-6 bounded flavor)', () => {
+                const { engine, tickScheduler, context, clock, events } = makeEngine({ clock: createFakeClock(0) });
+                const result = engine.startSequence(boundedParams());
+                expect(result).to.deep.include({ ok: true });
+                const song = songSources(context)[0];
+                expect(song.startedWith.duration).to.equal(1.0); // precondition: really bounded
+
+                clock.set(1.51); tickScheduler(); // → playing
+                clock.set(2.51); // past the bound (1.5 + 1.0)
+                song.onended();
+
+                expect(events.filter(e => e === 'ended').length).to.equal(1);
+                expect(engine.state).to.equal(ENGINE_STATES.STOPPED);
+                expect(engine.songPosition()).to.equal(null);
+            });
+
+            it('P-18 — bounded run: stop() then the stale song onended → no "ended", no state change (D4)', () => {
+                const { engine, tickScheduler, context, clock, events } = makeEngine({ clock: createFakeClock(0) });
+                const result = engine.startSequence(boundedParams());
+                expect(result).to.deep.include({ ok: true });
+                const song = songSources(context)[0];
+                expect(song.startedWith.duration).to.equal(1.0);
+
+                clock.set(1.6); tickScheduler(); // → playing
+                engine.stop(); // generation bumped
+                song.onended(); // stale — must be ignored
+
+                expect(events).to.deep.equal(['countingIn', 'playing', 'stopped']);
+                expect(engine.state).to.equal(ENGINE_STATES.STOPPED);
+            });
+
+            it('P-19 — bounded songPosition clamps to offset + length, not buffer duration', () => {
+                const { engine, tickScheduler, clock } = makeEngine({ clock: createFakeClock(0) });
+                engine.startSequence(boundedParams());
+                clock.set(6.5); // songStart (1.5) + 5
+                tickScheduler(); // → playing
+                expect(engine.songPosition(6.5)).to.equal(1.5); // offset + length — not 3.0
+                engine.stop();
+            });
+
+            it('P-20 — invalid length (0 / negative / NaN / past buffer end) → { ok: false }, nothing touched (P-13 shape)', () => {
+                const h = makeEngine({ clock: createFakeClock(5.0) });
+                const { engine, context, timers, events } = h;
+                const params = { buffer: fakeBuffer(3.0), bpm: 120, countInBeats: 2, offset: 1.0 };
+
+                for (const length of [0, -1, NaN, 5.0]) { // 1.0 + 5.0 > 3.0 + 1e-6
+                    expect(engine.startSequence({ ...params, length })).to.deep.include({ ok: false });
+                }
+
+                expect(context.sources).to.have.length(0);   // zero new sources
+                expect(timers.count()).to.equal(0);          // scheduler + watch never started
+                expect(events).to.have.length(0);
+                expect(engine.state).to.equal(ENGINE_STATES.STOPPED);
+            });
+
+            it('P-21 — restart with the same bound: identical section replays; old source stopped before the new start (P-05 ordering)', () => {
+                const { engine, tickScheduler, context, clock } = makeEngine({ clock: createFakeClock(0) });
+                const params = boundedParams();
+                engine.startSequence(params);
+                const songOld = songSources(context)[0];
+                expect(songOld.startedWith.duration).to.equal(1.0);
+
+                clock.set(2.0); // into playback (song started 1.5)
+                tickScheduler(); // → playing
+                const result = engine.restart(params);
+                expect(result).to.deep.include({ ok: true });
+
+                const songNew = songSources(context)[1];
+                expect(songNew.startedWith.when).to.equal(3.5);  // t_p 2.0 + 1.5
+                expect(songNew.startedWith.offset).to.equal(0.5);
+                expect(songNew.startedWith.duration).to.equal(1.0);
+                const stopIdx = context.calls.findIndex(c => c.type === 'stop' && c.source === songOld);
+                const startIdx = context.calls.findIndex(c => c.type === 'start' && c.source === songNew);
+                expect(stopIdx).to.not.equal(-1);
+                expect(startIdx).to.not.equal(-1);
+                expect(stopIdx).to.be.lessThan(startIdx); // ordering contract
+                engine.stop();
+            });
+
+            it('P-22 — preview({length}): D2 clamp-to-remainder generalizes to clamp-to-section (EN-D5)', () => {
+                const { engine, context } = makeEngine({ clock: createFakeClock(50.0) });
+                const buffer = fakeBuffer(3.0);
+
+                expect(engine.preview({ buffer, offset: 0.5, length: 1.0 })).to.deep.include({ ok: true });
+                expect(context.sources[0].startedWith).to.deep.equal({ when: 50.0, offset: 0.5, duration: 1.0 });
+
+                expect(engine.preview({ buffer, offset: 0.5, length: 5.0 })).to.deep.include({ ok: true });
+                expect(context.sources[1].startedWith).to.deep.equal({ when: 50.0, offset: 0.5, duration: 2.5 }); // min(5, 3.0 − 0.5)
+
+                expect(engine.preview({ buffer, offset: 0.5, length: 0.5 })).to.deep.include({ ok: true });
+                expect(context.sources[2].startedWith).to.deep.equal({ when: 50.0, offset: 0.5, duration: 0.5 });
+
+                expect(engine.preview({ buffer, offset: 0.5, length: 0 })).to.deep.include({ ok: false });
+                expect(engine.preview({ buffer, offset: 0.5, length: NaN })).to.deep.include({ ok: false });
+                expect(context.sources).to.have.length(3); // the rejects touched nothing
+                engine.stop();
             });
         });
 

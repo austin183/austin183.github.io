@@ -90,7 +90,7 @@ export function createPlaybackEngine({
     let _generation = 0;
 
     // Active sequence description (null when stopped).
-    let _seq = null; // { tP, interval, clicks: [{time,isAccent,scheduled}], songStart:{time,offset}, buffer, offset }
+    let _seq = null; // { tP, interval, clicks: [{time,isAccent,scheduled}], songStart:{time,offset}, buffer, offset, length }
     let _songSource = null;
     let _clickSources = [];
     let _gains = [];
@@ -218,15 +218,21 @@ export function createPlaybackEngine({
     }
 
     // ---- public API -----------------------------------------------------
-    function startSequence({ buffer, bpm, countInBeats, offset }) {
+    function startSequence({ buffer, bpm, countInBeats, offset, length }) {
         // P-13 defense-in-depth: validate before touching anything.
         // offset >= duration (I-3/RD-4): a past-the-end offset starts a
         // zero-sample source — count-in into silence. One rule, both entry
         // points (preview's D2 guard already rejects the same condition).
+        // length (CR 003, EN-D4): a bound must be a positive finite length
+        // that ends within the buffer. ε = 1e-6 absorbs the tenths
+        // quantization's float error (same rationale as clampOffset's 1e-9 —
+        // R-8).
         if (!buffer ||
             !Number.isFinite(bpm) || bpm < BPM_MIN || bpm > BPM_MAX ||
             !Number.isInteger(countInBeats) || countInBeats < COUNT_IN_MIN || countInBeats > COUNT_IN_MAX ||
-            !Number.isFinite(offset) || offset < 0 || offset >= buffer.duration) {
+            !Number.isFinite(offset) || offset < 0 || offset >= buffer.duration ||
+            (length != null && (!Number.isFinite(length) || length <= 0 ||
+                offset + length > buffer.duration + 1e-6))) {
             return { ok: false };
         }
 
@@ -242,7 +248,8 @@ export function createPlaybackEngine({
             clicks: built.clicks.map(c => ({ time: c.time, isAccent: c.isAccent, scheduled: false })),
             songStart: built.songStart,
             buffer,
-            offset
+            offset,
+            length: length ?? null // EN-D4 (CR §6 W-3): songPosition reads it
         };
 
         // D5: start the song source immediately, sample-accurately.
@@ -256,7 +263,11 @@ export function createPlaybackEngine({
             if (_state !== ENGINE_STATES.PLAYING && _state !== ENGINE_STATES.COUNTING_IN) return;
             _finish(ENGINE_EVENTS.ENDED);
         };
-        _songSource.start(_seq.songStart.time, _seq.songStart.offset);
+        if (_seq.length != null) {
+            _songSource.start(_seq.songStart.time, _seq.songStart.offset, _seq.length); // bounded (3-arg — the preview() precedent)
+        } else {
+            _songSource.start(_seq.songStart.time, _seq.songStart.offset); // byte-for-byte v1
+        }
 
         _startScheduler();
         _startWatch();
@@ -270,6 +281,7 @@ export function createPlaybackEngine({
             tP,
             interval,
             offset,
+            length: _seq.length, // CR 003: tests read it; writes stay no-ops (N-4)
             clicks: Object.freeze(_seq.clicks.map((c) => Object.freeze({ time: c.time, isAccent: c.isAccent, scheduled: c.scheduled }))),
             songStart: Object.freeze({ time: built.songStart.time, offset: built.songStart.offset })
         })};
@@ -287,12 +299,17 @@ export function createPlaybackEngine({
         return startSequence(params);
     }
 
-    function preview({ buffer, offset }) {
+    function preview({ buffer, offset, length }) {
         if (!buffer || !Number.isFinite(offset) || offset < 0) return { ok: false };
+        if (length != null && (!Number.isFinite(length) || length <= 0)) return { ok: false };
 
         const start = _clock.currentTime;
-        // D2: 3 s preview clamped to the remainder; never 0 or negative.
-        const remaining = buffer.duration - offset;
+        // D2 generalized (EN-D5): 3 s preview clamped to the section
+        // remainder when bounded, else to the song remainder; never 0 or
+        // negative. A preview must hear exactly what Play will play.
+        const remaining = length != null
+            ? Math.min(length, buffer.duration - offset)
+            : buffer.duration - offset;
         const duration = Math.min(PREVIEW_SECONDS, remaining);
         if (!(duration > 0)) return { ok: false };
 
@@ -324,15 +341,17 @@ export function createPlaybackEngine({
         };
     }
 
-    // offset + (now − songStartTime), clamped to [offset, duration]; null
-    // before the song has started (stopped / countingIn / preview-not-started).
+    // offset + (now − songStartTime), clamped to [offset, offset + length]
+    // while a section is active, else [offset, duration]; null before the
+    // song has started (stopped / countingIn / preview-not-started).
     function songPosition(now) {
         const t = (now === undefined) ? _clock.currentTime : now;
         if (!Number.isFinite(t)) return null;
 
         if (_state === ENGINE_STATES.PLAYING && _seq) {
             const pos = _seq.offset + (t - _seq.songStart.time);
-            return clamp(pos, _seq.offset, _seq.buffer.duration);
+            const hi = _seq.length != null ? _seq.offset + _seq.length : _seq.buffer.duration;
+            return clamp(pos, _seq.offset, hi);
         }
         if (_state === ENGINE_STATES.PREVIEW && _preview) {
             const pos = _preview.offset + (t - _preview.start);
