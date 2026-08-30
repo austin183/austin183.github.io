@@ -185,9 +185,16 @@
                          #endInput is the keyboard/SR path and the canvas
                          stays the single offset slider (W-10 intact,
                          KB-18). Stacks above the canvas → in the overlap
-                         sliver the handle wins pointerdown (EN-D10). -->
+                         sliver the handle wins pointerdown (EN-D10).
+                         2026-08-30: ALWAYS visible once peaks are painted
+                         (EN-D13 superseded for the handle) — with no
+                         section it rests at the song end as a muted
+                         ghost (at-the-end ⇔ null), draggable left to
+                         start a section. EN-D13 still holds for the
+                         placeholder TRACK (offset marker only). -->
                     <div id="waveformEndHandle" class="waveform-end-handle" aria-hidden="true"
-                         v-show="waveformReady && end !== null"
+                         v-show="waveformReady"
+                         :class="{ 'waveform-end-handle--ghost': end === null && endDraft === null }"
                          :style="{ left: endMarkerPercent + '%' }"></div>
                     <div id="waveformPlayhead" v-if="fileName" class="waveform-playhead"
                          :data-position-tenths="Math.round(displayPosition * 10)"

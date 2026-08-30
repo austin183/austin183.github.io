@@ -104,18 +104,22 @@ export function createMetronomadApp({ createApp, dataConfig, methodsConfig, life
             },
 
             // --- Section end overlays (CR 003). end null → 0 (guarded
-            // shape); the handle and end dim are gated on `end !== null`
-            // in the template, so 0 is never visible (R-4). ---
+            // shape); the end dim is gated on `end !== null` in the
+            // template, so 0 is never visible (R-4). ---
             endPercent() {
                 return percentOfDuration(this.duration, this.end);
             },
 
             // Draft-aware, mirroring markerPercent: the DOM overlays track
             // the draft while the end handle is dragged, the committed end
-            // otherwise.
+            // otherwise. 2026-08-30: with no section the handle RESTS at
+            // the song end (100) as a ghost — at-the-end ⇔ null makes the
+            // right edge the "no section" position, and dragging it left
+            // starts a section (no more hidden-until-typed marker).
             endMarkerPercent() {
                 if (this.endDraft !== null) return percentOfDuration(this.duration, this.endDraft);
-                return this.endPercent;
+                if (this.end !== null) return this.endPercent;
+                return 100;
             }
             // N-10: the per-position progressAriaLabel computed is deleted —
             // the template carries a STATIC aria-label, and aria-valuetext

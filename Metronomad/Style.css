@@ -382,6 +382,14 @@
     pointer-events: none;
 }
 
+/* 2026-08-30 (at-the-end ⇔ null): with no section the handle rests at
+   the song end as a MUTED ghost — same dashed texture and ew-resize
+   cursor (it is interactive: drag left to start a section), reduced
+   opacity signals "no section set" without a third hue or shape. */
+.waveform-end-handle--ghost {
+    opacity: 0.45;
+}
+
 /* EN-D12: post-end dim — end marker → song end (inline `left` + `right: 0`
    pin the span; `width: auto` overrides the pre-offset dim's inline-width
    usage). Purely static: no transition, no animation (KB-14 shape). */

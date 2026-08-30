@@ -1832,7 +1832,9 @@
         });
 
         // ============================================================
-        // CR-003 end-point handlers — EN-U1.1…EN-U1.23 (Phase 3).
+        // CR-003 end-point handlers — EN-U1.1…EN-U1.27 (Phase 3; 24–27 added
+        // 2026-08-30 with the at-the-end ⇔ null semantics: the handle now
+        // rests at the song end when no section is set).
         // The mock VM picks up the new data fields + computeds
         // automatically via createMetronomadData()/createMetronomadApp();
         // no harness change. The file-swap rows use loader results of
@@ -1912,12 +1914,13 @@
                 expect(vm.endHint).to.equal('Enter the time as m:ss.t');
             });
 
-            it('EN-U1.5 — beyond duration: clamps to the song end with the upper hint', () => {
+            it('EN-U1.5 — beyond duration: the input overshoots, so the end clears to null with the upper hint (at-the-end ⇔ no section, 2026-08-30)', () => {
                 const vm = buildVm({ duration: 3.0, offset: 0.0 });
 
                 vm.commitEndEntry('0:04.0');
 
-                expect(vm.end).to.equal(3.0);
+                expect(vm.end).to.equal(null);
+                expect(vm.endText).to.equal('');
                 expect(vm.endHint).to.equal('End limited to song length');
                 expect(vm.endClamped).to.equal(true);
             });
@@ -1974,8 +1977,9 @@
                 expect(vm.endDraft).to.equal(3.0); // end-clamped
 
                 vm.onEndScrubEnd(true);
-                expect(vm.end).to.equal(3.0);
-                expect(vm.endText).to.equal('0:03.0');
+                expect(vm.end).to.equal(null); // released at the song end → no section (2026-08-30)
+                expect(vm.endText).to.equal('');
+                expect(vm.endHint).to.equal('');
                 expect(vm.endDraft).to.equal(null);
             });
 
@@ -2082,17 +2086,17 @@
                 expect(vm.endClamped).to.equal(false);
             });
 
-            it('EN-U1.20 — file swap to 0.8 s: the section survives (re-clamp to the new duration)', async () => {
+            it('EN-U1.20 — file swap to 0.8 s: the end truncates to the NEW song end → cleared to null with the friendly hint (at-the-end ⇔ no section, 2026-08-30)', async () => {
                 const vm = makeLiveVm(0.8, { offset: 0.5, offsetText: '0:00.5', end: 1.5, endText: '0:01.5' });
 
                 await vm.onFileDropped({ name: 'short.mp3' });
 
                 expect(vm.duration).to.equal(0.8);
                 expect(vm.offset).to.equal(0.5); // still in range
-                expect(vm.end).to.equal(0.8); // clampEnd(1.5, 0.5, 0.8)
-                expect(vm.endText).to.equal('0:00.8');
-                expect(vm.endHint).to.equal('');
-                expect(vm.endClamped).to.equal(false);
+                expect(vm.end).to.equal(null); // clampEnd(1.5, 0.5, 0.8) = 0.8 = the new song end
+                expect(vm.endText).to.equal('');
+                expect(vm.endHint).to.equal('Section end removed (song too short)');
+                expect(vm.endClamped).to.equal(true);
             });
 
             it('EN-U1.21 — file swap to 0.55 s: section inexpressible → end cleared with the friendly hint', async () => {
@@ -2127,6 +2131,52 @@
                 expect(vm.announcement).to.equal('Section ended');
                 expect(vm.appState).to.equal('ready');
                 expect(vm.songPosition).to.equal(0.5); // KB-4: reset to the offset
+            });
+
+            it('EN-U1.24 — file swap to a longer file preserves a still-valid end (re-clamp no-op, no hint)', async () => {
+                const vm = makeLiveVm(20.0, { end: 1.5, endText: '0:01.5' });
+
+                await vm.onFileDropped({ name: 'long.mp3' });
+
+                expect(vm.duration).to.equal(20.0);
+                expect(vm.end).to.equal(1.5); // untouched
+                expect(vm.endText).to.equal('0:01.5');
+                expect(vm.endHint).to.equal('');
+                expect(vm.endClamped).to.equal(false);
+            });
+
+            it('EN-U1.25 — onEndScrub released exactly at the song end → null, no hint (drag to the edge = "no section")', () => {
+                const vm = buildVm({ appState: 'ready', duration: 3.0, offset: 0.0, end: 1.0, endText: '0:01.0' });
+
+                vm.onEndScrub(3.0);
+
+                expect(vm.end).to.equal(null);
+                expect(vm.endText).to.equal('');
+                expect(vm.endClamped).to.equal(false);
+                expect(vm.endHint).to.equal('');
+            });
+
+            it('EN-U1.26 — typing EXACTLY the duration → null, empty field, no hint (no overshoot to explain)', () => {
+                const vm = buildVm({ duration: 3.0, offset: 0.0 });
+
+                vm.commitEndEntry('0:03.0');
+
+                expect(vm.end).to.equal(null);
+                expect(vm.endText).to.equal('');
+                expect(vm.endClamped).to.equal(false);
+                expect(vm.endHint).to.equal('');
+            });
+
+            it('EN-U1.27 — final-tick boundary: a drag release at duration − 0.1 clears (null); one tick further in commits a section', () => {
+                const vm = buildVm({ appState: 'ready', duration: 3.0, offset: 0.0 });
+
+                vm.onEndScrub(2.9); // the floor law's landing spot 1 px short of the edge
+                expect(vm.end).to.equal(null);
+                expect(vm.endText).to.equal('');
+
+                vm.onEndScrub(2.8); // one tick further in — a real section
+                expect(vm.end).to.equal(2.8);
+                expect(vm.endText).to.equal('0:02.8');
             });
         });
 

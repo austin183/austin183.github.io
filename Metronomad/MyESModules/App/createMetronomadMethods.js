@@ -101,10 +101,13 @@ export function createMetronomadMethods() {
                     // CR 003 (EN-D14): the new song may make the section
                     // shorter or inexpressible — re-clamp AFTER the offset
                     // (clampEnd sees the new offset). A longer file whose
-                    // end is still in range is a no-op.
+                    // end is still in range is a no-op. 2026-08-30: a
+                    // re-clamp that lands ON the new song end is also
+                    // "no section" (at-the-end ⇔ null) — the friendly
+                    // hint covers both removals.
                     if (this.end !== null) {
                         this.end = clampEnd(this.end, this.offset, result.duration);
-                        if (this.end < this.offset + MIN_SECTION_SEC) {
+                        if (this.end < this.offset + MIN_SECTION_SEC || this._endAtSongEnd(this.end)) {
                             this.end = null;
                             this.endText = '';
                             this.endClamped = true;
@@ -417,6 +420,17 @@ export function createMetronomadMethods() {
                 return;
             }
             const value = clampEnd(parsed, this.offset, this.duration);
+            if (this._endAtSongEnd(value)) {
+                // 2026-08-30: a section ending in the song's final display
+                // tick IS "no section" — null + empty field. The upper
+                // hint fires only when the INPUT overshot the end;
+                // otherwise the "song end" placeholder explains it.
+                this.end = null;
+                this.endText = '';
+                this.endClamped = parsed > this.duration;
+                this.endHint = this.endClamped ? 'End limited to song length' : '';
+                return;
+            }
             this.end = value;
             this.endText = formatTime(value);
             if (value !== parsed) {
@@ -440,10 +454,33 @@ export function createMetronomadMethods() {
             const parsed = Number(tenths);
             if (!Number.isFinite(parsed)) return;
             const value = clampEnd(parsed, this.offset, this.duration);
+            if (this._endAtSongEnd(value)) {
+                // 2026-08-30: released at the song end → no section —
+                // the ghost handle rests there and the field shows the
+                // "song end" placeholder again.
+                this.end = null;
+                this.endText = '';
+                this.endClamped = false;
+                this.endHint = '';
+                return;
+            }
             this.end = value;
             this.endText = formatTime(value);
             this.endClamped = false;
             this.endHint = '';
+        },
+
+        // 2026-08-30 (at-the-end ⇔ null): a clamped end inside the song's
+        // FINAL display tick (one MIN_SECTION_SEC) is "play to the end",
+        // i.e. null — not a sub-tick section. One tick is the app's
+        // display/quantization resolution (U-10) and the marker's snap
+        // resolution, so the drag's "release at the edge to clear" target
+        // is a full tick wide instead of one quantization step (the floor
+        // law means a drag landing 1 px short of the edge already yields
+        // duration − 0.1 — that release must clear, not pin a 0.1 s
+        // "section").
+        _endAtSongEnd(value) {
+            return value >= this.duration - MIN_SECTION_SEC - 1e-9;
         },
 
         // End-handle drag (mirror of onWaveformScrub* — EN-D8). The draft

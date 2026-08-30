@@ -214,9 +214,14 @@ test.describe('CR 003 Phase 4 — section playback (E2E-5.x)', () => {
     expect(dim.right, 'pinned to the right edge').toBe('0px');
     expect(dim.visible, 'end dim visible').toBe(true);
 
-    // Clear the field: handle + end dim hidden (v-show → offsetParent null)
+    // Clear the field: the handle RESTS at the song end as a muted ghost
+    // (2026-08-30: at-the-end ⇔ null — the marker is always visible once
+    // peaks are painted, so a section can be started by dragging it);
+    // the post-end dim needs an active section and hides.
     await setEnd(page, '');
-    expect(await page.$eval('#waveformEndHandle', (el) => el.offsetParent), 'handle hidden').toBe(null);
+    expect(await page.$eval('#waveformEndHandle', (el) => el.offsetParent !== null), 'ghost handle visible').toBe(true);
+    expect(await handleLeftPct(page), 'ghost at the right edge').toBeCloseTo(100, 1);
+    expect(await page.$eval('#waveformEndHandle', (el) => el.classList.contains('waveform-end-handle--ghost')), 'ghost style').toBe(true);
     expect(await page.$eval('.waveform-dim--end', (el) => el.offsetParent), 'end dim hidden').toBe(null);
   });
 
@@ -393,5 +398,35 @@ test.describe('CR 003 Phase 4 — section playback (E2E-5.x)', () => {
     // across the run (EN-D7); the interrupted sequence announces nothing.
     const sectionEnds = timeline.filter((e) => /Section ended/.test(e.ann));
     expect(sectionEnds.length, 'one Section ended announcement').toBe(1);
+  });
+
+  test('E2E-5.11 drag from the ghost handle sets a section; drag back to the edge clears it (2026-08-30)', async ({ page }) => {
+    await loadFixture(page);
+    await expectWaveformReady(page);
+
+    // No end set: the ghost rests at the right edge.
+    expect(await page.locator('#endInput').inputValue(), 'no end set').toBe('');
+    expect(await handleLeftPct(page), 'ghost at the right edge').toBeCloseTo(100, 1);
+
+    const ghost = await page.locator('#waveformEndHandle').boundingBox();
+    const canvas = await page.locator('#waveformCanvas').boundingBox();
+    const y = ghost.y + ghost.height / 2;
+
+    // Drag the ghost LEFT to 50 % → commits a 1.5 s section.
+    await page.mouse.move(ghost.x + ghost.width / 2, y);
+    await page.mouse.down();
+    await page.mouse.move(canvas.x + canvas.width * 0.5, y, { steps: 5 });
+    await page.mouse.up();
+    await expect(page.locator('#endInput')).toHaveValue('0:01.5');
+    expect(await page.$eval('#waveformEndHandle', (el) => el.classList.contains('waveform-end-handle--ghost')), 'no longer a ghost').toBe(false);
+
+    // Drag it back to the right edge → at-the-end ⇔ null: the field clears.
+    const handle = await page.locator('#waveformEndHandle').boundingBox();
+    await page.mouse.move(handle.x + handle.width / 2, y);
+    await page.mouse.down();
+    await page.mouse.move(canvas.x + canvas.width - 2, y, { steps: 5 });
+    await page.mouse.up();
+    await expect(page.locator('#endInput')).toHaveValue('');
+    expect(await handleLeftPct(page), 'back at the right edge').toBeCloseTo(100, 1);
   });
 });
