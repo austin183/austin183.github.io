@@ -486,7 +486,7 @@ expect(underline.y).to.equal(1080 - 40 + 2); // height - fontSize + margin
 
 **Guidelines:**
 - Use exact equality when the value derives from known constants (`height`, `width`, `MARGIN`, `fontSize`)
-- **Pick binary-exact (dyadic) inputs for strict-equality position assertions** — `(90/300)·3 === 0.9` is `false` in float64 (it is `0.8999999999999999`). Choose coordinates whose fraction of the width is dyadic (75 of 300 → `0.75`), and reserve `closeTo` for values that are genuinely computed — never for plan-pinned contract values (50 % → `1.5` *is* dyadic and must stay exact)
+- **Pick binary-exact (dyadic) inputs for strict-equality position assertions** — `(90/300)·3 === 0.9` is `false` in float64 (it is `0.8999999999999999`). Choose coordinates whose fraction of the width is dyadic (75 of 300 → `0.75`) and reserve `closeTo` for values that are genuinely computed. That is the *authoring* rule — a dyadic pin (50 % → `1.5`) must stay exact `deep.equal`. *Transcription* rule when a pinned plan Given is non-dyadic (60 % → `1.8`): the Given is the contract — keep it and assert with tight `closeTo` plus a float-noise annotation; never silently re-pick a dyadic input, which quietly tests a different scenario than the pinned row
 - Use tolerance only when legitimate variation exists (e.g., font metric differences across platforms)
 - For positioning assertions where exact values are hard to compute, use relative relationships:
   ```javascript
@@ -702,6 +702,8 @@ expect(str).to.match(/^blob:/);
 ```
 
 **`deep.equal` distinguishes trailing `undefined`** — `['idle']` and `['idle', undefined]` are *not* deep-equal (different array lengths). Event-recorder helpers that push `[state, detail && detail.fileName]` record a trailing `undefined` for detail-less events and silently break every "no detail" assertion. Normalize absent details to an explicit sentinel (`null`) in the recorder: `[state, detail ? detail.fileName : null]`.
+
+**Pinning call shape via parameter absence** — the mirror image of the note above: when a regression row must pin "this call keeps its old arity/shape" (e.g., "byte-for-byte v1 2-arg start"), assert the *absence* of the new parameter on the existing shared recording fake (`expect(startedWith.duration).to.equal(undefined)`) rather than extending the fake API or editing pre-existing helpers — an N-arg call leaves the (N+1)th recorded parameter `undefined`, so no fake changes are needed. Scope the claim to what absence actually proves: `start(w, o, undefined)` also leaves the third parameter `undefined`, so the row pins "no value passed", and it is correct only when the pinned contract is value-absence (the v1 code path is exactly the 2-arg one). Keep the fake's shared ordered `calls` log as the arity/ordering evidence.
 
 ### Integration Testing After Modularization
 
