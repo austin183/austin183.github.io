@@ -16,10 +16,17 @@
  * captured ONCE (only `vm.duration` is read — at pointer-event time, for
  * the x→tenths conversion); browser globals are injected with defaults.
  * Scrub callbacks are OPTIONAL and looked up inside handlers — Phase 4
- * wires none (display-only), Phase 5 wires the three.
+ * wires none (display-only), Phase 5 wires the offset trio, CR 003
+ * wires the end-handle trio (initEndHandle; EN-D8).
+ *
+ * Two static surfaces (CR 003): the canvas (the offset slider) and the
+ * end handle (initEndHandle — v-show in the template, never v-if, EN-D9).
+ * The handle shares the `.waveform` box, so x→tenths reuses the canvas
+ * rect (_tenthsAt). The window pointerup/blur safety nets fan out to BOTH
+ * drag states — zero extra window listeners (sequencing constraint 4).
  *
  * Teardown: dispose() is idempotent and owns only this module's resources
- * (pending RAF, canvas + window listeners, GPU backing store via
+ * (pending RAF, canvas + handle + window listeners, GPU backing store via
  * width/height = 0). The lifecycle owns the call site — between
  * beatDots.stopAll() and engine.dispose().
  */
@@ -60,6 +67,8 @@ export function createWaveformView(vm, base = {}, callbacks = {}) {
     let _rafId = null;        // pending coalesced render (W-5)
     let _rendered = { peaks: null, draft: null, width: 0, height: 0 };
     let _dragPointerId = null; // active scrub drag pointerId; null = none
+    let _endHandle = null;         // CR 003: the static-DOM end handle element
+    let _endDragPointerId = null;  // independent of _dragPointerId (EN-V1.6)
     let _disposed = false;
 
     // x (CSS px) → tenths of a second via vm.duration (UX-5: CSS-space
@@ -116,11 +125,60 @@ export function createWaveformView(vm, base = {}, callbacks = {}) {
 
     function _onPointerCancel() { _endDrag(false); }
 
+    // ---- End-handle pointer path (CR 003, EN-D8) — the W-1 hygiene
+    // replicated verbatim in shape on the second static surface. x→tenths
+    // reuses _tenthsAt: the handle and the canvas share the `.waveform`
+    // box (UX-5 CSS-space math). NO focus on commit — #endInput is the
+    // keyboard/SR path (EN-D18/KB-18); the offset path keeps its focus.
+
+    function _onEndPointerDown(e) {
+        if (_endDragPointerId !== null) return; // one end drag at a time
+        const tenths = _tenthsAt(e.clientX);
+        if (tenths === null) return;
+        _endDragPointerId = e.pointerId;
+        try {
+            _endHandle.setPointerCapture(e.pointerId);
+        } catch (_) {
+            // W-1: Safari stale-pointerId throws — the drag continues
+            // without capture; the window safety nets still clean up.
+        }
+        callbacks.onEndScrubStart(tenths);
+    }
+
+    function _onEndPointerMove(e) {
+        if (_endDragPointerId === null || e.pointerId !== _endDragPointerId) return;
+        const tenths = _tenthsAt(e.clientX);
+        if (tenths !== null) callbacks.onEndScrubMove(tenths);
+    }
+
+    // Every end drag-exit funnels here (mirror of _endDrag): capture is
+    // released on every path (non-fatal hygiene — throws on stale ids,
+    // always wrapped).
+    function _endEndDrag(commit) {
+        if (_endDragPointerId === null) return;
+        const pid = _endDragPointerId;
+        _endDragPointerId = null;
+        try {
+            _endHandle.releasePointerCapture(pid);
+        } catch (_) { /* stale id — already released */ }
+        callbacks.onEndScrubEnd(commit);
+    }
+
+    function _onEndPointerUp(e) {
+        if (e.pointerId !== _endDragPointerId) return;
+        _endEndDrag(true);
+    }
+
+    function _onEndPointerCancel() { _endEndDrag(false); }
+
     // Safety nets (skill interaction.md): the pointer can be released
     // off-canvas (global pointerup) or the window can lose focus mid-drag
-    // (blur) — both would strand the drag state without them.
-    function _onWindowPointerUp() { _endDrag(true); }
-    function _onWindowBlur() { _endDrag(false); }
+    // (blur) — both would strand the drag state without them. CR 003
+    // (sequencing constraint 4): these EXISTING nets fan out to BOTH drag
+    // states — zero new window listeners. (The accepted two-finger edge is
+    // risk R-6 — never "fix" into per-pointer window nets.)
+    function _onWindowPointerUp() { _endDrag(true); _endEndDrag(true); }
+    function _onWindowBlur() { _endDrag(false); _endEndDrag(false); }
 
     function _onWindowResize() {
         if (!_canvas) return;
@@ -250,6 +308,24 @@ export function createWaveformView(vm, base = {}, callbacks = {}) {
         resize(container ? container.clientWidth : _widthCss, _getHeightCss());
     }
 
+    // Attach the end-handle pointer path (CR 003). Static-DOM element
+    // (v-show in the template — EN-D9): it exists at init and is never
+    // recreated, so the listeners stay valid across file swaps.
+    // EN-V1.7: null handle (Phase-3 shape — no DOM yet) is a no-op,
+    // mirroring init(canvas)'s missing-canvas defense. EN-V1.2: the
+    // optional-callback gate matches the offset path.
+    function initEndHandle(handle) {
+        if (_disposed || !handle) return;
+        if (typeof callbacks.onEndScrubStart !== 'function') return;
+        _endHandle = handle;
+        _endHandle.addEventListener('pointerdown', _onEndPointerDown);
+        _endHandle.addEventListener('pointermove', _onEndPointerMove);
+        _endHandle.addEventListener('pointerup', _onEndPointerUp);
+        _endHandle.addEventListener('pointercancel', _onEndPointerCancel);
+        // NOTE: no window listeners here — the existing pointerup/blur
+        // nets (attached in init) fan out to both drag states.
+    }
+
     // Idempotent — a double unmount must not tear down twice.
     function dispose() {
         if (_disposed) return;
@@ -266,6 +342,13 @@ export function createWaveformView(vm, base = {}, callbacks = {}) {
             _canvas.width = 0;   // GPU backing-store release
             _canvas.height = 0;
         }
+        if (_endHandle) {
+            _endHandle.removeEventListener('pointerdown', _onEndPointerDown);
+            _endHandle.removeEventListener('pointermove', _onEndPointerMove);
+            _endHandle.removeEventListener('pointerup', _onEndPointerUp);
+            _endHandle.removeEventListener('pointercancel', _onEndPointerCancel);
+            _endHandle = null;
+        }
         const win = _getWindow();
         win.removeEventListener('pointerup', _onWindowPointerUp);
         win.removeEventListener('blur', _onWindowBlur);
@@ -275,7 +358,8 @@ export function createWaveformView(vm, base = {}, callbacks = {}) {
         _peaks = null;
         _draft = null;
         _dragPointerId = null;
+        _endDragPointerId = null;
     }
 
-    return { init, setPeaks, setDraft, resize, scheduleRender, dispose };
+    return { init, initEndHandle, setPeaks, setDraft, resize, scheduleRender, dispose };
 }

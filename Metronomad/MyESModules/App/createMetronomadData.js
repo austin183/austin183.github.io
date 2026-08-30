@@ -35,6 +35,13 @@ export function createMetronomadData() {
             offset: 0,
             offsetText: '0:00.0',
 
+            // Section end point (CR 003) — end: null = play to the song end
+            end: null,
+            endText: '',        // draft (v-model); '' = empty = null (EN-D6 asymmetry vs V-03)
+            endClamped: false,
+            endHint: '',
+            endDraft: null,     // transient end-handle drag draft, tenths (mirror of offsetDraft)
+
             // BPM / count-in draft text (C-1, RD-1): bound via v-model;
             // the model (bpm/countInBeats) moves only on Enter/blur commit
             // or via the stepper. Initialized from the spec defaults so the

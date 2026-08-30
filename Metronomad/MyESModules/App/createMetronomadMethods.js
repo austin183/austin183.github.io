@@ -1,5 +1,5 @@
 import { APP_STATES } from './createMetronomadData.js';
-import { clampBpm, clampCountIn, clampOffset, BPM_DEFAULT, COUNT_IN_DEFAULT } from '../Utils/paramClamps.js';
+import { clampBpm, clampCountIn, clampOffset, clampEnd, MIN_SECTION_SEC, BPM_DEFAULT, COUNT_IN_DEFAULT } from '../Utils/paramClamps.js';
 import { formatTime, parseOffsetInput } from '../Utils/timeFormat.js';
 import { ENGINE_STATES, ENGINE_EVENTS, SCHEDULER } from '../Playback/playbackEngine.js';
 import { extractPeaks } from '../Analysis/waveformPeaks.js';
@@ -98,6 +98,23 @@ export function createMetronomadMethods() {
                     // clamp so a later Play can never start past the end.
                     this.offset = clampOffset(this.offset, result.duration);
                     this.offsetText = formatTime(this.offset);
+                    // CR 003 (EN-D14): the new song may make the section
+                    // shorter or inexpressible — re-clamp AFTER the offset
+                    // (clampEnd sees the new offset). A longer file whose
+                    // end is still in range is a no-op.
+                    if (this.end !== null) {
+                        this.end = clampEnd(this.end, this.offset, result.duration);
+                        if (this.end < this.offset + MIN_SECTION_SEC) {
+                            this.end = null;
+                            this.endText = '';
+                            this.endClamped = true;
+                            this.endHint = 'Section end removed (song too short)';
+                        } else {
+                            this.endText = formatTime(this.end);
+                            this.endClamped = false;
+                            this.endHint = '';
+                        }
+                    }
                     this.appState = APP_STATES.READY;
                     this.errorMessage = ''; // U-16: prior error cleared
                     this.announcement = `${result.fileName} loaded`;
@@ -259,15 +276,23 @@ export function createMetronomadMethods() {
             this.countInClamped = result.clamped;
         },
 
+        // CR 003 (EN-D16): the offset's effective maximum — one expression
+        // for every commit site. Section active → end − one display tick;
+        // else the song duration.
+        _offsetMax() {
+            return this.end !== null ? this.end - MIN_SECTION_SEC : this.duration;
+        },
+
         // U-10/R-5: THE shared offset scrub law. The waveform canvas
         // (pointer scrub + keyboard, CR 001 Phase 5) and the text field
         // both funnel through here — clampOffset quantizes to the display
-        // precision and re-clamps to [0, duration] (T-35). No other code
+        // precision and re-clamps to [0, bound] (T-35), where the bound is
+        // the section max while a section is active (EN-D16). No other code
         // re-derives quantization.
         onOffsetScrub(rawValue) {
             const parsed = Number(rawValue);
             if (!Number.isFinite(parsed)) return;
-            const value = clampOffset(parsed, this.duration);
+            const value = clampOffset(parsed, this.duration, this._offsetMax());
             this.offset = value;
             this.offsetText = formatTime(value);
             this.offsetClamped = false;
@@ -287,7 +312,7 @@ export function createMetronomadMethods() {
         onWaveformScrubStart(tenths) {
             if (this.isParamLocked) return; // U-12 JS backstop (CSS: pointer-events none)
             if (!Number.isFinite(this.duration) || this.duration <= 0) return; // WF-I2.10 backstop
-            this.offsetDraft = clampOffset(tenths, this.duration);
+            this.offsetDraft = clampOffset(tenths, this.duration, this._offsetMax());
             this._waveformView.setDraft(this.offsetDraft);
         },
 
@@ -295,7 +320,7 @@ export function createMetronomadMethods() {
         // before down (or after a cancel) has no draft to update.
         onWaveformScrubMove(tenths) {
             if (this.offsetDraft === null) return;
-            this.offsetDraft = clampOffset(tenths, this.duration);
+            this.offsetDraft = clampOffset(tenths, this.duration, this._offsetMax());
             this._waveformView.setDraft(this.offsetDraft);
         },
 
@@ -328,7 +353,7 @@ export function createMetronomadMethods() {
                 case 'PageDown': next = this.offset - this.duration * 0.1; break;
                 case 'PageUp': next = this.offset + this.duration * 0.1; break;
                 case 'Home': next = 0; break;
-                case 'End': next = this.duration; break;
+                case 'End': next = this._offsetMax(); break; // CR 003: the section max, not the song end (EN-U1.13)
                 default: return;
             }
             this.onOffsetScrub(next);
@@ -341,8 +366,11 @@ export function createMetronomadMethods() {
             this.commitOffsetEntry(this.offsetText);
         },
 
-        // V-04: parse mm:ss.t (or bare seconds), clamp to [0, duration],
-        // sync the text field to the committed value, and surface a hint.
+        // V-04: parse mm:ss.t (or bare seconds), clamp to [0, bound] (the
+        // section max while a section is active — EN-D16), sync the text
+        // field to the committed value, and surface a hint (EN-D18: the two
+        // clamp hints are mutually exclusive; the unbounded string is
+        // verbatim).
         commitOffsetEntry(rawValue) {
             const parsed = parseOffsetInput(rawValue);
             if (parsed === null) {
@@ -352,16 +380,92 @@ export function createMetronomadMethods() {
                 this.offsetHint = 'Enter the time as m:ss.t'; // N-19: matches formatTime's canonical shape
                 return;
             }
-            const value = clampOffset(parsed, this.duration);
+            const value = clampOffset(parsed, this.duration, this._offsetMax());
             this.offset = value;
             this.offsetText = formatTime(value);
             if (value !== parsed) {
                 this.offsetClamped = true;
-                this.offsetHint = 'Offset limited to song length';
+                this.offsetHint = this._offsetMax() < this.duration
+                    ? 'Offset limited by the end point'
+                    : 'Offset limited to song length';
             } else {
                 this.offsetClamped = false;
                 this.offsetHint = '';
             }
+        },
+
+        // CR 003 (EN-D6 ordering: empty FIRST): an EMPTY end commits to
+        // null ("no end" is a legitimate state — unlike the offset, which
+        // restores its last valid value on empty, V-03). Invalid → revert +
+        // format hint (string reused, not duplicated). The numeric clamp is
+        // clampEnd (U-10) — the two-layers split keeps "empty → null" out of
+        // the numeric clamp.
+        commitEndEntry(rawValue) {
+            const text = (rawValue === null || rawValue === undefined) ? '' : String(rawValue).trim();
+            if (text === '') {
+                this.end = null;
+                this.endText = '';
+                this.endClamped = false;
+                this.endHint = '';
+                return;
+            }
+            const parsed = parseOffsetInput(text); // reused verbatim — no duplication
+            if (parsed === null) {
+                this.endText = this.end !== null ? formatTime(this.end) : '';
+                this.endClamped = true;
+                this.endHint = 'Enter the time as m:ss.t'; // reused string
+                return;
+            }
+            const value = clampEnd(parsed, this.offset, this.duration);
+            this.end = value;
+            this.endText = formatTime(value);
+            if (value !== parsed) {
+                this.endClamped = true;
+                this.endHint = parsed > value ? 'End limited to song length' : 'End must be after the offset';
+            } else {
+                this.endClamped = false;
+                this.endHint = '';
+            }
+        },
+
+        // Template-facing wrapper (Enter/blur) — mirrors onOffsetCommit.
+        onEndCommit() {
+            this.commitEndEntry(this.endText);
+        },
+
+        // CR 003 (U-10): THE shared end-scrub law — the end-handle drag and
+        // any future end commit funnel through here: clampEnd, sync the
+        // field, clear the hints. One quantization law, never a second.
+        onEndScrub(tenths) {
+            const parsed = Number(tenths);
+            if (!Number.isFinite(parsed)) return;
+            const value = clampEnd(parsed, this.offset, this.duration);
+            this.end = value;
+            this.endText = formatTime(value);
+            this.endClamped = false;
+            this.endHint = '';
+        },
+
+        // End-handle drag (mirror of onWaveformScrub* — EN-D8). The draft
+        // renders via the DOM overlay (endMarkerPercent is draft-aware);
+        // these handlers deliberately NEVER call _waveformView.setDraft
+        // (that stays offset-only — no canvas repaint on end drags).
+        onEndScrubStart(tenths) {
+            if (this.isParamLocked) return; // U-12 JS backstop (CSS: pointer-events none)
+            if (!Number.isFinite(this.duration) || this.duration <= 0) return; // WF-I2.10 backstop shape
+            this.endDraft = clampEnd(tenths, this.offset, this.duration);
+        },
+
+        onEndScrubMove(tenths) {
+            if (this.endDraft === null) return;
+            this.endDraft = clampEnd(tenths, this.offset, this.duration);
+        },
+
+        // commit=true → commit through the shared law; commit=false
+        // (pointercancel / window blur) → discard the draft (W-1).
+        onEndScrubEnd(commit) {
+            if (commit && this.endDraft !== null) this.onEndScrub(this.endDraft);
+            this.endDraft = null;
         },
 
         // --- Playback (Phase 5) ---
@@ -435,13 +539,19 @@ export function createMetronomadMethods() {
         },
 
         // The parameter bundle the engine needs for a sequence (V-01/V-02).
+        // CR 003 (EN-D15): the `length` key is conditional — ABSENT when
+        // unbounded (not null/undefined) so the unbounded call shape stays
+        // byte-for-byte (V-01/U-08/P-01…P-14 never need edits). Restart
+        // replays the identical section (KB-5 extended to the bound).
         _sequenceParams() {
-            return {
+            const params = {
                 buffer: this._buffer,
                 bpm: this.bpm,
                 countInBeats: this.countInBeats,
                 offset: this.offset
             };
+            if (this.end !== null) params.length = this.end - this.offset;
+            return params;
         },
 
         // U-04/V-02: refocus the Play/Stop button after Stop or Restart
@@ -458,10 +568,11 @@ export function createMetronomadMethods() {
         // engine clamps to the song end (D2) and never accepts ≤ 0 remainders.
         onPreview() {
             if (!this.isReady || this.isParamLocked) return;
-            const result = this._engine.preview({
-                buffer: this._buffer,
-                offset: this.offset
-            });
+            // CR 003 (EN-D15): `length` only when a section is active — the
+            // preview hears exactly what Play will play (EN-D5).
+            const params = { buffer: this._buffer, offset: this.offset };
+            if (this.end !== null) params.length = this.end - this.offset;
+            const result = this._engine.preview(params);
             if (!result || !result.ok) {
                 this.errorMessage = "Can't preview from that position";
             } else {
@@ -523,7 +634,11 @@ export function createMetronomadMethods() {
                 // N-7: constants, not magic strings (R-N7.1).
                 case ENGINE_EVENTS.ENDED:
                     this._stopBeatDots();
-                    this._returnToReady('Song ended');
+                    // CR 003 (EN-D7, CR §6 W-1): the engine emits the same
+                    // ENDED event either way — the string is composed from
+                    // VM state. Stable for the run: params are locked during
+                    // playback (U-12).
+                    this._returnToReady(this.end !== null ? 'Section ended' : 'Song ended');
                     break;
                 case ENGINE_EVENTS.PREVIEW_ENDED:
                     this._stopBeatDots();

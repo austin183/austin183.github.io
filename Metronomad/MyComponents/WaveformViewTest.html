@@ -618,6 +618,256 @@
         });
 
         // ============================================================
+        // CR-003 end handle — EN-V1.1…EN-V1.8 (Phase 3, EN-D8)
+        // The second pointer path: static-DOM handle element (v-show in
+        // the Phase 4 template), W-1 hygiene replicated verbatim in shape,
+        // shared window safety nets, ZERO new window listeners (sequencing
+        // constraint 4 — the WF-V1.4 inventory pins stay green).
+        // ============================================================
+
+        // Fake handle element — the exact surface the view touches on the
+        // end path: add/removeEventListener, set/releasePointerCapture.
+        // (No focus — the end commit never focuses; #endInput is the
+        // keyboard/SR path, EN-D18/KB-18.)
+        function makeFakeHandle() {
+            const handle = {
+                listeners: new Map(),
+                captured: [],
+                released: [],
+                captureThrows: false,
+                releaseThrows: false,
+                addEventListener: (t, fn) => {
+                    if (!handle.listeners.has(t)) handle.listeners.set(t, []);
+                    handle.listeners.get(t).push(fn);
+                },
+                removeEventListener: (t, fn) => {
+                    const list = handle.listeners.get(t) || [];
+                    const i = list.indexOf(fn);
+                    if (i >= 0) list.splice(i, 1);
+                },
+                setPointerCapture: (id) => {
+                    if (handle.captureThrows) throw new Error('InvalidPointerId (Safari stale pointerId, W-1)');
+                    handle.captured.push(id);
+                },
+                releasePointerCapture: (id) => {
+                    if (handle.releaseThrows) throw new Error('stale id — already released');
+                    handle.released.push(id);
+                }
+            };
+            return handle;
+        }
+
+        // Fire a synthetic pointer event at the handle listeners (same
+        // shape as fireCanvas — only registered events dispatch).
+        function fireHandle(handle, type, { clientX = 0, clientY = 0, pointerId = 1 } = {}) {
+            const ev = { type, clientX, clientY, pointerId };
+            (handle.listeners.get(type) || []).slice().forEach((fn) => fn(ev));
+        }
+
+        // End-handle environment: both offset and end callbacks wired
+        // (unless `offset` is false), handle created but NOT yet inited —
+        // initEndHandle is under test. The handle and canvas share the
+        // .waveform box: x→tenths reuses the canvas rect (EN-V1.3).
+        function makeEndEnv({ offset = true } = {}) {
+            const calls = { start: [], move: [], end: [] };
+            const callbacks = {};
+            if (offset) {
+                callbacks.onScrubStart = (t) => calls.start.push(t);
+                callbacks.onScrubMove = (t) => calls.move.push(t);
+                callbacks.onScrubEnd = (c) => calls.end.push(c);
+            }
+            callbacks.onEndScrubStart = (t) => calls.endStart.push(t);
+            callbacks.onEndScrubMove = (t) => calls.endMove.push(t);
+            callbacks.onEndScrubEnd = (c) => calls.endEnd.push(c);
+            calls.endStart = [];
+            calls.endMove = [];
+            calls.endEnd = [];
+            const env = makeEnv({ duration: 3, callbacks });
+            const rctx = makeRecordingCtx();
+            env.canvas.ctx = rctx.proxy;
+            env.view.init(env.canvas);
+            env.view.resize(300, 64);
+            env.canvas.rect = { left: 0, top: 0, width: 300, height: 64 };
+            env.handle = makeFakeHandle();
+            env.calls = calls;
+            return env;
+        }
+
+        // Display-only shape: no callbacks at all (EN-V1.2's Given).
+        function makeDisplayOnlyEnv() {
+            const env = makeEnv({});
+            const rctx = makeRecordingCtx();
+            env.canvas.ctx = rctx.proxy;
+            env.view.init(env.canvas);
+            env.handle = makeFakeHandle();
+            return env;
+        }
+
+        describe('CR-003 end handle (EN-V1)', () => {
+            it('EN-V1.1 — initEndHandle attaches the four pointer listeners; NO new window listeners (shared safety nets)', () => {
+                const env = makeEndEnv();
+
+                const winBefore = {
+                    pointerup: (env.win.listeners.get('pointerup') || []).length,
+                    blur: (env.win.listeners.get('blur') || []).length,
+                    resize: (env.win.listeners.get('resize') || []).length
+                };
+
+                env.view.initEndHandle(env.handle);
+
+                for (const t of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) {
+                    expect(env.handle.listeners.get(t), t).to.have.lengthOf(1);
+                }
+                expect((env.win.listeners.get('pointerup') || []).length).to.equal(winBefore.pointerup);
+                expect((env.win.listeners.get('blur') || []).length).to.equal(winBefore.blur);
+                expect((env.win.listeners.get('resize') || []).length).to.equal(winBefore.resize);
+            });
+
+            it('EN-V1.2 — callbacks not wired (display-only): nothing attached', () => {
+                const env = makeDisplayOnlyEnv();
+
+                env.view.initEndHandle(env.handle);
+
+                for (const t of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) {
+                    expect(env.handle.listeners.has(t), t).to.equal(false);
+                }
+            });
+
+            it('EN-V1.3 — pointerdown at 60 % of the shared box → onEndScrubStart(1.8); capture-throw does not kill the drag (W-1)', () => {
+                const env = makeEndEnv();
+                env.view.initEndHandle(env.handle);
+                env.handle.captureThrows = true; // Safari stale-pointerId
+
+                fireHandle(env.handle, 'pointerdown', { clientX: 180, pointerId: 3 }); // 60 % of 300 px, 3 s
+                // 180/300·3 is 1.7999…98 in binary — the x→tenths law (the
+                // scenario's intent), not a float-literal pin.
+                expect(env.calls.endStart).to.have.lengthOf(1);
+                expect(env.calls.endStart[0]).to.be.closeTo(1.8, 12);
+
+                fireHandle(env.handle, 'pointermove', { clientX: 150, pointerId: 3 });
+                expect(env.calls.endMove).to.deep.equal([1.5]); // exact in binary — the drag continues without capture
+
+                fireHandle(env.handle, 'pointerup', { clientX: 150, pointerId: 3 });
+                expect(env.calls.endEnd).to.deep.equal([true]); // clean exit
+            });
+
+            it('EN-V1.4 — move before down ignored; a second pointerdown during an active end drag is ignored (one end drag at a time)', () => {
+                const env = makeEndEnv();
+                env.view.initEndHandle(env.handle);
+
+                fireHandle(env.handle, 'pointermove', { clientX: 150, pointerId: 1 });
+                expect(env.calls.endStart).to.deep.equal([]);
+                expect(env.calls.endMove).to.deep.equal([]);
+
+                fireHandle(env.handle, 'pointerdown', { clientX: 100, pointerId: 1 });
+                expect(env.calls.endStart).to.deep.equal([1.0]);
+
+                fireHandle(env.handle, 'pointerdown', { clientX: 200, pointerId: 2 }); // different pointerId
+                expect(env.calls.endStart).to.deep.equal([1.0]); // still exactly once
+            });
+
+            it('EN-V1.5 — all four W-1 exits: handle up (true), pointercancel (false), window up (true), window blur (false); capture released on every path, stale-id throw swallowed', () => {
+                // (a) handle pointerup → commit
+                let env = makeEndEnv();
+                env.view.initEndHandle(env.handle);
+                fireHandle(env.handle, 'pointerdown', { clientX: 30, pointerId: 1 });
+                fireHandle(env.handle, 'pointerup', { clientX: 30, pointerId: 1 });
+                expect(env.calls.endEnd).to.deep.equal([true]);
+                expect(env.handle.released).to.deep.equal([1]);
+
+                // (b) pointercancel → discard
+                env = makeEndEnv();
+                env.view.initEndHandle(env.handle);
+                fireHandle(env.handle, 'pointerdown', { clientX: 30, pointerId: 1 });
+                fireHandle(env.handle, 'pointercancel', { pointerId: 1 });
+                expect(env.calls.endEnd).to.deep.equal([false]);
+                expect(env.handle.released).to.deep.equal([1]);
+
+                // (c) window pointerup (release off-canvas) → commit
+                env = makeEndEnv();
+                env.view.initEndHandle(env.handle);
+                fireHandle(env.handle, 'pointerdown', { clientX: 30, pointerId: 1 });
+                env.win.fire('pointerup');
+                expect(env.calls.endEnd).to.deep.equal([true]);
+                expect(env.handle.released).to.deep.equal([1]);
+                // the canvas-level up afterwards is a no-op
+                fireHandle(env.handle, 'pointerup', { clientX: 30, pointerId: 1 });
+                expect(env.calls.endEnd).to.deep.equal([true]);
+
+                // (d) window blur mid-drag → discard; a stale release throw is swallowed
+                env = makeEndEnv();
+                env.view.initEndHandle(env.handle);
+                env.handle.releaseThrows = true;
+                fireHandle(env.handle, 'pointerdown', { clientX: 30, pointerId: 1 });
+                expect(() => env.win.fire('blur')).to.not.throw();
+                expect(env.calls.endEnd).to.deep.equal([false]);
+                // the drag is over — a later move fires nothing
+                fireHandle(env.handle, 'pointermove', { clientX: 60, pointerId: 1 });
+                expect(env.calls.endMove).to.deep.equal([]);
+                expect(env.calls.endEnd).to.deep.equal([false]);
+            });
+
+            it('EN-V1.6 — independent pointer slots: an active offset drag does not block the end path (and vice versa); the shared nets end only the active drag', () => {
+                // offset drag active → end pointerdown still starts
+                let env = makeEndEnv();
+                env.view.initEndHandle(env.handle);
+                fireCanvas(env.canvas, 'pointerdown', { clientX: 30, pointerId: 1 });
+                expect(env.calls.start).to.have.lengthOf(1);
+                expect(env.calls.start[0]).to.be.closeTo(0.3, 12);
+                fireHandle(env.handle, 'pointerdown', { clientX: 180, pointerId: 2 });
+                expect(env.calls.endStart).to.have.lengthOf(1); // no cross-interference
+                expect(env.calls.endStart[0]).to.be.closeTo(1.8, 12);
+                // window blur ends BOTH active drags (both are active here)
+                env.win.fire('blur');
+                expect(env.calls.endEnd).to.deep.equal([false]);
+                expect(env.calls.end).to.deep.equal([false]);
+
+                // end drag active → canvas pointerdown still starts
+                env = makeEndEnv();
+                env.view.initEndHandle(env.handle);
+                fireHandle(env.handle, 'pointerdown', { clientX: 180, pointerId: 1 });
+                expect(env.calls.endStart).to.have.lengthOf(1);
+                expect(env.calls.endStart[0]).to.be.closeTo(1.8, 12);
+                fireCanvas(env.canvas, 'pointerdown', { clientX: 30, pointerId: 2 });
+                expect(env.calls.start).to.have.lengthOf(1); // vice versa
+                expect(env.calls.start[0]).to.be.closeTo(0.3, 12);
+
+                // only the end drag active → window blur ends the END drag, not the offset one
+                env = makeEndEnv();
+                env.view.initEndHandle(env.handle);
+                fireHandle(env.handle, 'pointerdown', { clientX: 180, pointerId: 1 });
+                env.win.fire('blur');
+                expect(env.calls.endEnd).to.deep.equal([false]);
+                expect(env.calls.end).to.deep.equal([]); // offset path untouched
+                fireHandle(env.handle, 'pointermove', { clientX: 90, pointerId: 1 });
+                expect(env.calls.endMove).to.deep.equal([]); // no stuck state
+            });
+
+            it('EN-V1.7 — Phase-3 shape (no DOM yet): initEndHandle(null) is a no-op', () => {
+                const env = makeEndEnv();
+                expect(() => env.view.initEndHandle(null)).to.not.throw();
+                for (const t of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) {
+                    expect(env.canvas.listeners.get(t)).to.have.lengthOf(1); // canvas path untouched
+                }
+            });
+
+            it('EN-V1.8 — dispose removes the handle listeners; a second dispose is idempotent; the path is dead after teardown', () => {
+                const env = makeEndEnv();
+                env.view.initEndHandle(env.handle);
+                fireHandle(env.handle, 'pointerdown', { clientX: 180, pointerId: 1 }); // end drag active
+
+                env.view.dispose();
+                for (const t of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) {
+                    expect(env.handle.listeners.get(t) || [], t).to.have.lengthOf(0);
+                }
+
+                expect(() => env.view.dispose()).to.not.throw(); // idempotent
+                fireHandle(env.handle, 'pointerdown', { clientX: 180, pointerId: 1 });
+                expect(env.calls.endStart).to.have.lengthOf(1); // exactly once — the disposed path never re-fires
+            });
+        });
+
+        // ============================================================
         // Sizing — WF-V1.11 (W-4, review F-2)
         // ============================================================
         describe('createWaveformView — sizing (W-4)', () => {

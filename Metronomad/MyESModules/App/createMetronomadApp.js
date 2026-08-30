@@ -101,6 +101,21 @@ export function createMetronomadApp({ createApp, dataConfig, methodsConfig, life
                     return percentOfDuration(this.duration, this.offsetDraft);
                 }
                 return this.offsetMarkerPercent;
+            },
+
+            // --- Section end overlays (CR 003). end null → 0 (guarded
+            // shape); the handle and end dim are gated on `end !== null`
+            // in the template, so 0 is never visible (R-4). ---
+            endPercent() {
+                return percentOfDuration(this.duration, this.end);
+            },
+
+            // Draft-aware, mirroring markerPercent: the DOM overlays track
+            // the draft while the end handle is dragged, the committed end
+            // otherwise.
+            endMarkerPercent() {
+                if (this.endDraft !== null) return percentOfDuration(this.duration, this.endDraft);
+                return this.endPercent;
             }
             // N-10: the per-position progressAriaLabel computed is deleted —
             // the template carries a STATIC aria-label, and aria-valuetext

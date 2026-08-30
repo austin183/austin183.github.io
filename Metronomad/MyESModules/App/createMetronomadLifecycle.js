@@ -91,9 +91,20 @@ export function createMetronomadLifecycle() {
             this._waveformView = createWaveformView(this, {}, {
                 onScrubStart: (t) => this.onWaveformScrubStart(t),
                 onScrubMove: (t) => this.onWaveformScrubMove(t),
-                onScrubEnd: (c) => this.onWaveformScrubEnd(c)
+                onScrubEnd: (c) => this.onWaveformScrubEnd(c),
+                // CR 003 (EN-D8): the end-handle pointer path — same
+                // call-time lookup convention as the offset trio.
+                onEndScrubStart: (t) => this.onEndScrubStart(t),
+                onEndScrubMove: (t) => this.onEndScrubMove(t),
+                onEndScrubEnd: (c) => this.onEndScrubEnd(c)
             });
             this._waveformView.init(document.getElementById('waveformCanvas'));
+
+            // CR 003: the end handle (static DOM — v-show in the Phase 4
+            // template). Null-safe until the element exists; EN-V1.7 pins
+            // the no-op. beforeUnmount needs no change: waveformView.
+            // dispose() already covers the handle's listeners (EN-V1.8).
+            this._waveformView.initEndHandle(document.getElementById('waveformEndHandle'));
 
             document.addEventListener('visibilitychange', this.onVisibilityChange);
         },
