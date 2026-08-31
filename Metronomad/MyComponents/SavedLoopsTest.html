@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saved Loops Tests</title>
+    <link rel="stylesheet" href="https://unpkg.com/mocha@10.2.0/mocha.css">
+    <style>
+        body { margin: 20px; font-family: sans-serif; }
+        #mocha { margin-top: 20px; }
+        .test-plan-ref { color: #888; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h1>Metronomad — Saved Loops Unit Tests</h1>
+    <p class="test-plan-ref">Covers: CR 004 Phase 1 SL-P1.1…SL-P1.24 — Storage/savedLoops.js (pure) + Storage/localStorageAdapter.js (fake storages, no AudioContext anywhere)</p>
+    <div id="mocha"></div>
+
+    <script src="https://unpkg.com/mocha@10.2.0/mocha.js"></script>
+    <script src="https://unpkg.com/chai@4.3.10/chai.js"></script>
+    <script>mocha.setup('bdd');</script>
+
+    <script type="module">
+        // Direct module imports on purpose (the RED shape): before the
+        // Storage/ modules exist, this import list fails ES-module linking
+        // and the page dies before mocha.run() — a broken-page RED, not a
+        // green-by-accident.
+        import {
+            STORAGE_KEY, SCHEMA_VERSION, MAX_ENTRIES, DURATION_TOLERANCE_SEC,
+            createEmptyState, encode, parse, entryMatches, addEntry,
+            removeEntry, fileIdentityOf, newId
+        } from '../MyESModules/Storage/savedLoops.js';
+        import { createLocalStorageAdapter } from '../MyESModules/Storage/localStorageAdapter.js';
+
+        // Barrel spot-check (SL-D20 / R-11): a missing re-export silently
+        // yields `undefined` — assert both are defined and the key agrees.
+        import {
+            STORAGE_KEY as barrelKey,
+            createLocalStorageAdapter as barrelAdapter
+        } from '../MyESModules/index.js';
+
+        const { expect } = chai;
+
+        // ============================================================
+        // Shared fixtures (behavior-specs.md §1, verbatim)
+        // ============================================================
+
+        const I = { fileName: 'song.mp3', fileSize: 4821336, fileLastModified: 1756297200000 };
+        const E = {
+            id: 'a', fileName: 'song.mp3', fileSize: 4821336,
+            fileLastModified: 1756297200000, duration: 213.4, bpm: 122,
+            offset: 12.3, countInBeats: 4, end: null, savedAt: 1756297260000
+        };
+
+        // ============================================================
+        // Fake storage helpers (local — DI for the adapter, SL-P1.22…24)
+        // ============================================================
+
+        function makeFakeStorage(seed) {
+            const data = new Map(Object.entries(seed || {}));
+            return {
+                getItem(k) { return data.has(k) ? data.get(k) : null; },
+                setItem(k, v) { data.set(k, String(v)); },
+                removeItem(k) { data.delete(k); }
+            };
+        }
+
+        function makeThrower(name, message) {
+            const err = new Error(message || 'injected failure');
+            err.name = name;
+            return err;
+        }
+
+        // ============================================================
+        // encode / parse — SL-P1.1…SL-P1.10
+        // ============================================================
+
+        describe('savedLoops.parse()', () => {
+            it('SL-P1.1 — parse(encode(state)) deep-equals state (round-trip)', () => {
+                // Pinned interface constants (SL-D15/D2/D14)
+                expect(STORAGE_KEY).to.equal('metronomad.savedLoops.v1');
+                expect(SCHEMA_VERSION).to.equal(1);
+                expect(MAX_ENTRIES).to.equal(100);
+                expect(DURATION_TOLERANCE_SEC).to.equal(0.1);
+
+                const state = {
+                    v: 1,
+                    entries: [
+                        E,
+                        { ...E, id: 'b', bpm: 96, offset: 0, countInBeats: 8, end: 12.4, savedAt: 1756297300000 }
+                    ]
+                };
+                expect(parse(encode(state))).to.deep.equal(state);
+            });
+
+            it('SL-P1.2 — corrupt strings → null, no throw', () => {
+                expect(parse('{oops')).to.be.null;
+                expect(parse('')).to.be.null;
+            });
+
+            it('SL-P1.3 — foreign shapes → null each', () => {
+                expect(parse(null)).to.be.null;
+                expect(parse(42)).to.be.null;
+                expect(parse('"hello"')).to.be.null;
+                expect(parse('[1,2]')).to.be.null;
+                expect(parse('null')).to.be.null;
+                expect(parse('{}')).to.be.null;
+            });
+
+            it('SL-P1.4 — wrong/missing v → null each (no migration)', () => {
+                expect(parse('{"v":0,"entries":[]}')).to.be.null;
+                expect(parse('{"v":2,"entries":[]}')).to.be.null;
+                expect(parse('{"entries":[]}')).to.be.null;
+            });
+
+            it('SL-P1.5 — entries must be an array → null each', () => {
+                expect(parse('{"v":1}')).to.be.null;
+                expect(parse('{"v":1,"entries":"x"}')).to.be.null;
+                expect(parse('{"v":1,"entries":null}')).to.be.null;
+            });
+
+            it('SL-P1.6 — bad entries dropped, valid list intact (field-strict, SL-D15)', () => {
+                const raw = JSON.stringify({
+                    v: 1,
+                    entries: [{ ...E, bpm: null }, { ...E, offset: '12.3' }, E]
+                });
+                expect(parse(raw)).to.deep.equal({ v: 1, entries: [E] });
+            });
+
+            it('SL-P1.7 — missing end key → entry kept with end === null (W-6 leniency)', () => {
+                const entry = { ...E };
+                delete entry.end;
+                const raw = JSON.stringify({ v: 1, entries: [entry] });
+                expect(parse(raw)).to.deep.equal({ v: 1, entries: [E] });
+            });
+
+            it('SL-P1.8 — end: null kept / 12.4 kept / "12.4" dropped / -1 dropped', () => {
+                const make = (endValue) => JSON.stringify({ v: 1, entries: [{ ...E, end: endValue }] });
+                expect(parse(make(null))).to.deep.equal({ v: 1, entries: [{ ...E, end: null }] });
+                expect(parse(make(12.4))).to.deep.equal({ v: 1, entries: [{ ...E, end: 12.4 }] });
+                expect(parse(make('12.4'))).to.deep.equal({ v: 1, entries: [] });
+                expect(parse(make(-1))).to.deep.equal({ v: 1, entries: [] });
+            });
+
+            it('SL-P1.9 — id missing / "" / 42 → dropped each', () => {
+                const noId = { ...E }; delete noId.id;
+                const raws = [
+                    JSON.stringify({ v: 1, entries: [noId] }),
+                    JSON.stringify({ v: 1, entries: [{ ...E, id: '' }] }),
+                    JSON.stringify({ v: 1, entries: [{ ...E, id: 42 }] })
+                ];
+                for (const raw of raws) {
+                    expect(parse(raw)).to.deep.equal({ v: 1, entries: [] });
+                }
+            });
+
+            it('SL-P1.10 — fileSize -1 / missing, duration 0 / -3.2, fileLastModified null → dropped each', () => {
+                const variants = [
+                    { ...E, fileSize: -1 },
+                    (() => { const o = { ...E }; delete o.fileSize; return o; })(),
+                    { ...E, duration: 0 },
+                    { ...E, duration: -3.2 },
+                    { ...E, fileLastModified: null }
+                ];
+                for (const entry of variants) {
+                    const raw = JSON.stringify({ v: 1, entries: [entry] });
+                    expect(parse(raw), JSON.stringify(entry)).to.deep.equal({ v: 1, entries: [] });
+                }
+            });
+        });
+
+        // ============================================================
+        // entryMatches — SL-P1.11
+        // ============================================================
+
+        describe('savedLoops.entryMatches()', () => {
+            it('SL-P1.11 — strict triple + inclusive 0.1 s duration tolerance + guards', () => {
+                // (a) exact match
+                expect(entryMatches(E, I, 213.4)).to.be.true;
+                // (b–d) strict triple — one field off → false each
+                expect(entryMatches(E, { ...I, fileName: 'song (1).mp3' }, 213.4)).to.be.false;
+                expect(entryMatches(E, { ...I, fileSize: 4821337 }, 213.4)).to.be.false;
+                expect(entryMatches(E, { ...I, fileLastModified: 1756297200001 }, 213.4)).to.be.false;
+                // (e) Δ 0.09 → true
+                expect(entryMatches(E, I, 213.49)).to.be.true;
+                // (f) Δ = 0.1 boundary → true (inclusive, SL-D14)
+                expect(entryMatches(E, I, 213.5)).to.be.true;
+                // (g) Δ 0.2 → false
+                expect(entryMatches(E, I, 213.6)).to.be.false;
+                // (h) Δ 0.1 short side → true; Δ 0.11 → false
+                expect(entryMatches(E, I, 213.3)).to.be.true;
+                expect(entryMatches(E, I, 213.29)).to.be.false;
+                // (i) numeric guards → false each, no throw
+                expect(entryMatches({ ...E, duration: NaN }, I, 213.4)).to.be.false;
+                expect(entryMatches(E, { ...I, fileName: null }, 213.4)).to.be.false;
+                expect(entryMatches(E, I, NaN)).to.be.false;
+            });
+        });
+
+        // ============================================================
+        // addEntry — SL-P1.12…SL-P1.17
+        // ============================================================
+
+        describe('savedLoops.addEntry()', () => {
+            it('SL-P1.12 — append to empty state → 1 entry deep-equals E', () => {
+                const result = addEntry(createEmptyState(), E);
+                expect(result).to.deep.equal({ v: 1, entries: [E] });
+            });
+
+            it('SL-P1.13 — same identity + identical params → dedupe-refresh (id kept, savedAt/duration refreshed)', () => {
+                const result = addEntry({ v: 1, entries: [E] }, { ...E, savedAt: 1756300000000, duration: 213.45 });
+                expect(result.entries).to.have.length(1);
+                expect(result.entries[0]).to.deep.equal({ ...E, savedAt: 1756300000000, duration: 213.45 });
+            });
+
+            it('SL-P1.14 — identical params except end → append (multi-window, no dedupe)', () => {
+                const result = addEntry({ v: 1, entries: [E] }, { ...E, end: 12.4 });
+                expect(result.entries).to.have.length(2);
+            });
+
+            it('SL-P1.15 — at the cap → oldest savedAt evicted, E appended last', () => {
+                const entries = [];
+                for (let i = 1; i <= 100; i++) {
+                    entries.push({
+                        id: 'e' + String(i).padStart(3, '0'),
+                        fileName: 'file' + i + '.mp3', fileSize: 1000 + i,
+                        fileLastModified: 5000 + i, duration: 100 + i,
+                        bpm: 120, offset: 0, countInBeats: 1, end: null,
+                        savedAt: 999 + i   // 1000…1099 ascending
+                    });
+                }
+                const result = addEntry({ v: 1, entries }, E);
+                expect(result.entries).to.have.length(100);
+                const ids = result.entries.map((e) => e.id);
+                expect(ids).to.not.include('e001');   // oldest evicted
+                expect(result.entries[0].id).to.equal('e002');
+                expect(result.entries[99]).to.deep.equal(E);   // appended last
+            });
+
+            it('SL-P1.16 — tied minimum savedAt → earliest index evicted (deterministic)', () => {
+                const entries = [];
+                for (let i = 1; i <= 100; i++) {
+                    entries.push({
+                        id: 'e' + String(i).padStart(3, '0'),
+                        fileName: 'file' + i + '.mp3', fileSize: 1000 + i,
+                        fileLastModified: 5000 + i, duration: 100 + i,
+                        bpm: 120, offset: 0, countInBeats: 1, end: null,
+                        savedAt: i === 1 ? 1000 : 999 + i   // e001 & e002 share 1000
+                    });
+                }
+                const result = addEntry({ v: 1, entries }, E);
+                const ids = result.entries.map((e) => e.id);
+                expect(ids).to.not.include('e001');   // earliest index wins the tie
+                expect(ids).to.include('e002');
+            });
+
+            it('SL-P1.17 — input never mutated (pure)', () => {
+                const state = { v: 1, entries: [E] };
+                const snapshot = JSON.parse(JSON.stringify(state));
+                const result = addEntry(state, E);
+                expect(state).to.deep.equal(snapshot);
+                expect(result).to.not.equal(state);   // new object
+            });
+        });
+
+        // ============================================================
+        // removeEntry — SL-P1.18
+        // ============================================================
+
+        describe('savedLoops.removeEntry()', () => {
+            it('SL-P1.18 — remove by id (order-preserving) / absent id → no-op new object', () => {
+                const a = { ...E, id: 'a' };
+                const b = { ...E, id: 'b', bpm: 90 };
+                const c = { ...E, id: 'c', bpm: 95 };
+                const state = { v: 1, entries: [a, b, c] };
+                const removed = removeEntry(state, 'b');
+                expect(removed).to.deep.equal({ v: 1, entries: [a, c] });
+                const noop = removeEntry(state, 'zzz');
+                expect(noop).to.deep.equal(state);
+                expect(noop).to.not.equal(state);     // new object
+            });
+        });
+
+        // ============================================================
+        // fileIdentityOf — SL-P1.19
+        // ============================================================
+
+        describe('savedLoops.fileIdentityOf()', () => {
+            it('SL-P1.19 — plain-object File → identity; bad/missing fields → null each', () => {
+                // (a) valid fileLike → deep-equals I
+                expect(fileIdentityOf({ name: 'song.mp3', size: 4821336, lastModified: 1756297200000 }))
+                    .to.deep.equal(I);
+                // (b–e) → null each
+                expect(fileIdentityOf({ name: '' })).to.be.null;
+                expect(fileIdentityOf({ name: 'a.mp3', size: NaN, lastModified: 1 })).to.be.null;
+                expect(fileIdentityOf({ name: 'a.mp3', size: 1, lastModified: undefined })).to.be.null;
+                expect(fileIdentityOf(null)).to.be.null;
+            });
+        });
+
+        // ============================================================
+        // createEmptyState / newId — SL-P1.20…SL-P1.21
+        // ============================================================
+
+        describe('savedLoops.createEmptyState()', () => {
+            it('SL-P1.20 — fresh { v: 1, entries: [] }, distinct references', () => {
+                const s1 = createEmptyState();
+                const s2 = createEmptyState();
+                expect(s1).to.deep.equal({ v: 1, entries: [] });
+                expect(s2).to.deep.equal({ v: 1, entries: [] });
+                expect(s1).to.not.equal(s2);
+                expect(s1.entries).to.not.equal(s2.entries);
+            });
+        });
+
+        describe('savedLoops.newId()', () => {
+            it('SL-P1.21 — 1000 ids: all non-empty strings, all unique', () => {
+                const ids = new Set();
+                for (let i = 0; i < 1000; i++) {
+                    const id = newId();
+                    expect(id).to.be.a('string').and.to.have.length.greaterThan(0);
+                    ids.add(id);
+                }
+                expect(ids.size).to.equal(1000);
+            });
+        });
+
+        // ============================================================
+        // localStorageAdapter — SL-P1.22…SL-P1.24
+        // ============================================================
+
+        describe('localStorageAdapter.createLocalStorageAdapter()', () => {
+            it('SL-P1.22 — (a) in-memory storage: available, write ok, read round-trips; (b) probe-throwing: degraded, no throw', () => {
+                // (a)
+                const storage = makeFakeStorage();
+                const adapter = createLocalStorageAdapter({ storage });
+                expect(adapter.available).to.be.true;
+                const json = JSON.stringify({ v: 1, entries: [E] });
+                expect(adapter.write(json)).to.deep.equal({ ok: true });
+                expect(adapter.read()).to.equal(json);
+
+                // (b) probe-throwing storage: unavailable, read null, write storageError, no throw
+                const failing = makeFakeStorage();
+                failing.getItem = () => { throw makeThrower('SecurityError', 'denied'); };
+                const degraded = createLocalStorageAdapter({ storage: failing });
+                expect(degraded.available).to.be.false;
+                expect(degraded.read()).to.be.null;
+                expect(degraded.write('{}')).to.deep.equal({ ok: false, code: 'storageError' });
+
+                // Barrel spot-check (SL-D20 / R-11): a missing re-export silently
+                // yields `undefined` — both must be defined and the key must agree.
+                expect(barrelKey).to.be.a('string').and.to.equal(STORAGE_KEY);
+                expect(barrelAdapter).to.be.a('function');
+            });
+
+            it('SL-P1.23 — setItem throwers: quota names → "quota", other → "storageError"', () => {
+                const cases = [
+                    ['QuotaExceededError', 'quota'],
+                    ['NS_ERROR_DOM_QUOTA_REACHED', 'quota'],
+                    ['SomethingElse', 'storageError']
+                ];
+                for (const [name, code] of cases) {
+                    const storage = makeFakeStorage();
+                    storage.setItem = () => { throw makeThrower(name, 'boom'); };
+                    const adapter = createLocalStorageAdapter({ storage });
+                    expect(adapter.write('{}'), name)
+                        .to.deep.equal({ ok: false, code });
+                }
+            });
+
+            it('SL-P1.24 — late read failure flips available false; subsequent write degrades, never throws', () => {
+                const storage = makeFakeStorage();
+                const adapter = createLocalStorageAdapter({ storage });
+                expect(adapter.available).to.be.true;   // probe OK at construction
+                storage.getItem = () => { throw makeThrower('SecurityError', 'denied'); };
+                expect(adapter.read()).to.be.null;
+                expect(adapter.available).to.be.false;   // live property flipped
+                expect(adapter.write('{}')).to.deep.equal({ ok: false, code: 'storageError' });
+            });
+        });
+
+        // Run mocha after all tests are defined
+        window.addEventListener('load', () => {
+            mocha.run();
+        });
+    </script>
+</body>
+</html>
