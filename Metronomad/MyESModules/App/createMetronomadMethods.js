@@ -5,6 +5,7 @@ import { ENGINE_STATES, ENGINE_EVENTS, SCHEDULER } from '../Playback/playbackEng
 import { extractPeaks } from '../Analysis/waveformPeaks.js';
 import { channelArrays } from '../Analysis/channelData.js';
 import { detectTempo } from '../Analysis/tempoDetection.js';
+import { fileIdentityOf, entryMatches, addEntry, removeEntry, encode, newId } from '../Storage/savedLoops.js';
 
 /**
  * createMetronomadMethods — Vue instance-method factory for Metronomad.
@@ -20,6 +21,12 @@ import { detectTempo } from '../Analysis/tempoDetection.js';
  *   guards (generation + buffer identity + unmount; Phase 6 flag)
  *   _lastValidBpm / _lastValidCountIn — restored when an input is cleared
  *   (V-03; lazy-initialized from BPM_DEFAULT/COUNT_IN_DEFAULT)
+ *   _loopStorage        — createLocalStorageAdapter instance (CR 004, built
+ *   in mounted; owns no listeners — beforeUnmount just nulls it)
+ *   _liveFileIdentity   — { fileName, fileSize, fileLastModified } | null of
+ *   the loaded file (CR 004 ok-branch; the Save record's identity source)
+ *   _setupSavedHintTimer — the 3 s "Setup saved" auto-clear timer (CR 004;
+ *   cleared in beforeUnmount)
  *
  * Vue binds `this` to the component instance for every method.
  */
@@ -118,9 +125,27 @@ export function createMetronomadMethods() {
                             this.endHint = '';
                         }
                     }
+                    const identity = fileIdentityOf(file); // null for metadata-less File objects
+                    this._liveFileIdentity = identity;
+                    this.restoreHint = ''; // the previous file's hint dies with it (per-file, W-13 shape)
+                    this.matchedEntryIds = identity && this.savedLoopsAvailable
+                        ? this.savedLoops.entries
+                            .filter((e) => entryMatches(e, identity, result.duration))
+                            .map((e) => e.id)
+                        : [];
                     this.appState = APP_STATES.READY;
                     this.errorMessage = ''; // U-16: prior error cleared
-                    this.announcement = `${result.fileName} loaded`;
+                    // W-3: ONE live-region write per load. The pre-existing bare assignment
+                    // becomes the zero-match branch (string verbatim — pre-existing rows untouched).
+                    if (this.matchedEntryIds.length === 1 && this._draftsClean()) {
+                        this.applySavedSetup(this.savedLoops.entries.find((e) => e.id === this.matchedEntryIds[0]));
+                        this.restoreHint = 'Restored saved settings';
+                        this.announcement = `${result.fileName} loaded — settings restored`;
+                    } else if (this.matchedEntryIds.length > 0) {
+                        this.announcement = `${result.fileName} loaded — choose a saved setup`;
+                    } else {
+                        this.announcement = `${result.fileName} loaded`;
+                    }
                     // The single post-load hook (CR §3): BOTH async analysis
                     // tasks run after the READY paint, under the D4-style
                     // generation guard. Never delays the flip (W-6).
@@ -503,6 +528,156 @@ export function createMetronomadMethods() {
         onEndScrubEnd(commit) {
             if (commit && this.endDraft !== null) this.onEndScrub(this.endDraft);
             this.endDraft = null;
+        },
+
+        // --- Saved loops (CR 004) ---
+        // W-1 dirty-draft guard (SL-D9): a single match auto-applies ONLY
+        // when no field is mid-draft — the three text-vs-model clauses plus
+        // offsetDraft and the two CR-003 end clauses (every draft the apply
+        // writes is covered).
+        _draftsClean() {
+            return this.bpmText === String(this.bpm)
+                && this.countInText === String(this.countInBeats)
+                && this.offsetText === formatTime(this.offset)
+                && this.offsetDraft === null
+                && this.endText === (this.end === null ? '' : formatTime(this.end))
+                && this.endDraft === null;
+        },
+
+        // The apply law (W-4, SL-D7): the SINGLE writer for BOTH the ambient
+        // auto-apply (ok-branch hook) and the explicit Load. Writes models
+        // and drafts together, in the order bpm → countIn → offset → end,
+        // computing every flag exactly as its commit path. Writes no
+        // announcement — the caller composes (SL-D8/SL-D10).
+        applySavedSetup(entry) {
+            // 1. BPM (commitBpmEntry law)
+            const bpm = clampBpm(entry.bpm);
+            this.bpm = bpm;
+            this.bpmText = String(bpm);
+            this.bpmClamped = bpm !== entry.bpm;
+            this._lastValidBpm = bpm;
+            // 2. Count-in (commitCountInEntry law)
+            const countIn = clampCountIn(entry.countInBeats);
+            this.countInBeats = countIn;
+            this.countInText = String(countIn);
+            this.countInClamped = countIn !== entry.countInBeats;
+            this._lastValidCountIn = countIn;
+            // 3. Offset — re-validated against the FRESHLY DECODED duration,
+            //    never trusted raw. Bounded by DURATION ONLY: the old file's
+            //    `end` is about to be replaced, so _offsetMax() (which reads
+            //    this.end) would apply a stale section bound to the restore
+            //    (commitOffsetEntry law).
+            const offset = clampOffset(entry.offset, this.duration);
+            this.offset = offset;
+            this.offsetText = formatTime(offset);
+            if (offset !== entry.offset) {
+                this.offsetClamped = true;
+                this.offsetHint = 'Offset limited to song length';
+            } else {
+                this.offsetClamped = false;
+                this.offsetHint = '';
+            }
+            // 4. End (commitEndEntry law, incl. at-the-end ⇔ null)
+            if (entry.end === null) {
+                this.end = null; this.endText = '';
+                this.endClamped = false; this.endHint = '';
+            } else {
+                const end = clampEnd(entry.end, this.offset, this.duration);
+                if (this._endAtSongEnd(end)) {
+                    this.end = null; this.endText = '';
+                    this.endClamped = entry.end > this.duration;
+                    this.endHint = this.endClamped ? 'End limited to song length' : '';
+                } else {
+                    this.end = end; this.endText = formatTime(end);
+                    if (end !== entry.end) {
+                        this.endClamped = true;
+                        this.endHint = entry.end > end
+                            ? 'End limited to song length' : 'End must be after the offset';
+                    } else {
+                        this.endClamped = false; this.endHint = '';
+                    }
+                }
+            }
+            // 5. A restore is a user touch (CR-001 §2.5 flag table +1 row):
+            //    structurally suppresses the tempo prefill (W-16 write-time gate).
+            this._bpmTouchedThisFile = true;
+        },
+
+        // SL-D24: row summary + date (template-scope rule — the template
+        // cannot call module functions; instance methods only). The date is
+        // environment-dependent and never asserted in tests (R-9).
+        setupSummary(entry) {
+            return `${entry.bpm} BPM · ${formatTime(entry.offset)} · ${entry.countInBeats} c-in · ${entry.end === null ? 'to end' : 'to ' + formatTime(entry.end)}`;
+        },
+
+        savedDate(ms) {
+            return new Date(ms).toLocaleDateString();
+        },
+
+        // Save (SL-D18): backstops, then WRITE-FIRST — the in-memory VM
+        // moves only after the storage write acks (a failed write leaves
+        // state byte-for-byte unchanged; the banner is the only effect,
+        // RB-4). Captures committed model values only — never drafts (RB-5).
+        // Success feedback: the transient "Setup saved" hint on the 3 s
+        // _setupSavedHintTimer (SL-D12) — no live-region announcement.
+        onSaveSetup() {
+            if (!this.savedLoopsAvailable) return;
+            if (!this.isReady || this.isParamLocked) return;
+            if (!this._liveFileIdentity) return;
+            const id = this._liveFileIdentity;
+            const entry = { id: newId(), fileName: id.fileName, fileSize: id.fileSize,
+                fileLastModified: id.fileLastModified, duration: this.duration,
+                bpm: this.bpm, offset: this.offset, countInBeats: this.countInBeats,
+                end: this.end, savedAt: Date.now() };
+            const next = addEntry(this.savedLoops, entry);
+            const res = this._loopStorage.write(encode(next));
+            if (res.ok) {
+                this.savedLoops = next;
+                this.setupSavedHint = 'Setup saved';
+                clearTimeout(this._setupSavedHintTimer);
+                this._setupSavedHintTimer = setTimeout(() => { this.setupSavedHint = ''; }, 3000);
+            } else {
+                this.errorMessage = "Couldn't save — storage is full"; // both failure codes (RB-4)
+            }
+        },
+
+        // Load (SL-D13/SL-D22): the template's :disabled is the primary gate;
+        // these backstops are the JS half. Announces NOTHING (SL-D10 — the
+        // user just clicked; the visible restoreHint suffices).
+        onLoadSetup(entry) {
+            if (!this.isReady || this.isParamLocked) return;
+            if (!this.matchedEntryIds.includes(entry.id)) return;
+            this.applySavedSetup(entry);
+            this.restoreHint = 'Restored saved settings';
+        },
+
+        // Delete (SL-D11): always enabled, no confirm (XR-5/6 — the CR scopes
+        // the U-12 param lock to Save/Load; Delete is metadata-only). The
+        // write-first mirror of Save: on ok the VM moves + refocus; on
+        // failure the section degrades SILENTLY (savedLoopsAvailable false —
+        // it hides; no banner on delete, RB-4) + refocus.
+        onDeleteSetup(entry) {
+            if (!this._loopStorage) return;
+            const next = removeEntry(this.savedLoops, entry.id);
+            const res = this._loopStorage.write(encode(next));
+            if (res.ok) {
+                this.savedLoops = next;
+            } else {
+                this.savedLoopsAvailable = false; // silent degrade (RB-4)
+            }
+            this._refocusSaveButton();
+        },
+
+        // SL-D11: mirror of _refocusPlayStopButton — after Delete the row's
+        // button leaves the DOM and focus would drop into <body>; refocus
+        // #saveSetupBtn instead. The $refs entry exists once the Phase-3
+        // template binds it; guard its absence so unit rows without the ref
+        // don't throw.
+        _refocusSaveButton() {
+            this.$nextTick(() => {
+                const btn = this.$refs && this.$refs.saveSetupBtn;
+                if (btn && !btn.disabled) btn.focus();
+            });
         },
 
         // --- Playback (Phase 5) ---

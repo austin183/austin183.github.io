@@ -29,6 +29,12 @@
         // re-verified here through the barrel, so a broken re-export dies
         // the page instead of silently yielding undefined.
         import { CLICK } from '../MyESModules/index.js';
+        // CR 004 (SL-D20 / R-11): the saved-loops modules imported directly
+        // (RED shape) + a barrel spot-check of STORAGE_KEY — a missing
+        // re-export silently yields `undefined`.
+        import { parse, STORAGE_KEY } from '../MyESModules/Storage/savedLoops.js';
+        import { createLocalStorageAdapter } from '../MyESModules/Storage/localStorageAdapter.js';
+        import { STORAGE_KEY as barrelKey } from '../MyESModules/index.js';
 
         const { expect } = chai;
 
@@ -52,6 +58,18 @@
                 focused: false,
                 disabled: false,
                 focus() { this.focused = true; }
+            };
+        }
+
+        // In-memory Storage stand-in (DI for the localStorage adapter;
+        // methods are swappable per row for throwers) — mirrors the
+        // SavedLoopsTest fake, one shared shape (CR 004 Phase 1).
+        function makeFakeStorage(seed) {
+            const data = new Map(Object.entries(seed || {}));
+            return {
+                getItem(k) { return data.has(k) ? data.get(k) : null; },
+                setItem(k, v) { data.set(k, String(v)); },
+                removeItem(k) { data.delete(k); }
             };
         }
 
@@ -2177,6 +2195,445 @@
                 vm.onEndScrub(2.8); // one tick further in — a real section
                 expect(vm.end).to.equal(2.8);
                 expect(vm.endText).to.equal('0:02.8');
+            });
+        });
+
+        // ============================================================
+        // SL — saved loops (CR 004 Phase 2): ok-branch auto-apply hook +
+        // Save/Load/Delete handlers. Shared fixtures per behavior-specs.md §2.
+        // ============================================================
+        const SL_FILE_LIKE = { name: 'song.mp3', size: 4821336, lastModified: 1756297200000 };
+        const SL_IDENTITY = { fileName: 'song.mp3', fileSize: 4821336, fileLastModified: 1756297200000 };
+        const SL_ENTRY_A = { id: 'a', fileName: 'song.mp3', fileSize: 4821336, fileLastModified: 1756297200000, duration: 3.0, bpm: 122, offset: 1.2, countInBeats: 3, end: null, savedAt: 1756297260000 };
+        const SL_ENTRY_B = { ...SL_ENTRY_A, id: 'b', offset: 2.4, savedAt: 1756297300000 };
+
+        // Shared load-setup line: real data + methods, DI fake-storage
+        // adapter + ok loader, per-row entries pre-set.
+        function slLoadSetup(entries) {
+            const vm = buildVm();
+            const fakeStorage = makeFakeStorage();
+            vm.savedLoopsAvailable = true;
+            vm.savedLoops = { v: 1, entries };
+            vm._loopStorage = createLocalStorageAdapter({ storage: fakeStorage });
+            vm._fileLoader = { loadFile: async (f) => ({ ok: true, buffer: fakeBuffer, duration: 3.0, fileName: 'song.mp3' }) };
+            return { vm, fakeStorage };
+        }
+
+        describe('SL saved loops', () => {
+            it('SL-U1.1 — single match + clean drafts: auto-apply, restore announcement + hint', async () => {
+                const { vm } = slLoadSetup([SL_ENTRY_A]);
+
+                await vm.onFileDropped(SL_FILE_LIKE);
+
+                expect(vm.bpm).to.equal(122);
+                expect(vm.bpmText).to.equal('122');
+                expect(vm.bpmClamped).to.equal(false);
+                expect(vm.countInBeats).to.equal(3);
+                expect(vm.countInText).to.equal('3');
+                expect(vm.countInClamped).to.equal(false);
+                expect(vm.offset).to.equal(1.2);
+                expect(vm.offsetText).to.equal('0:01.2');
+                expect(vm.offsetClamped).to.equal(false);
+                expect(vm.offsetHint).to.equal('');
+                expect(vm.end).to.equal(null);
+                expect(vm.endText).to.equal('');
+                expect(vm.endClamped).to.equal(false);
+                expect(vm.endHint).to.equal('');
+                expect(vm.appState).to.equal('ready');
+                expect(vm.announcement).to.equal('song.mp3 loaded — settings restored');
+                expect(vm.restoreHint).to.equal('Restored saved settings');
+                expect(vm.matchedEntryIds).to.deep.equal(['a']);
+                expect(vm._bpmTouchedThisFile).to.equal(true);
+                expect(vm._liveFileIdentity).to.deep.equal(SL_IDENTITY);
+            });
+
+            it('SL-U1.2 — zero matches: legacy announcement verbatim, flag stays false; metadata-less file does not throw', async () => {
+                const { vm } = slLoadSetup([]);
+
+                await vm.onFileDropped(SL_FILE_LIKE);
+
+                expect(vm.announcement).to.equal('song.mp3 loaded');
+                expect(vm.matchedEntryIds).to.deep.equal([]);
+                expect(vm.restoreHint).to.equal('');
+                expect(vm.bpm).to.equal(120);
+                expect(vm._bpmTouchedThisFile).to.equal(false);
+
+                const second = slLoadSetup([]);
+                await second.vm.onFileDropped({ name: 'plain.mp3' }); // bare { name } — no size/lastModified
+
+                // The okLoader fixture pins result.fileName 'song.mp3' — the
+                // legacy string is verbatim for the zero-match branch.
+                expect(second.vm.announcement).to.equal('song.mp3 loaded');
+                expect(second.vm.matchedEntryIds).to.deep.equal([]);
+                expect(second.vm.restoreHint).to.equal('');
+                expect(second.vm._bpmTouchedThisFile).to.equal(false);
+            });
+
+            it('SL-U1.3 — multi-match: choose-string, rows highlighted, nothing written', async () => {
+                const { vm } = slLoadSetup([SL_ENTRY_A, SL_ENTRY_B]);
+
+                await vm.onFileDropped(SL_FILE_LIKE);
+
+                expect(vm.bpm).to.equal(120);
+                expect(vm.offset).to.equal(0);
+                expect(vm.offsetText).to.equal('0:00.0');
+                expect(vm.matchedEntryIds).to.deep.equal(['a', 'b']);
+                expect(vm.announcement).to.equal('song.mp3 loaded — choose a saved setup');
+                expect(vm.restoreHint).to.equal('');
+                expect(vm._bpmTouchedThisFile).to.equal(false);
+            });
+
+            it('SL-U1.4 — dirty bpmText degrades a single match to the choose path', async () => {
+                const { vm } = slLoadSetup([SL_ENTRY_A]);
+                vm.bpmText = '12'; // model 120 — mid-draft
+
+                await vm.onFileDropped(SL_FILE_LIKE);
+
+                expect(vm.bpm).to.equal(120);
+                expect(vm.bpmText).to.equal('12');
+                expect(vm.announcement).to.equal('song.mp3 loaded — choose a saved setup');
+                expect(vm.matchedEntryIds).to.deep.equal(['a']);
+            });
+
+            it('SL-U1.5 — dirty countInText degrades a single match to the choose path', async () => {
+                const { vm } = slLoadSetup([SL_ENTRY_A]);
+                vm.countInText = '7'; // model 4
+
+                await vm.onFileDropped(SL_FILE_LIKE);
+
+                expect(vm.countInBeats).to.equal(4);
+                expect(vm.countInText).to.equal('7');
+                expect(vm.announcement).to.equal('song.mp3 loaded — choose a saved setup');
+                expect(vm.matchedEntryIds).to.deep.equal(['a']);
+            });
+
+            // NOTE (plan-flag): behavior-specs.md U1.6 says "degrades", but the
+            // pinned SL-D8 hook sits AFTER the offset re-clamp, which unconditionally
+            // re-syncs offsetText to the model — the typed draft is washed before
+            // _draftsClean() ever reads it, so this row pins the apply path. The
+            // offsetText clause of _draftsClean is therefore structurally
+            // unreachable from the ok branch (defensive for other callers).
+            it('SL-U1.6 — offsetText draft is washed by the re-clamp before the hook: still auto-applies', async () => {
+                const { vm } = slLoadSetup([SL_ENTRY_A]);
+                vm.offsetText = '0:05.0'; // model 0 — the re-clamp overwrites this
+
+                await vm.onFileDropped(SL_FILE_LIKE);
+
+                expect(vm.bpm).to.equal(122); // drafts clean → single match auto-applies
+                expect(vm.offset).to.equal(1.2);
+                expect(vm.offsetText).to.equal('0:01.2'); // the applied value (the typed '0:05.0' was washed first)
+                expect(vm.announcement).to.equal('song.mp3 loaded — settings restored');
+                expect(vm.matchedEntryIds).to.deep.equal(['a']);
+            });
+
+            it('SL-U1.7 — offsetDraft (mid-scrub) degrades a single match to the choose path', async () => {
+                const { vm } = slLoadSetup([SL_ENTRY_A]);
+                vm.offsetDraft = 1.5;
+
+                await vm.onFileDropped(SL_FILE_LIKE);
+
+                expect(vm.bpm).to.equal(120);
+                expect(vm.announcement).to.equal('song.mp3 loaded — choose a saved setup');
+                expect(vm.matchedEntryIds).to.deep.equal(['a']);
+            });
+
+            it('SL-U1.8 — dirty endText degrades a single match to the choose path (CR-003 clause)', async () => {
+                const { vm } = slLoadSetup([SL_ENTRY_A]);
+                vm.endText = '0:01.0'; // end model null
+
+                await vm.onFileDropped(SL_FILE_LIKE);
+
+                expect(vm.bpm).to.equal(120);
+                expect(vm.announcement).to.equal('song.mp3 loaded — choose a saved setup');
+                expect(vm.matchedEntryIds).to.deep.equal(['a']);
+            });
+
+            it('SL-U1.9 — endDraft (mid end-drag) degrades a single match to the choose path', async () => {
+                const { vm } = slLoadSetup([SL_ENTRY_A]);
+                vm.endDraft = 2.0;
+
+                await vm.onFileDropped(SL_FILE_LIKE);
+
+                expect(vm.bpm).to.equal(120);
+                expect(vm.announcement).to.equal('song.mp3 loaded — choose a saved setup');
+                expect(vm.matchedEntryIds).to.deep.equal(['a']);
+            });
+
+            it('SL-U1.10 — zero matches + dirty draft: plain legacy announcement, no writes', async () => {
+                const { vm } = slLoadSetup([]);
+                vm.bpmText = '12';
+
+                await vm.onFileDropped(SL_FILE_LIKE);
+
+                expect(vm.announcement).to.equal('song.mp3 loaded');
+                expect(vm.matchedEntryIds).to.deep.equal([]);
+                expect(vm.bpm).to.equal(120);
+                expect(vm.bpmText).to.equal('12');
+            });
+
+            it('SL-U1.11 — hand-edited offset re-clamps against the decoded duration at apply', async () => {
+                const { vm } = slLoadSetup([{ ...SL_ENTRY_A, offset: 5.0 }]); // duration 3.0
+
+                await vm.onFileDropped(SL_FILE_LIKE);
+
+                expect(vm.offset).to.equal(3.0);
+                expect(vm.offsetText).to.equal('0:03.0');
+                expect(vm.offsetClamped).to.equal(true);
+                expect(vm.offsetHint).to.equal('Offset limited to song length');
+                expect(vm.bpm).to.equal(122);
+                expect(vm.countInBeats).to.equal(3);
+            });
+
+            it('SL-U1.12 — hand-edited out-of-range params clamp at apply (fresh vm each)', async () => {
+                let { vm } = slLoadSetup([{ ...SL_ENTRY_A, bpm: 300, countInBeats: 99 }]);
+
+                await vm.onFileDropped(SL_FILE_LIKE);
+
+                expect(vm.bpm).to.equal(250);
+                expect(vm.bpmClamped).to.equal(true);
+                expect(vm.countInBeats).to.equal(16);
+                expect(vm.countInClamped).to.equal(true);
+
+                ({ vm } = slLoadSetup([{ ...SL_ENTRY_A, bpm: 5 }]));
+
+                await vm.onFileDropped(SL_FILE_LIKE);
+
+                expect(vm.bpm).to.equal(30);
+                expect(vm.bpmClamped).to.equal(true);
+            });
+
+            it('SL-U1.13 — at-song-end end collapses to null (at-the-end ⇔ no section)', async () => {
+                const { vm } = slLoadSetup([{ ...SL_ENTRY_A, offset: 1.2, end: 5.0 }]); // duration 3.0
+
+                await vm.onFileDropped(SL_FILE_LIKE);
+
+                expect(vm.end).to.equal(null);
+                expect(vm.endText).to.equal('');
+                expect(vm.endClamped).to.equal(true);
+                expect(vm.endHint).to.equal('End limited to song length');
+            });
+
+            it('SL-U1.14 — in-range restore clears ALL stale clamp flags and hints (W-4)', async () => {
+                const { vm } = slLoadSetup([{ ...SL_ENTRY_A, end: 2.4 }]);
+                vm.bpmClamped = true;
+                vm.countInClamped = true;
+                vm.offsetClamped = true;
+                vm.offsetHint = 'Offset limited to song length';
+                vm.endClamped = true;
+                vm.endHint = 'End must be after the offset';
+
+                await vm.onFileDropped(SL_FILE_LIKE);
+
+                expect(vm.bpmClamped).to.equal(false);
+                expect(vm.countInClamped).to.equal(false);
+                expect(vm.offsetClamped).to.equal(false);
+                expect(vm.offsetHint).to.equal('');
+                expect(vm.endClamped).to.equal(false);
+                expect(vm.endHint).to.equal('');
+                expect(vm.end).to.equal(2.4);
+                expect(vm.endText).to.equal('0:02.4');
+            });
+
+            it('SL-U1.15 — restore agrees _lastValid* with the restored values', async () => {
+                const { vm } = slLoadSetup([SL_ENTRY_A]);
+                vm._lastValidBpm = 99;
+                vm._lastValidCountIn = 99;
+
+                await vm.onFileDropped(SL_FILE_LIKE);
+
+                expect(vm._lastValidBpm).to.equal(122);
+                expect(vm._lastValidCountIn).to.equal(3);
+            });
+
+            it('SL-U1.16 — a restore suppresses the tempo prefill (RB-1 structural tripwire)', async () => {
+                const { vm } = slLoadSetup([SL_ENTRY_A]);
+
+                await vm.onFileDropped(SL_FILE_LIKE);
+                vm.applyTempoSuggestion({ bpm: 140, confidence: 0.95 });
+
+                expect(vm.bpm).to.equal(122);
+                expect(vm.bpmText).to.equal('122');
+                expect(vm.tempoSuggestion).to.equal(null);
+                expect(vm.announcement).to.equal('song.mp3 loaded — settings restored');
+            });
+
+            it('SL-U1.17 — onSaveSetup: write-first save of committed models + transient hint', async () => {
+                const { vm } = slLoadSetup([]);
+
+                await vm.onFileDropped(SL_FILE_LIKE); // ready + _liveFileIdentity
+                vm.bpm = 122;
+                vm.bpmText = '199'; // dirty draft — the MODEL is what saves (RB-5)
+                vm.offset = 1.2;
+                vm.countInBeats = 3;
+                vm.end = 2.4;
+                vm.endText = '0:02.4';
+                vm.duration = 3.0;
+                vm.$refs.saveSetupBtn = makeFakeButton();
+
+                vm.onSaveSetup();
+
+                expect(vm.savedLoops.entries).to.have.length(1);
+                const saved = vm.savedLoops.entries[0];
+                expect(saved.bpm).to.equal(122);
+                expect(saved.offset).to.equal(1.2);
+                expect(saved.countInBeats).to.equal(3);
+                expect(saved.end).to.equal(2.4);
+                expect(saved.fileName).to.equal('song.mp3');
+                expect(saved.fileSize).to.equal(4821336);
+                expect(saved.fileLastModified).to.equal(1756297200000);
+                expect(saved.duration).to.equal(3.0);
+                expect(Number.isFinite(saved.savedAt)).to.be.true;
+                expect(saved.id).to.be.a('string').and.to.not.equal('');
+                const persisted = parse(vm._loopStorage.read());
+                expect(persisted.entries).to.have.length(1);
+                expect(persisted.entries[0]).to.deep.equal(saved);
+                expect(vm.setupSavedHint).to.equal('Setup saved');
+                expect(vm.errorMessage).to.equal('');
+                // Barrel spot-check (SL-D20 / R-11): a missing re-export
+                // silently yields `undefined`.
+                expect(barrelKey).to.be.a('string').and.to.equal(STORAGE_KEY);
+            });
+
+            it('SL-U1.18 — re-saving identical params dedupe-refreshes (idempotent)', async () => {
+                const { vm } = slLoadSetup([]);
+
+                await vm.onFileDropped(SL_FILE_LIKE);
+                vm.bpm = 122;
+                vm.bpmText = '122';
+                vm.offset = 1.2;
+                vm.countInBeats = 3;
+                vm.end = 2.4;
+                vm.endText = '0:02.4';
+                vm.onSaveSetup();
+                const first = vm.savedLoops.entries[0];
+
+                vm.onSaveSetup();
+
+                expect(vm.savedLoops.entries).to.have.length(1);
+                expect(vm.savedLoops.entries[0].id).to.equal(first.id);
+                expect(vm.savedLoops.entries[0].savedAt).to.be.at.least(first.savedAt);
+            });
+
+            it('SL-U1.19 — write failure (quota): banner, VM unchanged, feature stays available', async () => {
+                const { vm } = slLoadSetup([]);
+                vm._loopStorage.write = () => ({ ok: false, code: 'quota' });
+
+                await vm.onFileDropped(SL_FILE_LIKE);
+                vm.onSaveSetup();
+
+                expect(vm.errorMessage).to.equal("Couldn't save — storage is full");
+                expect(vm.savedLoops).to.deep.equal({ v: 1, entries: [] });
+                expect(vm.setupSavedHint).to.equal('');
+                expect(vm.savedLoopsAvailable).to.equal(true);
+            });
+
+            it('SL-U1.20 — feature hidden: onSaveSetup is a no-op (no write, no error, no hint)', async () => {
+                const { vm } = slLoadSetup([]);
+                let writes = 0;
+                vm._loopStorage.write = () => { writes += 1; return { ok: true }; };
+
+                await vm.onFileDropped(SL_FILE_LIKE);
+                vm.savedLoopsAvailable = false;
+                vm.onSaveSetup();
+
+                expect(writes).to.equal(0);
+                expect(vm.errorMessage).to.equal('');
+                expect(vm.setupSavedHint).to.equal('');
+                expect(vm.savedLoops.entries).to.have.length(0);
+            });
+
+            it('SL-U1.21 — Load with no match: identity-gating backstop, no-op', async () => {
+                const { vm } = slLoadSetup([]);
+
+                await vm.onFileDropped(SL_FILE_LIKE);
+                vm.onLoadSetup(SL_ENTRY_A);
+
+                expect(vm.bpm).to.equal(120);
+                expect(vm.restoreHint).to.equal('');
+            });
+
+            it('SL-U1.22 — explicit Load: applies + hint, announces nothing', async () => {
+                const { vm } = slLoadSetup([SL_ENTRY_A, SL_ENTRY_B]);
+
+                await vm.onFileDropped(SL_FILE_LIKE); // multi-match post-state
+                vm.onLoadSetup(SL_ENTRY_A);
+
+                expect(vm.bpm).to.equal(122);
+                expect(vm.offset).to.equal(1.2);
+                expect(vm.offsetText).to.equal('0:01.2');
+                expect(vm.countInBeats).to.equal(3);
+                expect(vm.restoreHint).to.equal('Restored saved settings');
+                expect(vm.announcement).to.equal('song.mp3 loaded — choose a saved setup');
+            });
+
+            it('SL-U1.23 — param-locked (playing): Save AND Load are no-ops (U-12)', async () => {
+                const { vm } = slLoadSetup([SL_ENTRY_A]);
+
+                await vm.onFileDropped(SL_FILE_LIKE); // ready, matched ['a']
+                vm.appState = 'playing'; // isParamLocked → true
+                vm.restoreHint = '';
+                vm.bpm = 110; // sentinel: no-op must leave it
+                vm.onSaveSetup();
+                expect(vm.savedLoops.entries).to.have.length(1);
+                expect(vm.setupSavedHint).to.equal('');
+                vm.onLoadSetup(SL_ENTRY_A);
+
+                expect(vm.bpm).to.equal(110);
+                expect(vm.restoreHint).to.equal('');
+            });
+
+            it('SL-U1.24 — Delete: write-first removal + Save-button refocus', () => {
+                const { vm } = slLoadSetup([SL_ENTRY_A, SL_ENTRY_B]);
+                vm.$refs.saveSetupBtn = makeFakeButton();
+
+                vm.onDeleteSetup(SL_ENTRY_B);
+
+                expect(vm.savedLoops.entries).to.have.length(1);
+                expect(vm.savedLoops.entries[0].id).to.equal('a');
+                expect(parse(vm._loopStorage.read()).entries).to.have.length(1);
+                expect(vm.$refs.saveSetupBtn.focused).to.equal(true);
+                expect(vm.errorMessage).to.equal('');
+            });
+
+            it('SL-U1.25 — Delete write failure: silent degrade (section hides), no banner (RB-4)', () => {
+                const { vm } = slLoadSetup([SL_ENTRY_A, SL_ENTRY_B]);
+                vm._loopStorage.write = () => ({ ok: false, code: 'storageError' });
+
+                vm.onDeleteSetup(SL_ENTRY_B);
+
+                expect(vm.savedLoops.entries).to.have.length(2);
+                expect(vm.savedLoopsAvailable).to.equal(false);
+                expect(vm.errorMessage).to.equal('');
+            });
+
+            it('SL-U1.26 — a different file: stale highlight + hint cleared on every load', async () => {
+                const { vm } = slLoadSetup([SL_ENTRY_A]);
+
+                await vm.onFileDropped(SL_FILE_LIKE); // U1.1 post-state: matched ['a'], hint set
+                vm._fileLoader = { loadFile: async () => ({ ok: true, buffer: fakeBuffer, duration: 4.0, fileName: 'other.mp3' }) };
+                await vm.onFileDropped({ name: 'other.mp3', size: 1, lastModified: 2 });
+
+                expect(vm.matchedEntryIds).to.deep.equal([]);
+                expect(vm.restoreHint).to.equal('');
+                expect(vm.announcement).to.equal('other.mp3 loaded');
+            });
+
+            it('SL-U1.27 — re-drop of the same file: hint re-set, apply re-runs (idempotent)', async () => {
+                const { vm } = slLoadSetup([SL_ENTRY_A]);
+
+                await vm.onFileDropped(SL_FILE_LIKE);
+                await vm.onFileDropped(SL_FILE_LIKE);
+
+                expect(vm.restoreHint).to.equal('Restored saved settings');
+                expect(vm.bpm).to.equal(122);
+                expect(vm.offset).to.equal(1.2);
+            });
+
+            it('SL-U1.28 — setupSummary: to-end and bounded shapes (SL-D24 verbatim)', () => {
+                const vm = buildVm();
+
+                expect(vm.setupSummary(SL_ENTRY_A)).to.equal('122 BPM · 0:01.2 · 3 c-in · to end');
+                expect(vm.setupSummary({ ...SL_ENTRY_A, end: 2.4 })).to.equal('122 BPM · 0:01.2 · 3 c-in · to 0:02.4');
             });
         });
 

@@ -42,6 +42,13 @@ export function createMetronomadData() {
             endHint: '',
             endDraft: null,     // transient end-handle drag draft, tenths (mirror of offsetDraft)
 
+            // Saved loops (CR 004) — parsed localStorage state (SL-D17)
+            savedLoopsAvailable: false,
+            savedLoops: { v: 1, entries: [] },
+            matchedEntryIds: [],
+            restoreHint: '',
+            setupSavedHint: '',
+
             // BPM / count-in draft text (C-1, RD-1): bound via v-model;
             // the model (bpm/countInBeats) moves only on Enter/blur commit
             // or via the stepper. Initialized from the spec defaults so the
