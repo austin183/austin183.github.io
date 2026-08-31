@@ -37,7 +37,7 @@ Metronomad/
 │   ├── PlaybackEngineTest.html     # P-01…P-11, P-13…P-22, H-03, R-I5.1 (fake context/clock/timers — zero real AudioContext; P-12 retired; P-15…22 = bounded playback)
 │   ├── BeatDotsTest.html           # B-01…B-05 (rev), R-I6.1/R-I6.2, B-06 (DI-injected fakes — no global patching)
 │   ├── WaveformPeaksTest.html      # WF-P1.1…WF-P1.9 (pure peaks math)
-│   ├── TempoDetectionTest.html     # TD-1.1…TD-1.15 (click trains synthesized in-page — zero real AudioContext)
+│   ├── TempoDetectionTest.html     # TD-1.1…TD-1.16 (click trains synthesized in-page — zero real AudioContext; TD-1.16 = the alias-swap path, 2026-08-31 fix)
 │   ├── WaveformViewTest.html       # WF-V1.1…WF-V1.11, EN-V1.1…8 (Proxy ctx + fake RAF/window — no global patching; EN-V1 = end-handle pointer path)
 │   ├── SavedLoopsTest.html         # SL-P1.1…24 (pure storage logic + DI'd fake storages — no AudioContext anywhere; barrel spot-check folded into the adapter row)
 │   └── UiHandlersTest.html         # V-01…V-07, WF-I1.1…5, WF-I2.1…10, TD-U1.1…10, EN-U1.1…23, SL-U1.1…28 (mock-VM pattern; EN-U1 = end-point handlers, SL-U1 = saved-loops handlers)

@@ -207,8 +207,13 @@ function estimateFromOnsets(onsets, sampleRate) {
     // (a 180 BPM period is 28.71 frames at 44.1 kHz) — refining to the
     // peak vertex keeps the returned integer bpm exact for the pinned
     // battery without a finer (costlier) search.
-    const bestP = refinePeriod(corr, best, pMax);
-    const bestBpm = bpmOf(bestP);
+    // `let`: the alias swap below reassigns both when an out-of-band
+    // winner's in-band half/double alias is non-weak (2026-08-31:
+    // they were `const` — a runtime TypeError on that exact path,
+    // which the TD battery never hit because its out-of-band cases
+    // all take the early `return null`).
+    let bestP = refinePeriod(corr, best, pMax);
+    let bestBpm = bpmOf(bestP);
 
     // Half/double resolution (pinned mechanism, TD-1.6/TD-1.7): an
     // out-of-band winner is reported only when its in-band half/double

@@ -2489,6 +2489,12 @@
                 expect(persisted.entries[0]).to.deep.equal(saved);
                 expect(vm.setupSavedHint).to.equal('Setup saved');
                 expect(vm.errorMessage).to.equal('');
+                // 2026-08-31 manual-test fix: the saved entry matches the live
+                // file by construction (same identity + duration) — Load must
+                // be enabled on the fresh row immediately, not stay stale
+                // ("Only available for the matching song" on its own song)
+                // until a re-drop.
+                expect(vm.matchedEntryIds).to.deep.equal([saved.id]);
                 // Barrel spot-check (SL-D20 / R-11): a missing re-export
                 // silently yields `undefined`.
                 expect(barrelKey).to.be.a('string').and.to.equal(STORAGE_KEY);

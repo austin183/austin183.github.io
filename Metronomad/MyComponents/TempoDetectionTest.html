@@ -92,7 +92,7 @@
         });
 
         // ============================================================
-        // detectTempo() — TD-1.1…TD-1.15
+        // detectTempo() — TD-1.1…TD-1.16
         // ============================================================
         describe('tempoDetection.detectTempo()', () => {
             it('TD-1.1 — 120 BPM train @ 44 100 Hz → 120 ± 1, confidence ≥ 0.6', () => {
@@ -212,6 +212,24 @@
                 const result = detectTempo([ch], 44100);
                 expect(result, 'result should not be null').to.not.be.null;
                 expect(result.bpm).to.be.within(119, 121);
+            });
+
+            it('TD-1.16 — 200 BPM train (66 clicks, 0.3 s) → 100 ± 1 (out-of-band winner, NON-WEAK in-band alias → the alias swap executes)', () => {
+                // 2026-08-31 post-ship fix (found by manual testing): this is
+                // the exact path the TD battery had never exercised — an
+                // out-of-prior-band winner (200 > PRIOR_MAX) whose in-band
+                // half (100) is non-weak. The swap reassigns bestP/bestBpm,
+                // which were `const` → a runtime TypeError on real songs with
+                // this correlation shape (every out-of-band case in TD-1.3/
+                // TD-1.6/TD-1.7 either wins in-band or takes the early
+                // `return null` before the reassignment). Now: the in-band
+                // alias is the perceived tempo (the pinned TD-1.6/TD-1.7
+                // mechanism), never the out-of-band winner, never a throw.
+                const ch = makeTrain({ sampleRate: 44100, durationSec: 20, spacingSec: 0.3, count: 66 });
+                const result = detectTempo([ch], 44100);
+                expect(result, 'result should not be null').to.not.be.null;
+                expect(result.bpm).to.be.within(99, 101);
+                expect(result.confidence).to.be.at.least(0.6);
             });
         });
 

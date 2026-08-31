@@ -128,11 +128,7 @@ export function createMetronomadMethods() {
                     const identity = fileIdentityOf(file); // null for metadata-less File objects
                     this._liveFileIdentity = identity;
                     this.restoreHint = ''; // the previous file's hint dies with it (per-file, W-13 shape)
-                    this.matchedEntryIds = identity && this.savedLoopsAvailable
-                        ? this.savedLoops.entries
-                            .filter((e) => entryMatches(e, identity, result.duration))
-                            .map((e) => e.id)
-                        : [];
+                    this._recomputeMatchedEntries();
                     this.appState = APP_STATES.READY;
                     this.errorMessage = ''; // U-16: prior error cleared
                     // W-3: ONE live-region write per load. The pre-existing bare assignment
@@ -614,6 +610,23 @@ export function createMetronomadMethods() {
             return new Date(ms).toLocaleDateString();
         },
 
+        // Recompute the saved-loop match set against the live file (SL-D13
+        // drives the row highlight + Load-enable from it). Called from the
+        // ok-branch (file load) AND after a successful save: the saved
+        // entry matches the live file by construction (same identity triple
+        // + same duration), so its Load must be enabled immediately —
+        // 2026-08-31 manual-test fix: computing at load only left
+        // matchedEntryIds stale after a save, so the fresh row showed
+        // "Only available for the matching song" on its own song.
+        _recomputeMatchedEntries() {
+            const identity = this._liveFileIdentity;
+            this.matchedEntryIds = identity && this.savedLoopsAvailable
+                ? this.savedLoops.entries
+                    .filter((e) => entryMatches(e, identity, this.duration))
+                    .map((e) => e.id)
+                : [];
+        },
+
         // Save (SL-D18): backstops, then WRITE-FIRST — the in-memory VM
         // moves only after the storage write acks (a failed write leaves
         // state byte-for-byte unchanged; the banner is the only effect,
@@ -633,6 +646,7 @@ export function createMetronomadMethods() {
             const res = this._loopStorage.write(encode(next));
             if (res.ok) {
                 this.savedLoops = next;
+                this._recomputeMatchedEntries(); // the fresh entry matches by construction (2026-08-31 manual-test fix)
                 this.setupSavedHint = 'Setup saved';
                 clearTimeout(this._setupSavedHintTimer);
                 this._setupSavedHintTimer = setTimeout(() => { this.setupSavedHint = ''; }, 3000);
