@@ -50,8 +50,13 @@ test.describe('Phase 8 — keyboard pass (U-23, U-12, V-07)', () => {
     // CR 003 (EN-D17): the End field sits between Offset and Count-in
     // (DOM order = tab order) — the one focusable addition; the end
     // handle itself is aria-hidden pointer-only (no second slider, KB-18).
-    const seq = await tabSequence(page, 9);
+    // CR 004 (SL-D4): the Save button lives in the file row, which sits
+    // between the drop zone and the controls in DOM order — so it lands
+    // FIRST after the browse button (9 → 10 elements; the same-commit
+    // spec update is the R-1 / EN-D17 precedent).
+    const seq = await tabSequence(page, 10);
     expect(seq).toEqual([
+      'saveSetupBtn',
       'bpmMinusBtn',
       'bpmInput',
       'bpmPlusBtn',
@@ -74,9 +79,11 @@ test.describe('Phase 8 — keyboard pass (U-23, U-12, V-07)', () => {
     // Only Restart sits between Play/Stop and the end of the focusable list
     // (preview disabled in countingIn; all parameter controls disabled +
     // canvas tabindex=-1). The rest lands back on body (no wrap in headless).
+    // CR 004: #saveSetupBtn (file row) is :disabled while locked (U-12
+    // scopes to Save/Load) → Tab skips it too.
     expect(seq[0]).toBe('restartBtn');
     for (const id of seq) {
-      expect(['bpmMinusBtn', 'bpmInput', 'bpmPlusBtn', 'waveformCanvas', 'offsetInput', 'endInput', 'countInInput', 'previewBtn'])
+      expect(['saveSetupBtn', 'bpmMinusBtn', 'bpmInput', 'bpmPlusBtn', 'waveformCanvas', 'offsetInput', 'endInput', 'countInInput', 'previewBtn'])
         .not.toContain(id);
     }
 

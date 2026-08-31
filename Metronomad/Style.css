@@ -428,6 +428,75 @@
     text-align: right;
 }
 
+/* Saved loops (CR 004) — minimal static additions: NO transition/animation
+   (KB-14 — reduced-motion-safe by construction). The section card matches
+   the .file-row/.controls surface language; the hints reuse .clamp-hint
+   as-is; the row buttons reuse .mn-btn (no new button class). */
+.saved-loops {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    background-color: var(--color-surface);
+    border-radius: var(--radius-medium);
+    box-shadow: var(--elevation-1);
+    padding: var(--space-4);
+    margin: var(--space-4) 0;
+}
+
+.saved-loops-title {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-primary);
+}
+
+/* Row: flex, wraps sanely at 360 px — the name truncates (ellipsis +
+   title, KB-2) and the two buttons stay on the row / wrap below. */
+.saved-loop-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    /* transparent border on EVERY row: the matched variant only recolors
+       it, so highlight state never shifts the layout. */
+    border-left: 4px solid transparent;
+    padding: var(--space-1) 0 var(--space-1) var(--space-2);
+}
+
+/* Matched row: --color-accent (both themes via the variable) — the
+   error-banner border shape. State is never color alone: the matched row
+   also gains its enabled Load button (SL-D13). */
+.saved-loop-row--matched {
+    border-left-color: var(--color-accent);
+}
+
+.saved-loop-name {
+    flex: 1 1 auto;
+    min-width: 0; /* allows ellipsis inside flex */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.saved-loop-summary {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    font-variant-numeric: tabular-nums;
+}
+
+.saved-loop-date {
+    flex-shrink: 0;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+    font-variant-numeric: tabular-nums;
+}
+
 /* Error banner (D8: non-blocking overlay) */
 .error-banner {
     margin-top: var(--space-4);

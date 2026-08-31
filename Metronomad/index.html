@@ -49,6 +49,14 @@
                 <span class="material-icons file-icon" aria-hidden="true">music_note</span>
                 <span class="file-name" :title="fileName">{{ fileName }}</span>
                 <span class="file-duration">{{ formattedDuration }}</span>
+                <!-- CR 004 (SL-D4): the Save button lives in the file row —
+                     hidden in the no-file state with the row (why it is out
+                     of smoke's CONTROLS). U-12 scopes to Save/Load (Delete
+                     never locks, SL-D11); the label is the discovery
+                     (XR-1: no first-time hint). -->
+                <button id="saveSetupBtn" ref="saveSetupBtn" class="mn-btn" type="button"
+                        :disabled="!isReady || isParamLocked"
+                        title="Save current setup" @click="onSaveSetup">Save</button>
             </div>
 
             <!-- Parameter controls (locked while audio runs — U-12) -->
@@ -207,6 +215,32 @@
                     {{ formattedDisplayPosition }} / {{ formattedDuration }}
                 </div>
             </div>
+
+            <!-- CR 004 (SL-D5): saved loops — after the waveform block,
+                 before the error banner (bottom of main): it never
+                 displaces the primary controls and renders only when
+                 there is content. Plain list + real <button>s, a visible
+                 <h2> — no new ARIA roles, no testability hooks (KB-6).
+                 The two hints are VISUAL-ONLY (no role="status"): the
+                 polite live region is the sole announcement channel
+                 (W-3); a second live region would double-announce. -->
+            <section v-if="savedLoopsAvailable && savedLoops.entries.length > 0" class="saved-loops">
+                <h2 class="saved-loops-title">Saved loops</h2>
+                <p v-if="restoreHint" class="clamp-hint">{{ restoreHint }}</p>
+                <p v-if="setupSavedHint" class="clamp-hint">{{ setupSavedHint }}</p>
+                <div v-for="entry in savedLoops.entries" :key="entry.id"
+                     class="saved-loop-row"
+                     :class="{ 'saved-loop-row--matched': matchedEntryIds.includes(entry.id) }">
+                    <span class="saved-loop-name" :title="entry.fileName">{{ entry.fileName }}</span>
+                    <span class="saved-loop-summary">{{ setupSummary(entry) }}</span>
+                    <span class="saved-loop-date">{{ savedDate(entry.savedAt) }}</span>
+                    <button class="mn-btn saved-loop-load" type="button"
+                            :disabled="!isReady || isParamLocked || !matchedEntryIds.includes(entry.id)"
+                            :title="!matchedEntryIds.includes(entry.id) ? 'Only available for the matching song' : undefined"
+                            @click="onLoadSetup(entry)">Load</button>
+                    <button class="mn-btn saved-loop-delete" type="button" @click="onDeleteSetup(entry)">Delete</button>
+                </div>
+            </section>
 
             <!-- Non-blocking error overlay (D8) -->
             <div v-if="errorMessage" role="alert" class="error-banner">{{ errorMessage }}</div>
