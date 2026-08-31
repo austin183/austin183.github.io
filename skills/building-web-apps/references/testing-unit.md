@@ -15,6 +15,7 @@
 - Testing Input Handlers: Replay the Keystroke Sequence
 - Comparing Float32Array Outputs: Expectations Must Round-Trip
 - Transcribing Plan-Pinned Numeric Examples
+- Structurally Unreachable Defensive Guards: Document Reachability, Don't Delete
 - Asserting Synchronous Side Effects of Async APIs
 - Driving Pinned `setTimeout(0)` Yields in Unit Tests
 - Testing Combined Edge Cases
@@ -118,6 +119,7 @@ Then read `window.__mochaRun.runner.stats` (final at `end`) for `passes`/`failur
 - Keep the timeout fall-through but make it **diagnostic** — name the failure ("mocha.run() never reached", "Mocha unavailable (no runner)", "did not settle (N tests complete)") rather than a silent stall that happens to land on the right answer.
 - **"mocha.run() never reached" is a disjunction, not a verdict** — the broken-page signal fires for *any* page-level failure before `mocha.run()` settles, including a new test page that simply forgot its trailing `load → mocha.run()` listener. Telling symptom: after fixing the suspected cause (e.g., a missing barrel export), the signal **persists identically**. Disambiguate with one probe before touching production code: load the page with Playwright and check (a) `pageerror` (module link failures report there; a missing run listener does not) and (b) whether a manual `window.mocha.run()` executes the registered tests. Silent page + registered tests + manual run works = page scaffolding is incomplete, not the implementation.
 - **Exit non-zero on any per-file failure.** A v1 runner exited 0 even when individual tests failed (it only threw when *every* file failed) — "green" CI output did not mean "no failing tests." Collect per-file errors, including `N failing test(s)` with each failing title + first error line, and fail the process on any of them.
+- **The runner's stdout is an interleaved stream, not a JSON document** — it mixes per-URL lines, `=== CONSOLE LOGS ===` blocks, per-file JSON, an errors JSON, and a summary, so a whole-stream `JSON.parse` chokes (observed twice in one session, 2026-08-30). When aggregating results from it: the simplest per-suite check is `grep -oE '"passes": [0-9]+'` and summing; for the full report, regex-extract the object containing `"files"` (e.g. `/{[\s\S]*"files"[\s\S]*\n}/`) and parse only that slice.
 
 ### Mocking Browser APIs
 
@@ -535,6 +537,10 @@ Plan documents pin numeric worked examples: bucket math, lag/offset ranges, scen
 4. **Never "fix" the test to match the plan's number — fix the plan.** A dimensionally-wrong pin that slips through produces a wrong *implementation* that passes a wrong *test*: the suite is green and the feature is subtly broken (e.g. a lag floor of "123 frames" where the true floor is 43 makes a 120 BPM onset train unfindable).
 
 The unit recompute costs seconds and is the only check that catches this class. It applies to E2E transcription as well — any test whose numbers come from a plan document rather than from the code.
+
+### Structurally Unreachable Defensive Guards: Document Reachability, Don't Delete
+
+A defensive clause in the code under test can be **unreachable from the row's entry path** — e.g. a cleanliness check's `offsetText === formatTime(offset)` clause sitting after an ok-branch re-sync that unconditionally satisfies it — while still covering other callers/paths. When a row's pre-set state is washed before it reaches the clause: leave the guard in place (deleting it to make the branch testable removes real coverage for other paths), pin the *reachable* behavior the row actually exercises, and add a one-line reachability note in the test file ("clause X is unreachable from the ok-branch — the re-sync always satisfies it; it covers other callers") so the next reader documents instead of "fixing" the clause away.
 
 ### Testing Default Behavior Explicitly
 
